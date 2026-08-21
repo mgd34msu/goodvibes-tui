@@ -1,4 +1,4 @@
-# Voice and Live TTS
+# Voice and live TTS
 
 GoodVibes has two separate voice paths:
 
@@ -7,7 +7,7 @@ GoodVibes has two separate voice paths:
 
 The `/tts` command does not replace text output. The normal assistant response still appears in the TUI. `/tts` only marks that turn for additional live audio playback.
 
-## TUI Commands
+## TUI commands
 
 ```text
 /tts <prompt>
@@ -26,7 +26,7 @@ The `/tts` command does not replace text output. The normal assistant response s
 
 `/tts stop` cancels pending TTS requests, kills active playback, and clears the queued audio chunks.
 
-`/tts on` enables always-speak mode. Every turn submitted to the conversation — including turns not prefixed with `/tts` — is automatically marked for live spoken output. The setting is persisted via `ui.voiceEnabled` in the TUI config. The player availability check still gates gracefully: if no player is found the turn text continues normally with a status message.
+`/tts on` enables always-speak mode. Every turn submitted to the conversation, including turns not prefixed with `/tts`, is automatically marked for live spoken output. The setting is persisted via `ui.voiceEnabled` in the TUI config. The player availability check still gates gracefully: if no player is found the turn text continues normally with a status message.
 
 `/tts off` disables always-speak mode. After running `/tts off`, only prompts submitted with `/tts <prompt>` are spoken.
 
@@ -38,18 +38,18 @@ Always-speak mode is controlled by the `ui.voiceEnabled` config key (boolean, de
 /config tts
 ```
 
-The **Always Speak** row appears at the top of the TTS settings tab. Toggle it there or use `/tts on` / `/tts off` or `/voice enable` / `/voice disable` — all four are the same switch writing the same `ui.voiceEnabled` key.
+The **Always Speak** row appears at the top of the TTS settings tab. Toggle it there or use `/tts on` / `/tts off` or `/voice enable` / `/voice disable`. All four are the same switch writing the same `ui.voiceEnabled` key.
 
 `/config tts` opens the fullscreen configuration workspace at the TTS category. From there users can toggle always-speak mode, choose the streaming TTS provider, choose a voice from that provider, open the fullscreen provider/model workspace for the TTS response model override, clear text fields, or reset selected settings.
 
 The modal and direct commands write the SDK TTS config keys:
 
-- `ui.voiceEnabled` — always-speak toggle (boolean)
+- `ui.voiceEnabled`: always-speak toggle (boolean)
 - `tts.provider`
 - `tts.voice`
 - `tts.llmProvider`
 - `tts.llmModel`
-- `tts.speed` — playback speed multiplier (see Speed section below)
+- `tts.speed`: playback speed multiplier (see Speed section below)
 
 By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model. Selecting either TTS LLM row opens the same fullscreen provider/model workspace used by the main model/provider commands, with the target route set to `TTS LLM`.
 
@@ -61,13 +61,13 @@ The SDK synthesis API (`VoiceSynthesisRequest`) accepts a `speed` field (positiv
 
 `tts.speed` is visible in `/config tts` and can be adjusted with arrow keys (0.1 steps, within the supported range) or inline edit mode (Enter). The default is `1` (normal speed).
 
-The SDK defines `tts.speed` in the config schema (default `1`, supported range 0.25–4.0), and both the settings modal and the synthesis call read it from there — the modal renders the schema descriptor like every other key, and `readOptionalConfigNumber` in `spoken-turn-controller.ts` reads the value on every synthesis call and passes it into `VoiceSynthesisRequest.speed`.
+The SDK defines `tts.speed` in the config schema (default `1`, supported range 0.25–4.0), and both the settings modal and the synthesis call read it from there. The modal renders the schema descriptor like every other key, and `readOptionalConfigNumber` in `spoken-turn-controller.ts` reads the value on every synthesis call and passes it into `VoiceSynthesisRequest.speed`.
 
 - The setting row is visible in `/config tts`; adjusting it takes effect on the next spoken turn.
 - The TUI synthesis call passes `speed: undefined` when no value is stored, which means provider default.
 - The isDefault diamond shows accurately via deepEqual against the default of `1`.
 
-## Playback Requirements
+## Playback requirements
 
 Live TTS playback streams audio bytes to a local player over stdin. Install one of:
 
@@ -76,7 +76,7 @@ Live TTS playback streams audio bytes to a local player over stdin. Install one 
 
 If neither player is on `PATH`, `/tts` still submits and renders the normal text response, but live audio is skipped with a non-blocking status message.
 
-## Providers and Voices
+## Providers and voices
 
 Live TTS uses voice providers that advertise the `tts-stream` capability. The TUI does not hardcode provider behavior. It asks the SDK voice service for streaming synthesis and uses the configured provider/voice defaults.
 

@@ -66,7 +66,7 @@ describe('parseCliFlags', () => {
   // ---------------------------------------------------------------------------
   // Env var precedence (flags win, env is fallback)
   // ---------------------------------------------------------------------------
-  // parseCliFlags itself does not read env vars — it only returns parsed flag
+  // parseCliFlags itself does not read env vars, it only returns parsed flag
   // values. The caller (daemon/cli.ts main()) is responsible for setting env
   // vars from the returned flags and then calling resolveDaemonCliOwnership()
   // which reads the env vars with ?? fallback. These tests confirm the flag
@@ -86,7 +86,7 @@ describe('parseCliFlags', () => {
     expect(flags.workingDir).toBeUndefined();
   });
 
-  test('flag overrides env for daemon-home — flag present, env set', () => {
+  test('flag overrides env for daemon-home; flag present, env set', () => {
     // Verify the flag value takes precedence: parser returns the flag value,
     // the caller writes it to env before resolveDaemonCliOwnership() is called.
     const savedEnv = process.env['GOODVIBES_DAEMON_HOME'];
@@ -104,7 +104,7 @@ describe('parseCliFlags', () => {
     }
   });
 
-  test('flag overrides env for working-dir — flag present, env set', () => {
+  test('flag overrides env for working-dir; flag present, env set', () => {
     const savedEnv = process.env['GOODVIBES_WORKING_DIR'];
     try {
       process.env['GOODVIBES_WORKING_DIR'] = '/from/env';
@@ -704,7 +704,7 @@ describe('parseCliFlags', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // applyRuntimeConfigDefault — persisted-value precedence
+  // applyRuntimeConfigDefault, persisted-value precedence
   // ---------------------------------------------------------------------------
 
   test('applyRuntimeConfigDefault: respects explicit false in global settings file', () => {
@@ -715,7 +715,7 @@ describe('parseCliFlags', () => {
     writeFileSync(join(configDir, 'settings.json'), JSON.stringify({ display: { showTokenSpeed: false } }), 'utf-8');
     const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: root });
 
-    // Attempt to apply a TUI default of true — user's explicit false must win.
+    // Attempt to apply a TUI default of true, user's explicit false must win.
     applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
 
     expect(configManager.get('display.showTokenSpeed')).toBe(false);
@@ -725,7 +725,7 @@ describe('parseCliFlags', () => {
     // Use separate directories so global and project config paths are distinct.
     const globalRoot = makeProjectTempDir('goodvibes-config-default-global-dir');
     const projectRoot = makeProjectTempDir('goodvibes-config-default-project-dir');
-    // Global configDir is in globalRoot — no settings file there (key absent globally).
+    // Global configDir is in globalRoot, no settings file there (key absent globally).
     const configDir = join(globalRoot, '.goodvibes', 'tui');
     // Project config is at projectRoot/.goodvibes/tui/settings.json.
     const projectConfigDir = join(projectRoot, '.goodvibes', 'tui');
@@ -733,7 +733,7 @@ describe('parseCliFlags', () => {
     writeFileSync(join(projectConfigDir, 'settings.json'), JSON.stringify({ display: { showTokenSpeed: false } }), 'utf-8');
     const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: projectRoot });
 
-    // Attempt to apply a TUI default of true — project-scoped explicit false must win.
+    // Attempt to apply a TUI default of true, project-scoped explicit false must win.
     applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
 
     expect(configManager.get('display.showTokenSpeed')).toBe(false);
@@ -743,10 +743,10 @@ describe('parseCliFlags', () => {
     const root = makeProjectTempDir('goodvibes-config-default-absent');
     const configDir = join(root, '.goodvibes', 'tui');
     // Neither global nor project settings file contains display.showTokenSpeed.
-    // No files written — clean install scenario.
+    // No files written, clean install scenario.
     const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: root });
 
-    // SDK default is false; TUI default is true — the TUI default must be applied.
+    // SDK default is false; TUI default is true, the TUI default must be applied.
     applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
 
     expect(configManager.get('display.showTokenSpeed')).toBe(true);
@@ -754,7 +754,7 @@ describe('parseCliFlags', () => {
     expect(existsSync(join(configDir, 'settings.json'))).toBe(false);
   });
 
-  test('applyRuntimeConfigDefault: corrupt global settings file does not block project file — explicit false respected', () => {
+  test('applyRuntimeConfigDefault: corrupt global settings file does not block project file; explicit false respected', () => {
     // Construct ConfigManager with valid files first so the SDK initialises cleanly,
     // then overwrite the global settings file with malformed JSON to simulate on-disk
     // corruption that occurs after startup. applyRuntimeConfigDefault reads the raw
@@ -780,7 +780,7 @@ describe('parseCliFlags', () => {
     expect(configManager.get('display.showTokenSpeed')).toBe(false);
   });
 
-  test('applyRuntimeConfigDefault: corrupt project settings file does not block global file — explicit false respected', () => {
+  test('applyRuntimeConfigDefault: corrupt project settings file does not block global file; explicit false respected', () => {
     // Construct ConfigManager with valid files first so the SDK initialises cleanly,
     // then overwrite the project settings file with malformed JSON to simulate on-disk
     // corruption after startup. The global file explicitly sets the key to false:

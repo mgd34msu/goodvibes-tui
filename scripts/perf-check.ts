@@ -1,15 +1,15 @@
 /**
- * perf-check.ts — CI performance budget gate.
+ * perf-check.ts, CI performance budget gate.
  *
  * Runs REAL headless measurements and compares against committed baselines.
  * Fails closed in CI when the baseline is absent (cannot gate against nothing).
  *
- * Measurements (all headless — never launches the interactive TUI binary):
- *   startup.renderer_load_ms  — cold import of compositor + buffer + grid
- *   frame.composite_p95_ms    — Compositor.composite() p95 over 200 full-repaint frames
- *   frame.composite_p99_ms    — Compositor.composite() p99 over 200 full-repaint frames
+ * Measurements (all headless, never launches the interactive TUI binary):
+ *   startup.renderer_load_ms , cold import of compositor + buffer + grid
+ *   frame.composite_p95_ms   , Compositor.composite() p95 over 200 full-repaint frames
+ *   frame.composite_p99_ms   , Compositor.composite() p99 over 200 full-repaint frames
  *
- * Budgets are ratchets — set just above measured reality, tighten as perf improves.
+ * Budgets are ratchets, set just above measured reality, tighten as perf improves.
  * Regenerate the baseline and budgets with:
  *   bun run perf:baseline
  *
@@ -18,8 +18,8 @@
  *   GOODVIBES_PERF_SAVE_BASELINE=1 bun run scripts/perf-check.ts  # capture + save baseline
  *
  * Exit codes:
- *   0 — all budgets passed
- *   1 — one or more budgets exceeded, or baseline absent in CI
+ *   0, all budgets passed
+ *   1, one or more budgets exceeded, or baseline absent in CI
  */
 
 import { performance } from 'node:perf_hooks';
@@ -109,7 +109,7 @@ function loadBaseline(): PerfBaseline | null {
 // ---------------------------------------------------------------------------
 //
 // In CI (env CI=true), a missing or corrupt baseline is a hard failure.
-// A missing baseline means the gate has no reference to compare against —
+// A missing baseline means the gate has no reference to compare against,
 // passing unconditionally is fail-open and meaningless (the bug this fixes).
 //
 // Locally, a missing baseline triggers auto-measure-and-save so first-runs
@@ -119,7 +119,7 @@ const baseline = loadBaseline();
 
 if (!baseline && isCI) {
   process.stderr.write(`
-Perf Gate: FAILED — baseline not found at ${BASELINE_PATH}.
+Perf Gate: FAILED; baseline not found at ${BASELINE_PATH}.
 
 Running without a baseline in CI is fail-open: the gate cannot detect
 performance regressions if there is no reference to compare against.
@@ -168,7 +168,7 @@ async function measureStartup(): Promise<number> {
 // ---------------------------------------------------------------------------
 // Delegates to the shared perf-frame-bench.ts helper so the gate script and
 // the test in performance-gate.test.ts always measure identically.
-// Change bench methodology in perf-frame-bench.ts — it updates both consumers.
+// Change bench methodology in perf-frame-bench.ts, it updates both consumers.
 // NEVER launches the interactive TUI binary.
 
 // ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ async function measureStartup(): Promise<number> {
 
 async function main(): Promise<void> {
   console.log('='.repeat(72));
-  console.log('Perf Gate — measuring headless benchmarks');
+  console.log('Perf Gate: measuring headless benchmarks');
   console.log(new Date().toISOString());
   console.log('='.repeat(72));
 
@@ -326,10 +326,10 @@ async function main(): Promise<void> {
   // --- Exit ---
   console.log('');
   if (anyFailed) {
-    console.error('Perf Gate: FAILED — one or more budgets exceeded.');
+    console.error('Perf Gate: FAILED; one or more budgets exceeded.');
     process.exit(1);
   } else {
-    console.log('Perf Gate: PASSED — all budgets within threshold.');
+    console.log('Perf Gate: PASSED; all budgets within threshold.');
     process.exit(0);
   }
 }

@@ -1,12 +1,12 @@
-# Panel Authoring Guide
+# Panel authoring guide
 
-This guide is the on-ramp for contributors who want to extend goodvibes-tui with a new panel. It covers the class hierarchy, the canonical implementation pattern used by the built-in panels, rendering utilities, input handling, performance instrumentation, and contract testing. Most secondary surfaces are modals now, not panels — see `builtin-modals.ts`.
+This guide is the on-ramp for contributors who want to extend goodvibes-tui with a new panel. It covers the class hierarchy, the canonical implementation pattern used by the built-in panels, rendering utilities, input handling, performance instrumentation, and contract testing. Most secondary surfaces are modals now, not panels. See `builtin-modals.ts`.
 
-## Table of Contents
+## Table of contents
 
 1. [Overview](#overview)
 2. [Base class tree](#base-class-tree)
-3. [Canonical example — SkillsPanel](#canonical-example--skillspanel)
+3. [Canonical example: SkillsPanel](#canonical-example-skillspanel)
 4. [Palette convention](#palette-convention)
 5. [Rendering patterns](#rendering-patterns)
 6. [Performance](#performance)
@@ -21,8 +21,8 @@ This guide is the on-ramp for contributors who want to extend goodvibes-tui with
 
 A **panel** is a full-terminal-area view that the panel manager renders into a grid of `Line` objects (arrays of styled cells). Each panel is responsible for two things:
 
-- **Rendering** — given `(width, height)`, returning exactly `height` `Line` values, each with exactly `width` cells.
-- **Input** — consuming or forwarding keyboard events.
+- **Rendering.** Given `(width, height)`, returns exactly `height` `Line` values, each with exactly `width` cells.
+- **Input.** Consumes or forwards keyboard events.
 
 Panels live in `src/panels/`. The panel manager (`src/panels/panel-manager.ts`) owns lifetime (activate, deactivate, destroy) and routes key events. The compositor calls `render()` only when `needsRender` is true.
 
@@ -42,7 +42,7 @@ BasePanel  (src/panels/base-panel.ts)
 `ScrollableListPanel<T>`; no built-in panel subclasses it yet.
 
 `ScrollableListPanel<T>` has an opt-in `'/'`-to-filter affordance (`filterEnabled`,
-`filterMatches()`) that coexists with single-letter action keys — see
+`filterMatches()`) that coexists with single-letter action keys. See
 [Opt-in filter](#opt-in-filter) below. There is no separate always-on-search base class; converged the former `SearchableListPanel<T>` (which intercepted every printable
 keystroke as search input, with no modal on/off state) onto this same modal `'/'` filter so
 every list panel shares one filter interaction.
@@ -77,21 +77,21 @@ abstract render(width: number, height: number): Line[];
 
 **Dirt / invalidation helpers:**
 
-- `this.needsRender = true` / `this.markDirty()` — request a re-render.
-- `this.invalidate()` — same, callable from outside (compositor contract).
-- `this.markRendered()` — called by compositor after a successful render.
+- `this.needsRender = true` / `this.markDirty()`: request a re-render.
+- `this.invalidate()`: same, callable from outside (compositor contract).
+- `this.markRendered()`: called by compositor after a successful render.
 
 **Error surface (I2 slot):**
 
-- `this.setError(msg)` — surface a transient error (bold red, auto-cleared on next keystroke when using `ScrollableListPanel`).
-- `this.clearError()` — clear manually.
-- `this.renderErrorLine(width)` — returns a `Line | null` for use in your footer.
+- `this.setError(msg)`: surface a transient error (bold red, auto-cleared on next keystroke when using `ScrollableListPanel`).
+- `this.clearError()`: clear manually.
+- `this.renderErrorLine(width)`: returns a `Line | null` for use in your footer.
 
 **Loading spinner (I3 slot):**
 
-- `this.startLoading(label?)` / `this.stopLoading()` — control visibility.
-- `await this.withLoading(label, fn)` — run an async operation under the spinner (clears on success or throw).
-- `this.renderLoadingLine(width, frame?)` — returns a `Line | null`.
+- `this.startLoading(label?)` / `this.stopLoading()`: control visibility.
+- `await this.withLoading(label, fn)`: run an async operation under the spinner (clears on success or throw).
+- `this.renderLoadingLine(width, frame?)`: returns a `Line | null`.
 
 ---
 
@@ -147,8 +147,8 @@ After data changes, call `this.clampSelection()` to keep `selectedIndex` in boun
 ### Opt-in filter
 
 Set `this.filterEnabled = true` in the constructor and override `filterMatches()` to give a
-list panel a `'/'`-to-filter affordance that coexists with single-letter action keys —
-filtering is modal: action keys work until you press `/`; while the filter is active,
+list panel a `'/'`-to-filter affordance that coexists with single-letter action keys.
+Filtering is modal: action keys work until you press `/`; while the filter is active,
 every printable character (including ones that are action keys outside filter mode) extends
 the query instead.
 
@@ -156,13 +156,13 @@ the query instead.
 protected filterMatches(item: T, q: string): boolean;
 ```
 
-`q` arrives already trimmed and lower-cased. `getItems()` stays the **unfiltered** list — do
+`q` arrives already trimmed and lower-cased. `getItems()` stays the **unfiltered** list. Do
 not filter inside it. `getVisibleItems()` (inherited, not overridable) applies `filterMatches()`
 against `getItems()` and is what `renderList()` and navigation actually read; anywhere your own
 code previously read a filtered list (e.g. computing counts, or looking up "the selected item"
 for an action key), call `this.getVisibleItems()[this.selectedIndex]`, not `getItems()[...]`.
 
-A filter input line is auto-rendered at the top of `renderList()`'s header for free — you do
+A filter input line is auto-rendered at the top of `renderList()`'s header for free. You do
 not need to build or pass it yourself. Set `this.filterLabel` (default `'Filter'`) for a
 domain-specific noun, e.g. `'Filter tasks'`.
 
@@ -189,19 +189,19 @@ if (!this.filterActive && key === 'd') {
 ```
 
 **Pinned rendering contract:** `Filter: query` when inactive, `[Filter] query_` when active
-(literal trailing `_`, not a block-glyph cursor substitution). This is `buildFilterLine()` —
-call it directly only if you need the line somewhere other than the auto-injected header slot
+(literal trailing `_`, not a block-glyph cursor substitution). This is `buildFilterLine()`.
+Call it directly only if you need the line somewhere other than the auto-injected header slot
 (e.g. `PanelListPanel`, `DocsPanel`, and `FileExplorerPanel` build their own equivalent because
 they don't extend `ScrollableListPanel`; see those files for the pattern to mirror in a
 non-list-panel class).
 
 ---
 
-## Canonical example — SkillsPanel
+## Canonical example: SkillsPanel
 
-> **note (the panel purge).** Most read/navigate surfaces — including
+> **note (the panel purge).** Most read/navigate surfaces, including
 > Skills, Memory, Marketplace, Security, Hooks, Policy, Knowledge, Providers,
-> Services, Remote, Sandbox, Settings-Sync — no longer render as standalone
+> Services, Remote, Sandbox, and Settings-Sync, no longer render as standalone
 > registered panels. They migrated to **config-modal surfaces** rendered through
 > the single config-modal host (`src/input/config-modal.ts` +
 > `src/renderer/config-modal.ts`); author a new one by implementing the
@@ -215,9 +215,9 @@ non-list-panel class).
 > (`memory-panel.ts`, referenced below historically, was deleted in the > migration). The rest of this section stays as the reference `BasePanel`
 > authoring walk-through for the panels that remain.
 
-Adapted from `src/panels/skills-panel.ts` — see `src/panels/cost-tracker-panel.ts` for the canonical `extendPalette` usage on a still-registered panel.
+Adapted from `src/panels/skills-panel.ts`. See `src/panels/cost-tracker-panel.ts` for the canonical `extendPalette` usage on a still-registered panel.
 
-### Step 1 — palette constant
+### Step 1: palette constant
 
 ```ts
 import { DEFAULT_PANEL_PALETTE, extendPalette } from './polish.ts';
@@ -239,7 +239,7 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
 
 `extendPalette` merges domain keys into a copy of `DEFAULT_PANEL_PALETTE` and preserves the `Readonly<Required<PanelPalette>>` shape that rendering utilities expect.
 
-### Step 2 — type and class declaration
+### Step 2: type and class declaration
 
 ```ts
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
@@ -269,7 +269,7 @@ export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
 
 The four positional arguments to `super()` are `id`, `name`, `icon` (single char for tab display), and `category`.
 
-### Step 3 — implement required abstracts
+### Step 3: implement required abstracts
 
 ```ts
 protected getItems(): readonly SkillRecord[] {
@@ -303,7 +303,7 @@ protected renderItem(
 }
 ```
 
-### Step 4 — override optional hooks
+### Step 4: override optional hooks
 
 ```ts
 protected override getPalette() { return C; }
@@ -322,7 +322,7 @@ public override onActivate(): void {
 }
 ```
 
-### Step 5 — render
+### Step 5: render
 
 ```ts
 public render(width: number, height: number): Line[] {
@@ -354,7 +354,7 @@ public render(width: number, height: number): Line[] {
 
 `trackedRender(() => { ... })` wraps the body with throttle-check, wall-clock measurement, and stale-lines caching. See [Performance](#performance).
 
-### Step 6 — input handling
+### Step 6: input handling
 
 ```ts
 public handleInput(key: string): boolean {
@@ -411,7 +411,7 @@ buildPanelLine(width, [[skill.name, C.project]]);
 | `sectionBg` | Section header background (workspace panels) |
 | `summaryBg` | Summary/footer row background (workspace panels) |
 
-> **Note:** `selectedFg` and `selectedBg` are conventional domain extensions — not fields on the base `PanelPalette`. Add them to your `extendPalette(...)` call when your `renderItem()` needs explicit foreground/background colors for the selected row.
+> **Note:** `selectedFg` and `selectedBg` are conventional domain extensions, not fields on the base `PanelPalette`. Add them to your `extendPalette(...)` call when your `renderItem()` needs explicit foreground/background colors for the selected row.
 
 ---
 
@@ -447,12 +447,12 @@ Valid `state` values: `'good'` | `'warn'` | `'bad'` | `'idle'` | `'loading'`.
 
 Renders the filter input row from `this.filterLabel` / `this.filterActive` / `this.filterQuery`.
 `renderList()` calls this automatically and prepends it to the header when
-`this.filterEnabled = true` — you normally never call it directly. Panels that don't extend
+`this.filterEnabled = true`. You normally never call it directly. Panels that don't extend
 `ScrollableListPanel` (`PanelListPanel`, `DocsPanel`, `FileExplorerPanel`) build the equivalent
 line by hand; copy their `_buildFilterLine` private helper rather than reinventing the format.
 
-- Active: `[Filter] query_` — bracketed, literal trailing `_` cursor.
-- Inactive: `Filter: query` — dim, no cursor.
+- Active: `[Filter] query_`, bracketed, literal trailing `_` cursor.
+- Inactive: `Filter: query`, dim, no cursor.
 
 ### `renderConfirmLines(width, state)` (`src/panels/confirm-state.ts`)
 
@@ -508,9 +508,9 @@ public render(width: number, height: number): Line[] {
 ```
 
 `trackedRender` wraps the body with:
-1. `canRenderNow()` — skips the body and returns the cached last lines when throttled.
+1. `canRenderNow()`: skips the body and returns the cached last lines when throttled.
 2. Wall-clock timing.
-3. `reportRenderDuration(ms)` — feeds the health monitor.
+3. `reportRenderDuration(ms)`: feeds the health monitor.
 
 If throttled, the cached stale lines are returned to avoid flicker.
 
@@ -530,7 +530,7 @@ public render(width: number, height: number): Line[] {
 
 ### Guidelines
 
-- Keep `renderItem()` pure — no side effects, no I/O.
+- Keep `renderItem()` pure: no side effects, no I/O.
 - Data fetching belongs in `onActivate()` or triggered by key events, not inside `render()`.
 - Enable `showSelectionGutter = true` for all flat-list panels.
 
@@ -580,16 +580,16 @@ public handleInput(key: string): boolean {
 
 **Panels that don't extend `ScrollableListPanel`:** if you need the same modal filter contract
 in a `BasePanel` subclass, mirror the private `_handleFilterKey(key): boolean | null` helper in
-`PanelListPanel` / `DocsPanel` / `FileExplorerPanel` — it returns `true`/`false` when the key is
+`PanelListPanel` / `DocsPanel` / `FileExplorerPanel`. It returns `true`/`false` when the key is
 consumed/ignored in filter context, or `null` to fall through to your panel's own navigation and
 action keys.
 
 ### Action-callback plumbing pattern
 
 Panels get real services (not just read-only snapshots) through `ResolvedBuiltinPanelDeps`
-(`src/panels/builtin/shared.ts`). Bootstrap wires the already-constructed runtime singletons —
+(`src/panels/builtin/shared.ts`). Bootstrap wires the already-constructed runtime singletons,
 `opsApi`, `planRuntime`, `watcherRegistry`, `runtimeStore`, `approvalBroker`, `sessionBroker`,
-`automationManager`, `openAgentDetail`, `openPanel`, etc. — onto this single deps object, and
+`automationManager`, `openAgentDetail`, `openPanel`, etc., onto this single deps object, and
 each `registerXPanels(manager, deps)` factory forwards exactly the slice a panel needs into its
 constructor (see `CockpitPanel`'s `openAgentDetail` forwarding in
 `src/panels/builtin/operations.ts` for the established shape).
@@ -601,7 +601,7 @@ manager method) is already available in the factory closure.
 
 Two dispatch paths cover nearly every case:
 
-1. **Direct service call** — call the bound service method straight from `handleInput()`:
+1. **Direct service call.** Call the bound service method straight from `handleInput()`:
 
    ```ts
    public handleInput(key: string): boolean {
@@ -610,7 +610,7 @@ Two dispatch paths cover nearly every case:
    }
    ```
 
-2. **`handlePanelIntegrationAction(key, ctx)`** — for cross-panel navigation or dispatching a
+2. **`handlePanelIntegrationAction(key, ctx)`.** For cross-panel navigation or dispatching a
    command through the shared command pipeline. Implement this optional `Panel` hook
    (`src/panels/types.ts`); the router in `src/input/panel-integration-actions.ts` calls it
    BEFORE its own `instanceof` fallback chain, so new panels never need an `instanceof` addition
@@ -686,9 +686,9 @@ const EMPTY_SOME_SERVICE = {
 
 | Pitfall | Fix |
 |---------|-----|
-| Re-implementing scroll state with `selectedIndex` / `scrollStart` manually | Don't — both are in `ScrollableListPanel`. Call `clampSelection()` after data changes. |
+| Re-implementing scroll state with `selectedIndex` / `scrollStart` manually | Don't. Both are in `ScrollableListPanel`. Call `clampSelection()` after data changes. |
 | Inlining hex colors in `renderItem()` | Move all colors to the module-level `const C = extendPalette(...)` palette. |
-| Calling `render()` directly from `handleInput()` | Never — set `this.needsRender = true` (or call `this.markDirty()`) and let the compositor schedule the render. |
+| Calling `render()` directly from `handleInput()` | Never. Set `this.needsRender = true` (or call `this.markDirty()`) and let the compositor schedule the render. |
 | Not wrapping expensive renders with `trackedRender` | Panels that read large data structures on every render will be throttled aggressively without health instrumentation. |
 | Subscribing to registry events in the constructor | Subscribe in `onActivate()` and unsubscribe in `onDeactivate()` to avoid zombie listeners. |
 | Reading `getItems()` where you want the filtered list | `getItems()` is always the unfiltered full list. Read `getVisibleItems()` for the filtered/displayed set (used by `renderList()`, navigation, and any "selected item" lookup for an action key). |
@@ -699,13 +699,13 @@ const EMPTY_SOME_SERVICE = {
 
 ## See also
 
-- `src/panels/base-panel.ts` — `BasePanel` source with inline JSDoc for all lifecycle and render helpers.
-- `src/panels/scrollable-list-panel.ts` — `ScrollableListPanel<T>` source, including the opt-in modal filter (`filterEnabled`, `_handleFilterKey`, `buildFilterLine`).
-- `src/panels/polish.ts` — All rendering utility functions and `PanelPalette` type definition.
-- `src/panels/skills-panel.ts` — Canonical `ScrollableListPanel` + opt-in filter implementation used throughout this guide.
-- `src/panels/memory-panel.ts` — A `ScrollableListPanel` example where the filter is only enabled in one of two view modes (`filterEnabled` toggled per mode).
-- `src/panels/panel-list-panel.ts`, `src/panels/docs-panel.ts`, `src/panels/file-explorer-panel.ts` — Panels that mirror the same modal filter contract without extending `ScrollableListPanel` (each has its own private `_handleFilterKey` / `_buildFilterLine`).
-- `src/panels/confirm-state.ts` — `ConfirmState`, `handleConfirmInput`, `renderConfirmLines`.
-- `src/panels/search-focus.ts` — `isPanelSearchBackspace`, `isPanelSearchPrintable`, plus `isPanelSearchCancel`/`isPanelSearchCommit`/`getPanelSearchFocusTransition` (retained for panels outside the filter convergence, e.g. `knowledge-graph-panel.ts`, `session-browser-panel.ts`, `git-panel.ts`).
-- `src/panels/builtin-panels.ts` — How built-in panels are grouped into categories and registered with the `PanelManager`.
-- `src/test/panels/migrated-panels-contract.test.ts` — Contract test suite; add a `PanelEntry` here for every new panel.
+- `src/panels/base-panel.ts`: `BasePanel` source with inline JSDoc for all lifecycle and render helpers.
+- `src/panels/scrollable-list-panel.ts`: `ScrollableListPanel<T>` source, including the opt-in modal filter (`filterEnabled`, `_handleFilterKey`, `buildFilterLine`).
+- `src/panels/polish.ts`: all rendering utility functions and `PanelPalette` type definition.
+- `src/panels/skills-panel.ts`: canonical `ScrollableListPanel` + opt-in filter implementation used throughout this guide.
+- `src/panels/memory-panel.ts`: a `ScrollableListPanel` example where the filter is only enabled in one of two view modes (`filterEnabled` toggled per mode).
+- `src/panels/panel-list-panel.ts`, `src/panels/docs-panel.ts`, `src/panels/file-explorer-panel.ts`: panels that mirror the same modal filter contract without extending `ScrollableListPanel` (each has its own private `_handleFilterKey` / `_buildFilterLine`).
+- `src/panels/confirm-state.ts`: `ConfirmState`, `handleConfirmInput`, `renderConfirmLines`.
+- `src/panels/search-focus.ts`: `isPanelSearchBackspace`, `isPanelSearchPrintable`, plus `isPanelSearchCancel`/`isPanelSearchCommit`/`getPanelSearchFocusTransition` (retained for panels outside the filter convergence, e.g. `knowledge-graph-panel.ts`, `session-browser-panel.ts`, `git-panel.ts`).
+- `src/panels/builtin-panels.ts`: how built-in panels are grouped into categories and registered with the `PanelManager`.
+- `src/test/panels/migrated-panels-contract.test.ts`: contract test suite; add a `PanelEntry` here for every new panel.

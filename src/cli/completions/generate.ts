@@ -10,7 +10,7 @@
  * command are derived from the usage strings documented in help.ts's
  * COMMAND_HELP table (read-only reference; no mutation of existing files).
  *
- * Deferred wiring (one-line changes to existing files — NOT done here):
+ * Deferred wiring (one-line changes to existing files, NOT done here):
  *   src/cli/completion.ts: replace renderCompletion() body with
  *     ```
  *     import { generateCompletion } from './completions/generate.ts';
@@ -629,7 +629,7 @@ export function generateFish(surface: CompletionSurface): string {
 }
 
 // ---------------------------------------------------------------------------
-// Dispatcher — mirrors the existing renderCompletion(shell) API
+// Dispatcher, mirrors the existing renderCompletion(shell) API
 // ---------------------------------------------------------------------------
 
 /**

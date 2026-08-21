@@ -1,5 +1,5 @@
 /**
- * Tests for /context window — parsing, status text, and the set/clear/show
+ * Tests for /context window, parsing, status text, and the set/clear/show
  * subcommand flows against a stub provider registry.
  */
 import { describe, test, expect } from 'bun:test';

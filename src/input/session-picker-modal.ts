@@ -1,13 +1,13 @@
 /**
- * SessionPickerModal — state management for the /sessions picker modal.
+ * SessionPickerModal, state management for the /sessions picker modal.
  *
  * Lists LOCAL saved transcript files from SessionManager.list() (load/delete
- * operate on these — a saved JSONL session is a different thing from a live
+ * operate on these, a saved JSONL session is a different thing from a live
  * control-plane session, see below), tracks selected index, and handles
  * load/delete actions.
  *
  * Union-sessions surface: additionally surfaces the cross-surface
- * session union from `sessionBroker` (a SessionReadFacade — normally
+ * session union from `sessionBroker` (a SessionReadFacade, normally
  * `uiServices.sessions.sessionBroker`, the SessionUnionCache) so a user can
  * SEE what sessions are live/closed across every surface sharing this
  * daemon (TUI, webui, companion, automation), not just this process's own
@@ -21,7 +21,7 @@
  * Hosted sessions: a third, also read-only section lists the conversations
  * running INSIDE the daemon (`sessions.hosted.list`, held by the shared roster
  * in runtime/client/hosted-roster.ts). They belong in the place a person
- * already goes to ask "what sessions are there" — a hosted session is exactly
+ * already goes to ask "what sessions are there", a hosted session is exactly
  * that, one whose loop happens to live elsewhere. Joining one is `/hosted
  * attach <id>` rather than an Enter here, for the same reason cross-surface
  * rows are not loadable: there is no on-disk transcript this process can
@@ -38,7 +38,7 @@ import type { ConversationManager } from '../core/conversation';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { HostedRosterSnapshot } from '../runtime/client/hosted-roster.ts';
 // Re-exported so the composition site (input/handler.ts) reaches the picker and
-// its hosted roster through ONE import — that file sits on this repo's 800-line
+// its hosted roster through ONE import, that file sits on this repo's 800-line
 // per-file gate and a second import line there is a real cost.
 export { getSharedHostedSessionRoster } from '../runtime/client/hosted-roster.ts';
 
@@ -67,7 +67,7 @@ const DORMANT_CROSS_SURFACE_VIEW: CrossSurfaceView = {
 export class SessionPickerModal {
   public active = false;
   public sessions: SessionInfo[] = [];
-  /** Cross-surface session union (view-only) — see class doc. Empty until open(). */
+  /** Cross-surface session union (view-only), see class doc. Empty until open(). */
   public crossSurfaceSessions: readonly SharedSessionRecord[] = [];
   /** Honest posture for crossSurfaceSessions: mode/online/stale/offlineNote. */
   public crossSurfaceView: CrossSurfaceView = DORMANT_CROSS_SURFACE_VIEW;
@@ -76,7 +76,7 @@ export class SessionPickerModal {
   public visibleRows = 8;
   public deleteConfirmationTarget: string | null = null;
 
-  /** Daemon-hosted sessions (view-only) — see class doc. Never a fabricated empty list. */
+  /** Daemon-hosted sessions (view-only), see class doc. Never a fabricated empty list. */
   public hostedRoster: HostedRosterSnapshot = UNREAD_HOSTED_ROSTER;
 
   /** Last status message to show in the modal (e.g. error or success). */

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// review-hunk-revert.test.ts — the /review panel's reject action: reverse-apply
+// review-hunk-revert.test.ts, the /review panel's reject action: reverse-apply
 // exactly one hunk via checkpoints.revertHunkPreview → DiffPanel confirm →
 // checkpoints.revertHunk (with the token), rendering a [Revert] receipt.
 //
@@ -58,7 +58,7 @@ describe('the hunk-revert verbs are the daemon\'s to answer, and this app knows 
 
   for (const id of IDS) {
     test(`${id} is in the contract this app calls against`, () => {
-      // The descriptor is cataloged — the contract is shared, and the panel
+      // The descriptor is cataloged, the contract is shared, and the panel
       // below builds its request from it. What is NOT here is a handler.
       expect(services.gatewayMethods.get(id)).toBeTruthy();
     });

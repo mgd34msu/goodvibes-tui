@@ -125,10 +125,10 @@ class MockPruner implements Pruner {
 }
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — age-based pruning
+// RetentionPolicy, age-based pruning
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — age-based pruning', () => {
+describe('RetentionPolicy: age-based pruning', () => {
   it('marks expired records as candidates and keeps recent ones', async () => {
     const mock = new MockPruner();
     const now = BASE_TIME + 2 * 60 * 60 * 1000; // 2 hours after base
@@ -170,10 +170,10 @@ describe('RetentionPolicy — age-based pruning', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — count-based pruning
+// RetentionPolicy, count-based pruning
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — count-based pruning', () => {
+describe('RetentionPolicy: count-based pruning', () => {
   it('prunes oldest records when count exceeds maxCount', async () => {
     const mock = new MockPruner();
     const policy = new RetentionPolicy(
@@ -221,10 +221,10 @@ describe('RetentionPolicy — count-based pruning', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — size-based pruning
+// RetentionPolicy, size-based pruning
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — size-based pruning', () => {
+describe('RetentionPolicy: size-based pruning', () => {
   it('prunes largest oldest records until total size fits', async () => {
     const mock = new MockPruner();
     // maxSizeBytes = 100 bytes; each record is 60 bytes → 2 records = 120 > 100
@@ -269,10 +269,10 @@ describe('RetentionPolicy — size-based pruning', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — dry-run mode
+// RetentionPolicy, dry-run mode
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — dry-run mode', () => {
+describe('RetentionPolicy: dry-run mode', () => {
   it('does not remove records from tracking in dry-run mode', async () => {
     const mock = new MockPruner();
     const now = BASE_TIME + 2 * 60 * 60 * 1000;
@@ -310,10 +310,10 @@ describe('RetentionPolicy — dry-run mode', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — per-class breakdown
+// RetentionPolicy, per-class breakdown
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — per-class breakdown', () => {
+describe('RetentionPolicy: per-class breakdown', () => {
   it('correctly attributes pruned records to their retention class', async () => {
     const mock = new MockPruner();
     const now = BASE_TIME + 10 * 60 * 60 * 1000; // 10 hours later
@@ -343,10 +343,10 @@ describe('RetentionPolicy — per-class breakdown', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — error handling (partial failures)
+// RetentionPolicy, error handling (partial failures)
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — error handling', () => {
+describe('RetentionPolicy: error handling', () => {
   it('returns partial results when some deletions fail', async () => {
     const mock = new MockPruner();
     mock.failIds.add('cpt_fail');
@@ -403,10 +403,10 @@ describe('RetentionPolicy — error handling', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — config validation
+// RetentionPolicy, config validation
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — config validation', () => {
+describe('RetentionPolicy: config validation', () => {
   it('throws RangeError for negative maxAgeMs', () => {
     expect(
       () =>
@@ -458,10 +458,10 @@ describe('RetentionPolicy — config validation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — injectable clock
+// RetentionPolicy, injectable clock
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — injectable clock', () => {
+describe('RetentionPolicy: injectable clock', () => {
   it('uses the injected clock to evaluate age', async () => {
     const mock = new MockPruner();
     let fakeNow = BASE_TIME;
@@ -475,7 +475,7 @@ describe('RetentionPolicy — injectable clock', () => {
       makeRecord('cpt_1', { createdAt: BASE_TIME, retentionClass: 'standard' }),
     );
 
-    // At base time, record is 0ms old — should not be pruned
+    // At base time, record is 0ms old, should not be pruned
     await policy.prune();
     expect(mock.calls[0]!.candidates).toHaveLength(0);
 
@@ -487,10 +487,10 @@ describe('RetentionPolicy — injectable clock', () => {
 });
 
 // ---------------------------------------------------------------------------
-// SnapshotPruner — path validation
+// SnapshotPruner, path validation
 // ---------------------------------------------------------------------------
 
-describe('SnapshotPruner — path validation', () => {
+describe('SnapshotPruner: path validation', () => {
   const pruner = new SnapshotPruner();
 
   it('rejects empty string path', async () => {
@@ -523,7 +523,7 @@ describe('SnapshotPruner — path validation', () => {
 
   it('accepts legitimate path containing double-dot in a directory name like v1..2', async () => {
     // We expect a validation pass (no traversal error), but the file won't exist,
-    // so it will fail with an ENOENT fs error — that is correct behaviour.
+    // so it will fail with an ENOENT fs error, that is correct behaviour.
     const rec = makeRecord('legit', { path: '/data/v1..2/checkpoint.json' });
     const result = await pruner.delete([rec]);
     // Should NOT be a traversal failure
@@ -543,10 +543,10 @@ describe('SnapshotPruner — path validation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// SnapshotPruner — dry-run semantics
+// SnapshotPruner, dry-run semantics
 // ---------------------------------------------------------------------------
 
-describe('SnapshotPruner — dry-run semantics', () => {
+describe('SnapshotPruner: dry-run semantics', () => {
   it('populates candidateIds and not deletedIds in dry-run mode', async () => {
     const pruner = new SnapshotPruner();
     const rec = makeRecord('cpt_dr', { path: '/tmp/__gv_test_dryrun.json' });
@@ -573,10 +573,10 @@ describe('SnapshotPruner — dry-run semantics', () => {
 });
 
 // ---------------------------------------------------------------------------
-// RetentionPolicy — injectable pruner
+// RetentionPolicy, injectable pruner
 // ---------------------------------------------------------------------------
 
-describe('RetentionPolicy — injectable pruner', () => {
+describe('RetentionPolicy: injectable pruner', () => {
   it('uses the injected pruner instead of default SnapshotPruner', async () => {
     const mock = new MockPruner();
     const policy = new RetentionPolicy(

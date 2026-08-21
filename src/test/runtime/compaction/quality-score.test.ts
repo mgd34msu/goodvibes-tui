@@ -92,7 +92,7 @@ function makeMockFlags(enabled = true): FeatureFlagManager {
 }
 
 // ---------------------------------------------------------------------------
-// computeQualityScore — unit tests
+// computeQualityScore, unit tests
 // ---------------------------------------------------------------------------
 
 describe('computeQualityScore', () => {
@@ -248,7 +248,7 @@ describe('grade assignment', () => {
     const output: StrategyOutput = {
       messages: [{
         role: 'user',
-        content: [{ type: 'text', text: '[Session Collapse — context collapsed to save tokens. Full conversation history replaced with this structured handoff note for session continuity.]' }],
+        content: [{ type: 'text', text: '[Session Collapse: context collapsed to save tokens. Full conversation history replaced with this structured handoff note for session continuity.]' }],
       }],
       tokensAfter: 150,
       summary: 'Collapsed.',
@@ -313,7 +313,7 @@ describe('describeScore', () => {
 });
 
 // ---------------------------------------------------------------------------
-// escalateStrategy — unit tests
+// escalateStrategy, unit tests
 // ---------------------------------------------------------------------------
 
 describe('escalateStrategy', () => {
@@ -343,7 +343,7 @@ describe('escalateStrategy', () => {
 // Manager-level strategy switch tests
 // ---------------------------------------------------------------------------
 
-describe('CompactionManager — strategy switch on low quality score', () => {
+describe('CompactionManager: strategy switch on low quality score', () => {
   const SESSION_ID = 'score-switch-test';
   const CONTEXT_WINDOW = 100000;
 

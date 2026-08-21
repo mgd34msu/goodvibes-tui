@@ -56,7 +56,7 @@ describe('budget-breach-notifier', () => {
     expect(checker.check(over, PRICED_MODEL, 1)).toBe(true);
     expect(notifier.send).toHaveBeenCalledTimes(1);
 
-    // Still over budget on the next check — must not re-fire.
+    // Still over budget on the next check, must not re-fire.
     expect(checker.check(over, PRICED_MODEL, 1)).toBe(false);
     expect(notifier.send).toHaveBeenCalledTimes(1);
   });
@@ -96,7 +96,7 @@ describe('budget-breach-notifier', () => {
     expect(checker.check(usage, PRICED_MODEL, 1)).toBe(true);
     expect(checker.check(usage, PRICED_MODEL, 1)).toBe(false); // same threshold, already notified
 
-    // Raise the threshold from $1 to $20 — session cost is $30 (10M input
+    // Raise the threshold from $1 to $20, session cost is $30 (10M input
     // tokens * $3/1M for claude-sonnet-4-6), so it's still breached against
     // the new, higher threshold. The latch re-arms on the threshold change
     // and fires once more even though it was already breached before.
@@ -147,7 +147,7 @@ describe('budget-breach-notifier', () => {
     });
     const usage = { input: 10_000_000, output: 0, cacheRead: 0, cacheWrite: 0 };
     // check() itself still returns true (a breach occurred and the latch
-    // fires) — the gate lives inside fireBudgetBreachAlert's delivery path.
+    // fires), the gate lives inside fireBudgetBreachAlert's delivery path.
     expect(checker.check(usage, PRICED_MODEL, 1)).toBe(true);
     expect(notifier.send).not.toHaveBeenCalled();
   });

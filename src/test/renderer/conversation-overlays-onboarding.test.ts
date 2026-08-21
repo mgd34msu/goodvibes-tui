@@ -95,8 +95,8 @@ describe('applyConversationOverlays onboarding shell', () => {
 
   test('preserves modalReturnFocus while escape unwinds nested onboarding modals', () => {
     const input = makeInput();
-    // Panel focus is only real while a panel workspace is actually open — focus
-    // ownership now lives in PanelManager and self-heals against visibility — so
+    // Panel focus is only real while a panel workspace is actually open, focus
+    // ownership now lives in PanelManager and self-heals against visibility, so
     // open a panel before claiming panel focus for this modalReturnFocus test.
     const pm = input.uiServices.shell.panelManager;
     pm.registerType({

@@ -132,7 +132,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           '  capabilities:',
           ...selected.capabilities.map((capability) => `    ${capability.id}: ${capability.supported ? 'yes' : 'no'} (${capability.detail})`),
           '  recovery:',
-          ...selected.recovery.map((action) => `    ${action.command} — ${action.reason}`),
+          ...selected.recovery.map((action) => `    ${action.command}: ${action.reason}`),
         ].join('\n'));
         return;
       }
@@ -157,7 +157,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           `  trustClass: ${selected.negotiation.trustClass}`,
           '  capabilities:',
           ...selected.capabilities.map((capability) => (
-            `    ${capability.id}: ${capability.supported ? 'supported' : 'missing'} — ${capability.detail}`
+            `    ${capability.id}: ${capability.supported ? 'supported' : 'missing'}; ${capability.detail}`
           )),
         ].join('\n'));
         return;
@@ -190,7 +190,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           ...(selected.lastError ? [`  lastError: ${selected.lastError}`] : []),
           ...(selected.taskId ? [`  bound task: ${selected.taskId}`] : []),
           '  actions:',
-          ...nextSteps.map((action) => `    ${action.command} — ${action.reason}`),
+          ...nextSteps.map((action) => `    ${action.command}: ${action.reason}`),
         ].join('\n'));
         return;
       }

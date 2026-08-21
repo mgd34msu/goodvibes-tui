@@ -8,7 +8,7 @@
 //      logout, reject, unpair, force, kill, terminate).
 //   2. Primary names and aliases are globally unique. CommandRegistry.register
 //      throws on any collision, and the tests below assert uniqueness over the
-//      fully-built registry — this IS statically checkable, and is checked.
+//      fully-built registry, this IS statically checkable, and is checked.
 //   3. Every alias is either in the command's `aliases` field or in `argsHint`.
 //      (Validates aliases are declared, not leaked through docs.)
 //
@@ -68,7 +68,7 @@ describe('Slash-command alias lint (β4)', () => {
 
     if (violations.length > 0) {
       throw new Error(
-        'Alias lint failed — destructive commands must not have single-letter aliases:\n  ' +
+        'Alias lint failed: destructive commands must not have single-letter aliases:\n  ' +
         violations.join('\n  ')
       );
     }

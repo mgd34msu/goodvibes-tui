@@ -36,7 +36,7 @@ export type PanelFocusRouteState = {
    * True when THIS token is a paste: a single 'text' token whose value holds
    * more than one character. The SDK tokenizer emits a bracketed paste
    * (\x1b[?2004h, enabled in main.ts init) as exactly one such token; discrete
-   * keystrokes — even several batched into one feed() by render-tick latency —
+   * keystrokes, even several batched into one feed() by render-tick latency,
    * arrive as separate 1-char tokens. See the text-token branch below.
    */
   isPasteToken: boolean;
@@ -88,12 +88,12 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
   }
 
   if (token.type === 'key') {
-    // I6: two-stage Escape — give the panel a chance to consume escape first
+    // I6: two-stage Escape, give the panel a chance to consume escape first
     // (e.g. dismiss a confirm dialog or clear search). Only unfocus if the
     // panel returns false (unconsumed) or there is no active panel.
     if (token.logicalName === 'escape') {
       // While streaming, a focused panel must not swallow the
-      // only way to cancel — Escape's first job is always cancel-turn; the
+      // only way to cancel, Escape's first job is always cancel-turn; the
       // panel's own two-stage consume-or-unfocus contract only runs once no
       // turn is active, so a *second* Escape falls through to it normally
       // (panelFocused stays unchanged here). Calls cancelGeneration()
@@ -117,7 +117,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     }
     const kb = state.keybindingsManager;
     // NOTE: panel-tab-next/prev, panel-close, and panel-close-all are handled
-    // globally in handleGlobalShortcutToken (runs earlier in the feed loop) —
+    // globally in handleGlobalShortcutToken (runs earlier in the feed loop),
     // their old, drifted copies here were unreachable and are gone. Only
     // panel-focus-toggle stays, since it's meaningful only once the panel
     // workspace already owns focus (it swaps between the two panes).
@@ -156,7 +156,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     // Invariant A/B: a paste (isPasteToken, one multi-char token) into
     // a capturing panel forwards verbatim below; elsewhere it is DROPPED with
     // a one-shot hint (never exploded into hotkeys, never a silent focus
-    // flip — focus moves only on an explicit verb). Discrete keystrokes fall
+    // flip, focus moves only on an explicit verb). Discrete keystrokes fall
     // through to the per-char dispatch below.
     if (state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
       state.onPasteDropped?.(activePanel?.name ?? 'the panel');
@@ -164,7 +164,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       return { handled: true, panelFocused };
     }
 
-    // item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts).
+    // item 5, paste flood guard (rate-based; see panel-paste-flood-guard.ts).
     if (!state.isPasteToken && !activePanel?.isCapturingTextBurst?.()) {
       const guard = trackPanelPasteFloodGuard(state.burstGuard, state.now);
       if (!guard.dispatch) {
@@ -293,7 +293,7 @@ export function handlePromptTextToken(state: TextRouteState, token: InputToken):
 
   if (prompt === '/') {
     // Arm commandMode as soon as the prompt becomes a bare '/', regardless of
-    // whether commandRegistry has been (re)attached yet — this is a one-shot
+    // whether commandRegistry has been (re)attached yet, this is a one-shot
     // transition (the only place commandMode ever becomes true), and gating
     // it on commandRegistry meant a transient null during a modal/overlay
     // handoff would permanently miss the window: every following keystroke
@@ -329,7 +329,7 @@ export type KeyRouteState = {
   commandContext: CommandContext | undefined;
   /**
    * Deliver a concealed submission. When it returns true, concealed mode was
-   * active and consumed the value — the plaintext went straight to the
+   * active and consumed the value, the plaintext went straight to the
    * requester, bypassing input history and the transcript. Optional so bare
    * test callers omit it.
    */
@@ -337,14 +337,14 @@ export type KeyRouteState = {
   /**
    * Optional: only used by the enter-key desync safety net below (a stray
    * slash-prefixed submission with commandMode somehow still false). When
-   * absent, that fallback simply doesn't trigger — the primary fix (arming
+   * absent, that fallback simply doesn't trigger, the primary fix (arming
    * commandMode on the '/' keystroke regardless of registry attachment, in
    * handlePromptTextToken above) is what actually prevents the desync.
    */
   commandRegistry?: CommandRegistry | null;
   autocomplete: AutocompleteEngine | null;
   blockActionsMenu: { open: (block: BlockMeta) => void };
-  /** The absolute history line of the bottom-most visible block — the block
+  /** The absolute history line of the bottom-most visible block, the block
    *  the user is actually looking at (see getViewportBottomLine's doc).
    *  Anchors Enter-on-empty-composer's block-actions menu to that block
    *  instead of an arbitrary fixed line. */
@@ -455,7 +455,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
     }
     if (text) {
       // Safety net for a desynced commandMode: text is command-shaped (starts
-      // with '/') but commandMode never armed — e.g. the '/' keystroke landed
+      // with '/') but commandMode never armed, e.g. the '/' keystroke landed
       // during a modal/overlay handoff window. handleCommandModeToken (the
       // normal dispatch path for '/name ...') never runs in this state since
       // it early-returns when commandMode is false, so without this the text
@@ -611,12 +611,12 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
   }
 
   if (token.logicalName === 'down') {
-    // Announce the focus move honestly — this handoff is otherwise silent
+    // Announce the focus move honestly, this handoff is otherwise silent
     // and easy to miss (the next keystrokes look like they're doing nothing,
     // because they're now landing on the indicator, not the composer).
     const announceIndicatorFocus = () => {
       indicatorFocused = true;
-      state.commandContext?.print('[Down] Focus moved to the process indicator — Up or Esc returns to the composer.');
+      state.commandContext?.print('[Down] Focus moved to the process indicator; Up or Esc returns to the composer.');
     };
     const move = computeCursorVerticalMove(prompt, cursorPos, inputScrollTop, state.contentWidth, state.maxInputRows, 1);
     if (move.moved) {

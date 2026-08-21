@@ -1,5 +1,5 @@
 /**
- * undo.test.ts — undo/redo coalescing, cursor restoration, kill/yank undoability,
+ * undo.test.ts, undo/redo coalescing, cursor restoration, kill/yank undoability,
  * bounded history eviction, and redo invalidation.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
@@ -153,7 +153,7 @@ describe('bounded undo history', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Coalescing burst groups — simulate what saveUndoStateForText does
+// Coalescing burst groups, simulate what saveUndoStateForText does
 // ---------------------------------------------------------------------------
 
 describe('coalescing burst simulation', () => {

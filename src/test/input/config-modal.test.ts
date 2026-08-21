@@ -125,7 +125,7 @@ describe('ConfigModal host', () => {
       ] }),
     }));
     const frameA = renderConfigModal(modal, 90, 24);
-    // Mutate ONLY live values — same structure, no key press.
+    // Mutate ONLY live values, same structure, no key press.
     tick = 999;
     const frameB = renderConfigModal(modal, 90, 24);
 
@@ -248,10 +248,10 @@ describe('ConfigModal host', () => {
     expect(fired).toEqual(['stop']);
   });
 
-  // jumpToRow — the in-surface "jump" a surface's own onAction drives (e.g.
+  // jumpToRow, the in-surface "jump" a surface's own onAction drives (e.g.
   // the Memory modal's Proposals tab jumping to an affected record in the
   // Review Queue tab), host-constructed and handed to onAction as
-  // ctx.jumpToRow — never something a caller of fireAction supplies.
+  // ctx.jumpToRow, never something a caller of fireAction supplies.
   describe('jumpToRow (in-surface jump)', () => {
     function twoTabSurface(): ConfigModalSurface {
       return makeSurface({
@@ -362,7 +362,7 @@ function ctxNoop() {
 
 // ── item 1: config-modal host '/' type-to-filter ─────────────────────
 
-describe('ConfigModal host — type-to-filter (item 1)', () => {
+describe('ConfigModal host: type-to-filter (item 1)', () => {
   test('/ arms the filter; typed text narrows rows on a real surface (memory-modal)', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface()); // fixture pre-awaits its onOpen refresh, so records are already loaded here
@@ -381,7 +381,7 @@ describe('ConfigModal host — type-to-filter (item 1)', () => {
     expect(model.rows[0]!.label).toContain('batches');
   });
 
-  test('a multi-char paste token lands in the filter atomically (handleConfigModalToken) — not split into per-char nav/close', async () => {
+  test('a multi-char paste token lands in the filter atomically (handleConfigModalToken); not split into per-char nav/close', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface());
     const state = { configModal: modal, requestRender: () => {}, handleEscape: () => modal.close() };
@@ -403,7 +403,7 @@ describe('ConfigModal host — type-to-filter (item 1)', () => {
     expect(modal.getFilterQuery()).toBe('charte');
   });
 
-  test('Esc two-stage: a non-empty query is cleared first; a second Esc (now empty) closes — single-Esc-close preserved for the no-filter case', async () => {
+  test('Esc two-stage: a non-empty query is cleared first; a second Esc (now empty) closes; single-Esc-close preserved for the no-filter case', async () => {
     const modal = new ConfigModal();
     let closed = false;
     modal.open(await memoryModalGoldenSurface());
@@ -488,12 +488,12 @@ describe('ConfigModal host — type-to-filter (item 1)', () => {
     modal.activateFilter();
     modal.appendFilterText('charter');
     const model = modal.getRenderModel();
-    expect(model.hints).toContain('/charter — 1 of 2 match');
+    expect(model.hints).toContain('/charter: 1 of 2 match');
     expect(model.hints).toContain('Esc clear · Esc close');
     expect(model.hints.some((h) => h.includes('refresh'))).toBe(false);
   });
 
-  test('filtering resets on tab switch — a query is scoped to the tab it was typed against', async () => {
+  test('filtering resets on tab switch; a query is scoped to the tab it was typed against', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface()); // two tabs: All Records / Review Queue
     modal.activateFilter();
@@ -516,7 +516,7 @@ describe('ConfigModal host — type-to-filter (item 1)', () => {
 
 // ── item 2: wrap-clamp the live-label overlay ────────────────────────
 
-describe('ConfigModal host — wrap-clamp overlay (item 2)', () => {
+describe('ConfigModal host: wrap-clamp overlay (item 2)', () => {
   test('a live label growing past the wrap width is clamped to the frozen line count with an ellipsis; the full label appears after a keypress', () => {
     let label = 'short label';
     const modal = new ConfigModal();
@@ -570,26 +570,26 @@ describe('ConfigModal host — wrap-clamp overlay (item 2)', () => {
 });
 
 // ── Modal sizing rule (owner, zero tolerance): a modal/list must never clip
-// its full descriptive text — size to content or scroll, never clip. Before
+// its full descriptive text, size to content or scroll, never clip. Before
 // this fix, row-count-based scroll windowing (`visible` rows sliced off
 // `allRows`) assumed one rendered line per row; ModalFactory then bounds the
 // WRAPPED lines to a fixed content-row budget (renderConfigModal's
 // targetContentRows), so a row that wraps to multiple lines could push a
 // LATER row's content past that budget and have it silently cut off
 // mid-line by ModalFactory.createModal's `sectionLines.slice(0,
-// targetContentRows)` — a real, reproduced bug (confirmed against the
+// targetContentRows)`, a real, reproduced bug (confirmed against the
 // planning-modal golden fixture, which had been rendering exactly this kind
 // of truncated row prior to this fix; its golden was re-baselined
 // accordingly). `_windowRowsByLineBudget` closes this by windowing on
 // CUMULATIVE WRAPPED LINES rather than raw row count.
-describe('ConfigModal host — line-budget row windowing (modal sizing rule)', () => {
+describe('ConfigModal host: line-budget row windowing (modal sizing rule)', () => {
   test('a row that wraps to multiple lines is shown in FULL (label untouched, no ellipsis); a later row that would overflow the line budget is deferred to scrolling instead of being cut off', () => {
     const modal = new ConfigModal();
     modal.setViewportRows(3); // exactly the host's floor (setViewportRows clamps to a minimum of 3)
     modal.open(makeSurface({
       view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [
         // Wraps to 4 lines at width 20 (verified: "a label long enough" /
-        // "to wrap across three" / "lines at this narrow" / "width here") —
+        // "to wrap across three" / "lines at this narrow" / "width here"),
         // already past the 3-line budget on its own.
         { id: 'r1', label: 'a label long enough to wrap across three lines at this narrow width here' },
         { id: 'r2', label: 'second row' },
@@ -597,8 +597,8 @@ describe('ConfigModal host — line-budget row windowing (modal sizing rule)', (
       ] }] }),
     }));
     const model = modal.getRenderModel(20);
-    // r1 alone already exceeds the 3-line budget — shown in full anyway (a
-    // lone overflowing row is rendered whole, never replaced with nothing —
+    // r1 alone already exceeds the 3-line budget, shown in full anyway (a
+    // lone overflowing row is rendered whole, never replaced with nothing,
     // only a SUBSEQUENT row is deferred), so r2/r3 have no room left at all.
     expect(model.rows.map((r) => r.id)).toEqual(['r1']);
     expect(model.rows[0]!.label).toBe('a label long enough to wrap across three lines at this narrow width here');

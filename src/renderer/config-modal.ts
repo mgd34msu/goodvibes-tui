@@ -5,13 +5,13 @@ import { activeUiTones } from './theme.ts';
 import type { ConfigModal, ConfigModalRenderModel } from '../input/config-modal.ts';
 
 // Matches ModalFactory.createModal's own box-width computation (margin 4,
-// requested max width 76 — see renderConfigModalModel below) so the
+// requested max width 76, see renderConfigModalModel below) so the
 // wrap-clamp in ConfigModal.getRenderModel() measures against the SAME width
 // the list section will actually wrap at, at the current terminal size.
 const MODAL_MARGIN = 4;
 const MODAL_MAX_WIDTH = 76;
 /**
- * renderConfigModal — the single render path for every ConfigModalSurface.
+ * renderConfigModal, the single render path for every ConfigModalSurface.
  * Reads the host's frozen-structure-plus-live-values render model and maps it
  * onto ModalFactory.createModal (the same renderer settings-modal uses), so the
  * chrome, tab strip, list, and footer are one dialect across all migrated
@@ -32,7 +32,7 @@ export function renderConfigModal(modal: ConfigModal, width: number, height: num
   return renderConfigModalModel(model, width);
 }
 
-/** Pure model→Line[] mapping — the shared inner step of renderConfigModal. */
+/** Pure model→Line[] mapping, the shared inner step of renderConfigModal. */
 function renderConfigModalModel(model: ConfigModalRenderModel, width: number): Line[] {
   // Read the active-mode chrome tones per call (this render path is not on a
   // hot loop; the modal renders once per keystroke).

@@ -121,7 +121,7 @@ describe('planning modal surface', () => {
   });
 
   // dismiss is now a first-class CONFIRMED action ('d') that dispatches
-  // the real /plan dismiss and closes the panel — not a pseudo answer-row.
+  // the real /plan dismiss and closes the panel, not a pseudo answer-row.
   test('the dismiss action dispatches /plan dismiss and closes the panel', async () => {
     const surface = await warm(serviceWithState(noQuestionState()));
     const cap = captureCommands();

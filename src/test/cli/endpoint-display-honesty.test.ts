@@ -9,12 +9,12 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
 /**
  * Mirrors the verifier's live probe: a daemon can be serving an endpoint
  * healthily (flag overrides at launch) while the STORED hostMode is an
- * unrecognized value — 'not probed' must therefore be its own tri-state on
+ * unrecognized value, 'not probed' must therefore be its own tri-state on
  * every surface: text says not probed, JSON omits the field (undefined),
  * NEVER a definite `reachable: no` / `"reachable": false` for an endpoint a
  * daemon demonstrably answers.
  */
-describe('endpoint display honesty — not-probed is a tri-state, never coerced to false', () => {
+describe('endpoint display honesty: not-probed is a tri-state, never coerced to false', () => {
   const scratch = makeProjectTempDir('gv-display-honesty');
   // A real listener: the "daemon demonstrably answering" in the verifier's probe.
   const listener = Bun.listen({
@@ -85,7 +85,7 @@ describe('endpoint display honesty — not-probed is a tri-state, never coerced 
     expect(text).not.toMatch(/reachable: no\b/);
   });
 
-  test('a disabled endpoint keeps the definite reachable: no (nothing should be listening — pre-existing semantics)', async () => {
+  test('a disabled endpoint keeps the definite reachable: no (nothing should be listening; pre-existing semantics)', async () => {
     const runtime = fakeRuntime({
       'controlPlane.enabled': false,
       'controlPlane.hostMode': 'local',

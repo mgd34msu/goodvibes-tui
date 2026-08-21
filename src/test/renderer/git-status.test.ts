@@ -78,7 +78,7 @@ function providerWithFakeFetch(
 // ---------------------------------------------------------------------------
 
 describe('GitStatusProvider', () => {
-  describe('getStatus — clean repo', () => {
+  describe('getStatus: clean repo', () => {
     test('returns correct branch name', async () => {
       const provider = new GitStatusProvider(process.cwd());
       // Directly test _fetch by patching getInstance at the module level
@@ -102,7 +102,7 @@ describe('GitStatusProvider', () => {
     });
   });
 
-  describe('unborn HEAD (repo with no commits) — 5a', () => {
+  describe('unborn HEAD (repo with no commits); 5a', () => {
     test('shows "new" instead of "?" for a freshly-initialised repo', async () => {
       const dir = makeProjectTempDir('gv-git-new');
       try {
@@ -121,7 +121,7 @@ describe('GitStatusProvider', () => {
       const provider = new GitStatusProvider(process.cwd());
       // Prime the cache
       const first = await provider.getStatus();
-      // Immediately call again — should be same object (cached)
+      // Immediately call again, should be same object (cached)
       const second = await provider.getStatus();
       expect(second).toBe(first);
     });
@@ -136,7 +136,7 @@ describe('GitStatusProvider', () => {
     });
   });
 
-  describe('error handling — never throws', () => {
+  describe('error handling: never throws', () => {
     test('getStatus returns fallback when GitService.getInstance throws', async () => {
       // Create a provider and corrupt its internal state by patching _fetch indirectly
       const provider = new GitStatusProvider(process.cwd());
@@ -146,7 +146,7 @@ describe('GitStatusProvider', () => {
         throw new Error('git not found');
       };
 
-      // lastFetch is 0, so it will call _fetch — should not throw
+      // lastFetch is 0, so it will call _fetch, should not throw
       const info = await provider.getStatus();
       expect(info.branch).toBe('?');
       expect(info.dirty).toBe(false);
@@ -161,12 +161,12 @@ describe('GitStatusProvider', () => {
         throw new Error('git not found');
       };
 
-      // refresh calls _fetch directly — wraps error
+      // refresh calls _fetch directly, wraps error
       const info = await provider.refresh().catch(() => null);
       // refresh propagates errors from _fetch via the outer try/catch in the private method
-      // but our overridden _fetch throws before the finally — info may be null here
+      // but our overridden _fetch throws before the finally, info may be null here
       // The important contract: the PROVIDER METHOD (getStatus) never throws
-      // refresh() itself is allowed to propagate — but in practice the private _fetch
+      // refresh() itself is allowed to propagate, but in practice the private _fetch
       // catches the error. Let's verify the cache still has the fallback.
       // The important contract: getStatus never throws and cache holds fallback values
       const cached = await provider.getStatus();
@@ -260,11 +260,11 @@ describe('GitStatusProvider', () => {
 
       await wait(POLL_MS * 8);
       // tmpDir was never turned into a repo, so isGitRepo() stays false the
-      // whole time — the call count must not increment every tick.
+      // whole time, the call count must not increment every tick.
       expect(seen).toEqual([]);
     });
 
-    test('stopPolling() clears the interval — no further onChange after it is called', async () => {
+    test('stopPolling() clears the interval: no further onChange after it is called', async () => {
       tmpDir = makeProjectTempDir('gv-git-status-poll-stop');
       const provider = new GitStatusProvider(tmpDir);
       providers.push(provider);
@@ -292,7 +292,7 @@ describe('GitStatusProvider', () => {
         provider.startPolling(POLL_MS, () => {});
       }).not.toThrow();
 
-      // Let a few ticks elapse with the throwing isGitRepo — must not crash
+      // Let a few ticks elapse with the throwing isGitRepo, must not crash
       // the process or reject unhandled.
       await wait(POLL_MS * 5);
     });

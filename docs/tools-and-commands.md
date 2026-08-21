@@ -1,4 +1,4 @@
-# Tools and Commands
+# Tools and commands
 
 ## Built-in tools
 
@@ -65,15 +65,15 @@ Read files with token-efficient extraction modes.
 
 - Extract modes: `content` (full text), `outline` (signatures only), `symbols` (exported names only, the most compact mode), `ast` (structural), `lines` (specific ranges)
 - Tree-sitter powered outline and symbol extraction with regex fallback
-- Token-budget pagination for large batch reads — request many files, get pages that fit within a budget
+- Token-budget pagination for large batch reads: request many files, get pages that fit within a budget
 - Built-in image, PDF, and Jupyter notebook reading
-- Per-file caching with optimistic concurrency control (OCC) conflict detection — tracks what you've read and warns if it changed externally
+- Per-file caching with optimistic concurrency control (OCC) conflict detection: tracks what you've read and warns if it changed externally
 
 ### write
 
 Write files with atomic operations, backup modes, and auto-heal.
 
-- Atomic writes via temp file + rename — no partial writes on crash
+- Atomic writes via temp file + rename: no partial writes on crash
 - Overwrite modes: `fail_if_exists`, `overwrite`, `backup` (copies the original to `.goodvibes/.backups/`)
 - Auto-heal pipeline: if a written file has syntax errors and `tools.autoHeal` is enabled, runs formatter -> linter -> LLM fix automatically
 - Base64 content support for files with special characters
@@ -84,7 +84,7 @@ Write files with atomic operations, backup modes, and auto-heal.
 Structural code editing with AST matching, scope hints, and transactional rollback.
 
 - Match modes: `exact`, `fuzzy` (whitespace-insensitive), `regex` (with capture groups), `ast` (tree-sitter structural), `ast_pattern` (ast-grep with metavariables like `$VAR` and `$$$ARGS`)
-- Scope hints: `in_function`, `in_class`, `near_line` — disambiguate matches without adding more context
+- Scope hints: `in_function`, `in_class`, `near_line`, to disambiguate matches without adding more context
 - Occurrence selection: `first`, `last`, `all`, or a specific Nth occurrence, with an ambiguity guard by default
 - Atomic transactions: all edits succeed or all roll back; also supports `partial` and `none` modes
 - Pre/post validation: run `typecheck`, `lint`, `test`, or `build` before and after edits, with auto-rollback on failure
@@ -104,7 +104,7 @@ Multi-mode search across files, content, symbols, references, and structural AST
 
 Shell execution with background processes, retry, progress tracking, and file operations.
 
-- Background execution with process tracking — spawn, poll status, read output, kill
+- Background execution with process tracking: spawn, poll status, read output, kill
 - Retry with exponential backoff on transient failures
 - `until` pattern: watch stdout for a regex match, then stop or promote to background
 - Pre-command file operations: copy, move, delete files before running commands
@@ -122,7 +122,7 @@ HTTP client with extraction modes, service registry auth, and batch operations.
 
 ### web_search
 
-Higher-level provider-backed search built on top of the lower-level fetch/runtime stack. `fetch` is the HTTP/extraction primitive; `web_search` is the search/evidence surface built on top of it — reach for `fetch` when you already have a URL, and `web_search` when you need ranked results and evidence shaping first. See [Providers and routing](providers-and-routing.md) for the current search provider list.
+Higher-level provider-backed search built on top of the lower-level fetch/runtime stack. `fetch` is the base HTTP/extraction tool; `web_search` is the search/evidence surface built on top of it. Reach for `fetch` when you already have a URL, and `web_search` when you need ranked results and evidence shaping first. See [Providers and routing](providers-and-routing.md) for the current search provider list.
 
 ### analyze
 
@@ -166,10 +166,10 @@ In-process subagent management. See [Agent system](#agent-system) below for arch
 Session state, persistent memory, telemetry, hooks, and output modes, all in one tool.
 
 - KV state: session-scoped key-value store with atomic persistence
-- Durable memory posture: inspect the reviewed knowledge substrate and related runtime state (the full durable-memory workflow lives under `/recall` and the knowledge panels)
+- Durable memory posture: inspect the reviewed knowledge store and related runtime state (the full durable-memory workflow lives under `/recall` and the knowledge panels)
 - Hook management: list, enable, disable, add, and remove hooks at runtime
 - Output mode switching: switch between `default`, `vibecoding`, and `justvibes` verbosity presets
-- Analytics: record tool calls, query by filter, export as JSON/CSV, dashboard view — backed by WASM SQLite
+- Analytics: record tool calls, query by filter, export as JSON/CSV, dashboard view, backed by WASM SQLite
 - Context and budget reporting for token usage awareness
 
 ### workflow
@@ -177,7 +177,7 @@ Session state, persistent memory, telemetry, hooks, and output modes, all in one
 Workflow state machines, automation triggers, and scheduled tasks. See [Automation and scheduling](#automation-and-scheduling) below for the underlying contract model.
 
 - Named workflow definitions: `wrfc` (work-review-fix cycle), `fix_loop`, `test_then_fix`, `review_only`
-- State machine with validated transitions — prevents invalid state changes
+- State machine with validated transitions: prevents invalid state changes
 - Automation triggers: fire shell commands when specific hook events occur, with optional JS conditions
 - Cron scheduler: full 5-field cron expressions with IANA timezone support, missed-run detection, per-task run history, and enable/disable control; persists to `.goodvibes/tui/schedules.json`
 - Full lifecycle: start, transition, cancel, list active instances
@@ -258,11 +258,11 @@ Representative slash-command families include:
 
 `/editor` (alias `/ed`) opens the current composer draft in your `$VISUAL`/`$EDITOR`, suspends the TUI while the editor runs, and loads the edited text back into the composer when you save and quit. Set `$EDITOR` (e.g. `export EDITOR=nvim`) for it to work.
 
-Composer capture markers: a line beginning with `#` saves the rest as a session-memory note and does NOT send a turn — a quick "jot this down" — and a confirmation names what was saved and where. (`## ...` markdown headings are left alone and sent normally.) The existing `!# <text>` still pins to session memory and also sends the text as a prompt.
+Composer capture markers: a line beginning with `#` saves the rest as a session-memory note and does NOT send a turn (a quick "jot this down"), and a confirmation names what was saved and where. (`## ...` markdown headings are left alone and sent normally.) The existing `!# <text>` still pins to session memory and also sends the text as a prompt.
 
-`/schedule add when "<natural language>" <prompt...>` accepts natural-language times parsed locally — for example `every weekday at 9am`, `daily at 6pm`, `every 30 minutes`, `every monday at 08:00`, or `in 2 hours`. The command always echoes back the concrete interpretation (the resulting cron/interval/one-shot schedule) before the job is saved, so you can see exactly what was understood.
+`/schedule add when "<natural language>" <prompt...>` accepts natural-language times parsed locally, for example `every weekday at 9am`, `daily at 6pm`, `every 30 minutes`, `every monday at 08:00`, or `in 2 hours`. The command always echoes back the concrete interpretation (the resulting cron/interval/one-shot schedule) before the job is saved, so you can see exactly what was understood.
 
-`/search <query> [--limit <n>]` runs a provider-backed web search directly (bypassing the agent-tool JSON wrapper) and renders ranked results, an instant answer, and the source label into the transcript; it degrades honestly using the web-search service's own status note. `/imagine <prompt>` is the first production caller of the media-provider registry's image generation — on success it persists the artifact (inline bytes stored directly; a remote-URL-only result is stored as a small JSON pointer record rather than eagerly fetched), and prints the registry's own per-provider status (naming the exact env var) when no image-capable provider is configured. (`/image` is a different, pre-existing command — it attaches a local image file to the next message for multimodal analysis.)
+`/search <query> [--limit <n>]` runs a provider-backed web search directly (bypassing the agent-tool JSON wrapper) and renders ranked results, an instant answer, and the source label into the transcript; it degrades honestly using the web-search service's own status note. `/imagine <prompt>` is the first production caller of the media-provider registry's image generation. On success it persists the artifact (inline bytes stored directly; a remote-URL-only result is stored as a small JSON pointer record rather than eagerly fetched), and prints the registry's own per-provider status (naming the exact env var) when no image-capable provider is configured. (`/image` is a different, pre-existing command; it attaches a local image file to the next message for multimodal analysis.)
 
 `/session` is the single front-door for all session work. Two domains:
 - Lifecycle: `list`, `rename`, `resume`, `fork`, `save`, `info`, `export <id|.> [format]`, `search <query>`, `delete <id>`, `events [kind]`, `groups [kind]`, `hotspots`
@@ -309,7 +309,7 @@ Five keys are fixed and are not in the rebindable table: `F2` (toggle the Fleet 
 
 `Ctrl+W` uses whitespace-delimited word boundaries (readline/unix-word-rubout semantics), while `Alt+D`, `Alt+B`, and `Alt+F` use Unicode word boundaries (letters, digits, underscore).
 
-`Ctrl+K` is the command palette, not kill-to-end-of-line: the readline kill that historically owned `Ctrl+K` is bound to `Alt+K` instead, so the capability is kept rather than lost. `Ctrl+U` and `Alt+U` are likewise split — `Ctrl+U` kills to the start of the line and pushes the text onto the kill ring (readline convention), while `Alt+U` clears the whole buffer regardless of cursor position and pushes nothing.
+`Ctrl+K` is the command palette, not kill-to-end-of-line: the readline kill that historically owned `Ctrl+K` is bound to `Alt+K` instead, so the capability is kept rather than lost. `Ctrl+U` and `Alt+U` are likewise split: `Ctrl+U` kills to the start of the line and pushes the text onto the kill ring (readline convention), while `Alt+U` clears the whole buffer regardless of cursor position and pushes nothing.
 
 ### Navigation
 
@@ -342,7 +342,7 @@ Five keys are fixed and are not in the rebindable table: `F2` (toggle the Fleet 
 | Key | Action |
 |-----|--------|
 | `Ctrl+P` | Toggle panel sidebar |
-| `F2` | Toggle the Fleet panel — the live unified process tree (open and focus, bring to front, or close) |
+| `F2` | Toggle the Fleet panel: the live unified process tree (open and focus, bring to front, or close) |
 | `Ctrl+]` / `Ctrl+PageDown` | Next panel tab |
 | `Ctrl+PageUp` | Previous panel tab |
 | `Alt+1`…`Alt+9` | Jump to panel tab 1–9 (shown as `⌥N` on the tab bar) |
@@ -353,7 +353,7 @@ Five keys are fixed and are not in the rebindable table: `F2` (toggle the Fleet 
 
 ### Selection modals
 
-Every picker built on the selection modal — the recovery offer, session picker, profile picker, config rows — shares one key vocabulary:
+The recovery offer, session picker, profile picker, and config rows are all pickers built on the selection modal, and they share one key vocabulary:
 
 | Key | Action |
 |-----|--------|
@@ -500,12 +500,12 @@ Hook properties: `match`, `type`, `command`/`prompt`/`url`/`path`, `async`, `onc
 
 Beyond individual hook definitions, GoodVibes treats hook points, workflow runs, and scheduled tasks as a managed contract rather than plain fire-and-forget shell calls.
 
-- Hook-point contracts carry execution authority, mutation/injection permissions, timeout policy, and failure policy metadata — a hook point declares what it is allowed to do, not just what triggers it
+- Hook-point contracts carry execution authority, mutation/injection permissions, timeout policy, and failure policy metadata: a hook point declares what it is allowed to do, not just what triggers it
 - Managed hooks support scaffold, chain, enable/disable, inspect, import/export, and simulation flows through `/hooks` and the `state` tool's hook management modes
-- Workflow state machines (`wrfc`, `fix_loop`, `test_then_fix`, `review_only`) drive validated transitions for multi-step review/fix cycles — see [Tool reference: workflow](#workflow) above
+- Workflow state machines (`wrfc`, `fix_loop`, `test_then_fix`, `review_only`) drive validated transitions for multi-step review/fix cycles. See [Tool reference: workflow](#workflow) above
 - Cron-like scheduled agent tasks support timezone-aware schedules, missed-run tracking, run history, and manual trigger support, managed via `/schedule`
 
-Project planning and the persistent `/work-plan` checklist are a related but separate surface — see [Project planning](#project-planning) below and [Project planning](project-planning.md).
+Project planning and the persistent `/work-plan` checklist are a related but separate surface. See [Project planning](#project-planning) below and [Project planning](project-planning.md).
 
 ## MCP integration
 
@@ -564,16 +564,16 @@ Place plugin folders in `~/.goodvibes/tui/plugins/`. Each plugin has a `manifest
 
 Plugins receive a sandboxed API:
 
-- `registerCommand()` — add custom slash commands
-- `registerProvider()` / `registerProviderInstance()` — add OpenAI-compatible or fully custom LLM providers
-- `registerTool()` — add custom tools available to the LLM
-- `registerGatewayMethod()` — add control-plane/API methods
-- `registerChannelPlugin()` / `registerDeliveryStrategy()` — extend omnichannel surfaces
-- `registerMemoryEmbeddingProvider()` — extend sqlite-vec-backed memory indexing
-- `registerVoiceProvider()` / `registerMediaProvider()` / `registerWebSearchProvider()` — extend voice, media, and search families
-- `onEvent()` — subscribe to typed runtime events
-- `getConfig()` — read plugin-specific settings
-- `log()` — emit structured plugin logs
+- `registerCommand()`: add custom slash commands
+- `registerProvider()` / `registerProviderInstance()`: add OpenAI-compatible or fully custom LLM providers
+- `registerTool()`: add custom tools available to the LLM
+- `registerGatewayMethod()`: add control-plane/API methods
+- `registerChannelPlugin()` / `registerDeliveryStrategy()`: extend omnichannel surfaces
+- `registerMemoryEmbeddingProvider()`: extend sqlite-vec-backed memory indexing
+- `registerVoiceProvider()` / `registerMediaProvider()` / `registerWebSearchProvider()`: extend voice, media, and search families
+- `onEvent()`: subscribe to typed runtime events
+- `getConfig()`: read plugin-specific settings
+- `log()`: emit structured plugin logs
 
 Manage installed plugins via `/plugin enable|disable|reload|list`.
 
@@ -650,7 +650,7 @@ When auto-compaction fires, a before/after notice appears in the transcript. The
 
 Use `/compact` to compact manually at any time.
 
-## Knowledge Ask
+## Knowledge ask
 
 `/knowledge ask <query>` asks the SDK knowledge/wiki layer for a source-backed semantic answer. Use `--space <knowledgeSpaceId>` to target a specific space such as a Home Assistant graph, `--limit <n>` to bound evidence, and `--mode concise|standard|detailed` to select answer detail.
 
@@ -672,7 +672,7 @@ The `/wrfc` command opens the chain-status view directly. Constraint counts are 
 
 Each chain row and the selected-chain summary also show elapsed time (active chains, since `createdAt`) or total duration (terminal chains, `createdAt` to `completedAt`). Press `a` on a selected chain to jump straight to its owner agent in the Inspector panel. When an expanded chain's detail exceeds the panel's per-chain line cap, the truncated tail is replaced with a `+N more` indicator instead of being silently dropped.
 
-The panel's empty state points at the actual chain producer, `/teamwork create-mode <mode> <title>` (modes with `reviewMode: wrfc` — see `/teamwork modes`), rather than a `/wrfc run` command that does not exist.
+The panel's empty state points at the actual chain producer, `/teamwork create-mode <mode> <title>` (modes with `reviewMode: wrfc`; see `/teamwork modes`), rather than a `/wrfc run` command that does not exist.
 
 ## Live TTS commands
 
@@ -722,15 +722,15 @@ For QEMU guest bootstrapping details, including the generated image script and g
 
 Three flags control which session is active when the TUI opens:
 
-- `--continue` — resumes the most recently active session for the current working directory (reads the last-session pointer file; does nothing when no pointer exists).
-- `--resume [id]`, `-r [id]` — resumes a specific session by id. When the id is omitted, resolves via the same last-session pointer as `--continue`.
-- `--fork [id]` — forks a session into a new branch. Bare `--fork` forks the session already active when the TUI starts; `--fork <id>` resumes the named session first, then forks it.
+- `--continue`: resumes the most recently active session for the current working directory (reads the last-session pointer file; does nothing when no pointer exists).
+- `--resume [id]`, `-r [id]`: resumes a specific session by id. When the id is omitted, resolves via the same last-session pointer as `--continue`.
+- `--fork [id]`: forks a session into a new branch. Bare `--fork` forks the session already active when the TUI starts; `--fork <id>` resumes the named session first, then forks it.
 
 Only one of `--continue`, `--resume`, and `--fork` may be used in a single invocation. Combining them is an error.
 
 When a session is resumed, the TUI prints `Resumed session: <id>` with message count and model to the transcript. When a session is forked, it prints `Session forked:` with the new id, fork name, source title, and message count.
 
-A session that crashed before saving is offered back through the startup recovery modal instead of any of these flags — see [the startup recovery modal](getting-started.md#the-startup-recovery-modal).
+A session that crashed before saving is offered back through the startup recovery modal instead of any of these flags. See [the startup recovery modal](getting-started.md#the-startup-recovery-modal).
 
 See [CLI flags reference](cli-flags.md) for full syntax, inline-value forms, and examples.
 
@@ -738,7 +738,7 @@ See [CLI flags reference](cli-flags.md) for full syntax, inline-value forms, and
 
 - [Getting started](getting-started.md)
 - [CLI flags reference](cli-flags.md)
-- [/share — session export](share-command.md)
+- [/share: session export](share-command.md)
 - [Deployment and services](deployment-and-services.md)
 - [Channels, remote runtime, and API](channels-remote-and-api.md)
 - [Providers and routing](providers-and-routing.md)

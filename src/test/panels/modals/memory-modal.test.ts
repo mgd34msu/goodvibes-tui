@@ -43,7 +43,7 @@ describe('memory modal surface', () => {
     expect(view.tabs.map((t) => t.id)).toEqual(['all', 'review', 'proposals']);
     const all = tabText(view, 'all');
     // Both are review candidates (the SDK's isReviewCandidate covers all four
-    // review states, not just flagged ones) — ranked, not filtered down.
+    // review states, not just flagged ones), ranked, not filtered down.
     expect(all).toContain('records 2  review queue 2');
     expect(all).toContain('Ship in batched waves.');
     const review = view.tabs.find((t) => t.id === 'review')!;
@@ -112,7 +112,7 @@ describe('memory modal surface', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Proposals tab — memory.consolidation.receipts read through the injected
+// Proposals tab, memory.consolidation.receipts read through the injected
 // resolveConsolidationGateway seam (memory-consolidation-gateway.ts), never a
 // real daemon round-trip in these tests.
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ function proposalsTab(view: ConfigModalView) {
   return view.tabs.find((t) => t.id === 'proposals')!;
 }
 
-describe('memory modal — Proposals tab', () => {
+describe('memory modal: Proposals tab', () => {
   test('no resolveConsolidationGateway wired renders the honest "unavailable" state without ever attempting a fetch', async () => {
     const view = await openAsync(createMemoryModalSurface(fixedDeps()));
     const tab = proposalsTab(view);
@@ -164,7 +164,7 @@ describe('memory modal — Proposals tab', () => {
     expect(proposalsTab(view).emptyText).toContain('Pending proposals unavailable');
   });
 
-  test('a 404 from an older daemon (route not wired yet) also renders "unavailable" — the same bucket as 501', async () => {
+  test('a 404 from an older daemon (route not wired yet) also renders "unavailable"; the same bucket as 501', async () => {
     const surface = createMemoryModalSurface({
       ...fixedDeps(),
       resolveConsolidationGateway: failingGateway(new GoodVibesSdkError('not found', { status: 404 })),
@@ -185,12 +185,12 @@ describe('memory modal — Proposals tab', () => {
     expect(tab.emptyText).not.toContain('unavailable');
   });
 
-  test('a successful fetch with zero pending proposals renders the honest "none pending" line — a THIRD distinct state', async () => {
+  test('a successful fetch with zero pending proposals renders the honest "none pending" line; a THIRD distinct state', async () => {
     const surface = createMemoryModalSurface({ ...fixedDeps(), resolveConsolidationGateway: readyGateway([]) });
     const view = await openAsync(surface);
     const tab = proposalsTab(view);
     expect(tab.rows).toHaveLength(0);
-    expect(tab.emptyText).toBe('No pending proposals — nothing awaiting judgment right now.');
+    expect(tab.emptyText).toBe('No pending proposals: nothing awaiting judgment right now.');
     expect(tab.header).toEqual(['pending proposals 0']);
   });
 
@@ -244,12 +244,12 @@ describe('memory modal — Proposals tab', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Review Queue reason correlation (item 3) — a cross-scope-duplicate proposal
+// Review Queue reason correlation (item 3), a cross-scope-duplicate proposal
 // marks its records 'fresh' with NO staleReason, so without correlating
 // against the fetched proposals those rows would be bare and unexplained.
 // ---------------------------------------------------------------------------
 
-describe('memory modal — Review Queue reason correlation against pending proposals', () => {
+describe('memory modal: Review Queue reason correlation against pending proposals', () => {
   const FRESH_DUPLICATE_RECORDS = [
     ...RECORDS, // mem-bbb2 here already carries its own staleReason
     { id: 'mem-ccc3', scope: 'project', cls: 'fact', summary: 'Near-duplicate fact record.', tags: [], reviewState: 'fresh', confidence: 50, createdAt: FIXED + 2000, provenance: [] },
@@ -267,7 +267,7 @@ describe('memory modal — Review Queue reason correlation against pending propo
     expect(row.label).toContain('(cross-scope-duplicate: Near-duplicate of a project-scope record.)');
   });
 
-  test('a record that already carries its own staleReason keeps that reason — the matching proposal\'s reason is not appended on top', async () => {
+  test('a record that already carries its own staleReason keeps that reason; the matching proposal\'s reason is not appended on top', async () => {
     const surface = createMemoryModalSurface({
       memoryRegistry: { honestSearch: async () => ({ records: FRESH_DUPLICATE_RECORDS }) },
       resolveConsolidationGateway: readyGateway(PROPOSALS), // proposal 2 also names mem-bbb2, which already has a staleReason
@@ -293,13 +293,13 @@ describe('memory modal — Review Queue reason correlation against pending propo
 
 // ---------------------------------------------------------------------------
 // Modal sizing rule (owner, zero tolerance): a modal must never clip its full
-// descriptive text — size to content or scroll, never clip. Rendered through
+// descriptive text, size to content or scroll, never clip. Rendered through
 // the REAL host (ConfigModal + renderConfigModal), at a COMPACT height, with
 // realistic (not pathological) proposal reason text long enough to wrap
 // across multiple lines within a single row.
 // ---------------------------------------------------------------------------
 
-describe('memory modal — Proposals tab at compact height (modal sizing rule)', () => {
+describe('memory modal: Proposals tab at compact height (modal sizing rule)', () => {
   const LONG_REASON = 'Duplicates a project-scope decision already captured with more detail and provenance elsewhere in the store.';
 
   /**
@@ -307,7 +307,7 @@ describe('memory modal — Proposals tab at compact height (modal sizing rule)',
    * hint bar (the bottom border line, e.g. "d delete · r refresh · v view in
    * revi…"). The footer hints line is a supplementary shortcut legend that
    * ModalFactory deliberately truncates at narrow widths (every modal's
-   * footer does this, existing behavior) — the modal sizing rule is about the
+   * footer does this, existing behavior), the modal sizing rule is about the
    * row/list DESCRIPTIVE TEXT, so the two are asserted on separately.
    */
   async function renderProposalsTab(width: number, height: number): Promise<{ content: string; footer: string }> {
@@ -332,7 +332,7 @@ describe('memory modal — Proposals tab at compact height (modal sizing rule)',
   test('a long proposal reason wraps across lines and is never truncated with an ellipsis, at a compact height', async () => {
     const { content } = await renderProposalsTab(90, 14); // compact height (default goldens use 40)
     expect(content).toContain('cross-scope-duplicate');
-    // Each word-boundary chunk of the full reason must survive — proving the
+    // Each word-boundary chunk of the full reason must survive, proving the
     // wrap kept the whole sentence rather than dropping its tail.
     expect(content).toContain('Duplicates a project-scope decision');
     expect(content).toContain('provenance elsewhere in the store.');

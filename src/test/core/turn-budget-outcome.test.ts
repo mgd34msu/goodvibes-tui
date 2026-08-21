@@ -23,12 +23,12 @@ describe('describeTurnBudgetSource', () => {
 describe('formatTurnBudgetOutcome', () => {
   test('renders the limit and its source from the event, as a budget line (not a crash)', () => {
     expect(formatTurnBudgetOutcome({ limit: 50, source: 'default' })).toBe(
-      'reached its turn budget — 50 turns (the default limit (agents.maxTurns))',
+      'reached its turn budget: 50 turns (the default limit (agents.maxTurns))',
     );
   });
   test('singular turn', () => {
     expect(formatTurnBudgetOutcome({ limit: 1, source: 'spawn-override' })).toBe(
-      'reached its turn budget — 1 turn (a per-spawn override)',
+      'reached its turn budget: 1 turn (a per-spawn override)',
     );
   });
   test('policy-bound source names the cap', () => {

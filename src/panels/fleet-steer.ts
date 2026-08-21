@@ -34,7 +34,7 @@ export function steerBadgeTone(status: SteerBadgeStatus, palette: PanelPalette):
   }
 }
 
-/** Labels of the currently live, steerable agent nodes other than `excludeNodeId` — offered when a steer target has gone inactive (WO item 4). */
+/** Labels of the currently live, steerable agent nodes other than `excludeNodeId`, offered when a steer target has gone inactive (WO item 4). */
 export function liveSteerableLabels(nodes: readonly ProcessNode[], excludeNodeId: string): string[] {
   return nodes
     .filter((node) => node.id !== excludeNodeId && node.kind === 'agent' && node.capabilities.steerable && !isTerminalProcessState(node.state))
@@ -44,8 +44,8 @@ export function liveSteerableLabels(nodes: readonly ProcessNode[], excludeNodeId
 /** Refusal message for a steer that could not be queued: states why + preserves the draft + suggests live targets. */
 export function steerRefusalMessage(reason: string, siblingLabels: readonly string[]): string {
   const suggestion = siblingLabels.length > 0
-    ? ` Draft kept — steerable now: ${siblingLabels.slice(0, 3).join(', ')}${siblingLabels.length > 3 ? '…' : ''}.`
-    : ' Draft kept — no other agents are currently steerable.';
+    ? ` Draft kept: steerable now: ${siblingLabels.slice(0, 3).join(', ')}${siblingLabels.length > 3 ? '…' : ''}.`
+    : ' Draft kept: no other agents are currently steerable.';
   return `${reason}.${suggestion}`;
 }
 
@@ -55,10 +55,10 @@ export function renderSteerBadgeLine(badge: SteerBadge, width: number, palette: 
   const tone = steerBadgeTone(badge.status, palette);
   const forTarget = targetLabel ? ` for ${targetLabel}` : '';
   const label = badge.status === 'queued'
-    ? `steer queued${forTarget} — delivers on its next turn (watch the ${glyph} badge)`
+    ? `steer queued${forTarget}: delivers on its next turn (watch the ${glyph} badge)`
     : badge.status === 'consumed'
       ? 'steer consumed'
-      : `steer dropped — ${badge.note ?? 'the target ended before delivery'}`;
+      : `steer dropped: ${badge.note ?? 'the target ended before delivery'}`;
   return buildPanelLine(width, [
     [' ', palette.dim],
     [glyph, tone],
@@ -75,7 +75,7 @@ export function renderSteerBadgeLine(badge: SteerBadge, width: number, palette: 
  * its short linger so a tab doesn't accumulate stale indicators.
  *
  * Mutates `tab.steerBadge` in place (same mutable-slot convention as
- * `FleetTab.ledgerEntries` — see fleet-panel.ts's ensureLedgerLoaded).
+ * `FleetTab.ledgerEntries`, see fleet-panel.ts's ensureLedgerLoaded).
  * Returns true when anything changed, so the caller knows whether to mark
  * itself dirty.
  */
@@ -102,7 +102,7 @@ export function reconcileSteerBadges(
         changed = true;
       } else if (badge.queuedAt !== undefined && now - badge.queuedAt > STEER_TTL_MS) {
         // Long-tool-call case: the target is still healthy and non-terminal,
-        // but the underlying steer message's own TTL (the SDK's MessageBus —
+        // but the underlying steer message's own TTL (the SDK's MessageBus,
         // see registry.js's steer(), which stamps every steer with
         // STEER_TTL_MS) has lapsed without a COMMUNICATION_CONSUMED ever
         // arriving. The SDK gives no explicit expiry signal, so without this

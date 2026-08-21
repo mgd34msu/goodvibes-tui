@@ -116,7 +116,7 @@ describe('SessionMemoryStore', () => {
       store.add('second');
       store.clear();
       const id = store.add('after clear');
-      // Counter was at 2 before clear — next ID must be mem-3, not mem-1
+      // Counter was at 2 before clear, next ID must be mem-3, not mem-1
       expect(id).toBe('mem-3');
     });
 

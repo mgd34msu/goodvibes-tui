@@ -4,7 +4,7 @@
  * Unit coverage for the TUI's INBOUND steer poller (SessionInboundInputPoller):
  * it collects QUEUED steer/follow-up inputs for ITS session, injects each via the
  * onSteer callback, acks delivery on the wire, and is per-session isolated. Uses a
- * stub inbound client (no daemon) — the real-daemon end-to-end proof lives in
+ * stub inbound client (no daemon), the real-daemon end-to-end proof lives in
  * session-inbound-steer-daemon-integration.test.ts.
  */
 import { describe, expect, test } from 'bun:test';
@@ -59,7 +59,7 @@ function makeStub(inputsBySession: Record<string, StubInput[]>): {
   return { client, delivered, listCalls };
 }
 
-describe('SessionInboundInputPoller — collect, inject, ack', () => {
+describe('SessionInboundInputPoller: collect, inject, ack', () => {
   test('a queued webui steer is injected and acked queued->delivered', async () => {
     const { client, delivered } = makeStub({
       's1': [{ id: 'in-1', sessionId: 's1', intent: 'steer', state: 'queued', body: 'resize the panel', createdAt: 100, surfaceKind: 'webui', surfaceId: 'surface:webui', displayName: 'Alice' }],
@@ -121,7 +121,7 @@ describe('SessionInboundInputPoller — collect, inject, ack', () => {
     poller.dispose();
   });
 
-  test('D7b — per-session isolation: a steer to each of two sessions lands only in the right poller', async () => {
+  test('D7b: per-session isolation: a steer to each of two sessions lands only in the right poller', async () => {
     const { client } = makeStub({
       'proj-a': [{ id: 'a-1', sessionId: 'proj-a', intent: 'steer', state: 'queued', body: 'for A', createdAt: 10, surfaceId: 'surface:webui' }],
       'proj-b': [{ id: 'b-1', sessionId: 'proj-b', intent: 'steer', state: 'queued', body: 'for B', createdAt: 20, surfaceId: 'surface:webui' }],

@@ -3,7 +3,7 @@ import { UIFactory } from '../../renderer/ui-factory.ts';
 import { linesToText } from '../setup.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 3 — the always-visible "sleep disabled" chip in the footer posture
+// STEP 3, the always-visible "sleep disabled" chip in the footer posture
 // block (the danger-mode idiom), present only while power.keepAwake holds.
 // Full-string render at 80x24 and 60 columns, both states.
 // ---------------------------------------------------------------------------

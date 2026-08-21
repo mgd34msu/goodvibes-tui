@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
-// fleet-headline-stall.test.ts — fleet rows render the read-model's headline
+// fleet-headline-stall.test.ts, fleet rows render the read-model's headline
 // (replaced in place, never a scrolling feed) and the stall marker
 // ('quiet Nm'), and the waiting-on-human classification adopts the registry's
 // canonical needsAttention projection (approval AND input reasons).
 //
-// Row assertions are FULL-STRING at 80 and 60 columns — never prefix checks —
+// Row assertions are FULL-STRING at 80 and 60 columns, never prefix checks,
 // so any layout drift in the row composer is named, not hidden.
 // ---------------------------------------------------------------------------
 
@@ -105,9 +105,9 @@ describe('fleet row headline + stall marker (full-string, 80 and 60 cols)', () =
 });
 
 // STEP 2: the ready best-of-N pick and the merge-conflict flag are first-class
-// members of the ONE waiting-on-human state class — same ⚑ glyph idiom (which
+// members of the ONE waiting-on-human state class, same ⚑ glyph idiom (which
 // truncates to '…' in the 1-width glyph cell, exactly like approval/input),
-// same jump key, same count — but each names its required act in its own words,
+// same jump key, same count, but each names its required act in its own words,
 // distinct from the bare 'blocked on you'. Full-string at 80 AND 60 columns.
 describe('fleet row waiting-on-human: pick + conflict reasons (full-string, 80 and 60 cols)', () => {
   test('80 cols: a ready best-of-N pick reads "needs your pick"', () => {
@@ -232,7 +232,7 @@ describe('fleet detail block: headline row', () => {
     });
     const texts = renderFleetDetailLines(node, 60, false, true).map(text);
     expect(texts.some((t) => t.includes('conflicts') && t.includes('2 file(s)') && t.includes('press Enter to resolve'))).toBe(true);
-    // The long path is fully present across (hard-)wrapped, padded segments —
+    // The long path is fully present across (hard-)wrapped, padded segments,
     // never truncated with an ellipsis. Stripping whitespace reconstructs it
     // (wrap only inserts line breaks / indent padding, never drops characters).
     const stripped = texts.join('').replace(/\s/g, '');

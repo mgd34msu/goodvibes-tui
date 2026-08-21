@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { renderWorkstreamGraphLines, renderPoolSummary, type WorkstreamGraphSnapshot } from '../../panels/workstream-graph-render.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 6 — the task graph renders (fleet.graph.get): nodes/edges/states —
-// ready / running / blocked-with-"waiting on: X" / at-cap / stalled — legible
+// STEP 6, the task graph renders (fleet.graph.get): nodes/edges/states,
+// ready / running / blocked-with-"waiting on: X" / at-cap / stalled, legible
 // without opening transcripts. Full-string render at 80x24 and 60 columns, no
 // clipping (every line fits the width).
 // ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ describe('renderWorkstreamGraphLines states (STEP 6)', () => {
       ];
       const edges = [{ from: 'a', to: 'c' }];
       const lines = renderWorkstreamGraphLines(snapshot(nodes, edges, { ready: 1, running: 2, atCap: true, capKey: 'fleet.maxSize', maxSize: 2, refusal: undefined } as WorkstreamGraphSnapshot['pool']), width);
-      // Normalize wrapped continuation lines to one flat string — nothing is
+      // Normalize wrapped continuation lines to one flat string, nothing is
       // clipped, so the full tell survives even where it wrapped.
       const flat = lines.join(' ').replace(/\s+/g, ' ');
       expect(flat).toContain('fix-phase chain');
@@ -90,11 +90,11 @@ describe('renderWorkstreamGraphLines states (STEP 6)', () => {
     expect(noOverflow(lines, 60)).toBe(true);
   });
 
-  test('a very long blocked reason wraps to fit 60 columns — nothing clipped, no overflow', () => {
+  test('a very long blocked reason wraps to fit 60 columns; nothing clipped, no overflow', () => {
     const nodes = [node({ id: 'a', title: 'a very long work-item title that eats the line', state: 'blocked', blockedReason: 'an extremely long blocking reason that would otherwise run well past the sixty-column boundary' })];
     const lines = renderWorkstreamGraphLines(snapshot(nodes, [], null), 60);
     expect(noOverflow(lines, 60)).toBe(true);
-    // The full reason survives across wrapped lines (no clipping) — the last
+    // The full reason survives across wrapped lines (no clipping), the last
     // words are still present once continuation whitespace is normalized.
     const flat = lines.join(' ').replace(/\s+/g, ' ');
     expect(flat).toContain('sixty-column boundary');

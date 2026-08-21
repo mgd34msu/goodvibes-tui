@@ -3,11 +3,11 @@
  *
  * replay defect: the footer's context-info line put the `spine:online`/
  * `spine:offline` segment LAST, so ordinary width pressure clipped it mid-word
- * (e.g. "spi…") — invisible exactly when the daemon-liveness honesty signal
+ * (e.g. "spi…"), invisible exactly when the daemon-liveness honesty signal
  * matters most. Fix: segments now carry a survival priority. cwd/model are
  * essential (priority 0), spine is a high-value honesty signal (priority 1)
- * ordered ahead of the two decorative segments — tool count (priority 2) and
- * notify mode (priority 3) — which are the first to be dropped WHOLE under
+ * ordered ahead of the two decorative segments, tool count (priority 2) and
+ * notify mode (priority 3), which are the first to be dropped WHOLE under
  * width pressure, never character-truncated mid-word.
  */
 import { describe, test, expect } from 'bun:test';
@@ -58,7 +58,7 @@ describe('footer: spine segment survives width pressure', () => {
 
   test('narrow line (75 cols): spine renders whole; decorative segments drop whole, not mid-word', () => {
     const text = footerText(75, 'online');
-    // The full spine marker must be intact — never clipped to e.g. "spi…".
+    // The full spine marker must be intact, never clipped to e.g. "spi…".
     expect(text).toContain('spine:online');
     expect(text).not.toContain('spi…');
     // The decorative segments are dropped ENTIRELY at this width, not left as

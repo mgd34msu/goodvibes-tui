@@ -11,7 +11,7 @@ export interface ProviderRuntimeInspect {
 
 /**
  * Provider-health config-modal surface (migrated from the `provider-health`
- * panel — the charter's live-modal exemplar; also the target of the `providers`
+ * panel, the charter's live-modal exemplar; also the target of the `providers`
  * and `accounts` redirects). providerRuntime.inspectAll() is async, so its
  * result is cached and refreshed on open, on `r`, and on a 3s live tick (the
  * panel's display-tick cadence); buildView reads the cache synchronously so

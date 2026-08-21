@@ -2,7 +2,7 @@
  * Gate test for scripts/typecheck-coverage-rule.ts.
  *
  * Two jobs, and the second matters as much as the first:
- *   1. the repo is currently clean — every tracked TypeScript file is compiled
+ *   1. the repo is currently clean, every tracked TypeScript file is compiled
  *      by tsconfig.json or tsconfig.test.json;
  *   2. the check can still answer NO. A coverage detector that returns "all
  *      covered" unconditionally passes forever and hides exactly the defect it
@@ -39,7 +39,7 @@ afterAll(removeProbe);
 /**
  * Each listProjectFiles call spawns tsc (~1.5 s), so the assertions that only
  * read the settled repo share one resolved list per project. The probe test
- * deliberately does NOT use this cache — it needs tsc to run with the probe file
+ * deliberately does NOT use this cache, it needs tsc to run with the probe file
  * present on disk.
  */
 const projectFileCache = new Map<string, Set<string>>();

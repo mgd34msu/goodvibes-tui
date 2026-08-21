@@ -7,7 +7,7 @@ import { requirePanelManager, requireSessionChangeTracker, requireShellPaths } f
 /**
  * Run a git command that lists changed file names, capturing stderr instead
  * of letting it fall through to the process's real stderr (which, for a
- * spawned child with no stdio option, is inherited from the parent — i.e.
+ * spawned child with no stdio option, is inherited from the parent, i.e.
  * written straight to the TUI's controlling terminal, corrupting the screen
  * outside the renderer's front/back-buffer diffing). Mirrors the 'staged'
  * subcommand's existing pattern below.
@@ -89,7 +89,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
       const shellPaths = requireShellPaths(ctx);
       const workingDirectory = shellPaths.workingDirectory;
       // Gate before any git spawn happens (same defensive check /git already
-      // has) — every subcommand below shells out to git, and without this
+      // has), every subcommand below shells out to git, and without this
       // they each produced a differently-shaped error for the same
       // not-a-git-repo condition.
       if (!GitService.isGitRepo(workingDirectory)) {

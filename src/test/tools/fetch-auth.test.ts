@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
-// Local test server — echoes headers so we can verify auth was applied
+// Local test server, echoes headers so we can verify auth was applied
 // ---------------------------------------------------------------------------
 
 let server: ReturnType<typeof Bun.serve>;

@@ -23,7 +23,7 @@ recommended path for all Windows users and requires no beta artifacts.
 A native `windows-x64` binary **compiles** today: `bun build --compile
 --target=bun-windows-x64` produces a working `goodvibes-windows-x64.exe`
 (PE32+). It is built and smoke-tested by a **separate, non-gating** workflow
-(`.github/workflows/windows-beta.yml`, `workflow_dispatch`) — deliberately kept
+(`.github/workflows/windows-beta.yml`, `workflow_dispatch`), deliberately kept
 out of the release gate until the smoke job is reliably green and the blockers
 below are resolved. That workflow's Windows-runner smoke job is a real
 pass/fail check (never `continue-on-error`); a green run there is the signal to

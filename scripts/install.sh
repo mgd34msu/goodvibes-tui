@@ -224,7 +224,7 @@ linger_enabled() {
 # closing copy says "on login" instead of "at boot".
 ensure_linger() {
   if ! command -v loginctl >/dev/null 2>&1; then
-    say "  NOTE: loginctl not found — could not enable lingering, so the daemon starts"
+    say "  NOTE: loginctl not found; could not enable lingering, so the daemon starts"
     say "  at login rather than at boot. Enable it once yourself with:"
     say "    loginctl enable-linger $(id -un)"
     return 1
@@ -337,7 +337,7 @@ resolve_platform() {
     1. In an elevated PowerShell:  wsl --install
     2. Open your WSL2 distribution, then re-run:  curl -fsSL https://goodvibes.sh/install.sh | sh
   WSL2 setup and native-Windows status: https://github.com/$REPO/blob/main/docs/windows.md" ;;
-    *) fail "unsupported operating system: $os (Windows: use WSL2 — see https://github.com/$REPO/blob/main/docs/windows.md)" ;;
+    *) fail "unsupported operating system: $os (Windows: use WSL2; see https://github.com/$REPO/blob/main/docs/windows.md)" ;;
   esac
   case "$arch" in
     x86_64|amd64) arch_tag="x64" ;;
@@ -500,7 +500,7 @@ report_foreign_processes() {
     [ -n "$_foreign_exe" ] || continue
     [ "${_foreign_exe##*/}" = "$2" ] || continue
     say ""
-    say "Leaving $2 (pid $_p) alone — it belongs to a different install:"
+    say "Leaving $2 (pid $_p) alone; it belongs to a different install:"
     say "  $_foreign_exe"
     say "  This install manages only $INSTALL_DIR. Restart that one yourself if you meant to."
   done
@@ -799,12 +799,12 @@ refresh_stale_canonical_unit() {
       command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload 2>/dev/null || true
       say "  rewrote    $_rp (config-derived launch, --daemon-home $HOME/.goodvibes/daemon)"
       if [ "$RESTART_DAEMON" != "1" ]; then
-        say "  NOTE: GOODVIBES_RESTART_DAEMON=0 — the running daemon keeps the old launch arguments until restarted."
+        say "  NOTE: GOODVIBES_RESTART_DAEMON=0; the running daemon keeps the old launch arguments until restarted."
       fi
       ;;
     hand-written)
       say ""
-      say "NOTE: $SYSTEMD_DAEMON_UNIT at $_rp $_reason —"
+      say "NOTE: $SYSTEMD_DAEMON_UNIT at $_rp $_reason,"
       say "  and the unit is not recognizably platform-managed, so it was left untouched."
       say "  Fix the launch arguments yourself so the daemon runs with its own state directory:"
       say "    --daemon-home $HOME/.goodvibes/daemon"
@@ -843,13 +843,13 @@ restart_systemd_unit() {
       # the never-touch violation this gate exists to prevent. Say so.
       say ""
       say "NOTE: ${unit} points at $exec_bin, which no longer exists, and the unit is not one this"
-      say "  tool may replace — leaving it (and its running daemon, which may be executing a deleted"
+      say "  tool may replace; leaving it (and its running daemon, which may be executing a deleted"
       say "  binary) untouched."
       say "  Fix the unit's ExecStart yourself, then: systemctl --user restart $unit"
       return 0
     fi
     say ""
-    say "${unit} points at $exec_bin, which no longer exists — replacing it."
+    say "${unit} points at $exec_bin, which no longer exists; replacing it."
     systemctl --user disable --now "$unit" 2>/dev/null ||
       systemctl --user stop "$unit" 2>/dev/null || true
     unit_path=$(systemd_unit_path "$unit")
@@ -875,7 +875,7 @@ restart_systemd_unit() {
         ;;
     esac
   else
-    say "  NOTE: restart failed — restart it yourself with:"
+    say "  NOTE: restart failed; restart it yourself with:"
     say "    systemctl --user restart $unit"
   fi
   return 0
@@ -923,12 +923,12 @@ restart_bare_processes() {
     _supervision=$(pid_supervision "$pid")
     if [ "$_supervision" = "supervised" ]; then
       say ""
-      say "Skipping pid $pid — it is supervised by a service manager; its unit owns the restart."
+      say "Skipping pid $pid: it is supervised by a service manager; its unit owns the restart."
       continue
     fi
     if [ "$_supervision" = "unknown" ]; then
       say ""
-      say "Skipping pid $pid — cannot determine whether it is service-managed (service manager unreachable)."
+      say "Skipping pid $pid: cannot determine whether it is service-managed (service manager unreachable)."
       say "  Nothing was touched. Restart it yourself after the upgrade if needed."
       continue
     fi
@@ -966,7 +966,7 @@ restart_bare_processes() {
       waited=$((waited + 1))
     done
     if kill -0 "$pid" 2>/dev/null; then
-      say "  NOTE: pid $pid did not exit within 10s — not starting a second instance."
+      say "  NOTE: pid $pid did not exit within 10s; not starting a second instance."
       say "  Stop it, then start the new one: $new_bin ${display_args:-}"
       continue
     fi
@@ -992,7 +992,7 @@ restart_bare_processes() {
     if kill -0 "$newpid" 2>/dev/null; then
       say "  restarted  pid $newpid${display_args:+ (args: $display_args)}"
     else
-      say "  NOTE: the new process did not stay up — start it yourself and check its output:"
+      say "  NOTE: the new process did not stay up; start it yourself and check its output:"
       say "    $new_bin ${display_args:-}"
     fi
   done
@@ -1016,7 +1016,7 @@ restart_launchd_agent() {
   if [ "$_prc" -ne 0 ]; then
     [ "$_prc" -eq 113 ] && return 1
     say ""
-    say "NOTE: cannot determine the $_label agent state (launchctl print failed — is the GUI session"
+    say "NOTE: cannot determine the $_label agent state (launchctl print failed, is the GUI session"
     say "  reachable from this session?). No process was touched; restart the agent yourself from a"
     say "  logged-in session:  launchctl kickstart -k gui/$(id -u)/$_label"
     return 0
@@ -1026,7 +1026,7 @@ restart_launchd_agent() {
   if launchctl kickstart -k "gui/$(id -u)/$_label" 2>/dev/null; then
     say "  restarted  $_label"
   else
-    say "  NOTE: restart failed — restart it yourself with:"
+    say "  NOTE: restart failed; restart it yourself with:"
     say "    launchctl kickstart -k gui/$(id -u)/$_label"
   fi
   return 0
@@ -1065,7 +1065,7 @@ restart_running_daemon() {
       case "$(legacy_unit_provenance)" in
         managed)
           say ""
-          say "The daemon is running under the installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT unit — the migration step below transfers it to $SYSTEMD_DAEMON_UNIT."
+          say "The daemon is running under the installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT unit; the migration step below transfers it to $SYSTEMD_DAEMON_UNIT."
           ;;
         *)
           # Hand-written or unreadable: this tool won't modify the unit, but
@@ -1075,7 +1075,7 @@ restart_running_daemon() {
           # corpse state included.
           restart_systemd_unit "$LEGACY_SYSTEMD_DAEMON_UNIT" "$INSTALL_DIR/goodvibes-daemon" 0 || {
             say ""
-            say "NOTE: could not restart $LEGACY_SYSTEMD_DAEMON_UNIT — restart it yourself so the upgraded binary takes effect:"
+            say "NOTE: could not restart $LEGACY_SYSTEMD_DAEMON_UNIT; restart it yourself so the upgraded binary takes effect:"
             say "    systemctl --user restart $LEGACY_SYSTEMD_DAEMON_UNIT"
           }
           ;;
@@ -1223,7 +1223,7 @@ EOF
 setup_daemon_service_systemd() {
   unit_path=$(systemd_daemon_unit_path)
   if [ -f "$unit_path" ]; then
-    say "A ${SYSTEMD_DAEMON_UNIT} unit already exists at $unit_path — leaving it as is."
+    say "A ${SYSTEMD_DAEMON_UNIT} unit already exists at $unit_path; leaving it as is."
     say "  Start it yourself if it is not running:"
     say "    systemctl --user start $SYSTEMD_DAEMON_UNIT"
     return 0
@@ -1234,7 +1234,7 @@ setup_daemon_service_systemd() {
   say "  wrote      $unit_path"
 
   if ! systemctl --user daemon-reload 2>/dev/null; then
-    say "  NOTE: 'systemctl --user daemon-reload' failed — a user systemd instance"
+    say "  NOTE: 'systemctl --user daemon-reload' failed; a user systemd instance"
     say "  may not be running for this session. Enable it yourself later with:"
     say "    systemctl --user enable --now $SYSTEMD_DAEMON_UNIT"
     return 0
@@ -1264,7 +1264,7 @@ setup_daemon_service_systemd() {
 setup_daemon_service_launchd() {
   plist_path=$(launchd_daemon_plist_path)
   if [ -f "$plist_path" ]; then
-    say "A LaunchAgent already exists at $plist_path — leaving it as is."
+    say "A LaunchAgent already exists at $plist_path; leaving it as is."
     say "  Load it yourself if it is not running:"
     say "    launchctl bootstrap gui/$(id -u) $plist_path"
     return 0
@@ -1361,7 +1361,7 @@ migrate_legacy_systemd_unit() {
     unreadable)
       say ""
       say "NOTE: a $LEGACY_SYSTEMD_DAEMON_UNIT unit exists at $legacy_path but could not be read"
-      say "  (permissions?) — leaving it untouched. Inspect it yourself; if it is redundant:"
+      say "  (permissions?). Leaving it untouched. Inspect it yourself; if it is redundant:"
       say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
       return 0
       ;;
@@ -1379,7 +1379,7 @@ migrate_legacy_systemd_unit() {
   if ! command -v systemctl >/dev/null 2>&1; then
     say ""
     say "NOTE: found the installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT at $legacy_path but systemctl is not"
-    say "  available — nothing was changed. Retire it yourself once systemd is reachable:"
+    say "  available; nothing was changed. Retire it yourself once systemd is reachable:"
     say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
     return 0
   fi
@@ -1394,7 +1394,7 @@ migrate_legacy_systemd_unit() {
   if [ "$legacy_state" = "unknown" ] || [ "$canonical_state" = "unknown" ]; then
     say ""
     say "NOTE: cannot determine the daemon units' state (user service manager unreachable from this"
-    say "  session?) — nothing was changed. Re-run the installer from a logged-in session, or migrate"
+    say "  session?). Nothing was changed. Re-run the installer from a logged-in session, or migrate"
     say "  deliberately with: goodvibes-daemon migrate-service"
     return 0
   fi
@@ -1403,7 +1403,7 @@ migrate_legacy_systemd_unit() {
   # that contract covers the migration's stop/disable of an ACTIVE unit too.
   if [ "$legacy_state" = "active" ] && [ "$RESTART_DAEMON" != "1" ]; then
     say ""
-    say "NOTE: $LEGACY_SYSTEMD_DAEMON_UNIT is running and GOODVIBES_RESTART_DAEMON=0 — leaving it untouched."
+    say "NOTE: $LEGACY_SYSTEMD_DAEMON_UNIT is running and GOODVIBES_RESTART_DAEMON=0; leaving it untouched."
     say "  Re-run the installer without GOODVIBES_RESTART_DAEMON=0 to migrate it to $SYSTEMD_DAEMON_UNIT."
     return 0
   fi
@@ -1431,7 +1431,7 @@ migrate_legacy_systemd_unit() {
       say "  the canonical $SYSTEMD_DAEMON_UNIT keeps running (verified: active with a live main process)."
     else
       say "  NOTE: could not disable $LEGACY_SYSTEMD_DAEMON_UNIT (is the user service manager reachable?)."
-      say "  Its unit file was left in place — this tool removed nothing. Retire it yourself:"
+      say "  Its unit file was left in place; this tool removed nothing. Retire it yourself:"
       say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
     fi
     return 0
@@ -1464,7 +1464,7 @@ migrate_legacy_systemd_unit() {
           ;;
         *)
           say "  NOTE: the existing $SYSTEMD_DAEMON_UNIT $transfer_stale_reason and is not"
-          say "  recognizably platform-managed — transferring supervision onto it could run the daemon wrong."
+          say "  recognizably platform-managed; transferring supervision onto it could run the daemon wrong."
           say "  The units were not changed; fix the launch arguments yourself (the daemon's own state directory"
           say "  is --daemon-home $HOME/.goodvibes/daemon), or migrate deliberately with:"
           say "    goodvibes-daemon migrate-service"
@@ -1473,9 +1473,9 @@ migrate_legacy_systemd_unit() {
           # die with the refusal: restart the legacy unit here so the swapped
           # binary actually starts serving.
           if systemctl --user restart "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
-            say "  restarted  $LEGACY_SYSTEMD_DAEMON_UNIT — the daemon keeps running there, now on the upgraded binary."
+            say "  restarted  $LEGACY_SYSTEMD_DAEMON_UNIT; the daemon keeps running there, now on the upgraded binary."
           else
-            say "  NOTE: could not restart $LEGACY_SYSTEMD_DAEMON_UNIT — the running daemon is still the previous"
+            say "  NOTE: could not restart $LEGACY_SYSTEMD_DAEMON_UNIT; the running daemon is still the previous"
             say "  binary; restart it yourself:  systemctl --user restart $LEGACY_SYSTEMD_DAEMON_UNIT"
           fi
           return 0
@@ -1493,7 +1493,7 @@ migrate_legacy_systemd_unit() {
     canonical_pre_enabled=$(unit_enabled_state "$SYSTEMD_DAEMON_UNIT")
     systemctl --user daemon-reload 2>/dev/null || true
     if ! systemctl --user stop "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
-      say "  NOTE: could not stop $LEGACY_SYSTEMD_DAEMON_UNIT — nothing was changed; the daemon keeps"
+      say "  NOTE: could not stop $LEGACY_SYSTEMD_DAEMON_UNIT: nothing was changed; the daemon keeps"
       say "  running under the legacy unit. Migrate later with: goodvibes-daemon migrate-service"
       [ "$wrote_canonical" = "1" ] && rm -f "$canonical_path"
       return 0
@@ -1521,7 +1521,7 @@ migrate_legacy_systemd_unit() {
         rm -f "$legacy_path"
         say "  retired    $LEGACY_SYSTEMD_DAEMON_UNIT (disabled, unit file removed)"
       else
-        say "  NOTE: $SYSTEMD_DAEMON_UNIT is active, but $LEGACY_SYSTEMD_DAEMON_UNIT could not be disabled —"
+        say "  NOTE: $SYSTEMD_DAEMON_UNIT is active, but $LEGACY_SYSTEMD_DAEMON_UNIT could not be disabled;"
         say "  its unit file was left in place. Retire it yourself:"
         say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
       fi
@@ -1532,7 +1532,7 @@ migrate_legacy_systemd_unit() {
       # unit's prior enablement, and restart the legacy unit. Never leave the
       # host with no supervised daemon, and never leave the canonical unit
       # disabled when it was enabled before this run.
-      say "  NOTE: $SYSTEMD_DAEMON_UNIT did not come up healthy — rolling back."
+      say "  NOTE: $SYSTEMD_DAEMON_UNIT did not come up healthy; rolling back."
       if [ "$wrote_canonical" = "1" ]; then
         systemctl --user disable --now "$SYSTEMD_DAEMON_UNIT" 2>/dev/null || true
         rm -f "$canonical_path"
@@ -1547,9 +1547,9 @@ migrate_legacy_systemd_unit() {
       fi
       systemctl --user daemon-reload 2>/dev/null || true
       if systemctl --user start "$LEGACY_SYSTEMD_DAEMON_UNIT" 2>/dev/null; then
-        say "  restarted  $LEGACY_SYSTEMD_DAEMON_UNIT — the daemon keeps running under the legacy unit."
+        say "  restarted  $LEGACY_SYSTEMD_DAEMON_UNIT; the daemon keeps running under the legacy unit."
       else
-        say "  NOTE: the legacy unit could not be restarted either — start it yourself:"
+        say "  NOTE: the legacy unit could not be restarted either; start it yourself:"
         say "    systemctl --user start $LEGACY_SYSTEMD_DAEMON_UNIT"
       fi
     fi
@@ -1560,7 +1560,7 @@ migrate_legacy_systemd_unit() {
   # when a canonical unit file exists — never remove the only daemon unit.
   if [ ! -f "$canonical_path" ]; then
     say ""
-    say "Found the installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT (inactive) but no $SYSTEMD_DAEMON_UNIT unit —"
+    say "Found the installer-managed $LEGACY_SYSTEMD_DAEMON_UNIT (inactive) but no $SYSTEMD_DAEMON_UNIT unit;"
     say "  leaving it alone so the host is never left without a daemon unit."
     return 0
   fi
@@ -1573,15 +1573,15 @@ migrate_legacy_systemd_unit() {
     if [ "$canonical_state" = "active" ]; then
       # 'active' but not serving (no confirmed live main process): say so
       # rather than claiming health.
-      say "  NOTE: $SYSTEMD_DAEMON_UNIT reports active but its main process could not be confirmed —"
+      say "  NOTE: $SYSTEMD_DAEMON_UNIT reports active but its main process could not be confirmed;"
       say "  check it with: systemctl --user status $SYSTEMD_DAEMON_UNIT"
     else
-      say "  NOTE: $SYSTEMD_DAEMON_UNIT is present but not active — start it with:"
+      say "  NOTE: $SYSTEMD_DAEMON_UNIT is present but not active; start it with:"
       say "    systemctl --user start $SYSTEMD_DAEMON_UNIT"
     fi
   else
     say "  NOTE: could not disable $LEGACY_SYSTEMD_DAEMON_UNIT (is the user service manager reachable?)."
-    say "  Its unit file was left in place — this tool removed nothing. Retire it yourself:"
+    say "  Its unit file was left in place; this tool removed nothing. Retire it yourself:"
     say "    systemctl --user disable --now $LEGACY_SYSTEMD_DAEMON_UNIT && rm $legacy_path && systemctl --user daemon-reload"
   fi
 }
@@ -1641,7 +1641,7 @@ migrate_one_launchd_plist() {
     _plr=$(unit_launch_stale_reason "$plist_path")
     if [ -n "$_plr" ]; then
       say ""
-      say "NOTE: the LaunchAgent at $plist_path $_plr —"
+      say "NOTE: the LaunchAgent at $plist_path $_plr,"
       say "  and it is not recognizably platform-managed, so it was left untouched."
       say "  Fix the launch arguments yourself so the daemon follows your settings and runs with its own"
       say "  state directory: --daemon-home $HOME/.goodvibes/daemon"
@@ -1663,13 +1663,13 @@ migrate_one_launchd_plist() {
   say "  rewrote    $plist_path"
 
   if [ "$agent_loaded" != "1" ]; then
-    say "  NOTE: the agent is not currently loaded — leaving it stopped (matching its current state)."
+    say "  NOTE: the agent is not currently loaded; leaving it stopped (matching its current state)."
     say "  Load it yourself when ready:"
     say "    launchctl bootstrap gui/$(id -u) $plist_path"
     return 0
   fi
   if [ "$RESTART_DAEMON" != "1" ]; then
-    say "  NOTE: GOODVIBES_RESTART_DAEMON=0 — the running agent keeps its old arguments until you reload it:"
+    say "  NOTE: GOODVIBES_RESTART_DAEMON=0; the running agent keeps its old arguments until you reload it:"
     say "    launchctl bootout gui/$(id -u)/$plist_label ; launchctl bootstrap gui/$(id -u) $plist_path"
     return 0
   fi
@@ -1680,7 +1680,7 @@ migrate_one_launchd_plist() {
      launchctl load "$plist_path" 2>/dev/null; then
     say "  reloaded   $plist_label with the new launch arguments"
   else
-    say "  NOTE: could not reload the LaunchAgent — load it yourself:"
+    say "  NOTE: could not reload the LaunchAgent; load it yourself:"
     say "    launchctl bootstrap gui/$uid $plist_path"
   fi
 }
@@ -1708,7 +1708,7 @@ install_daemon() {
   fetch "$DAEMON_BASE_URL/$artifact" "$WORKDIR/$artifact"
 
   expected=$(awk -v name="$artifact" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/daemon-SHA256SUMS.txt" | head -1)
-  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $artifact — refusing to install an unverified binary"
+  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $artifact; refusing to install an unverified binary"
   actual=$(sha256_of "$WORKDIR/$artifact")
   [ "$expected" = "$actual" ] || fail "checksum mismatch for $artifact (expected $expected, got $actual)"
   say "  verified   $artifact"
@@ -1747,7 +1747,7 @@ install_sqlite_vec() {
   expected=$(awk -v name="$addon_asset" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/daemon-SHA256SUMS.txt" | head -1)
   if [ -z "$expected" ]; then
     say ""
-    say "  note: daemon release $DAEMON_VERSION does not ship $addon_asset — semantic vector"
+    say "  note: daemon release $DAEMON_VERSION does not ship $addon_asset; semantic vector"
     say "  search will be unavailable; upgrade to a release that includes it."
     return 0
   fi
@@ -1808,7 +1808,7 @@ install_wake_word_model() {
       say "  $wake_line"
     done
   else
-    say "  note: this build has no provision-wake-model command — wake-word detection"
+    say "  note: this build has no provision-wake-model command; wake-word detection"
     say "  will fetch its model at the next daemon start, or run: goodvibes /voice wake setup"
   fi
 }
@@ -1827,7 +1827,7 @@ install_agent() {
   fetch "$agent_base_url/$artifact" "$WORKDIR/$artifact"
 
   expected=$(awk -v name="$artifact" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/agent-SHA256SUMS.txt" | head -1)
-  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $artifact — refusing to install an unverified binary"
+  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $artifact; refusing to install an unverified binary"
   actual=$(sha256_of "$WORKDIR/$artifact")
   [ "$expected" = "$actual" ] || fail "checksum mismatch for $artifact (expected $expected, got $actual)"
   say "  verified   $artifact"
@@ -1870,7 +1870,7 @@ install_browser_driver() {
   expected=$(awk -v name="$driver_asset" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/agent-SHA256SUMS.txt" | head -1)
   if [ -z "$expected" ]; then
     say ""
-    say "  note: agent release $_version does not ship $driver_asset — the agent will"
+    say "  note: agent release $_version does not ship $driver_asset; the agent will"
     say "  install a browser driver for itself the first time it is asked to use a browser."
     return 0
   fi
@@ -1893,7 +1893,7 @@ install_browser_driver() {
   # it is not a usable driver no matter what else extracted.
   for required in package.json index.js cli.js; do
     [ -f "$driver_staging/playwright-core/$required" ] ||
-      fail "$driver_asset is missing playwright-core/$required — refusing to install an unusable driver"
+      fail "$driver_asset is missing playwright-core/$required; refusing to install an unusable driver"
   done
 
   driver_target="$INSTALL_DIR/playwright-core"
@@ -1954,7 +1954,7 @@ install_webui() {
 
   expected=$(awk -v name="$webui_asset" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/webui-SHA256SUMS.txt" | head -1)
   if [ -z "$expected" ]; then
-    say "  note: web UI release $WEBUI_VERSION does not ship $webui_asset — the browser"
+    say "  note: web UI release $WEBUI_VERSION does not ship $webui_asset; the browser"
     say "  surface is not installed. Upgrade to a release that includes it, or point the"
     say "  daemon at a bundle you built: goodvibes-daemon webui enable --bundle-dir <dir>"
     return 0
@@ -1976,7 +1976,7 @@ install_webui() {
   # index.html is what the daemon serves at / and falls back to for app routes;
   # an archive without it is not a usable bundle no matter what else extracted.
   [ -f "$webui_staging/goodvibes-webui/index.html" ] ||
-    fail "$webui_asset is missing goodvibes-webui/index.html — refusing to install an unusable bundle"
+    fail "$webui_asset is missing goodvibes-webui/index.html; refusing to install an unusable bundle"
 
   webui_target="$WEBUI_ROOT/$webui_plain_version"
   mkdir -p "$WEBUI_ROOT"
@@ -2347,7 +2347,7 @@ shadow_confirm() {
   # properly exempted here.
   if ! { true > /dev/tty; } 2>/dev/null || ! { true < /dev/tty; } 2>/dev/null; then
     SHADOW_HEADLESS_UNCONFIRMED=1
-    say "  (no terminal available to ask — leaving this copy in place for now;"
+    say "  (no terminal available to ask; leaving this copy in place for now;"
     say "   re-run this installer interactively, or set GOODVIBES_SHADOW_REMOVE=1, to remove it.)"
     return 1
   fi
@@ -2501,7 +2501,7 @@ check_command_shadowing() {
     # removal — those all set shadow_remaining above). A headless/unattended
     # run cannot be blamed for skipping a step nobody could have answered:
     # report it honestly (already done above) and let the install succeed.
-    say "  \"$shadow_command\" could not be fully resolved without a terminal to confirm removal —"
+    say "  \"$shadow_command\" could not be fully resolved without a terminal to confirm removal;"
     say "  re-run this installer interactively, or set GOODVIBES_SHADOW_REMOVE=1, to finish this."
     return 0
   fi
@@ -2575,7 +2575,7 @@ stop_bare_processes() {
       waited=$((waited + 1))
     done
     if kill -0 "$pid" 2>/dev/null; then
-      say "  NOTE: pid $pid did not exit within 10s — stop it yourself: kill $pid"
+      say "  NOTE: pid $pid did not exit within 10s; stop it yourself: kill $pid"
     else
       say "  stopped    $label (pid $pid)"
       record_removed "$label process (pid $pid)"
@@ -2616,13 +2616,13 @@ uninstall_systemd_service() {
       exec_bin=$(systemd_unit_exec_binary "$unit")
       if [ -n "$exec_bin" ] && [ ! -x "$exec_bin" ]; then
         say "  NOTE: $unit_path points at $exec_bin, which no longer exists (a broken,"
-        say "  non-installer-managed unit) — it is left in place; remove it yourself:"
+        say "  non-installer-managed unit); it is left in place; remove it yourself:"
       else
-        say "  KEPT       $unit_path is not installer-managed (no marker) — leaving it in place."
+        say "  KEPT       $unit_path is not installer-managed (no marker); leaving it in place."
         say "  Remove it yourself:"
       fi
       say "    systemctl --user disable --now $unit && rm $unit_path && systemctl --user daemon-reload"
-      record_kept "$unit_path (hand-written $unit — not installer-managed)"
+      record_kept "$unit_path (hand-written $unit; not installer-managed)"
     fi
   fi
 }
@@ -2651,10 +2651,10 @@ uninstall_launchd_agent() {
     say "  removed    $plist_path"
     record_removed "$plist_path (installer-managed agent)"
   elif [ -f "$plist_path" ]; then
-    say "  KEPT       $plist_path is not installer-managed (no marker) — leaving it in place."
+    say "  KEPT       $plist_path is not installer-managed (no marker); leaving it in place."
     say "  Remove it yourself:"
     say "    launchctl bootout gui/$uid/$label ; rm $plist_path"
-    record_kept "$plist_path (hand-written agent — not installer-managed)"
+    record_kept "$plist_path (hand-written agent; not installer-managed)"
   fi
 }
 
@@ -2746,11 +2746,11 @@ run_uninstall() {
     say "Removed:"
     printf '%s' "$UNINSTALL_REMOVED"
   else
-    say "Removed: nothing — no installer-managed files were found in $INSTALL_DIR."
+    say "Removed: nothing; no installer-managed files were found in $INSTALL_DIR."
   fi
   say ""
   say "Preserved:"
-  say "  $HOME/.goodvibes (your GoodVibes data — settings, sessions, memory) is left untouched."
+  say "  $HOME/.goodvibes (your GoodVibes data: settings, sessions, memory) is left untouched."
   if [ -n "$UNINSTALL_KEPT" ]; then
     printf '%s' "$UNINSTALL_KEPT"
   fi
@@ -2784,7 +2784,7 @@ main() {
   fetch "$BASE_URL/$artifact" "$WORKDIR/$artifact"
 
   expected=$(awk -v name="$artifact" '$2 == name || $2 == "*"name {print $1}' "$WORKDIR/SHA256SUMS.txt" | head -1)
-  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $artifact — refusing to install an unverified binary"
+  [ -n "$expected" ] || fail "SHA256SUMS.txt has no entry for $artifact; refusing to install an unverified binary"
   actual=$(sha256_of "$WORKDIR/$artifact")
   [ "$expected" = "$actual" ] || fail "checksum mismatch for $artifact (expected $expected, got $actual)"
   say "  verified   $artifact"
@@ -2875,7 +2875,7 @@ main() {
     # not resolve here. State a command that works RIGHT NOW instead of a
     # promise that depends on a shell restart the user hasn't done.
     say "Done. Start with: $INSTALL_DIR/goodvibes   (health check: $INSTALL_DIR/goodvibes doctor)"
-    say "PATH updated in $RC_FILE_USED — open a new shell (or run: . $RC_FILE_USED) to use the plain 'goodvibes' command from then on."
+    say "PATH updated in $RC_FILE_USED; open a new shell (or run: . $RC_FILE_USED) to use the plain 'goodvibes' command from then on."
   else
     say "Done. Start with: goodvibes   (health check: goodvibes doctor)"
   fi
@@ -2887,12 +2887,12 @@ main() {
     # that was already bound to its network is never told it is on loopback.
     case "$WEBUI_URL" in
       http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*)
-        say "Web UI:           $WEBUI_URL   (this machine only — the daemon is bound to loopback)"
+        say "Web UI:           $WEBUI_URL   (this machine only: the daemon is bound to loopback)"
         say "                  To reach it from another device on your network:"
         say "                    goodvibes-daemon webui enable --lan"
         ;;
       *)
-        say "Web UI:           $WEBUI_URL   (reachable from your network — the daemon is bound to all interfaces)"
+        say "Web UI:           $WEBUI_URL   (reachable from your network: the daemon is bound to all interfaces)"
         say "                  To take it back to this machine only:"
         say "                    goodvibes-daemon webui enable --loopback"
         ;;

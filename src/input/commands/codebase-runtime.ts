@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// codebase-runtime.ts — /codebase
+// codebase-runtime.ts, /codebase
 //
 // Explicit-query + transparency surface over the repo source-tree code index
 // (CodeIndexStore, @pellux/goodvibes-sdk/platform/state, landed on SDK main
@@ -10,10 +10,10 @@
 //
 // Mirrors /recall's transparency idiom (recall-query.ts's handleRecallVector:
 // status/rebuild) and /workstream's registerXRuntimeCommands function-export
-// shape: build (schedules the index build — visible as a fleet 'code-index'
+// shape: build (schedules the index build, visible as a fleet 'code-index'
 // node while it runs), status (counts, skips, degradation state, last
 // build), search <query> (explicit retrieval, results labeled
-// 'lexical'|'semantic' honestly — never implied as more precise than they
+// 'lexical'|'semantic' honestly, never implied as more precise than they
 // are). Passive auto-injection into coding turns and tool-site incremental
 // reindex followed later; `status` surfaces both honestly (the
 // auto-injection flag+setting gate, and the last reindex activity).
@@ -37,15 +37,15 @@ function formatBytes(bytes: number): string {
 /**
  * Honest one-line auto-injection state: both the (default-off)
  * `agent-passive-code-injection` feature flag AND storage.codeIndexEnabled must
- * be on for passive code injection to run — state which is off, and why.
+ * be on for passive code injection to run, state which is off, and why.
  */
 function renderAutoInjectionState(flagEnabled: boolean, settingEnabled: boolean): string {
   if (flagEnabled && settingEnabled) {
     return '  auto-injection: on (code hits may be injected into coding turns within the shared knowledge budget)';
   }
   const reasons: string[] = [];
-  if (!flagEnabled) reasons.push('agent-passive-code-injection flag off (default off) — enable in the settings modal flags section');
-  if (!settingEnabled) reasons.push('storage.codeIndexEnabled off — /config to change');
+  if (!flagEnabled) reasons.push('agent-passive-code-injection flag off (default off); enable in the settings modal flags section');
+  if (!settingEnabled) reasons.push('storage.codeIndexEnabled off: /config to change');
   return `  auto-injection: off (${reasons.join('; ')})`;
 }
 
@@ -58,7 +58,7 @@ function renderReindexActivity(activity: CodeIndexReindexActivity | null, now: n
     : activity.status === 'skipped'
       ? `skipped (${activity.mode ?? 'empty'})`
       : `indexed (${activity.mode ?? 'symbols'})`;
-  return `  last reindex: ${activity.path} — ${detail}, ${agoSec}s ago`;
+  return `  last reindex: ${activity.path}; ${detail}, ${agoSec}s ago`;
 }
 
 interface CodeIndexStatusExtras {
@@ -69,18 +69,18 @@ interface CodeIndexStatusExtras {
 
 function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<ConfigManager, 'get'>, extras: CodeIndexStatusExtras): string {
   const lines: string[] = [];
-  lines.push(`Code index — backend: ${stats.backend}, available: ${stats.available ? 'yes' : 'no'}`);
+  lines.push(`Code index: backend: ${stats.backend}, available: ${stats.available ? 'yes' : 'no'}`);
   lines.push(`  path: ${stats.path}`);
   lines.push(`  indexed: ${stats.indexedFiles} file(s), ${stats.indexedChunks} chunk(s), ${stats.dimensions} dims`);
   lines.push(`  embedding provider: ${stats.embeddingProviderLabel} (${stats.embeddingProviderId})`);
   lines.push(
     stats.semanticRetrievalAvailable
       ? '  search results labeled: semantic'
-      : '  search results labeled: lexical (hashed fallback — low precision)',
+      : '  search results labeled: lexical (hashed fallback; low precision)',
   );
   const autoStart = isCodeIndexAutoStartEnabled(configManager);
   lines.push(
-    `  auto-build on startup: ${autoStart ? 'on' : 'off'} (storage.codeIndexEnabled, default off — /config to change)`,
+    `  auto-build on startup: ${autoStart ? 'on' : 'off'} (storage.codeIndexEnabled, default off; /config to change)`,
   );
   // Passive code auto-injection state (flag + setting) and the last tool-site reindex.
   lines.push(renderAutoInjectionState(extras.flagEnabled, autoStart));
@@ -91,9 +91,9 @@ function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<Config
   );
   // Provider-space honesty (SDK finding): vectors embedded under a different
   // provider than the current default disable the vector search path until a
-  // rebuild re-embeds — say so, in the store's own words.
+  // rebuild re-embeds, say so, in the store's own words.
   if (stats.embeddingProviderMismatch) {
-    lines.push(`  provider mismatch: ${stats.embeddingProviderMismatch} (vector search disabled — lexical fallback only)`);
+    lines.push(`  provider mismatch: ${stats.embeddingProviderMismatch} (vector search disabled; lexical fallback only)`);
   }
 
   if (stats.building) {
@@ -115,7 +115,7 @@ function renderCodeIndexStatus(stats: CodeIndexStats, configManager: Pick<Config
     if (skip.chunkedByWindow) skipParts.push(`${skip.chunkedByWindow} windowed (no tree-sitter symbols)`);
     lines.push(skipParts.length > 0 ? `  skipped: ${skipParts.join(', ')}` : '  skipped: none');
   } else {
-    lines.push('  last build: never — run /codebase build');
+    lines.push('  last build: never; run /codebase build');
   }
 
   if (stats.error) lines.push(`  error: ${stats.error}`);
@@ -170,7 +170,7 @@ const USAGE = 'Usage:\n'
 export function registerCodebaseRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'codebase',
-    description: 'Repo source-tree code index — build, inspect, and search',
+    description: 'Repo source-tree code index: build, inspect, and search',
     usage: 'build | status | search <query...> [--limit n]',
     argsHint: 'build | status | search <query>',
     handler(args: string[], ctx: CommandContext) {
@@ -201,7 +201,7 @@ export function registerCodebaseRuntimeCommands(registry: CommandRegistry): void
           return;
         }
         store.scheduleBuild();
-        ctx.print('Build scheduled — track progress with /codebase status or the fleet panel (code-index node).');
+        ctx.print('Build scheduled: track progress with /codebase status or the fleet panel (code-index node).');
         return;
       }
 
@@ -217,7 +217,7 @@ export function registerCodebaseRuntimeCommands(registry: CommandRegistry): void
           const stats = store.stats();
           ctx.print(
             stats.indexedChunks === 0
-              ? 'No results — the code index is empty. Run /codebase build first.'
+              ? 'No results: the code index is empty. Run /codebase build first.'
               : 'No matching chunks found.',
           );
           return;

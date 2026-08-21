@@ -33,7 +33,7 @@ describe('command runner', () => {
     expect(elapsed).toBeGreaterThanOrEqual(900);
     expect(elapsed).toBeLessThan(5000);
     // Process killed via timeout triggers an exit (non-zero or error)
-    // Bun resolves exited with signal kill — either ok:false or the proc exited non-zero
+    // Bun resolves exited with signal kill, either ok:false or the proc exited non-zero
     // Either way the result should reflect failure or the process was cleaned up
     expect(result).toBeDefined();
   }, 10000);

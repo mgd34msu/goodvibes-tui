@@ -375,7 +375,7 @@ describe('SettingsModal', () => {
     expect(modal.commitEdit()).toBe(true);
 
     // The settings-modal edit buffer is a wholly separate field from the main
-    // composer's InputHistory (arrow-up recall) — nothing in the edit/commit
+    // composer's InputHistory (arrow-up recall), nothing in the edit/commit
     // path ever calls history.add() with the typed plaintext. Assert the
     // invariant directly so a future wiring that routes settings-modal
     // keystrokes through the shared composer path cannot silently leak it.

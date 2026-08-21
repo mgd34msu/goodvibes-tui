@@ -135,7 +135,7 @@ describe('automation foundation features', () => {
       'service-management',
     ] as const;
 
-    // Every capability in this set now ships ON in a stock configuration —
+    // Every capability in this set now ships ON in a stock configuration,
     // the automation/omnichannel surfaces graduated to enabled defaults with
     // the dissolved feature model (each is still governed by its own domain
     // settings key, e.g. automation.enabled, surfaces.slack.enabled).

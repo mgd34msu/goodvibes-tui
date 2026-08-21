@@ -1,19 +1,19 @@
 /**
- * operator-endpoint.ts — the one place this product resolves "the daemon I talk
+ * operator-endpoint.ts, the one place this product resolves "the daemon I talk
  * to", for every seam that talks to it.
  *
  * The terminal app is a pure client: it runs its own conversation loop and asks
  * a separately-running daemon for everything else. Every one of those asks is
  * an operator verb over HTTP, and every one of them needs the same three
- * things — is the daemon enabled, what base URL does it answer on, and what
+ * things, is the daemon enabled, what base URL does it answer on, and what
  * bearer token proves this surface may call it. Resolving that in each seam is
  * how the old composition ended up with a DirectTransport in one place and a
  * real fetch in another.
  *
  * `resolveOperatorRpc` was previously the command layer's private helper
  * (input/commands/operator-rpc.ts). It moved here unchanged in behaviour so the
- * runtime seams — approvals, config, credentials, sessions, fleet, tasks,
- * devices, checkpoints — reach the daemon through the SAME resolution the
+ * runtime seams, approvals, config, credentials, sessions, fleet, tasks,
+ * devices, checkpoints, reach the daemon through the SAME resolution the
  * commands already used, and the command module now re-exports it.
  *
  * Refusals are values, never throws: a disabled daemon or an underivable base
@@ -25,7 +25,7 @@
  * Auth is the loopback file-token bootstrap: the token
  * is read (or minted) from the daemon's own state directory. A daemon on
  * another machine is reached by the network-adopt path, which writes that
- * daemon's bearer into the same file — so this resolution covers both.
+ * daemon's bearer into the same file, so this resolution covers both.
  */
 import { join } from 'node:path';
 import { createGoodVibesSdk } from '@pellux/goodvibes-sdk';
@@ -77,7 +77,7 @@ export function resolveControlPlaneBaseUrl(configManager: ConfigManager): string
   return null;
 }
 
-/** The daemon's own state directory — where the shared bearer token lives. */
+/** The daemon's own state directory, where the shared bearer token lives. */
 export function resolveDaemonStateDirectory(homeDirectory: string): string {
   return join(homeDirectory, '.goodvibes', 'daemon');
 }
@@ -85,14 +85,14 @@ export function resolveDaemonStateDirectory(homeDirectory: string): string {
 /**
  * Resolve (or honestly refuse to resolve) an operator SDK client wired to this
  * workspace's control-plane daemon, from just the two things the resolution
- * actually needs — the config manager and the home directory.
+ * actually needs, the config manager and the home directory.
  */
 export function resolveOperatorRpc(deps: {
   readonly configManager: ConfigManager;
   readonly homeDirectory: string | (() => string);
 }): OperatorRpc {
   const { configManager } = deps;
-  // A refusal is a VALUE here, never a throw — that is the whole contract of
+  // A refusal is a VALUE here, never a throw, that is the whole contract of
   // this function, and callers rely on it to print an honest line rather than
   // crash a keystroke. A context whose config manager cannot answer (a narrow
   // embed, a partially-wired test double) is one more case of "no daemon can be
@@ -101,13 +101,13 @@ export function resolveOperatorRpc(deps: {
     return { available: false, reason: 'no config manager is wired here, so no control-plane daemon can be resolved.' };
   }
   if (!resolveDaemonEnabled(configManager)) {
-    return { available: false, reason: 'the daemon is disabled (daemon.enabled=false) — no operator surface to reach. Enable it in /settings, then retry.' };
+    return { available: false, reason: 'the daemon is disabled (daemon.enabled=false): no operator surface to reach. Enable it in /settings, then retry.' };
   }
   const baseUrl = resolveControlPlaneBaseUrl(configManager);
   if (!baseUrl) {
-    return { available: false, reason: 'no control-plane base URL is configured (controlPlane.publicBaseUrl / controlPlane.host+port) — cannot reach the operator surface.' };
+    return { available: false, reason: 'no control-plane base URL is configured (controlPlane.publicBaseUrl / controlPlane.host+port): cannot reach the operator surface.' };
   }
-  // Resolve the home directory only AFTER the static refusals — a caller whose
+  // Resolve the home directory only AFTER the static refusals, a caller whose
   // shell paths are not wired (a disabled-daemon path) must still get the honest
   // unavailable reason above, never a "shell paths not wired" throw.
   const homeDirectory = typeof deps.homeDirectory === 'function' ? deps.homeDirectory() : deps.homeDirectory;
@@ -124,7 +124,7 @@ export function resolveOperatorRpc(deps: {
 export function describeOperatorRpcError(error: unknown): string {
   if (error instanceof GoodVibesSdkError) {
     if (error.status === 404) {
-      return 'the connected daemon returned 404 — this operator verb is not wired up on that daemon yet.';
+      return 'the connected daemon returned 404; this operator verb is not wired up on that daemon yet.';
     }
     if (error.status === 401 || error.status === 403) {
       return `the connected daemon rejected the request (${error.status}): ${error.message}`;
@@ -139,8 +139,8 @@ export function describeOperatorRpcError(error: unknown): string {
  * WEBSOCKET binding only.
  *
  * This matters more than it looks. `sdk.operator.invoke` resolves a method's
- * declared `http` route and refuses — with a contract error, before any request
- * is made — when the method has none. A large part of what this client needs is
+ * declared `http` route and refuses, with a contract error, before any request
+ * is made, when the method has none. A large part of what this client needs is
  * exactly that class: `approvals.raise`, `credentials.set`/`delete`,
  * `checkpoints.*`, `rewind.*` and the `fleet.*` reads are all `transport: ws`
  * in the operator contract, with no REST path of their own.

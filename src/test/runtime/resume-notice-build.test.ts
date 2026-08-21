@@ -132,7 +132,7 @@ describe('buildResumeNotice', () => {
       lastChainOutcome: null,
       memoryAvailable: false,
     });
-    expect(notice).toBe('Previous session found: 5 turns, 0 checkpoints — /resume to continue (or /session resume abc123 directly)');
+    expect(notice).toBe('Previous session found: 5 turns, 0 checkpoints: /resume to continue (or /session resume abc123 directly)');
   });
 
   test('session + checkpoints: adds the /checkpoints hint', () => {
@@ -143,7 +143,7 @@ describe('buildResumeNotice', () => {
       lastChainOutcome: null,
       memoryAvailable: false,
     });
-    expect(notice).toBe('Previous session found: 1 turn, 3 checkpoints — /resume to continue (or /session resume abc123 directly) · /checkpoints to browse');
+    expect(notice).toBe('Previous session found: 1 turn, 3 checkpoints: /resume to continue (or /session resume abc123 directly) · /checkpoints to browse');
   });
 
   test('session + checkpoints + chain history: adds the last-chain clause', () => {
@@ -155,7 +155,7 @@ describe('buildResumeNotice', () => {
       memoryAvailable: false,
     });
     expect(notice).toBe(
-      'Previous session found: 4 turns, 2 checkpoints, last chain: cancelled — /resume to continue (or /session resume abc123 directly) · /checkpoints to browse',
+      'Previous session found: 4 turns, 2 checkpoints, last chain: cancelled: /resume to continue (or /session resume abc123 directly) · /checkpoints to browse',
     );
   });
 
@@ -167,7 +167,7 @@ describe('buildResumeNotice', () => {
       lastChainOutcome: null,
       memoryAvailable: true,
     });
-    expect(notice).toBe('Previous session found: 1 turn, 0 checkpoints — /resume to continue (or /session resume abc123 directly) · /recall for memory');
+    expect(notice).toBe('Previous session found: 1 turn, 0 checkpoints: /resume to continue (or /session resume abc123 directly) · /recall for memory');
   });
 
   test('no chain history means no chain clause at all (not a fabricated "none")', () => {
@@ -189,7 +189,7 @@ describe('buildResumeNotice', () => {
       lastChainOutcome: null,
       memoryAvailable: false,
     });
-    expect(notice).toBe('Previous session found: 2 turns — /resume to continue (or /session resume abc123 directly)');
+    expect(notice).toBe('Previous session found: 2 turns: /resume to continue (or /session resume abc123 directly)');
     expect(notice).not.toContain('checkpoint');
   });
 
@@ -201,7 +201,7 @@ describe('buildResumeNotice', () => {
       lastChainOutcome: 'passed',
       memoryAvailable: false,
     });
-    expect(notice).toBe('Workspace history found: 4 checkpoints, last chain: passed — /checkpoints to browse');
+    expect(notice).toBe('Workspace history found: 4 checkpoints, last chain: passed: /checkpoints to browse');
     expect(notice).not.toContain('/session resume');
   });
 
@@ -219,7 +219,7 @@ describe('buildResumeNotice', () => {
   //
   // A crash-recovery snapshot used to get a clause here. It now gets an
   // explicit ask-then-retire modal instead (runtime/recovery-prompt.ts), so
-  // this notice must not mention one — two announcements of the same snapshot
+  // this notice must not mention one, two announcements of the same snapshot
   // is not more honest than one, it is just noisier, and the passive clause
   // was the half that could not actually restore anything.
 

@@ -15,7 +15,7 @@ import { togglePlanMode, permissionModeLabel, type PermissionModeValue } from '.
  *
  * `dismiss` and `answer` are now REAL subcommands (handled above this
  * guard), so they were removed from the refuse-list. `pause`/`stop`/`cancel`
- * remain here — they still have no backing verb and must not seed a goal.
+ * remain here, they still have no backing verb and must not seed a goal.
  */
 const PSEUDO_SUBCOMMAND_VERBS = new Set(['pause', 'stop', 'cancel']);
 
@@ -178,7 +178,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      // /plan dismiss — archive the current plan. Dismisses the active
+      // /plan dismiss, archive the current plan. Dismisses the active
       // execution plan (ExecutionPlanManager.dismiss, honest per-state) AND
       // deactivates the project-planning interview state shown in the modal so a
       // later /plan <goal> starts fresh. Mid-execution is refused outright.
@@ -223,7 +223,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      // /plan answer <n|question-id> <text> — record a real answer to an
+      // /plan answer <n|question-id> <text>, record a real answer to an
       // open planning question (moves open → answered, consumed on next refine).
       if (args[0] === 'answer') {
         if (!projectPlanningService || !projectId) {
@@ -265,7 +265,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
       }
 
       // Defense (review finding): a single verb-looking token is almost never a
-      // real planning goal — it is a mistyped or removed subcommand. The
+      // real planning goal, it is a mistyped or removed subcommand. The
       // Planning modal used to dispatch `/plan dismiss`, which has no
       // subcommand and silently fell through to this free-form branch, seeding
       // the goal with the literal "dismiss". Refuse to seed on a lone
@@ -273,7 +273,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
       // corrupting the goal.
       if (args.length === 1 && PSEUDO_SUBCOMMAND_VERBS.has(args[0].toLowerCase())) {
         ctx.print(
-          `Unknown /plan subcommand "${args[0]}" — did you mean panel, approve, list, show, or status? ` +
+          `Unknown /plan subcommand "${args[0]}": did you mean panel, approve, list, show, or status? ` +
           `To seed a planning goal, use /plan <a real sentence describing the change>.`,
         );
         return;
@@ -318,13 +318,13 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
   });
 
   // /plan now enters/toggles the SESSION PERMISSION plan mode (read-only
-  // planning posture) — distinct from the project-planning manager above, which
+  // planning posture), distinct from the project-planning manager above, which
   // moved to /project-plan (alias /planning). The change goes through the SDK
   // config surface (permissions.mode), the same value the PermissionManager
   // reads and Shift+Tab cycles, so plan mode is one concept across surfaces.
   registry.register({
     name: 'plan',
-    description: 'Enter or exit plan mode — a read-only planning posture where writes, commands, and network calls are blocked',
+    description: 'Enter or exit plan mode, a read-only planning posture where writes, commands, and network calls are blocked',
     usage: '[on | off | toggle]',
     argsHint: '[on|off]',
     handler(args, ctx) {
@@ -337,8 +337,8 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         : togglePlanMode(current);
       configManager.set('permissions.mode', next);
       ctx.print(next === 'plan'
-        ? '[Permissions] Plan mode ON — read-only: writes, commands, and network calls are blocked until you exit (/plan off or Shift+Tab).'
-        : `[Permissions] Plan mode OFF — mode: ${permissionModeLabel(next)}.`);
+        ? '[Permissions] Plan mode ON; read-only: writes, commands, and network calls are blocked until you exit (/plan off or Shift+Tab).'
+        : `[Permissions] Plan mode OFF; mode: ${permissionModeLabel(next)}.`);
     },
   });
 }

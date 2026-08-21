@@ -275,7 +275,7 @@ afterEach(() => {
 // project mode
 // ---------------------------------------------------------------------------
 
-describe('inspect — project mode', () => {
+describe('inspect: project mode', () => {
   test('detects Node.js project from package.json', async () => {
     write(tmpDir, 'package.json', JSON.stringify({
       name: 'my-app',

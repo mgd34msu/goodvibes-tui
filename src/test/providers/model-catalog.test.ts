@@ -370,7 +370,7 @@ describe('nameToSlug', () => {
 });
 
 // ---------------------------------------------------------------------------
-// normalizeModelName — preserved vs stripped identifiers
+// normalizeModelName, preserved vs stripped identifiers
 // ---------------------------------------------------------------------------
 
 describe('normalizeModelName', () => {
@@ -453,7 +453,7 @@ describe('normalizeModelName', () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildSyntheticCanonicalModels — slug-based merging in broad families
+// buildSyntheticCanonicalModels, slug-based merging in broad families
 // ---------------------------------------------------------------------------
 
 function makeCatalogModel(
@@ -486,7 +486,7 @@ function buildBroadFamily(
   return [...fillers, ...extras];
 }
 
-describe('buildSyntheticCanonicalModels — slug-based merging in broad families', () => {
+describe('buildSyntheticCanonicalModels: slug-based merging in broad families', () => {
   it('merges models whose names differ only in punctuation/spacing into one canonical group', () => {
     const family = 'gpt';
     const hyphen = makeCatalogModel('gpt-4o-openai', 'GPT-4o', family, 'provider-a');

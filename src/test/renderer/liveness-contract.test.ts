@@ -1,10 +1,10 @@
 /**
- * c — liveness contract harness, seeded against the settings modal.
+ * c, liveness contract harness, seeded against the settings modal.
  *
  * The reusable assertions live in ../helpers/liveness.ts so the integrator can
  * point them at the provider/MCP modals. Here they are exercised
  * against a real render surface: a settings modal backed by a frozen-but-
- * updatable ConfigManager (deterministic tmp dir — golden-frames excludes the
+ * updatable ConfigManager (deterministic tmp dir, golden-frames excludes the
  * live-config modal for exactly this reason; we inject one). A values-only
  * update (mutating one visible entry's currentValue, which renderSettingsModal
  * reads via formatValue) must not reflow the table or move the cursor.
@@ -77,7 +77,7 @@ function line(text: string): Line {
   return [...text].map((ch) => createStyledCell(ch));
 }
 
-describe('liveness contract — settings modal (values-only update)', () => {
+describe('liveness contract: settings modal (values-only update)', () => {
   test('a value update on a NON-selected visible row updates in place: no reflow, cursor unchanged, exactly one row differs', () => {
     withSettingsModal((modal) => {
       const items = modal.currentItems;
@@ -119,10 +119,10 @@ describe('liveness contract — settings modal (values-only update)', () => {
   });
 });
 
-describe('liveness contract — harness is non-vacuous (catches violations)', () => {
+describe('liveness contract: harness is non-vacuous (catches violations)', () => {
   test('a moved structural border FAILS the contract', () => {
     const a = [line('┌────────┐'), line('│ ok     │'), line('└────────┘')];
-    // Frame B shifts the left border of the middle row right by one column — a reflow.
+    // Frame B shifts the left border of the middle row right by one column, a reflow.
     const b = [line('┌────────┐'), line(' │ok     │'), line('└────────┘')];
     expect(() => assertFrameLiveness(a, b)).toThrow();
   });

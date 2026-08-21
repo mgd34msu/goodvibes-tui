@@ -1,6 +1,6 @@
 // Deliberately per-repo test scaffolding, byte-identical to the sibling product's copy by design: it binds to this repo's own working tree, source layout and Bun test lifecycle, so a shared home would mean inventing a test-only published package rather than hoisting anything.
 /**
- * bun test preload — temp-directory containment and teardown.
+ * bun test preload, temp-directory containment and teardown.
  *
  * Wired in bunfig.toml (`[test] preload`), so it loads once per test process,
  * before any test file, and applies to `bun test` however it is invoked: through
@@ -11,13 +11,13 @@
  * 1. CONTAINMENT. It creates one directory per test process inside the inherited
  *    temp root and repoints process.env.TMPDIR/TMP/TEMP at it. `os.tmpdir()`
  *    reads those variables on every call (verified against this Bun build), so
- *    every in-process `mkdtempSync(join(tmpdir(), ...))` — the ~314 test files
- *    that build temp paths by hand included — now lands inside one directory
+ *    every in-process `mkdtempSync(join(tmpdir(), ...))`, the ~314 test files
+ *    that build temp paths by hand included, now lands inside one directory
  *    this process owns and can delete wholesale. Nothing has to be fixed file by
  *    file, and nothing outside this process's own directory is ever touched.
  *
  * 2. TEARDOWN. A top-level `afterAll` drains the shared registry in
- *    helpers/temp-registry.ts — the per-process root above, plus every directory
+ *    helpers/temp-registry.ts, the per-process root above, plus every directory
  *    a helper registered explicitly (notably makeProjectTempDir, which writes
  *    under <repo>/.test-tmp and so does NOT follow TMPDIR). `afterAll` is used
  *    because `bun test` does not fire `process.on('exit')`; that is the defect
@@ -31,7 +31,7 @@
  *    inside the process can win that race for certain. So when
  *    GOODVIBES_TEST_TEMP_MANIFEST names a path, the teardown also writes the full
  *    list of directories it owned to that file. scripts/run-tests.ts sets it and
- *    deletes the listed paths once the child has EXITED — no writer is left to
+ *    deletes the listed paths once the child has EXITED, no writer is left to
  *    race, and only that child's own directories are touched, which keeps it safe
  *    with 8 test processes sharing <repo>/.test-tmp.
  *
@@ -55,8 +55,8 @@
  * sees the TMPDIR this process inherited, not the redirected one. Under
  * scripts/run-tests.ts that inherited value is already a per-file directory the
  * runner removes in a `finally`, so children are contained there. Under a bare
- * `bun test` with no manifest, a child writing to the system temp dir — and a
- * late writer that outlasts the drain budget — are outside this file's reach.
+ * `bun test` with no manifest, a child writing to the system temp dir, and a
+ * late writer that outlasts the drain budget, are outside this file's reach.
  */
 import { afterAll } from 'bun:test';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';

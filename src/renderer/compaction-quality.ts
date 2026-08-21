@@ -4,7 +4,7 @@
  * Reality check: the SDK's `computeQualityScore()`
  * (platform/runtime/compaction/quality-score.ts) is only ever called from a
  * SEPARATE pipeline, `CompactionManager` (platform/runtime/compaction/manager.ts).
- * The TUI's actual `/compact` path never instantiates `CompactionManager` — it
+ * The TUI's actual `/compact` path never instantiates `CompactionManager`, it
  * goes through `platform/core/context-compaction.ts` via
  * `ConversationManager.compact()` (see `compactConversation()` in
  * runtime-services.ts), which has no scoring of its own. Adopting the whole
@@ -20,7 +20,7 @@
  * Honesty note: the `strategy` value passed to `computeQualityScore()` is a
  * BORROWED rubric label describing what `compactConversation()`'s structured
  * multi-section extraction actually does (collapse the whole conversation
- * into one handoff message) — it is NOT a real `CompactionStrategy`
+ * into one handoff message), it is NOT a real `CompactionStrategy`
  * escalation result, and no strategy switch is triggered from it. Every
  * rendering of the score says so explicitly (see `formatQualityScoreLine`).
  *
@@ -29,7 +29,7 @@
  * api-extractor regen for a value the SDK's own compaction log never
  * populates). Keyed by `CompactionEvent.timestamp` rather than array index,
  * because `compactSmallWindow`'s null-event path (small-context-window
- * models — see runtime-services.ts) can create index gaps.
+ * models, see runtime-services.ts) can create index gaps.
  */
 
 import { computeQualityScore, describeScore } from '@/runtime/index.ts';
@@ -41,7 +41,7 @@ export type { CompactionQualityScore } from '@/runtime/index.ts';
 /**
  * Bound the TUI-local score store the same way the SDK bounds its own
  * compaction event log (context-compaction.ts caps at 50 and shifts the
- * oldest entry) — a long-running session should not accumulate this forever.
+ * oldest entry), a long-running session should not accumulate this forever.
  */
 const MAX_TRACKED_SCORES = 50;
 
@@ -80,7 +80,7 @@ export function scoreCompactionRun(input: ScoreCompactionRunInput): CompactionQu
     messages: input.messagesBefore,
     tokensBefore: input.tokensBefore,
     contextWindow: input.contextWindow,
-    // Borrowed rubric label, not a real strategy escalation — see module doc.
+    // Borrowed rubric label, not a real strategy escalation, see module doc.
     strategy: 'collapse',
   };
   const strategyOutput: StrategyOutput = {

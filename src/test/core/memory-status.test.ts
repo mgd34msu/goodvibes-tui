@@ -56,7 +56,7 @@ describe('formatMb / formatMemoryBytes', () => {
   });
 });
 
-describe('memoryStatusLines — populated (normal tier)', () => {
+describe('memoryStatusLines: populated (normal tier)', () => {
   test('renders tier, budget/rss, heap, thresholds, cache footprints, no paused jobs, disarmed tripwire', () => {
     const text = memoryStatusLines(snapshot()).join('\n');
     expect(text).toContain('tier: normal — footprint is comfortably within budget');
@@ -72,7 +72,7 @@ describe('memoryStatusLines — populated (normal tier)', () => {
   });
 });
 
-describe('memoryStatusLines — high/critical tiers', () => {
+describe('memoryStatusLines: high/critical tiers', () => {
   test('critical tier renders the refusal and paused jobs', () => {
     const text = memoryStatusLines(snapshot({
       tier: 'critical',
@@ -88,7 +88,7 @@ describe('memoryStatusLines — high/critical tiers', () => {
   });
 });
 
-describe('memoryStatusLines — empty caches', () => {
+describe('memoryStatusLines: empty caches', () => {
   test('honest "none registered" rather than a fabricated zero row', () => {
     const text = memoryStatusLines(snapshot({ caches: [] })).join('\n');
     expect(text).toContain('caches: none registered');

@@ -1,5 +1,5 @@
 /**
- * provider-classification.ts — how a provider is paid for: a raw API key, a
+ * provider-classification.ts, how a provider is paid for: a raw API key, a
  * cloud account, a stored subscription/OAuth session, a local runtime, or
  * honestly unknown.
  *

@@ -1,9 +1,9 @@
 /**
- * recovery-prompt.ts — the startup "a recovery snapshot exists, do you want
+ * recovery-prompt.ts, the startup "a recovery snapshot exists, do you want
  * it?" flow.
  *
  * A crash-recovery snapshot used to get one sentence in the boot resume
- * notice, which left the operator to read it and retype a command — and for a
+ * notice, which left the operator to read it and retype a command, and for a
  * session that crashed before its first clean save, there was no command that
  * reached the snapshot at all, so the sentence was a dead end. This module
  * replaces that with an explicit two-step ask:
@@ -14,13 +14,13 @@
  * Rules this flow keeps:
  *   - Nothing is ever applied without the user picking Resume. There is no
  *     silent auto-restore path here, and this module never loads a snapshot
- *     just to look at it — `checkRecoveryFile` reports, and only an explicit
+ *     just to look at it, `checkRecoveryFile` reports, and only an explicit
  *     yes reaches the code that opens the file.
  *   - The SDK's `applyRecoverySnapshot` is what runs on that yes, and it will
  *     not run without the confirmation token this flow hands it. It reads,
  *     retires and applies in one operation, load-then-delete: the file is
  *     retired only after a successful load, so a failed read can never destroy
- *     state that was never actually recovered — and a successful load can
+ *     state that was never actually recovered, and a successful load can
  *     never leave a restored snapshot behind to be offered again.
  *   - Every fact shown is one we actually have (session id, snapshot age,
  *     title when the snapshot carries one, byte size when the file is where
@@ -44,8 +44,8 @@
  *     is offered again on the next launch, not again in this one.
  *   - Remove is permanent, not just for this file. The decision is written to
  *     the durable ledger in recovery-decisions.ts, so a snapshot that comes
- *     back byte-for-byte — because a session still running on an older build
- *     is rewriting it every minute — is deleted on sight instead of asked
+ *     back byte-for-byte, because a session still running on an older build
+ *     is rewriting it every minute, is deleted on sight instead of asked
  *     about again. Deleting the file used to be the entire memory of the
  *     answer, which is how the same question survived being answered three
  *     times.
@@ -79,7 +79,7 @@ export type SelectionOpener = (
 
 export interface RecoveryPromptDeps {
   readonly surface: SessionSurface;
-  /** The shell's selection-modal opener. Absent in headless hosts — the flow then does nothing at all. */
+  /** The shell's selection-modal opener. Absent in headless hosts, the flow then does nothing at all. */
   readonly openSelection: SelectionOpener | undefined;
   /**
    * Apply an explicitly-accepted snapshot to the live conversation and report
@@ -106,7 +106,7 @@ export interface RecoveryPromptDeps {
    * session (`checkRecoveryFile`). Used by the `--continue` / bare `--resume`
    * pre-resume check (cli/tui-startup.ts): resuming a named session straight
    * from its durable store would silently drop the tail of messages held only
-   * in a snapshot newer than that store — the same rule `checkRecoveryFile`
+   * in a snapshot newer than that store, the same rule `checkRecoveryFile`
    * uses, just scoped to the one session being resumed instead of "whichever
    * session has the newest snapshot".
    */
@@ -115,7 +115,7 @@ export interface RecoveryPromptDeps {
 
 // ─── Honest fact formatting ─────────────────────────────────────────────────
 
-/** Human-readable age of a snapshot. Coarse on purpose — the exact second is not a fact worth claiming. */
+/** Human-readable age of a snapshot. Coarse on purpose, the exact second is not a fact worth claiming. */
 export function formatSnapshotAge(ageMs: number): string {
   if (ageMs < 0) return 'just now';
   const minutes = Math.floor(ageMs / 60_000);
@@ -155,7 +155,7 @@ export function describeRecoverySnapshot(
 
 /**
  * The offer modal's rows. The snapshot's facts ride on the Resume row's
- * `detail` — both because that is where they are decision-relevant ("this is
+ * `detail`, both because that is where they are decision-relevant ("this is
  * what you would be loading") and because `detail` is the only field the
  * selection overlay wraps rather than truncates, so the full description
  * survives any terminal width.
@@ -226,8 +226,8 @@ function defaultSnapshotBytes(surface: SessionSurface, sessionId: string): numbe
 
 /**
  * Snapshots the user has already answered about (Keep or dismissal) during
- * this process's lifetime. Two offer paths exist in one boot — the targeted
- * pre-resume check for `--continue`/`--resume` and the general startup offer —
+ * this process's lifetime. Two offer paths exist in one boot, the targeted
+ * pre-resume check for `--continue`/`--resume` and the general startup offer,
  * and both can find the same snapshot; an answer given to either binds both,
  * so "stays quiet for the rest of the run" holds across the pair. Resume and
  * Remove retire the file itself, so only the declined cases need remembering.
@@ -236,7 +236,7 @@ const answeredThisRun = new Set<string>();
 
 /**
  * Test seam: a fresh process has no answered offers. Only clears the
- * in-process Keep memory — removal decisions are durable on purpose and live
+ * in-process Keep memory, removal decisions are durable on purpose and live
  * in the surface's own directory, so a test gets a clean ledger by using a
  * fresh temp surface, the same way a real user gets one by using a different
  * machine.
@@ -259,7 +259,7 @@ const MAX_RECORDED_REMOVAL_PASSES = 8;
  *
  * A snapshot whose session is in the removal ledger is deleted here and NOT
  * offered: the user answered that question already, and re-asking because the
- * file came back is the defect. Deleting rather than merely skipping matters —
+ * file came back is the defect. Deleting rather than merely skipping matters,
  * skipping would leave the file to mask an older, genuinely-orphaned snapshot
  * underneath it forever.
  */
@@ -298,7 +298,7 @@ export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<R
     // targeted --continue offer and the general startup offer can both find
     // it). The earlier answer stands; don't ask twice.
     if (answeredThisRun.has(info.sessionId)) return 'kept';
-    // Another terminal is actively refreshing this snapshot — it is that
+    // Another terminal is actively refreshing this snapshot, it is that
     // instance's live state, not an orphaned crash.
     if (checkSessionLiveness(deps.surface, info.sessionId).live) return 'none';
     const open = deps.openSelection;
@@ -318,8 +318,8 @@ export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<R
         // is gone" are not the same news.
         deps.receipt(
           result.refusal === 'no-snapshot'
-            ? 'Recovery snapshot could not be read — it was left on disk and will be offered again next launch.'
-            : `Recovery snapshot for session ${info.sessionId} could not be restored — the file was damaged, and reading it retired it. Nothing was changed in this session.`,
+            ? 'Recovery snapshot could not be read; it was left on disk and will be offered again next launch.'
+            : `Recovery snapshot for session ${info.sessionId} could not be restored; the file was damaged, and reading it retired it. Nothing was changed in this session.`,
         );
         deps.render();
         return 'resume-failed';
@@ -345,14 +345,14 @@ export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<R
       // it in the first place.
       recordRecoveryRemoval(deps.surface, info.sessionId);
       deps.receipt(removed
-        ? `Recovery point removed (session ${info.sessionId}) — it will not be offered again, even if the file reappears.`
-        : `No recovery point was found to remove (session ${info.sessionId}) — if one reappears for that session it will be discarded, not offered.`);
+        ? `Recovery point removed (session ${info.sessionId}): it will not be offered again, even if the file reappears.`
+        : `No recovery point was found to remove (session ${info.sessionId}): if one reappears for that session it will be discarded, not offered.`);
       deps.render();
       return 'removed';
     }
 
     answeredThisRun.add(info.sessionId);
-    deps.receipt(`Recovery point kept (session ${info.sessionId}) — it will be offered again next launch.`);
+    deps.receipt(`Recovery point kept (session ${info.sessionId}): it will be offered again next launch.`);
     deps.render();
     return 'kept';
   } catch {

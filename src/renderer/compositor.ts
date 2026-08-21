@@ -28,7 +28,7 @@ export interface SearchInfo {
 export interface PanelCompositeData {
   /**
    * The single consolidated workspace tab bar spanning all open panels across
-   * both panes. There are no per-pane tab bars — pane focus is shown by the
+   * both panes. There are no per-pane tab bars, pane focus is shown by the
    * accent border (see `topFocused`/`bottomFocused`).
    */
   workspaceBar: Line;
@@ -62,7 +62,7 @@ export interface CompositeRequest {
 
 /**
  * Compositor - Authoritative TUI layout engine with Selection Overlay.
- * Decoupled from global state — all needed data is passed as parameters.
+ * Decoupled from global state, all needed data is passed as parameters.
  */
 export class Compositor {
   /** Double-buffer reuse: back is written, front is the last-rendered reference. */
@@ -80,7 +80,7 @@ export class Compositor {
    * and anything that writes to the terminal outside composite() moves content
    * the compositor never wrote. After either, a row the model believes is
    * already blank is never re-emitted, so whatever the terminal is showing
-   * there — splash art, a stale rule line — survives every later frame. The
+   * there, splash art, a stale rule line, survives every later frame. The
    * erase is what clears cells the diff structurally skips (wide-glyph
    * continuation cells, see DiffEngine.diff), which a diff against a null
    * front buffer alone cannot do.
@@ -93,12 +93,12 @@ export class Compositor {
     this.diffEngine = new DiffEngine(this.caps);
   }
 
-  /** Exposed for unit tests — returns the detected color capability. */
+  /** Exposed for unit tests, returns the detected color capability. */
   public get termCapsForTest(): TermColorCaps {
     return this.caps;
   }
 
-  /** Exposed for unit tests — returns the last composited buffer. */
+  /** Exposed for unit tests, returns the last composited buffer. */
   public get lastBufferForTest(): TerminalBuffer | null {
     return this.frontBuffer;
   }
@@ -126,7 +126,7 @@ export class Compositor {
   public composite(params: CompositeRequest): void {
     const { width, height, header, viewport, footer, selection, search, panel, panelWidth } = params;
     // A size change reallocates the buffer, which drops every record of what
-    // the terminal is currently showing — repaint in full rather than diff
+    // the terminal is currently showing, repaint in full rather than diff
     // against a model that no longer describes the screen.
     const resized = this.frontBuffer !== null
       && (this.frontBuffer.width !== width || this.frontBuffer.height !== height);
@@ -148,7 +148,7 @@ export class Compositor {
     const leftWidth = hasPanel ? Math.max(1, width - panelWidth - 1) : width;
     const sepX = hasPanel ? leftWidth : -1;
 
-    // 1. Draw Header — always full width
+    // 1. Draw Header, always full width
     header.forEach((line, i) => newBuffer.blitLine(i, line));
 
     // 2. Draw Viewport directly after the supplied header.
@@ -320,7 +320,7 @@ export class Compositor {
     // (rows past the supplied viewport lines are covered by the loop above,
     // separator column included, so they can no longer keep a stale frame.)
 
-    // 3. Draw Footer (Pinned to Bottom) — always full width
+    // 3. Draw Footer (Pinned to Bottom), always full width
     const footerStart = height - footer.length;
     footer.forEach((line, i) => {
       const screenY = footerStart + i;
@@ -329,7 +329,7 @@ export class Compositor {
     });
 
     // 4. Diff and Render
-    // Diff against front-buffer (last-rendered), then swap front/back — no clone() needed.
+    // Diff against front-buffer (last-rendered), then swap front/back, no clone() needed.
     // On a full repaint the SGR run-state is reset (the erase below leaves the
     // terminal's attributes unknown) and the diff runs against no previous
     // frame, so every cell of the grid is emitted.

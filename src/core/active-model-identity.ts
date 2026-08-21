@@ -1,5 +1,5 @@
 /**
- * active-model-identity.ts — the single answer to "which backend is serving
+ * active-model-identity.ts, the single answer to "which backend is serving
  * this session right now, and is that what the user chose?"
  *
  * Two shell surfaces used to answer that question independently and could
@@ -13,8 +13,8 @@
  *
  * Both surfaces now resolve through resolveActiveModelDisplay() so they are
  * computed from one comparison of serving-vs-configured. Divergence is
- * detected structurally — by comparing the live registry key against the
- * configured selection — not by trusting a flag, so ANY path that moves the
+ * detected structurally, by comparing the live registry key against the
+ * configured selection, not by trusting a flag, so ANY path that moves the
  * registry off the user's choice is surfaced, not just the failover path that
  * sets the record below.
  *
@@ -46,11 +46,11 @@ export interface FailoverTurnState {
   current(): FailoverTurnRecord | null;
   /**
    * Record a failover switch. On a second switch within the same turn the
-   * originally-configured key is preserved — divergence is always reported
+   * originally-configured key is preserved, divergence is always reported
    * against the user's own selection.
    */
   begin(record: FailoverTurnRecord): void;
-  /** Drop the record — called only after serving is actually back on the configured selection. */
+  /** Drop the record, called only after serving is actually back on the configured selection. */
   clear(): void;
 }
 
@@ -76,7 +76,7 @@ export interface ServingModelIdentity {
 }
 
 export interface ActiveModelInputs {
-  /** Live registry answer — who is actually serving right now. */
+  /** Live registry answer, who is actually serving right now. */
   readonly serving: ServingModelIdentity;
   /** The user's configured selection as a registry key (config `provider.model`). */
   readonly configuredRegistryKey: string | undefined;
@@ -100,7 +100,7 @@ export interface ActiveModelDisplay {
   /**
    * Divergence marker naming the configured selection, e.g.
    * `failover from abacusai:route-llm`. Empty string when serving is the
-   * configured selection — in that case both surfaces render exactly as they
+   * configured selection, in that case both surfaces render exactly as they
    * did before this resolver existed.
    */
   readonly divergenceNote: string;

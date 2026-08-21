@@ -10,7 +10,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { lineToString } from '../setup.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 2a — per-tool cancel. A key cancels JUST the running tool call via the
+// STEP 2a, per-tool cancel. A key cancels JUST the running tool call via the
 // in-process orchestrator (the local-session equivalent of the
 // sessions.toolCalls.cancel wire verb); the cancelled result renders
 // structurally ("cancelled by user", partial output preserved) and the turn

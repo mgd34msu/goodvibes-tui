@@ -14,11 +14,11 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CliCommandOutput, CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 
 // ---------------------------------------------------------------------------
-// `goodvibes plugin bundles browse|install|list` — the capability-bundle
+// `goodvibes plugin bundles browse|install|list`, the capability-bundle
 // marketplace surface. Extends the existing plugin-command.ts family with the
 // SDK's SHA-256-pinned bundle distribution (platform/runtime/ecosystem):
 // parseMarketplaceIndex, fetchAndVerifyBundle, planBundleActivation. There is
-// deliberately NO flag that bypasses a pin mismatch — `install` either
+// deliberately NO flag that bypasses a pin mismatch, `install` either
 // verifies or refuses; `--yes` only confirms an ALREADY-verified activation
 // plan, it never substitutes for the pin.
 // ---------------------------------------------------------------------------
@@ -59,7 +59,7 @@ function formatJsonOrText(runtime: CliCommandRuntime, value: unknown, text: stri
   return runtime.cli.flags.outputFormat === 'json' ? JSON.stringify(value, null, 2) : text;
 }
 
-/** file:// / bare-path vs http(s):// — the only two source kinds this CLI surface accepts (no git ref flag exists yet). */
+/** file:// / bare-path vs http(s)://, the only two source kinds this CLI surface accepts (no git ref flag exists yet). */
 function inferSourceKind(ref: string): 'file' | 'url' {
   return ref.startsWith('http://') || ref.startsWith('https://') ? 'url' : 'file';
 }
@@ -111,7 +111,7 @@ async function handleBrowse(runtime: CliCommandRuntime, ref: string | undefined)
   const lines = [`Marketplace index at '${ref}' (${bundles.length} bundle${bundles.length === 1 ? '' : 's'}):`];
   for (const entry of bundles) {
     lines.push(
-      `  ${entry.id} — ${entry.name} v${entry.version} (${entry.kind})`,
+      `  ${entry.id}: ${entry.name} v${entry.version} (${entry.kind})`,
       `    ${entry.summary}`,
       `    capabilities: ${summarizeCapabilities(entry.capabilities)}`,
       `    pin: sha256:${entry.source.sha256} (${entry.source.kind}: ${entry.source.location})`,
@@ -123,7 +123,7 @@ async function handleBrowse(runtime: CliCommandRuntime, ref: string | undefined)
 /** Render an activation plan (granted capabilities, withheld/quarantined ones) for confirmation. */
 function renderPlan(plan: BundleActivationPlan, committed: boolean): string {
   const lines = [
-    `${committed ? 'Installed' : 'Activation plan (preview — re-run with --yes to install)'}: ${plan.manifest.id} v${plan.manifest.version} (${plan.manifest.kind})`,
+    `${committed ? 'Installed' : 'Activation plan (preview; re-run with --yes to install)'}: ${plan.manifest.id} v${plan.manifest.version} (${plan.manifest.kind})`,
     `  trust tier: ${plan.trustTier}`,
     `  declared runtime capabilities: ${plan.manifest.capabilities.runtime.join(', ') || 'none'}`,
     `  declared tools: ${plan.manifest.capabilities.tools.join(', ') || 'none'}`,
@@ -134,18 +134,18 @@ function renderPlan(plan: BundleActivationPlan, committed: boolean): string {
   ];
   if (plan.quarantine.required) {
     lines.push(
-      `  QUARANTINED: yes — ${plan.quarantine.reason ?? 'over-reached its trust tier'}`,
+      `  QUARANTINED: yes; ${plan.quarantine.reason ?? 'over-reached its trust tier'}`,
       `  withheld capabilities: ${plan.quarantine.revokedCapabilities.join(', ')}`,
     );
   } else {
-    lines.push('  quarantined: no — every declared capability fit the trust tier');
+    lines.push('  quarantined: no; every declared capability fit the trust tier');
   }
   return lines.join('\n');
 }
 
 async function handleInstall(runtime: CliCommandRuntime, ref: string | undefined, sha256: string | undefined): Promise<CliCommandOutput> {
   if (!ref || !sha256) {
-    return { output: 'Usage: goodvibes plugin bundles install <ref> --sha256 <pin>  (the pin is required — there is no unpinned install path)', exitCode: 2 };
+    return { output: 'Usage: goodvibes plugin bundles install <ref> --sha256 <pin>  (the pin is required; there is no unpinned install path)', exitCode: 2 };
   }
   const kind = inferSourceKind(ref);
   const source = { kind, location: ref, sha256 } as const;
@@ -205,10 +205,10 @@ function handleList(runtime: CliCommandRuntime): CliCommandOutput {
   const lines = [`Installed capability bundles (${records.length}):`];
   for (const record of records) {
     lines.push(
-      `  ${record.id} — ${record.name} v${record.version} (${record.kind})`,
+      `  ${record.id}: ${record.name} v${record.version} (${record.kind})`,
       `    installedAt: ${new Date(record.installedAt).toISOString()}`,
       `    source: ${record.source.kind}:${record.source.location} (sha256:${record.source.sha256})`,
-      `    quarantined: ${record.quarantine.required ? `yes — ${record.quarantine.reason ?? 'over-reached its trust tier'}` : 'no'}`,
+      `    quarantined: ${record.quarantine.required ? `yes: ${record.quarantine.reason ?? 'over-reached its trust tier'}` : 'no'}`,
     );
   }
   return { output: formatJsonOrText(runtime, records, lines.join('\n')), exitCode: 0 };

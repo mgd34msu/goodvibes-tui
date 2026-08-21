@@ -1,11 +1,11 @@
 /**
- * terminal-notifier — emits in-terminal desktop notifications via the OSC 9
+ * terminal-notifier, emits in-terminal desktop notifications via the OSC 9
  * escape sequence (`ESC ] 9 ; <text> BEL`) and, optionally, an audible bell.
  *
  * This is distinct from the OS-level desktop notifications the alert classes in
  * this directory fire through the SDK's notifyCompletion: OSC 9 is delivered by
  * the terminal emulator itself, so it works over SSH and inside tmux where a
- * host-side notify daemon is not reachable. The two are complementary — a user
+ * host-side notify daemon is not reachable. The two are complementary, a user
  * can enable either, both, or neither.
  *
  * Three signals, each with its own config toggle (documented in
@@ -16,14 +16,14 @@
  *
  * Focus rule (per the feature brief): emit only when the terminal is NOT focused
  * if focus is knowable, and unconditionally when the terminal never reported
- * focus — exactly FocusTracker.shouldAlertWhenUnfocused(). This is deliberately
+ * focus, exactly FocusTracker.shouldAlertWhenUnfocused(). This is deliberately
  * NOT tied to the alert classes' master `notifyOnlyWhenUnfocused` gate: an
  * in-terminal notification only makes sense for an unattended window.
  *
  * Write discipline: the escape sequence goes out through allowTerminalWrite (so
  * the terminal-output guard passes it rather than intercepting it as stray
  * output) and NEVER after the terminal has been handed back to the shell
- * (isReleased() — the same restore gate the render scheduler honors). No cursor
+ * (isReleased(), the same restore gate the render scheduler honors). No cursor
  * positioning is involved, so an OSC 9 emitted between frames is safe.
  */
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -64,7 +64,7 @@ export interface TerminalNotifierDeps {
   readonly stdout: { write(s: string): boolean };
   readonly configGet: ConfigGet;
   readonly focusTracker: Pick<FocusTracker, 'shouldAlertWhenUnfocused'>;
-  /** True once the terminal has been restored to the shell — no writes after that. */
+  /** True once the terminal has been restored to the shell, no writes after that. */
   readonly isReleased: () => boolean;
 }
 

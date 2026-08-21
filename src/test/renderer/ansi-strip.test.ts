@@ -112,7 +112,7 @@ describe('stripDangerousAnsi', () => {
   });
 
   // ── Category: SGR color codes (MUST be preserved)
-  describe('SGR color/style codes (\\x1b[<n>m) — must be preserved', () => {
+  describe('SGR color/style codes (\\x1b[<n>m): must be preserved', () => {
     test('preserves reset (\\x1b[0m)', () => {
       expect(stripDangerousAnsi('\x1b[0mtext')).toBe('\x1b[0mtext');
     });

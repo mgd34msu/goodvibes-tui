@@ -3,10 +3,10 @@
  *
  * Implements the Evaluation Harness commands:
  *
- *   /eval list                    — List all available eval suites
- *   /eval run <suite>             — Run a named suite (or 'all')
- *   /eval compare <baseline-file> — Compare last run against a baseline file
- *   /eval gate <suite>            — Run suite and apply CI gate (exits 1 on regression)
+ *   /eval list                   , List all available eval suites
+ *   /eval run <suite>            , Run a named suite (or 'all')
+ *   /eval compare <baseline-file>, Compare last run against a baseline file
+ *   /eval gate <suite>           , Run suite and apply CI gate (exits 1 on regression)
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';

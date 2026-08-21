@@ -2,7 +2,7 @@ import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { formatDeviceLine, resolveTokenByIdPrefix } from '@pellux/goodvibes-sdk/platform/pairing';
 
 /**
- * Register the /devices command — manage the per-device pairing tokens minted by
+ * Register the /devices command, manage the per-device pairing tokens minted by
  * the pairing surfaces. Mirrors the pairing.tokens.* gateway verbs the daemon
  * serves (list/rename/revoke/migrate/revoke-shared) so the terminal has the same
  * capability as the web app's device manager.
@@ -42,7 +42,7 @@ export function registerDevicesRuntimeCommands(registry: CommandRegistry): void 
         }
         const resolved = resolveTokenByIdPrefix(pairingTokens.list(), idOrPrefix);
         if (!resolved.ok) {
-          ctx.print(resolved.reason === 'ambiguous' ? `Ambiguous device id "${idOrPrefix}" — use more characters.` : `No device matches "${idOrPrefix}".`);
+          ctx.print(resolved.reason === 'ambiguous' ? `Ambiguous device id "${idOrPrefix}": use more characters.` : `No device matches "${idOrPrefix}".`);
           return;
         }
         pairingTokens.rename(resolved.token.id, name);
@@ -58,11 +58,11 @@ export function registerDevicesRuntimeCommands(registry: CommandRegistry): void 
         }
         const resolved = resolveTokenByIdPrefix(pairingTokens.list(), idOrPrefix);
         if (!resolved.ok) {
-          ctx.print(resolved.reason === 'ambiguous' ? `Ambiguous device id "${idOrPrefix}" — use more characters.` : `No device matches "${idOrPrefix}".`);
+          ctx.print(resolved.reason === 'ambiguous' ? `Ambiguous device id "${idOrPrefix}": use more characters.` : `No device matches "${idOrPrefix}".`);
           return;
         }
         const revoked = pairingTokens.revoke(resolved.token.id);
-        ctx.print(revoked ? `Revoked "${resolved.token.name}" — its token stops working immediately.` : `Device "${resolved.token.name}" was already absent.`);
+        ctx.print(revoked ? `Revoked "${resolved.token.name}": its token stops working immediately.` : `Device "${resolved.token.name}" was already absent.`);
         return;
       }
 
@@ -82,7 +82,7 @@ export function registerDevicesRuntimeCommands(registry: CommandRegistry): void 
           return;
         }
         pairingTokens.revokeLegacyShared();
-        ctx.print('Revoked the legacy shared token — devices still on it must re-pair with their own token.');
+        ctx.print('Revoked the legacy shared token; devices still on it must re-pair with their own token.');
         return;
       }
 
@@ -95,7 +95,7 @@ function renderList(ctx: CommandContext, pairingTokens: NonNullable<CommandConte
   const list = pairingTokens.list();
   const lines: string[] = ['Paired devices:'];
   if (list.length === 0) {
-    lines.push('  (none yet — pair one with /pair)');
+    lines.push('  (none yet: pair one with /pair)');
   } else {
     for (const token of list) lines.push(`  ${formatDeviceLine(token)}`);
   }
@@ -103,7 +103,7 @@ function renderList(ctx: CommandContext, pairingTokens: NonNullable<CommandConte
     '',
     pairingTokens.isLegacyRevoked()
       ? 'Legacy shared token: revoked.'
-      : 'Legacy shared token: active — run /devices migrate-shared then /devices revoke-shared to retire it.',
+      : 'Legacy shared token: active; run /devices migrate-shared then /devices revoke-shared to retire it.',
   );
   ctx.print(lines.join('\n'));
 }

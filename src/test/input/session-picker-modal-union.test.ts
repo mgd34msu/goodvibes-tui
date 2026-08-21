@@ -1,5 +1,5 @@
 /**
- * session-picker-modal-union.test.ts — union-sessions surface.
+ * session-picker-modal-union.test.ts, union-sessions surface.
  *
  * Verifies SessionPickerModal (when constructed with a sessionBroker) and its
  * renderer honestly surface the cross-surface session union alongside the
@@ -11,8 +11,8 @@
  *  (4) closed session shown as 'closed'; unknown kind rendered verbatim.
  *
  * Drives the real SessionUnionCache (the SDK's SessionReadFacade
- * implementation) with fake local/wire readers — same style as
- * src/test/runtime/session-union-cache.test.ts — so this is real facade
+ * implementation) with fake local/wire readers, same style as
+ * src/test/runtime/session-union-cache.test.ts, so this is real facade
  * behavior, not a hand-rolled stand-in.
  */
 import { describe, expect, test } from 'bun:test';
@@ -67,7 +67,7 @@ function makeSessionManager(): { sessionManager: SessionManager; dir: string } {
   return { sessionManager: new SessionManager(dir, { surface: makeTestSurface(dir) }), dir };
 }
 
-describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
+describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
   test('backward compatible: no sessionBroker -> mode stays local, no cross-surface claim', () => {
     const { sessionManager, dir } = makeSessionManager();
     try {
@@ -121,7 +121,7 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
 
       expect(modal.crossSurfaceView.online).toBe(false);
       expect(modal.crossSurfaceView.offlineNote).toBe('cross-surface view offline');
-      // Never an empty list on offline — local rows are still honestly served.
+      // Never an empty list on offline, local rows are still honestly served.
       expect(modal.crossSurfaceSessions.map((r) => r.id)).toEqual(['local-1']);
 
       const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
@@ -140,7 +140,7 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
       // Real Date.now() clock (default) with a staleAfterMs of 0: any time that
       // elapses between the refresh settling and the crossSurfaceView read
       // (guaranteed > 0ms, since both are separate async ticks) reads as aged,
-      // while `online` stays true — the exact "confirmed live, but old" state
+      // while `online` stays true, the exact "confirmed live, but old" state
       // the note exists for. The renderer computes elapsed time off the real
       // wall clock (lastSyncAt is a real epoch ms), so assert the note's SHAPE
       // rather than an exact age to avoid timing flakiness.
@@ -213,7 +213,7 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
       expect(text).toContain('User-closed session');
       expect(text).toContain('Legacy closed session');
       // Deliberately-closed and pre-feature (no metadata) records still read
-      // "closed" — only the idle-reaped one gets the distinct badge.
+      // "closed", only the idle-reaped one gets the distinct badge.
       const reapedLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('Reaped session'));
       const userClosedLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('User-closed session'));
       const legacyLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('Legacy closed session'));
@@ -222,9 +222,9 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
       expect(userClosedLine).toContain('· closed ·');
       expect(legacyLine).toContain('· closed ·');
       // UX-lens note: 'reaped' is jargon with no on-screen explanation
-      // — a plain-language hint must render alongside the badge (the webui
+      //, a plain-language hint must render alongside the badge (the webui
       // pairs its own 'reaped' badge with an equivalent tooltip).
-      expect(text).toContain('reaped = closed by the idle sweep — reopens on next activity');
+      expect(text).toContain('reaped = closed by the idle sweep; reopens on next activity');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -274,7 +274,7 @@ describe('SessionPickerModal — cross-surface union (W3-T2)', () => {
 // disk I/O) since only the local list's *length* matters here, matching the
 // reviewer's repro at /tmp/.../scratchpad/repro.ts.
 // ---------------------------------------------------------------------------
-describe('SessionPickerModal — cross-surface budget reservation (W3 Finding 1)', () => {
+describe('SessionPickerModal: cross-surface budget reservation (W3 Finding 1)', () => {
   function fakeLocalSessions(n: number): SessionPickerModal['sessions'] {
     return Array.from({ length: n }, (_, i) => ({
       name: `local-session-${i + 1}`,
@@ -334,7 +334,7 @@ describe('SessionPickerModal — cross-surface budget reservation (W3 Finding 1)
     modal.active = true;
     modal.sessions = fakeLocalSessions(10);
     modal.selectedIndex = 0;
-    // mode stays 'local' (the DORMANT_CROSS_SURFACE_VIEW default) — no broker wired.
+    // mode stays 'local' (the DORMANT_CROSS_SURFACE_VIEW default), no broker wired.
     const lines = renderSessionPickerModal(modal, 100, 40);
     const text = linesToText(lines).join('\n');
     expect(text).not.toContain('Cross-surface sessions');

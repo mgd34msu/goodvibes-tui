@@ -3,11 +3,11 @@
  *
  * Implements the Provider Optimizer panel commands:
  *
- *   /provider optimizer on|off   — Enable or disable the provider optimizer
- *   /provider route auto|manual  — Set optimizer routing mode
- *   /provider explain-route      — Print current route explanation
- *   /provider pin <provider:model> — Pin routing to a specific provider/model
- *   /provider fallback test      — Simulate the fallback chain
+ *   /provider optimizer on|off  , Enable or disable the provider optimizer
+ *   /provider route auto|manual , Set optimizer routing mode
+ *   /provider explain-route     , Print current route explanation
+ *   /provider pin <provider:model>, Pin routing to a specific provider/model
+ *   /provider fallback test     , Simulate the fallback chain
  *
  * When the optimizer is disabled, commands report its status and
  * explain-route still works (reads current model capabilities).
@@ -112,7 +112,7 @@ function handleOptimizerToggle(
     context.print('  Provider selection returns to manual-only mode. No automatic failover.');
     context.print('  Pinned targets and fallback log are preserved; re-enable to resume.');
   } else {
-    context.print(`[provider] Optimizer already ${enable ? 'enabled' : 'disabled'} — no change.`);
+    context.print(`[provider] Optimizer already ${enable ? 'enabled' : 'disabled'}; no change.`);
   }
 }
 
@@ -136,7 +136,7 @@ function handleRoute(
 
   if (!optimizer.enabled) {
     context.print(
-      '[provider] Optimizer is off — routing mode recorded but failover will not fire until optimizer is enabled.',
+      '[provider] Optimizer is off: routing mode recorded but failover will not fire until optimizer is enabled.',
     );
     context.print('  Enable with: /provider optimizer on');
   }
@@ -273,7 +273,7 @@ async function handlePin(
   // Enable optimizer if it's off
   if (!optimizer.enabled) {
     optimizer.setEnabled(true);
-    context.print('⚠ Optimizer was disabled — enabling it for pin to take effect.');
+    context.print('⚠ Optimizer was disabled: enabling it for pin to take effect.');
   }
 
   optimizer.pin(match.providerId, match.modelId);
@@ -299,7 +299,7 @@ function handleFallbackTest(
     return;
   }
 
-  context.print('[provider] Simulating fallback chain (empty request profile — no requirements)...');
+  context.print('[provider] Simulating fallback chain (empty request profile; no requirements)...');
 
   const result: FallbackTestResult = optimizer.testFallback();
 
@@ -360,7 +360,7 @@ function handleFallbackTest(
 // ---------------------------------------------------------------------------
 
 /**
- * providerCommand — The `/provider` slash command.
+ * providerCommand, The `/provider` slash command.
  *
  * Routes to subcommand handlers based on args[0].
  */

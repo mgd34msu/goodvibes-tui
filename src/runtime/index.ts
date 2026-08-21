@@ -9,7 +9,7 @@
 // No runtime namespace objects are imported as values here: an eager
 // `export const X = ns.X` compiles to a top-level property read off a lazy
 // namespace object, and Bun's single-file compiler orders module bodies
-// nondeterministically — on some builds the read lands before the defining
+// nondeterministically, on some builds the read lands before the defining
 // module and the compiled binary dies at load with a ReferenceError. Every
 // value below is a grouped live re-export from the SDK's registered runtime
 // subpaths instead (exactly how the operations block below fixed the first
@@ -73,7 +73,7 @@ export type {
   WorkflowEvent,
 } from '@pellux/goodvibes-sdk/events';
 
-// Bootstrap compatibility aliases — grouped live re-exports (see the header
+// Bootstrap compatibility aliases, grouped live re-exports (see the header
 // comment for why these must not be eager namespace reads).
 export {
   scheduleBackgroundMcpDiscovery,
@@ -135,7 +135,7 @@ export type OperatorClient = Bootstrap.OperatorClient;
 export type PeerClient = Bootstrap.PeerClient;
 export type OpsApi = Bootstrap.OpsApi;
 
-// Transport compatibility aliases — grouped live re-exports.
+// Transport compatibility aliases, grouped live re-exports.
 export {
   createDirectTransport,
   createDirectTransportFromServices,
@@ -173,8 +173,8 @@ export {
   GlobalNetworkTransportInstaller,
   inspectOutboundTls,
 } from '@pellux/goodvibes-sdk/platform/runtime/transport';
-// Re-exported here because bootstrap.ts — the one place an exit can await
-// anything — sits on the 800-line per-file gate, so it reaches this through the
+// Re-exported here because bootstrap.ts, the one place an exit can await
+// anything, sits on the 800-line per-file gate, so it reaches this through the
 // import block it already has rather than a second import line.
 export { leaveHostedSessionOnExit } from './client/hosted-exit.ts';
 
@@ -218,7 +218,7 @@ export type SerializedRuntimeEnvelope = Transport.SerializedRuntimeEnvelope;
 // `export const X = operations.X` module-scope reads off the `operations`
 // namespace object: those reads evaluated the namespace getter while the
 // compiled single-file bundle could still be mid-cycle, and the binding they
-// reached for was not defined yet — source execution hid this, the compiled
+// reached for was not defined yet, source execution hid this, the compiled
 // binary died on it at load. A grouped `export { ... } from '<subpath>'` is a
 // live binding resolved by the module system, not a module-scope value read,
 // so it is cycle-safe.
@@ -314,7 +314,7 @@ export {
 } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 // Snapshot-retention symbols (SnapshotPruner, RetentionPolicy,
 // DEFAULT_RETENTION_CONFIG) are intentionally NOT re-exported here. No app code
-// consumes them — only the retention unit test does, and it now imports them
+// consumes them, only the retention unit test does, and it now imports them
 // straight from the SDK `operations` namespace. Re-exporting them created a
 // second top-level binding named `SnapshotPruner` that collided with the SDK's
 // own `class SnapshotPruner`, forcing the bundler to rename ours to
@@ -333,13 +333,13 @@ export {
 // OpsTargetNotFoundError, ToolContractVerifier, McpLifecycleManager,
 // McpPermissionManager, McpSchemaFreshnessTracker, PluginLifecycleManager,
 // PluginQuarantineEngine, PluginTrustStore, RemoteRunnerRegistry,
-// RemoteSupervisor, DistributedRuntimeManager) — their instance types are
+// RemoteSupervisor, DistributedRuntimeManager), their instance types are
 // forwarded automatically and are not redeclared below.
 // The declare-once storage handle (platform/runtime/session-surface.ts) plus
 // the two prompted-recovery primitives that only accept it. Every session
 // path in this app derives from one surface built in runtime/services.ts.
 export type SessionSurface = Operations.SessionSurface;
-// Probe for a NAMED session's live snapshot (per-session supersession — see
+// Probe for a NAMED session's live snapshot (per-session supersession, see
 // session-recovery.ts's header) without retiring anything. Backs the
 // --continue / --resume pre-resume check in cli/tui-startup.ts.
 export type RecoveryFileInfo = Operations.RecoveryFileInfo;
@@ -421,7 +421,7 @@ export type ToolExecutionPhase = Operations.ToolExecutionPhase;
 export type PhaseResult = Operations.PhaseResult;
 export type ToolExecutionRecord = Operations.ToolExecutionRecord;
 
-// Runtime shell compatibility aliases — grouped live re-exports.
+// Runtime shell compatibility aliases, grouped live re-exports.
 // WorktreeRegistry is a class: the value re-export carries its instance type,
 // so the old separate `export type WorktreeRegistry` alias is gone (TS2484).
 export {
@@ -486,7 +486,7 @@ export type EcosystemCatalogBundle = Shell.EcosystemCatalogBundle;
 export type EcosystemCatalogEntry = Shell.EcosystemCatalogEntry;
 export type EcosystemEntryKind = Shell.EcosystemEntryKind;
 
-// Runtime security compatibility aliases — grouped live re-exports. The class
+// Runtime security compatibility aliases, grouped live re-exports. The class
 // re-exports (DivergenceDashboard, PolicyRegistry, …) carry their instance
 // types, so the old separate type companions for those names are gone.
 export {

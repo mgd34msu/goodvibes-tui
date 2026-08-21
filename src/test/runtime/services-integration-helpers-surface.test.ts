@@ -1,5 +1,5 @@
 /**
- * services-integration-helpers-surface.test.ts — pins the fix for the
+ * services-integration-helpers-surface.test.ts, pins the fix for the
  * "/health continuity reads the wrong paths" finding.
  *
  * runtime/services.ts used to construct IntegrationHelperService with the
@@ -10,11 +10,11 @@
  * checkRecoveryFile) resolved against the UNSCOPED legacy directory, so
  * /health continuity (and the health panel's continuity domain) reported
  * "nothing here" even when a pointer and a recovery snapshot both genuinely
- * existed — just not at the path this service was looking under.
+ * existed, just not at the path this service was looking under.
  *
  * This test writes both through the SAME surface runtime/services.ts now
  * constructs IntegrationHelperService with, then reads them back through
- * createUiReadModels(...).continuity.getSnapshot() — the exact call
+ * createUiReadModels(...).continuity.getSnapshot(), the exact call
  * src/input/commands/health-runtime.ts's `/health continuity` branch makes.
  * A second case constructs a THROWAWAY legacy-scoped instance against the
  * same directories to prove the distinction is real: that instance reports
@@ -65,7 +65,7 @@ describe('IntegrationHelperService continuity reads through the surface it was c
     expect(direct.recoveryFilePresent).toBe(true);
   });
 
-  test('the same files are invisible to a legacy-scoped instance over the same directories — the shape of the original bug', () => {
+  test('the same files are invisible to a legacy-scoped instance over the same directories; the shape of the original bug', () => {
     const services = getTestRuntimeServices();
     const sessionId = 'continuity-legacy-blind-session';
 
@@ -82,7 +82,7 @@ describe('IntegrationHelperService continuity reads through the surface it was c
 
     // A throwaway instance built the OLD (legacy) way, over the identical
     // workingDirectory/homeDirectory pair, resolves the unscoped legacy
-    // directory instead — the same instance shape services.ts used to
+    // directory instead, the same instance shape services.ts used to
     // construct, and the reason /health continuity read the wrong paths.
     const legacyScoped = new IntegrationHelperService({
       workingDirectory: services.workingDirectory,

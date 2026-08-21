@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// rewind-runtime.ts — /rewind (message-anchored, unified files + conversation),
+// rewind-runtime.ts, /rewind (message-anchored, unified files + conversation),
 // plus the /undo rewind and /redo rewind reversals over the last receipt.
 //
 // The rewind engine is the SDK's UnifiedRewindService (platform/rewind:
 // plan() previews + issues a single-use confirm token; apply() is token-gated
 // and returns a receipt carrying an undo block). It JOINS the platform's three
-// existing history stores — it never adds a fourth. This module wires that
+// existing history stores, it never adds a fourth. This module wires that
 // service to the TUI's in-process stores through the two ports the service
 // defines:
 //   • RewindWorkspacePort  ← the in-process WorkspaceCheckpointManager (the
@@ -51,7 +51,7 @@ export type RewindScope = SdkRewindScope;
 const REWIND_SCOPES: readonly RewindScope[] = ['files', 'conversation', 'both'];
 
 // ---------------------------------------------------------------------------
-// Ports — bridge the SDK rewind service onto the TUI's in-process stores.
+// Ports, bridge the SDK rewind service onto the TUI's in-process stores.
 // ---------------------------------------------------------------------------
 
 /**
@@ -75,7 +75,7 @@ function makeWorkspacePort(mgr: WorkspaceCheckpointManager): RewindWorkspacePort
 }
 
 // ---------------------------------------------------------------------------
-// Per-session rewind state — the SDK service (with its wired ports) plus the
+// Per-session rewind state, the SDK service (with its wired ports) plus the
 // TUI-owned undo/redo stacks of applied receipts.
 // ---------------------------------------------------------------------------
 
@@ -120,7 +120,7 @@ function undoAvailable(receipt: RewindReceipt): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// /undo rewind & /redo rewind — reversal over the last receipt's undo points.
+// /undo rewind & /redo rewind, reversal over the last receipt's undo points.
 // Called from session-content.ts so the /undo and /redo commands stay single.
 // ---------------------------------------------------------------------------
 
@@ -201,7 +201,7 @@ function renderTurnList(sessionId: string): string {
   if (turns.length === 0) {
     return 'No completed turns recorded this run yet. /rewind targets turns completed in the current session run.';
   }
-  const lines = ['Recent turns (newest first) — /rewind <n> [files|conversation|both]:'];
+  const lines = ['Recent turns (newest first): /rewind <n> [files|conversation|both]:'];
   turns.slice(0, 20).forEach((t, i) => {
     lines.push(`  ${String(i + 1).padStart(2)}. ${t.label}  (${formatAge(t.at)}, ${t.messageCount} msgs)`);
   });
@@ -233,12 +233,12 @@ function parseScope(token: string | undefined): RewindScope | null {
 }
 
 // ---------------------------------------------------------------------------
-// Checkpoint-only fallback — no completed turns recorded THIS run (e.g. right
+// Checkpoint-only fallback, no completed turns recorded THIS run (e.g. right
 // after a restart) means the message-anchored picker above has nothing to
 // list, even though real workspace checkpoints exist on disk. Rather than
 // dead-ending on "no completed turns" while /checkpoints and the boot notice
 // both point back here, /rewind falls back to listing and restoring
-// checkpoints directly — a FILES-ONLY restore (there is no turn anchor to
+// checkpoints directly, a FILES-ONLY restore (there is no turn anchor to
 // join a conversation boundary against), reusing the same diff-panel
 // preview/confirm idiom as the turn-anchored path above.
 // ---------------------------------------------------------------------------
@@ -247,9 +247,9 @@ const CHECKPOINT_FALLBACK_NO_ANCHORS_MESSAGE = 'No completed turns recorded this
 
 function renderCheckpointFallbackList(checkpoints: readonly WorkspaceCheckpoint[]): string {
   const lines = [
-    'No completed turns recorded this run yet — falling back to workspace checkpoints (FILES ONLY, no conversation state):',
+    'No completed turns recorded this run yet; falling back to workspace checkpoints (FILES ONLY, no conversation state):',
     ...checkpoints.slice(0, 20).map((cp, i) => `  ${String(i + 1).padStart(2)}. ${shortId(cp.id).padEnd(12)} ${cp.kind.padEnd(9)} ${cp.label}  (${formatAge(cp.createdAt)})`),
-    'Restore one: /rewind <n|id> — files only; conversation history is untouched.',
+    'Restore one: /rewind <n|id>; files only; conversation history is untouched.',
   ];
   return lines.join('\n');
 }
@@ -272,7 +272,7 @@ function resolveCheckpointRef(checkpoints: readonly WorkspaceCheckpoint[], ref: 
 /**
  * Handles bare `/rewind` and `/rewind <ref>` when this run has recorded no
  * turn anchors at all. Returns true if it handled the invocation (always,
- * once called), false is never returned — kept boolean-shaped only to mirror
+ * once called), false is never returned, kept boolean-shaped only to mirror
  * the calling convention at the call site.
  */
 async function handleCheckpointOnlyRewind(args: string[], ctx: CommandContext): Promise<void> {
@@ -325,13 +325,13 @@ async function handleCheckpointOnlyRewind(args: string[], ctx: CommandContext): 
 
   diffPanel.confirmOverlay.arm({
     id: checkpoint.id,
-    label: `${checkpoint.label} — restore FILES ONLY (no conversation state this run)`,
+    label: `${checkpoint.label}: restore FILES ONLY (no conversation state this run)`,
     verb: 'Restore',
     onConfirm: async () => {
       try {
         await mgr.restore(checkpoint.id, { safetyCheckpoint: true });
         ctx.session.conversationManager.addTypedSystemMessage(
-          `[Rewind] Restored files from checkpoint ${shortId(checkpoint.id)} ("${checkpoint.label}"). Files only — no turn anchors exist this run, so conversation state is unchanged.`,
+          `[Rewind] Restored files from checkpoint ${shortId(checkpoint.id)} ("${checkpoint.label}"). Files only: no turn anchors exist this run, so conversation state is unchanged.`,
           'operational',
         );
         pm.close('diff');
@@ -342,14 +342,14 @@ async function handleCheckpointOnlyRewind(args: string[], ctx: CommandContext): 
       }
     },
     onCancel: () => {
-      ctx.print('Restore cancelled — nothing changed.');
+      ctx.print('Restore cancelled: nothing changed.');
       pm.close('diff');
       ctx.focusPrompt?.();
       ctx.renderRequest();
     },
   });
 
-  ctx.print(`Previewing checkpoint restore: "${checkpoint.label}" (FILES ONLY — no conversation state this run). Confirm in the diff panel: Enter/y to restore, n/Esc to cancel.`);
+  ctx.print(`Previewing checkpoint restore: "${checkpoint.label}" (FILES ONLY; no conversation state this run). Confirm in the diff panel: Enter/y to restore, n/Esc to cancel.`);
   ctx.renderRequest();
 }
 
@@ -367,7 +367,7 @@ export function registerRewindRuntimeCommands(registry: CommandRegistry): void {
       const sessionId = ctx.session.runtime.sessionId;
 
       // No turn anchors recorded this run (most commonly: right after a
-      // restart, before /session resume has restored any) — fall back to a
+      // restart, before /session resume has restored any), fall back to a
       // files-only restore over the real workspace checkpoints instead of a
       // dead end (see handleCheckpointOnlyRewind's header doc).
       if (recentTurnsNewestFirst(sessionId).length === 0) {
@@ -393,7 +393,7 @@ export function registerRewindRuntimeCommands(registry: CommandRegistry): void {
       const anchor: RewindAnchor = { sessionId, turnId: resolved.turnId };
 
       if (wants(scope, 'files') && !ctx.workspace.workspaceCheckpointManager) {
-        ctx.print('Checkpoints are not available in this session — files rewind cannot run. Try /rewind <n> conversation.');
+        ctx.print('Checkpoints are not available in this session; files rewind cannot run. Try /rewind <n> conversation.');
         return;
       }
 
@@ -413,7 +413,7 @@ export function registerRewindRuntimeCommands(registry: CommandRegistry): void {
       }
 
       // Preview in the DiffPanel + arm its confirm overlay (same idiom the
-      // former checkpoint-id /rewind used — see checkpoint-runtime.ts).
+      // former checkpoint-id /rewind used, see checkpoint-runtime.ts).
       const { DiffPanel } = await import('../../panels/diff-panel.ts');
       const pm = requirePanelManager(ctx);
       let panel = pm.getAllOpen().find((p) => p.id === 'diff');
@@ -438,7 +438,7 @@ export function registerRewindRuntimeCommands(registry: CommandRegistry): void {
         const drop = plan.conversation?.messagesToDrop ?? 0;
         const remaining = plan.conversation?.messagesRemaining ?? 0;
         diffPanel.showDiff(
-          `Conversation rewind — drop ${drop} message(s)`,
+          `Conversation rewind: drop ${drop} message(s)`,
           `@@ rewind @@\n Keep ${remaining} message(s), drop ${drop} after this turn. No files change.`,
         );
       }
@@ -449,7 +449,7 @@ export function registerRewindRuntimeCommands(registry: CommandRegistry): void {
 
       diffPanel.confirmOverlay.arm({
         id: anchor.turnId ?? sessionId,
-        label: `${resolved.label} — rewind ${scope} (${summaryParts.join(', ')})`,
+        label: `${resolved.label}: rewind ${scope} (${summaryParts.join(', ')})`,
         verb: 'Rewind',
         onConfirm: async () => {
           try {
@@ -478,7 +478,7 @@ export function registerRewindRuntimeCommands(registry: CommandRegistry): void {
           }
         },
         onCancel: () => {
-          ctx.print('Rewind cancelled — nothing changed.');
+          ctx.print('Rewind cancelled: nothing changed.');
           pm.close('diff');
           ctx.focusPrompt?.();
           ctx.renderRequest();

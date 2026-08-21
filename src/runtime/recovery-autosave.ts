@@ -1,5 +1,5 @@
 /**
- * recovery-autosave.ts — periodic recovery-file autosave + liveness-marker
+ * recovery-autosave.ts, periodic recovery-file autosave + liveness-marker
  * refresh, extracted out of main.ts to keep it under the architecture
  * line-count gate.
  *
@@ -22,8 +22,8 @@ export interface StartRecoveryAutosaveOptions {
   readonly runtime: { readonly sessionId: string };
   /**
    * The app's declare-once session-storage handle. Both the snapshot and the
-   * liveness marker resolve off it, so the startup recovery offer — which
-   * reads through the same handle — looks in the directory this writer used.
+   * liveness marker resolve off it, so the startup recovery offer, which
+   * reads through the same handle, looks in the directory this writer used.
    */
   readonly surface: SessionSurface;
   readonly buildSessionContinuityHints: () => Parameters<typeof buildPersistedSessionContext>[2];

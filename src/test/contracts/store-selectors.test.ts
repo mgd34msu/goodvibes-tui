@@ -42,7 +42,7 @@ import {
 describe('store-selectors contract', () => {
   const state = createInitialRuntimeState();
 
-  describe('primary domain selectors — all 19 return correct domain slice', () => {
+  describe('primary domain selectors: all 19 return correct domain slice', () => {
     test('selectSession returns session domain', () => {
       const session = selectSession(state);
       expect(session).toBe(state.session);
@@ -143,7 +143,7 @@ describe('store-selectors contract', () => {
     });
   });
 
-  describe('derived selectors — correct types from initial state', () => {
+  describe('derived selectors: correct types from initial state', () => {
     test('selectActiveModel returns ActiveModelSummary with string fields', () => {
       const summary = selectActiveModel(state);
 
@@ -199,7 +199,7 @@ describe('store-selectors contract', () => {
 
     test('selectIsTurnActive returns false from initial state (turn is idle)', () => {
       const active = selectIsTurnActive(state);
-      // Initial turn state is 'idle' — should not be active
+      // Initial turn state is 'idle', should not be active
       expect(typeof active).toBe('boolean');
     });
 

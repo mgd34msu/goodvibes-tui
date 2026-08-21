@@ -2,8 +2,8 @@
  * Local natural-language schedule parsing for `/schedule add when "<phrase>"`.
  *
  * Parses common English scheduling phrases entirely offline into one of the
- * three concrete schedule shapes the automation manager already understands —
- * `cron`, `every` (fixed interval), or `at` (one-shot timestamp) — and returns
+ * three concrete schedule shapes the automation manager already understands,
+ * `cron`, `every` (fixed interval), or `at` (one-shot timestamp), and returns
  * a plain-English description of exactly what it decided, so the caller can
  * ALWAYS echo the concrete interpretation back to the user before anything is
  * saved.

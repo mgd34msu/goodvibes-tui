@@ -36,7 +36,7 @@ describe('onboarding markers', () => {
     shellPaths = makeShellPaths(tmpDir);
   });
 
-  // ── read — missing file ─────────────────────────────────────────────────
+  // ── read, missing file ─────────────────────────────────────────────────
 
   test('readOnboardingCheckMarker returns exists:false for missing file', () => {
     const result = readOnboardingCheckMarker(shellPaths, 'user');

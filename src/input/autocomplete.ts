@@ -20,7 +20,7 @@ export interface AutocompleteState {
   selectedIndex: number;
   /**
    * (item 4): how many leading entries of `results` belong to the
-   * curated "common" tier — only meaningful when `query === ''` (0
+   * curated "common" tier, only meaningful when `query === ''` (0
    * otherwise, since a typed filter searches everything and the common/rest
    * split no longer applies). The renderer uses this to draw a separator
    * before the alphabetical rest.
@@ -57,11 +57,11 @@ export class AutocompleteEngine {
     this.state.results = this.registry.fuzzyMatch(query);
     this.state.active = true;
     // fuzzyMatch('') sorts the curated common tier first (score 2),
-    // then the alphabetical rest (score 1) — both tiers alphabetical within
+    // then the alphabetical rest (score 1), both tiers alphabetical within
     // themselves. Count the leading common run to tell the renderer where to
     // draw the separator. A non-empty query means every command was scored on
     // its actual match quality, not tier, so the common/rest split does not
-    // apply — the resulting 0 is not a real answer to "how many are common"
+    // apply, the resulting 0 is not a real answer to "how many are common"
     // and is unused because renderAutocompleteOverlay itself gates on the
     // query string too, but zeroing here keeps the field internally honest.
     let commonCount = 0;

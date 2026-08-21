@@ -1,5 +1,5 @@
 /**
- * — TUI-side compaction wiring regression tests.
+ *, TUI-side compaction wiring regression tests.
  *
  * compactConversation() (src/input/commands/runtime-services.ts) previously:
  *  1. Filtered agents down to running/pending only before building
@@ -80,7 +80,7 @@ function makeContext(opts: {
   } as unknown as CommandContext;
 }
 
-describe('compactConversation — agents pass through unfiltered (premature-filter bug)', () => {
+describe('compactConversation: agents pass through unfiltered (premature-filter bug)', () => {
   test('the full agent list (running, pending, completed, failed) reaches CompactionContext.agents', async () => {
     const captured: { value: CompactionContext | null } = { value: null };
     const agents = [
@@ -105,7 +105,7 @@ describe('compactConversation — agents pass through unfiltered (premature-filt
   });
 });
 
-describe('compactConversation — originalTask wiring ("Original task" mislabel bug)', () => {
+describe('compactConversation: originalTask wiring ("Original task" mislabel bug)', () => {
   test('CompactionContext.originalTask is populated from sessionLineageTracker.getOriginalTask()', async () => {
     const captured: { value: CompactionContext | null } = { value: null };
     const context = makeContext({

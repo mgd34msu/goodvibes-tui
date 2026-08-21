@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// panel-timer-lifecycle.test.ts — Regression tests for panel refresh/poll timers.
+// panel-timer-lifecycle.test.ts, Regression tests for panel refresh/poll timers.
 // TokenBudgetPanel STOPS its refresh timer while off-screen (onDeactivate)
 // and RESTARTS it when re-shown (onActivate), so it neither leaks an
 // interval nor polls a hidden panel.
 //
 // (the purge): this file used to also cover AgentInspectorPanel
-// ('inspector', RETIRE-INTO-FLEET — retired into the Fleet panel). Its
-// timer-lifecycle test was removed along with the class — see
+// ('inspector', RETIRE-INTO-FLEET, retired into the Fleet panel). Its
+// timer-lifecycle test was removed along with the class, see
 // .goodvibes/audit/2026-07-04-wave6-briefs.json.
 // ---------------------------------------------------------------------------
 
@@ -24,10 +24,10 @@ const realClear = globalThis.clearInterval;
 // 'node:*' modules) and Bun's ambient globals both declare `setInterval` /
 // `clearInterval`, and their overloads resolve to different, mutually
 // incompatible id types (`NodeJS.Timeout` vs Bun's `Timer`) depending on
-// which declaration a given expression binds to — even `realSet`'s own
+// which declaration a given expression binds to, even `realSet`'s own
 // return type and `realClear`'s own parameter type disagree. This spy only
 // needs to track SET MEMBERSHIP (identity), never touch timer-specific
-// members, so `unknown` is the honest type here — bridged back to whatever
+// members, so `unknown` is the honest type here, bridged back to whatever
 // concrete type `realClear` expects with a single assertion at its one call site.
 let active: Set<unknown>;
 

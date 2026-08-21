@@ -54,11 +54,11 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     };
     // Every credential the first-run wizard captures is one the DAEMON executes
     // with: model provider API keys (the daemon runs the model), the Cloudflare
-    // API token, and the masked fields of the external surfaces — all of which
+    // API token, and the masked fields of the external surfaces, all of which
     // live under daemon-owned `surfaces.*` config paths. So they all go to the
     // daemon tier, which is the one tier every surface AND the daemon read.
     //
-    // 'project' — what this used to pass — filed them under whatever directory
+    // 'project', what this used to pass, filed them under whatever directory
     // the wizard happened to be run from. Run the wizard in ~/code/foo and the
     // daemon, which has no idea that directory exists, found nothing; run it
     // again elsewhere and the first setup silently stopped applying. First-run
@@ -108,7 +108,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     // One-Platform daemon-by-default (SDK docs/decisions/2026-07-05-daemon-by-default.md):
     // the loopback-only cross-surface session daemon is safe-by-design
     // (loopback bind, auth-gated, rate-limited) and runs regardless of whether
-    // browser/LAN/webhook/external-app capabilities are selected here — it is no
+    // browser/LAN/webhook/external-app capabilities are selected here, it is no
     // longer bundled with those network-exposing surfaces, so onboarding leaves
     // daemon.enabled untouched and lets the SDK's own default-true (or an existing
     // explicit user override) govern. (The deprecated danger.daemon alias this
@@ -143,7 +143,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     setConfig('behavior.hitlMode', hitlMode);
     // behavior.hitlMode IS the enablement key of the hitl-ux-modes capability
     // (active for quiet/balanced/operator, off only at 'off'), so the write
-    // above already carries the enablement — no separate gating write exists,
+    // above already carries the enablement, no separate gating write exists,
     // and adding one here would clobber a non-default choice with the stock
     // mode when the batch flushes.
     setConfig('behavior.guidanceMode', controller.getStringFieldValue('experience.guidance', controller.runtimeSnapshot?.runtimeDefaults.behavior.guidanceMode ?? 'minimal'));
@@ -204,7 +204,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     applyFeatureUnitOperations(controller, setConfig, featureFlagOverrides);
 
     // Surface/server capabilities are authoritative for the network-exposing
-    // features they own — apply them last so they win over any feature-step
+    // features they own, apply them last so they win over any feature-step
     // override.
     for (const surfaceFlag of getServerSurfaceFeatureFlags({
       serverBacked: hasServers,
@@ -306,7 +306,7 @@ function addCloudflareOperations(
     // login-rate-limiter keys on the client address the tunnel forwards rather
     // than the tunnel's own egress address. On its own, that address is read
     // from X-Forwarded-For, which a client reaching the listener directly can
-    // set for itself — so it could still choose which address the rate limiter
+    // set for itself, so it could still choose which address the rate limiter
     // and the audit log recorded.
     //
     // httpListener.trustCloudflare is what closes that: the listener reads

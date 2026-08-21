@@ -112,7 +112,7 @@ describe('local-auth modal surface', () => {
       print: (m) => printed.push(m),
       executeCommand: async (name, args) => { calls.push([name, args]); return true; },
     }));
-    // Masked entry cannot render under a fullscreen modal — no command is
+    // Masked entry cannot render under a fullscreen modal, no command is
     // dispatched into a hidden surface; the operator is pointed at the command.
     expect(calls).toEqual([]);
     expect(printed.join('\n')).toContain('/local-auth add-user');

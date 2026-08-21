@@ -1,5 +1,5 @@
 /**
- * header-line.ts — the top-of-screen header row: brand, version, optional
+ * header-line.ts, the top-of-screen header row: brand, version, optional
  * conversation title, optional git segment, and the right-hand model/provider
  * pair.
  *
@@ -8,7 +8,7 @@
  * remains the call name everywhere and delegates here.
  *
  * The model/provider pair rendered here is the SERVING backend, resolved by
- * core/active-model-identity.ts — the same resolution the footer uses, so the
+ * core/active-model-identity.ts, the same resolution the footer uses, so the
  * two surfaces can no longer disagree about who is answering. `note` carries
  * the divergence marker naming the user's configured selection when serving
  * has moved off it.
@@ -43,7 +43,7 @@ function buildGitSegment(gitInfo: GitHeaderInfo): { text: string; width: number 
  * Graded, never truncated mid-word: the full marker (which names the
  * configured selection) is preferred; a bare "divergent" keyword is the
  * fallback on a narrow terminal; on a very narrow terminal the marker is
- * dropped entirely. Dropping it is safe — what remains is still the SERVING
+ * dropped entirely. Dropping it is safe, what remains is still the SERVING
  * backend, so the header never claims the configured backend is answering.
  * The footer carries the full marker with far more room (see ui-factory's
  * prioritized context segments).
@@ -80,7 +80,7 @@ export function renderHeaderLine(
 ): Line[] {
   const lines: Line[] = [];
   // Header/footer/thinking paint on the transparent terminal background, so
-  // they read chrome.* (light-terminal-aware) — NOT fg.*/state.*, which stay
+  // they read chrome.* (light-terminal-aware), NOT fg.*/state.*, which stay
   // tuned for the opaque dark modal/panel boxes. Read live per render so a
   // mode flip re-resolves without any module reload (see theme.ts).
   const t = activeUiTones();
@@ -99,7 +99,7 @@ export function renderHeaderLine(
   let curX = 0;
   for (const char of brand) { line[curX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
   for (const char of ver) { line[curX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
-  // Optional conversation title — shown after brand/ver, truncated to fit
+  // Optional conversation title, shown after brand/ver, truncated to fit
   if (title) {
     const titleStr = `│ ${title} `;
     // Reserve space for git info (if present) + model/provider + marker on the right

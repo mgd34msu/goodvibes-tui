@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// power-chip-source.test.ts — the topology-aware chip source:
+// power-chip-source.test.ts, the topology-aware chip source:
 //   • embedded: the in-process manager is the truth; a local
 //     OPS_POWER_STATE_CHANGED triggers an immediate repaint.
 //   • external: the DAEMON's power.status.get is polled and served, so a
@@ -56,7 +56,7 @@ function makeHarness(opts: { local: boolean; external: boolean; daemon: PowerSta
   };
 }
 
-describe('power chip source — embedded topology', () => {
+describe('power chip source: embedded topology', () => {
   test('serves the in-process manager state', () => {
     const h = makeHarness({ local: true, external: false, daemon: null });
     expect(h.source.get().keepAwake).toBe(true);
@@ -70,7 +70,7 @@ describe('power chip source — embedded topology', () => {
   });
 });
 
-describe('power chip source — external/adopted topology', () => {
+describe('power chip source: external/adopted topology', () => {
   test('a webui-originated daemon toggle lights the chip within one poll', async () => {
     const h = makeHarness({ local: false, external: true, daemon: powerState(false) });
     await h.fire(); // initial sync: daemon says off
@@ -81,7 +81,7 @@ describe('power chip source — external/adopted topology', () => {
   });
 
   test('the DAEMON state wins over the local manager in external mode', async () => {
-    // Local manager says on, daemon says off — the daemon is the truth.
+    // Local manager says on, daemon says off, the daemon is the truth.
     const h = makeHarness({ local: true, external: true, daemon: powerState(false) });
     await h.fire();
     expect(h.source.get().keepAwake).toBe(false);

@@ -1,6 +1,6 @@
 /**
  * Friction fix: the Network step's daemon-source choice
- * — start a new daemon owned by this TUI (default) vs connect to one that is
+ *, start a new daemon owned by this TUI (default) vs connect to one that is
  * already running elsewhere with a known token. Extracted from
  * onboarding-wizard-steps.ts to keep that file under the architecture line cap.
  */
@@ -19,7 +19,7 @@ export function getDaemonSource(controller: OnboardingWizardControllerLike): str
 /**
  * Push the daemon-source radio, plus the host/port/token/connect fields when
  * 'adopt' is selected, onto the Network step's field list. Independent of the
- * local/custom network mode — adopting someone else's daemon is a client-side
+ * local/custom network mode, adopting someone else's daemon is a client-side
  * choice about which daemon THIS TUI talks to, not about how THIS TUI's own
  * daemon binds to the network.
  */
@@ -79,7 +79,7 @@ export function pushDaemonAdoptionFields(
 
 /**
  * The guided, visible entry point for migrating a detected legacy
- * `goodvibes-daemon.service` unit — closes the fast-follow-up flagged when
+ * `goodvibes-daemon.service` unit, closes the fast-follow-up flagged when
  * `handleMigrateLegacyDaemonServiceForHandler` (handler-onboarding-daemon-adopt.ts)
  * shipped fully built but not wired to any onboarding control. Independent of
  * the daemon-source radio above: this offers to retire an old unmanaged unit
@@ -88,11 +88,11 @@ export function pushDaemonAdoptionFields(
  *
  * Visible ONLY when the runtime snapshot's read-only `legacyDaemon` detection
  * (collected via `detectLegacyUnit`, see `../../runtime/legacy-daemon-migration.ts`)
- * found a unit file present — never rendered speculatively. Confirm-gated on
+ * found a unit file present, never rendered speculatively. Confirm-gated on
  * top of the engine's own consent requirement: a checklist toggle must be
  * checked before the action executes the real migration (`confirmMigration:
  * true`); left unchecked, pressing the action still works but only prints the
- * engine's dry-run plan (`confirmMigration: false`) — see
+ * engine's dry-run plan (`confirmMigration: false`), see
  * `runLegacyDaemonMigration`'s honest dry-run branch. The action label and
  * hint change to make which mode is armed unambiguous before it is pressed.
  */
@@ -108,7 +108,7 @@ export function pushLegacyDaemonMigrationFields(
     id: 'network.migrate-legacy-daemon-detected',
     label: 'Separate install-script daemon service detected',
     // Follow-up: name the unit this host actually resolves (carried on the
-    // snapshot from `resolveConfiguredServiceName` at collection time) — the
+    // snapshot from `resolveConfiguredServiceName` at collection time), the
     // MANAGED_SERVICE_NAME fallback only covers snapshots built without it.
     hint: legacyUnitNote(legacy, legacy.trackedServiceName ?? MANAGED_SERVICE_NAME),
     defaultValue: legacy.active ? 'Installed and running' : 'Installed (not active)',

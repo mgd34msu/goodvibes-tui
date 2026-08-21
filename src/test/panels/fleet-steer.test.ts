@@ -137,7 +137,7 @@ describe('reconcileSteerBadges', () => {
   // -------------------------------------------------------------------------
   // TTL-expiry fallback (long-tool-call case): the target stays healthy and
   // non-terminal throughout, but the underlying steer message's own TTL
-  // (the SDK's MessageBus stamps every steer with STEER_TTL_MS — see
+  // (the SDK's MessageBus stamps every steer with STEER_TTL_MS, see
   // registry.js's steer()) lapses in the bus without ever producing a
   // COMMUNICATION_CONSUMED. Without this, the badge would show 'queued'
   // forever even though the message is provably gone.
@@ -162,7 +162,7 @@ describe('reconcileSteerBadges', () => {
     expect(tab.steerBadge?.resolvedAt).toBe(NOW);
   });
 
-  test('a queued badge with no queuedAt (older/hand-built badge) never TTL-expires — absence of the field just means no inference is possible, not an error', () => {
+  test('a queued badge with no queuedAt (older/hand-built badge) never TTL-expires; absence of the field just means no inference is possible, not an error', () => {
     const tab = makeTab({ nodeId: 'a', steerBadge: { messageId: 'm1', status: 'queued' } });
     const changed = reconcileSteerBadges([tab], () => makeNode({ id: 'a', state: 'executing-tool' }), NOW + STEER_TTL_MS * 10);
     expect(changed).toBe(false);

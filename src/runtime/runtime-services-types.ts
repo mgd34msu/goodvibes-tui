@@ -1,12 +1,12 @@
 /**
- * runtime-services-types.ts — the public contract createRuntimeServices() takes
+ * runtime-services-types.ts, the public contract createRuntimeServices() takes
  * and returns.
  *
  * Split out of services.ts (the composition root that builds every one of
  * these fields) so the construction logic can stay under the repo's
  * architecture line-count gate without trimming 35 arbitrary lines to clear
  * the number. This module owns ONLY the shape of the input options and the
- * output surface — no runtime code, no wiring order, nothing that constructs
+ * output surface, no runtime code, no wiring order, nothing that constructs
  * anything. services.ts re-exports both types from here, so no import site
  * anywhere else in the app had to change.
  */
@@ -87,14 +87,14 @@ export interface RuntimeServicesOptions {
    * Threaded into `SecretsManager` so the override MOVES the daemon-scoped
    * credential store; without it a daemon told to run out of a temp tree still
    * read the real home's daemon secrets, so an "isolated" test daemon held the
-   * owner's live credentials. One name for one thing — `resolveGoodVibesHomeOwnership`
+   * owner's live credentials. One name for one thing, `resolveGoodVibesHomeOwnership`
    * is the single reader that produces it.
    */
   readonly daemonHomeDirectory?: string | undefined;
   /** Host power seam opt-in. Fork mirrors the SDK: non-spawning unavailable-seam
    * default (idle-power-services.ts); this product always passes createHostPowerSeam(), since it never has a co-located daemon to own its own inhibitor. */
   readonly powerSeam?: Parameters<typeof wireIdlePowerAndLiveTurn>[0]['powerSeam'];
-  /** Live session id, read per crash-residue sweep so the running session is exempt — see durability-services.ts. */
+  /** Live session id, read per crash-residue sweep so the running session is exempt, see durability-services.ts. */
   readonly currentSessionId?: (() => string | null) | undefined;
   /**
    * Wake-word boot provisioning opt-in. Same shape as `powerSeam`: the real
@@ -108,9 +108,9 @@ export interface RuntimeServicesOptions {
 export interface RuntimeServices {
   readonly workingDirectory: string;
   readonly homeDirectory: string;
-  /** The surface segment this runtime's stores live under (platform runtime 2.0.8 requires it — a blank segment resolved to the unscoped control-plane orphan). */
+  /** The surface segment this runtime's stores live under (platform runtime 2.0.8 requires it, a blank segment resolved to the unscoped control-plane orphan). */
   readonly surfaceRoot: string;
-  /** The declare-once session-storage handle every session reader and writer threads through — see session-storage-services.ts. */
+  /** The declare-once session-storage handle every session reader and writer threads through, see session-storage-services.ts. */
   readonly surface: SessionSurface;
   readonly shellPaths: ShellPathService;
   readonly configManager: ConfigManager;
@@ -123,11 +123,11 @@ export interface RuntimeServices {
   readonly routeBindings: RouteBindingManager;
   readonly surfaceRegistry: SurfaceRegistry;
   readonly channelPlugins: ChannelPluginRegistry;
-  /** The one router this surface delivers through — AutomationDeliveryManager's own, not a second copy of it. */
+  /** The one router this surface delivers through, AutomationDeliveryManager's own, not a second copy of it. */
   readonly channelDeliveryRouter: ChannelDeliveryRouter;
   readonly watcherRegistry: WatcherRegistry;
   /**
-   * This surface's own record of the asks IT raised — what the approval card
+   * This surface's own record of the asks IT raised, what the approval card
    * and the panel render. Not authoritative: `requestApproval` below raises the
    * same ask on the daemon, whose record every other surface reads.
    */
@@ -152,7 +152,7 @@ export interface RuntimeServices {
   readonly clientBuildGuard: ClientBuildGuard;
   /**
    * This surface offering its live conversation to the daemon, so a rewind
-   * driven from anywhere can reach the messages — which only this process
+   * driven from anywhere can reach the messages, which only this process
    * holds. Started on adoption; released on disposal.
    */
   readonly conversationRewindHost: ConversationRewindHostClient;
@@ -160,7 +160,7 @@ export interface RuntimeServices {
   readonly daemonConfig: DaemonConfigClient;
   /** Daemon-scoped credential writes: `credentials.set`/`delete` on the daemon, one verified sequence. */
   readonly daemonCredentials: DaemonCredentialsClient;
-  /** The terminal prompt, late-bound — the UI layer patches the real one in after boot. */
+  /** The terminal prompt, late-bound, the UI layer patches the real one in after boot. */
   readonly localPromptRef: { requestPermission: (request: PermissionPromptRequest) => Promise<PermissionPromptDecision> };
   /** The live session id an ask belongs to; written by the bootstrap tail. */
   readonly liveSessionIdRef: { value: string | null };
@@ -173,18 +173,18 @@ export interface RuntimeServices {
   /** Durable user-origin permission rules (remembered approvals); permissions.rules.* surface. Mirrors the SDK composition. */
   readonly userPermissionRuleStore: UserPermissionRuleStore;
   /**
-   * An EMPTY verb catalog. This product answers no verbs — it is a client. The
+   * An EMPTY verb catalog. This product answers no verbs, it is a client. The
    * field exists because the SDK's `startExternalServices` takes a daemon-grade
    * `RuntimeServices` even in the adopt-only mode this surface runs in, and
    * because plugin loading is handed one. Nothing is ever served off it: with
    * `adoptOnly` no `DaemonServer` is constructed, so a descriptor registered
    * here has no listener behind it. Plugin registrations that need to be
-   * ANSWERED belong daemon-side — see docs/decisions for the plugin split.
+   * ANSWERED belong daemon-side, see docs/decisions for the plugin split.
    */
   readonly gatewayMethods: GatewayMethodCatalog;
   /** Step-up (re-auth) for this surface's own privileged actions. */
   readonly stepUpService: StepUpService;
-  /** This installation's pairing tokens — the bearer a phone or browser presents. */
+  /** This installation's pairing tokens, the bearer a phone or browser presents. */
   readonly pairingTokens: PairingTokenManager;
   /** Paired-phone posture over `devices.*` verbs; the `phone` tool calls through it. */
   readonly devices: DevicesClient;
@@ -229,7 +229,7 @@ export interface RuntimeServices {
   readonly worktreeRegistry: WorktreeRegistry;
   readonly sandboxSessionRegistry: SandboxSessionRegistry;
   readonly webhookNotifier: WebhookNotifier;
-  /** Terminal focus tracker — fed by input/handler-feed.ts, read by the alert notifiers in core/. */
+  /** Terminal focus tracker, fed by input/handler-feed.ts, read by the alert notifiers in core/. */
   readonly focusTracker: FocusTracker;
   readonly replayEngine: DeterministicReplayEngine;
   readonly providerOptimizer: ProviderOptimizer;
@@ -258,13 +258,13 @@ export interface RuntimeServices {
   readonly contextAccountingHolder: ContextAccountingHolder; // bound at bootstrap.ts; see context-accounting-source.ts
   readonly wrfcController: WrfcController;
   readonly processManager: ProcessManager;
-  /** The phase/work-item orchestration engine — see runtime/workstream-services.ts. */
+  /** The phase/work-item orchestration engine, see runtime/workstream-services.ts. */
   readonly orchestrationEngine: OrchestrationEngine;
   readonly workstreamCommands: WorkstreamCommandService;
-  /** The repo source-tree code index — see runtime/code-index-services.ts. */
+  /** The repo source-tree code index, see runtime/code-index-services.ts. */
   readonly codeIndexStore: CodeIndexStore;
   readonly codeIndexReindexScheduler: CodeIndexReindexScheduler; // tool-site reindex
-  /** Daily snapshots of every SQLite store this runtime writes, with bounded retention; unref'd timers (mirrors the SDK composition — hosts that tear down a runtime stop() it themselves). */
+  /** Daily snapshots of every SQLite store this runtime writes, with bounded retention; unref'd timers (mirrors the SDK composition, hosts that tear down a runtime stop() it themselves). */
   readonly storeSnapshotScheduler: StoreSnapshotScheduler;
   readonly appendOnlyRetentionScheduler: ReturnType<typeof createDurabilityServices>['appendOnlyRetentionScheduler']; // periodic append-only sweep; unref'd timers, stop() on teardown
   /** Stops the recurring crash-residue sweep; idempotent, unref'd timer (hosts that tear a runtime down call it). */
@@ -280,18 +280,18 @@ export interface RuntimeServices {
   /** Controller the governor uses to pause/resume the deferrable background jobs under pressure. */
   readonly pauseController: PauseController;
   readonly sessionLiveTurnControls: SessionLiveTurnControlsHolder;
-  /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware — finished subtrees can be moved to the session archive view. */
+  /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware, finished subtrees can be moved to the session archive view. */
   readonly processRegistry: ArchivableProcessRegistry;
   /**
    * What the Fleet panel reads: this surface's own registry rows UNION the
    * adopted daemon's, deduped by node id with the local (live, actionable) copy
-   * winning. Interval-refreshed on the daemon half — see client/fleet-union.ts.
+   * winning. Interval-refreshed on the daemon half, see client/fleet-union.ts.
    */
   readonly fleetReadModel: FleetUnionReadModel;
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
   readonly workspaceCheckpointManager: WorkspaceCheckpointManager;
-  /** Per-workspace trust gate — restricts write/execute/delegate tools until the workspace is trusted. */
+  /** Per-workspace trust gate, restricts write/execute/delegate tools until the workspace is trusted. */
   readonly workspaceTrustManager: WorkspaceTrustManager;
   readonly integrationHelpers: IntegrationHelperService;
   /** Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory, called by WorkspaceSwapManager after verification; stores needing a process restart just warn-log and keep serving the old path until the daemon restarts with the new --working-dir. */

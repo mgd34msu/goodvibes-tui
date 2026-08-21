@@ -1,7 +1,7 @@
 /**
  * auto-register.test.ts
  *
- * Tests for src/providers/auto-register.ts — Stage 2 of the dynamic model catalog.
+ * Tests for src/providers/auto-register.ts, Stage 2 of the dynamic model catalog.
  */
 
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
@@ -316,7 +316,7 @@ describe('autoRegisterProviders', () => {
   });
 
   it('uses default catalog when no argument provided', () => {
-    // Call with no arguments — should not throw
+    // Call with no arguments, should not throw
     const result = autoRegisterProviders(providerRegistry);
     // Since no env vars are set (cleared in beforeEach), nothing registers
     expect(Array.isArray(result)).toBe(true);

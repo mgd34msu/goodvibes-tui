@@ -1,5 +1,5 @@
 /**
- * Diagnostics panels barrel — re-exports all panel data provider classes.
+ * Diagnostics panels barrel, re-exports all panel data provider classes.
  *
  * Import from this module to access the individual diagnostic panel providers.
  */

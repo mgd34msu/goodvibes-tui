@@ -34,7 +34,7 @@ export interface SkillRecord {
   frontmatter: Record<string, string>;
   /**
    * Set when this skill's file lives under an installed ecosystem-marketplace
-   * receipt's targetPath — the receipt's provenance summary (e.g. curated
+   * receipt's targetPath, the receipt's provenance summary (e.g. curated
    * source / signature info), so marketplace-installed skills read as such
    * instead of looking identical to hand-authored ones.
    */
@@ -370,7 +370,7 @@ export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
   // (the purge): Enter used to open the skill's markdown source in the
   // preview panel via a staged pendingOpenPreview flag + handlePanelIntegrationAction
   // (same pattern diff-panel.ts used). 'preview' is DELETE-disposition with no
-  // successor surface (no file-picker-overlay preview to repoint to either —
+  // successor surface (no file-picker-overlay preview to repoint to either,
   // verified), so that cross-panel jump was removed rather than repointed;
   // Enter is currently a no-op on this list (browse-only until migrates
   // Skills to a modal).
@@ -392,7 +392,7 @@ export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
     }
     if (confirmResult === 'absorbed') return true;
 
-    // I1: 'd' prompts delete confirmation — only outside filter mode, so 'd'
+    // I1: 'd' prompts delete confirmation, only outside filter mode, so 'd'
     // remains typeable into the filter query while it is active (// converged modal '/' filter coexists with single-letter action keys).
     if (!this.filterActive && key === 'd') {
       const skill = this.getSelectedItem();

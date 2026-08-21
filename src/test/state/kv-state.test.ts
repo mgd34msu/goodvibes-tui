@@ -51,7 +51,7 @@ describe('KVState', () => {
 
   describe('session ID', () => {
     test('requires an explicit state directory or storage root', () => {
-      // @ts-expect-error — deliberately omitting the required `stateDir` option
+      // @ts-expect-error, deliberately omitting the required `stateDir` option
       // to assert the constructor throws at runtime when no state directory
       // can be resolved.
       expect(() => new KVState()).toThrow();
@@ -323,7 +323,7 @@ describe('KVState.dispose', () => {
   test('dispose flushes pending data to disk', async () => {
     const kv = disposables.add(new KVState({ stateDir: stateDirFor(tmpDir) }));
     await kv.set({ disposeKey: 'disposeVal' });
-    // Timer is pending — dispose should flush before it fires
+    // Timer is pending, dispose should flush before it fires
     await kv.dispose();
     const stateDir = join(tmpDir, '.goodvibes', 'state');
     const filePath = join(stateDir, `session_${kv.getSessionId()}.json`);

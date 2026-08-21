@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// transcript-tree-repaint.test.ts — drives the REAL TerminalBuffer + DiffEngine
+// transcript-tree-repaint.test.ts, drives the REAL TerminalBuffer + DiffEngine
 // over a realistic concurrent-tool-call sequence and measures what actually
 // repaints between frames.
 //
@@ -8,8 +8,8 @@
 //
 //   1. A connector flip (`└` -> `├`, when a sibling arrives) changes exactly
 //      one cell on that row and moves no text.
-//   2. Rows that STOP being supplied — a turn collapsing, so its result rows
-//      vanish — are repainted rather than left on screen. That is the known
+//   2. Rows that STOP being supplied, a turn collapsing, so its result rows
+//      vanish, are repainted rather than left on screen. That is the known
 //      back-buffer-seeding hazard: the back buffer is seeded from the front
 //      buffer so untouched rows keep describing the screen, which means a row
 //      that silently stops being written would never repaint.
@@ -58,7 +58,7 @@ describe('transcript tree repaint behaviour', () => {
     const buffer = new TerminalBuffer(W, H);
     blitFrame(buffer, cm.getDisplayBlocks());
 
-    // Find the result row — it is the last sibling, so it draws `└`.
+    // Find the result row, it is the last sibling, so it draws `└`.
     const beforeRows = Array.from({ length: H }, (_, y) => rowText(buffer, y));
     const resultRowY = beforeRows.findIndex((t) => t.includes('└') && /line/.test(t));
     expect(resultRowY).toBeGreaterThanOrEqual(0);
@@ -109,7 +109,7 @@ describe('transcript tree repaint behaviour', () => {
 
     // Every row that HAD content and no longer does is blank on screen and was
     // marked dirty, so the diff actually emits the clear. (Rows that were
-    // already blank are correctly left clean — repainting them would be
+    // already blank are correctly left clean, repainting them would be
     // wasted output, and that is the distinction this asserts.)
     let vacated = 0;
     for (const y of occupied) {
@@ -131,7 +131,7 @@ describe('transcript tree repaint behaviour', () => {
     expect(betaY).toBeGreaterThan(alphaY);
 
     // Now the FIRST call settles. Its result must appear between alpha's call
-    // row and beta's call row — not appended at the bottom.
+    // row and beta's call row, not appended at the bottom.
     cm.addToolResults([{ callId: 'c1', success: true, output: 'alpha done' }]);
     rows = cm.getDisplayBlocks().map((l) => l.map((c) => c.char || ' ').join(''));
     const alphaY2 = rows.findIndex((t) => t.includes('alpha.ts'));
@@ -145,7 +145,7 @@ describe('transcript tree repaint behaviour', () => {
   test('an in-flight call is visible before it completes', () => {
     const cm = buildConcurrentTurn();
     const rows = cm.getDisplayBlocks().map((l) => l.map((c) => c.char || ' ').join(''));
-    // Both calls render immediately, with the not-yet-run glyph — nothing is
+    // Both calls render immediately, with the not-yet-run glyph, nothing is
     // buffered until the turn finishes.
     expect(rows.some((t) => t.includes('alpha.ts') && t.includes('◌'))).toBe(true);
     expect(rows.some((t) => t.includes('beta.ts') && t.includes('◌'))).toBe(true);

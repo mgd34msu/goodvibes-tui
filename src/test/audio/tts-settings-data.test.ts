@@ -5,8 +5,8 @@
  * every other key in it, and the tts.* defaults read back with an accurate
  * modified marker.
  *
- * `tts.speed` used to be hand-built here — a TUI-local descriptor with its own
- * default, its own "positive finite number" normalization, and a cast key —
+ * `tts.speed` used to be hand-built here, a TUI-local descriptor with its own
+ * default, its own "positive finite number" normalization, and a cast key,
  * because the schema had no entry for it. It has one now (default 1, range
  * 0.25–4.0), so the row the modal renders is the schema's: same key, same type,
  * one definition of the default, and the range the SDK validates against

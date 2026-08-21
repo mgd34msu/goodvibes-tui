@@ -297,12 +297,12 @@ describe('PanelManager', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (the purge) — modal-redirect mechanism (builds the mechanism;
+// (the purge), modal-redirect mechanism (builds the mechanism;
 // B register the actual MIGRATE-TO-MODAL ids against it) and the
 // default-panel retarget away from the now-deleted 'panel-list'.
 // ---------------------------------------------------------------------------
 
-describe('PanelManager — modal redirect mechanism', () => {
+describe('PanelManager: modal redirect mechanism', () => {
   test('open() on a modal-redirected id invokes the callback and returns a sentinel without constructing the real panel', () => {
     const manager = new PanelManager();
     const factory = mock(() => makePanel('providers-modal-victim', 'Should never be built'));
@@ -316,7 +316,7 @@ describe('PanelManager — modal redirect mechanism', () => {
 
     expect(seen).toEqual(['providers-modal']);
     expect(factory).not.toHaveBeenCalled();
-    // The sentinel is never added to a pane — the workspace stays empty.
+    // The sentinel is never added to a pane, the workspace stays empty.
     expect(manager.getAllOpen()).toHaveLength(0);
     expect(manager.getPanel('providers')).toBeNull();
     // The sentinel still satisfies the non-null Panel contract callers expect.
@@ -333,7 +333,7 @@ describe('PanelManager — modal redirect mechanism', () => {
   test('a modal redirect is checked before alias resolution and does not require setOpenModalCallback to be wired', () => {
     const manager = new PanelManager();
     manager.registerModalRedirect('sandbox', 'sandbox-modal');
-    // No setOpenModalCallback call at all — must not throw.
+    // No setOpenModalCallback call at all, must not throw.
     expect(() => manager.open('sandbox')).not.toThrow();
   });
 
@@ -349,10 +349,10 @@ describe('PanelManager — modal redirect mechanism', () => {
   });
 });
 
-describe('PanelManager — default panel retargets to fleet, not registry[0]', () => {
+describe('PanelManager: default panel retargets to fleet, not registry[0]', () => {
   test('toggle() with nothing open falls back to fleet when present, not the first-registered type', () => {
     const manager = new PanelManager();
-    // Register 'git' first (mirrors real registration order — development.ts
+    // Register 'git' first (mirrors real registration order, development.ts
     // registers before operations.ts) to prove the retarget is explicit, not
     // an accident of registry[0].
     manager.registerType({ id: 'git', name: 'Git', icon: 'G', category: 'development', description: '', factory: () => makePanel('git', 'Git') });
@@ -384,7 +384,7 @@ describe('PanelManager — default panel retargets to fleet, not registry[0]', (
 });
 
 // ---------------------------------------------------------------------------
-// — saved-layout tolerance contract. session-workflow.ts's
+//, saved-layout tolerance contract. session-workflow.ts's
 // reopenPanelsFromReturnContext wraps `panelManager.open(id)` in a
 // try/catch per id so a saved layout containing a DELETE-disposition id
 // (no alias, e.g. the old 'panel-list'/'thinking'/'tools') resolves-or-skips
@@ -393,7 +393,7 @@ describe('PanelManager — default panel retargets to fleet, not registry[0]', (
 // on, without re-implementing the full /session resume command flow.
 // ---------------------------------------------------------------------------
 
-describe('PanelManager — open() contract backing saved-layout tolerance', () => {
+describe('PanelManager: open() contract backing saved-layout tolerance', () => {
   test('open() throws for an id with no registration and no alias (the DELETE-disposition case)', () => {
     const manager = new PanelManager();
     manager.registerType({ id: 'git', name: 'Git', icon: 'G', category: 'development', description: '', factory: () => makePanel('git', 'Git') });
@@ -420,7 +420,7 @@ describe('PanelManager — open() contract backing saved-layout tolerance', () =
         manager.open(id);
         reopened.push(id);
       } catch {
-        // Ignore unknown or currently unavailable panel ids during resume —
+        // Ignore unknown or currently unavailable panel ids during resume,
         // mirrors session-workflow.ts's reopenPanelsFromReturnContext.
       }
     }

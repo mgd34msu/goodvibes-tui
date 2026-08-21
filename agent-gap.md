@@ -4,13 +4,13 @@
 
 The laptop's goodvibes said "unable to connect". Root state: the local daemon
 service was stopped/disabled AND the agent setting `daemon.enabled` was
-explicitly `false` — a stale leftover from the old split-brain semantics of
+explicitly `false`, a stale leftover from the old split-brain semantics of
 that key. The agent auto-updated itself to 2.0.9 at launch (the npm update
 path works without the daemon) but honored the stale flag into a dead end.
 The assistant model running there then spent a session probing the daemon
-with shell commands through the exec sandbox — which is network-isolated by
-design since 2.0.10, so its 127.0.0.1 is never the host's — and misdiagnosed
-the containment as the defect. The owner had to relay fix instructions by
+with shell commands through the exec sandbox and misdiagnosed the containment
+as the defect. The sandbox is network-isolated by design since 2.0.10, so its
+127.0.0.1 is never the host's. The owner had to relay fix instructions by
 hand across machines.
 
 ## Why it could not self-heal

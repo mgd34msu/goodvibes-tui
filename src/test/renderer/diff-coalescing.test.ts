@@ -299,11 +299,11 @@ describe('DiffEngine run-coalescing: output correctness', () => {
 // ---------------------------------------------------------------------------
 
 describe('DiffEngine run-coalescing: wide-char safety', () => {
-  test('wide-char placeholder (char=empty) breaks the run — next cell re-addressed', () => {
+  test('wide-char placeholder (char=empty) breaks the run; next cell re-addressed', () => {
     // Wide characters occupy 2 columns: the first column holds the char,
     // the second column holds a placeholder cell with char=''. The diff loop
     // skips cells with char='' (line 69: if (!newCell || newCell.char === '') continue).
-    // This means wide chars break contiguous runs — the cell after a wide char
+    // This means wide chars break contiguous runs, the cell after a wide char
     // must re-address because the placeholder was not emitted.
     const W = 8;
     const H = 1;
@@ -344,7 +344,7 @@ describe('DiffEngine run-coalescing: wide-char safety', () => {
 // ---------------------------------------------------------------------------
 
 describe('DiffEngine run-coalescing: frame isolation', () => {
-  test('run state resets between diff() calls — no cross-frame coalescing', () => {
+  test('run state resets between diff() calls; no cross-frame coalescing', () => {
     // If lastEmitX/Y were NOT reset between frames, a cell at (0, 0) in frame 2
     // could incorrectly coalesce with the last cell from frame 1.
     // H=1: single-row buffer so diff(null, buf1) visits only row 0, producing
@@ -367,7 +367,7 @@ describe('DiffEngine run-coalescing: frame isolation', () => {
       makeCell('Z'), CLEAR_CELL, CLEAR_CELL, CLEAR_CELL, CLEAR_CELL,
     ]);
     const diff2 = engine.diff(buf1, buf2);
-    // Must emit a cursor sequence — not coalesce with end-of-frame-1 position
+    // Must emit a cursor sequence, not coalesce with end-of-frame-1 position
     expect(countCursorMoves(diff2)).toBe(1);
     expect(diff2).toContain('Z');
   });

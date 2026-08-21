@@ -1,7 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 
 /**
- * /palette — open the fuzzy command palette, a searchable picker over every
+ * /palette, open the fuzzy command palette, a searchable picker over every
  * registered slash command. The palette itself is generated live from the
  * registry (see openCommandPalette in shell/ui-openers.ts); this command is
  * just the discoverable front door, mirroring the Ctrl+K chord.

@@ -68,7 +68,7 @@ export async function hydrateOnboardingWizardFromRuntimeForHandler(handler: Inpu
  * The prompt is edited on the HANDLER here, not on the shortcut route state
  * that dispatched the key. feedInputTokens snapshots the prompt before
  * dispatching and would write that snapshot back over this edit, erasing the
- * paste — it does not, because it only restores a field the action left
+ * paste, it does not, because it only restores a field the action left
  * untouched (see the promptBefore guard in handler-feed.ts). That guard is the
  * only reason Ctrl+V works, so it is pinned by test.
  */
@@ -150,7 +150,7 @@ export function handleCopyForHandler(handler: InputHandler): void {
 
   /**
    * handleBlockCopy - Ctrl+Y: Copy the content of the block the user is
-   * looking at (the viewport's bottom-most visible block — see
+   * looking at (the viewport's bottom-most visible block, see
    * InputHandler.getBlockAnchorLine).
    */
 export function handleBlockCopyForHandler(handler: InputHandler): void {

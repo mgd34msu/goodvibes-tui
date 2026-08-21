@@ -59,7 +59,7 @@ describe('new runtime event domains', () => {
       'fleet', // SDK 1.6.1: added fleet domain
       // SDK 1.21.0: a key-level config change published on the bus, so a
       // consumer that used to poll a file (the wake runtime, the settings
-      // workspace) hears about an edit made anywhere — including one the
+      // workspace) hears about an edit made anywhere, including one the
       // daemon applied on the other side of config.set.
       'config',
     ]);
@@ -133,7 +133,7 @@ describe('new runtime event domains', () => {
       'matrix',
       'service',
     ]);
-    // SDK One-Platform: SURFACE_KINDS is now a SUPERSET of the route surfaces —
+    // SDK One-Platform: SURFACE_KINDS is now a SUPERSET of the route surfaces,
     // it adds the first-class PRODUCT surfaces (agent/webui/companion/automation)
     // that are not message-route bindings. Assert the superset relationship plus
     // the product kinds rather than strict equality.

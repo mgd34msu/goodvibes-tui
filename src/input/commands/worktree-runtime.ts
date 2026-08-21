@@ -4,7 +4,7 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireShellPaths } from './runtime-services.ts';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
 
-/** Compact per-row setup-state tag for /worktree review — absent when setup has never run; failure stands out. */
+/** Compact per-row setup-state tag for /worktree review, absent when setup has never run; failure stands out. */
 export function formatSetupTag(setup: ManagedWorktreeMeta['setup']): string {
   if (!setup) return '';
   if (setup.state === 'failed') return ' setup:FAILED';
@@ -12,13 +12,13 @@ export function formatSetupTag(setup: ManagedWorktreeMeta['setup']): string {
   return ' setup:skipped';
 }
 
-/** Full setup-state block for /worktree inspect — the failing step + captured output when failed. */
+/** Full setup-state block for /worktree inspect, the failing step + captured output when failed. */
 export function formatSetupDetail(setup: ManagedWorktreeMeta['setup']): string[] {
   if (!setup) return ['  setup: never run'];
   if (setup.state !== 'failed') return [`  setup: ${setup.state}`];
   const failingStep = setup.steps.find((step) => !step.ok);
   return [
-    `  setup: FAILED — ${setup.error ?? 'unknown error'}`,
+    `  setup: FAILED; ${setup.error ?? 'unknown error'}`,
     ...(failingStep
       ? [
           `    failing step (${failingStep.kind}): ${failingStep.label}${failingStep.exitCode !== undefined ? ` (exit ${failingStep.exitCode})` : ''}`,
@@ -94,7 +94,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
         try {
           const { setup } = await rpc.sdk.operator.invoke('worktrees.setup.run', { path });
           if (setup.state === 'skipped') {
-            ctx.print('[worktree setup] skipped — no setup commands or carry-over globs are configured.');
+            ctx.print('[worktree setup] skipped: no setup commands or carry-over globs are configured.');
           } else if (setup.state === 'succeeded') {
             ctx.print(`[worktree setup] succeeded (${setup.steps.length} step(s)).`);
           } else {
@@ -148,7 +148,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
       if (sub === 'discard') {
         // Discard is a real destructive act, not a metadata flip: route it
         // through the worktrees.discard operator verb (preservation commit,
-        // git worktree removal, honest receipt) — the SAME behavior as the
+        // git worktree removal, honest receipt), the SAME behavior as the
         // Fleet panel's D key. Typing the verb with an explicit path is the
         // confirmation.
         const path = args[1];
@@ -167,7 +167,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
             ctx.print([
               `[worktree discard] Discarded ${receipt.path}`,
               `  branch kept: ${receipt.branch || '(unknown)'}`,
-              `  preservation commit: ${receipt.preservedCommit || '(none — nothing to preserve)'}`,
+              `  preservation commit: ${receipt.preservedCommit || '(none; nothing to preserve)'}`,
               `  ${receipt.detail}`,
             ].join('\n'));
           } else {

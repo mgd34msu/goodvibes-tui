@@ -11,7 +11,7 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
  *
  * A ceiling, not a target. Every test here installs a real binary, runs it as a
  * real process, serves a real release over a real HTTP listener, verifies it and
- * respawns — the wall-clock cost is set by how busy the machine is, not by what
+ * respawns, the wall-clock cost is set by how busy the machine is, not by what
  * the test asserts. 30 s was an idle machine's number: under a realistic
  * concurrent load one of these died at 30003 ms mid-respawn
  * ("this test timed out after 30000ms") while every step was progressing.
@@ -29,7 +29,7 @@ const END_TO_END_BUDGET_MS = 180_000;
 //     prints its own version and argv, so the respawn assertion observes what
 //     actually ran, not what was supposed to run;
 //   - the only seam used is UpdateFetchLike, and only to rewrite the GitHub
-//     host to the local server — the redirect-tag resolution, checksum
+//     host to the local server, the redirect-tag resolution, checksum
 //     manifest parsing, sha256 verification, atomic swap, keep-previous, and
 //     respawn are all the production code paths operating on real bytes.
 //
@@ -235,7 +235,7 @@ async function runInstalledBinary(
   return { stdout: out + err, exitCode };
 }
 
-describe.if(artifacts !== null)('launch auto-update — end to end with real processes and a real release server', () => {
+describe.if(artifacts !== null)('launch auto-update: end to end with real processes and a real release server', () => {
   test('a stale binary launches, updates through the real verify path, and the respawn runs the NEW binary with the original argv', async () => {
     const install = installOldVersion('gv-e2e-update');
     const newAppBytes = newBinarySource();
@@ -246,7 +246,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     // The parent (old) process reported the update honestly before restarting.
     expect(run.stdout).toContain(`Update available: ${NEW_TAG} (running v${OLD_VERSION}). Downloading and verifying...`);
     expect(run.stdout).toContain(`Updated to ${NEW_TAG}.`);
-    expect(run.stdout).toContain(`auto-update: ${NEW_TAG} installed — restarting onto the new version`);
+    expect(run.stdout).toContain(`auto-update: ${NEW_TAG} installed; restarting onto the new version`);
 
     // The respawned process IS the downloaded payload: it prints the receipt
     // naming both versions, the NEW version banner, and the ORIGINAL argv.
@@ -261,14 +261,14 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     expect(readFileSync(`${install.appPath}${PREVIOUS_FILE_SUFFIX}`).equals(install.oldAppBytes)).toBe(true);
     // The daemon binary beside it is a different product on a different release
     // line and updates itself. This app's release publishes no daemon asset, so
-    // it is neither fetched nor replaced — and nothing is parked for it either,
+    // it is neither fetched nor replaced, and nothing is parked for it either,
     // which is what makes the rollback below leave it alone too.
     expect(readFileSync(install.daemonPath).equals(install.oldDaemonBytes)).toBe(true);
     expect(() => readFileSync(`${install.daemonPath}${PREVIOUS_FILE_SUFFIX}`)).toThrow();
 
     // ── rollback, for real, from the swapped state ──────────────────────────
     // rollbackUpdate is exactly what `/update rollback` invokes; only print is
-    // captured — the renames are the real filesystem operations.
+    // captured, the renames are the real filesystem operations.
     const printed: string[] = [];
     rollbackUpdate({
       execPath: install.appPath,
@@ -286,7 +286,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     expect(readFileSync(`${install.appPath}${PREVIOUS_FILE_SUFFIX}`, 'utf-8')).toBe(newAppBytes);
 
     // The restored binary RUNS (auto-update disabled for this launch so the
-    // still-serving release does not immediately re-update it — which also
+    // still-serving release does not immediately re-update it, which also
     // proves the off switch in a real process).
     const restored = await runInstalledBinary(install, ['--after-rollback'], {
       GV_TEST_RELEASES_BASE: base,
@@ -326,7 +326,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
 
     // The receipt matches what happened: the swap never started, so this
     // really will be retried next launch.
-    expect(run.stdout).toContain('update deferred — will retry next launch');
+    expect(run.stdout).toContain('update deferred: will retry next launch');
     expect(run.stdout).not.toContain('updated in background');
     expect(run.stdout).toContain(`RUNNING v${OLD_VERSION} argv=["--slow-download"] outcome=continue:update-deferred`);
     // A cancelled download is an expected ending, not a crash: the abandoned
@@ -348,7 +348,7 @@ describe.if(artifacts !== null)('launch auto-update — end to end with real pro
     const run = await runInstalledBinary(install, ['--offline-work'], { GV_TEST_RELEASES_BASE: deadBase });
 
     expect(run.exitCode).toBe(0);
-    const offlineLines = run.stdout.split('\n').filter((line) => line === "couldn't reach the update server — check skipped");
+    const offlineLines = run.stdout.split('\n').filter((line) => line === "couldn't reach the update server; check skipped");
     expect(offlineLines).toHaveLength(1);
     expect(run.stdout).toContain(`RUNNING v${OLD_VERSION} argv=["--offline-work"] outcome=continue:check-skipped`);
     expect(readFileSync(install.appPath).equals(install.oldAppBytes)).toBe(true);

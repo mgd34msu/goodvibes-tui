@@ -34,26 +34,26 @@ function footer(opts: {
 }
 
 describe('footer render truths (item 5)', () => {
-  test('5c — input-token meter shows "—" (not a false 0) before usage is known', () => {
+  test('5c: input-token meter shows "—" (not a false 0) before usage is known', () => {
     const tokenLine = footer({ usageUp: 0 }).find((t) => t.includes('Token Usage'));
     expect(tokenLine).toBeDefined();
     expect(tokenLine!).toContain('Input: —');
   });
 
-  test('5c — input-token meter shows the count once usage is known', () => {
+  test('5c: input-token meter shows the count once usage is known', () => {
     const tokenLine = footer({ usageUp: 1234 }).find((t) => t.includes('Token Usage'));
     expect(tokenLine).toBeDefined();
     expect(tokenLine!).not.toContain('Input: —');
     expect(tokenLine!).toMatch(/Input: \d/);
   });
 
-  test('5c — context meter shows "—" instead of a false 0 before the first input count', () => {
+  test('5c: context meter shows "—" instead of a false 0 before the first input count', () => {
     const barLine = footer({ contextWindow: 100_000, lastInputTokens: 0 }).find((t) => t.includes('Context Usage'));
     expect(barLine).toBeDefined();
     expect(barLine!).toContain('— /');
   });
 
-  test('5b — a long ghost hint is clamped with an ellipsis, not hard-cut', () => {
+  test('5b: a long ghost hint is clamped with an ellipsis, not hard-cut', () => {
     const longHint = 'add <name> <url> --branch <branch> --path <path> --pin <sha> --trust <mode> --enable';
     const text = footer({
       prompt: '/marketplace',

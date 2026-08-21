@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// markdown-table-wrapping.test.ts — markdown table cells WRAP, never truncate.
+// markdown-table-wrapping.test.ts, markdown table cells WRAP, never truncate.
 //
 // The defect: renderTable allocated each column a proportional slice of the
 // terminal width and ellipsized anything that did not fit, so a comparison
@@ -24,7 +24,7 @@ const TABLE = [
 ].join('\n');
 
 /** Every word that must survive rendering, from the widest and the narrowest
- *  columns alike — these are exactly the words the old renderer cut. */
+ *  columns alike, these are exactly the words the old renderer cut. */
 const REQUIRED_WORDS = [
   'Capability', 'repositories', 'portability', 'reusable', 'behaviour',
   'checkpointing', 'rewind', 'citation', 'coverage', 'absent',
@@ -82,7 +82,7 @@ describe('markdown table cells wrap instead of ellipsizing', () => {
         for (const line of lines) expect(line.length).toBe(width);
 
         // Every box line has its vertical/horizontal separators at identical
-        // columns — a multi-line row must not shift its borders.
+        // columns, a multi-line row must not shift its borders.
         const borderCols = (line: string, ch: string): number[] => {
           const cols: number[] = [];
           for (let i = 0; i < line.length; i++) if (line[i] === ch) cols.push(i);
@@ -157,7 +157,7 @@ describe('markdown table cells wrap instead of ellipsizing', () => {
  * budget collapses, but the row is then written into a line buffer exactly
  * `width` cells wide. Once left border + per-column (pad + content + pad +
  * border) exceeded the terminal width, the trailing columns were written past
- * the end of the buffer and dropped — an eight-column table at width 40 lost
+ * the end of the buffer and dropped, an eight-column table at width 40 lost
  * its last columns, HEADERS INCLUDED, with nothing on screen to say so.
  *
  * The renderer now abandons the box at that width and stacks each row as

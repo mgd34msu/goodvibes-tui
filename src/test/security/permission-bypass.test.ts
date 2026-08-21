@@ -66,7 +66,7 @@ describe('security: permission bypass', () => {
       // Pre-seed the session cache with an allow for this tool+command
       evaluator.recordSessionOverride('exec', { command: 'rm -rf /' }, true, true);
 
-      // Safety layer runs before session cache — must still block
+      // Safety layer runs before session cache, must still block
       const decision = evaluator.evaluate('exec', { command: 'rm -rf /' });
       expect(decision.allowed).toBe(false);
       expect(decision.sourceLayer).toBe('safety');

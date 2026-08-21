@@ -2,7 +2,7 @@
  * Behavioral composition check for the memory governance layer: the TUI's
  * forked createRuntimeServices constructs a live MemoryGovernor (default ON),
  * registers the REAL cache adapters (knowledge-store + session-union), and
- * registers the three deferrable background jobs as pausable — so ops.memory.get
+ * registers the three deferrable background jobs as pausable, so ops.memory.get
  * serves a genuine snapshot and the governor can actually shed footprint and
  * pause work. Complements the source-level pins in composition-parity.test.ts
  * with a runtime assertion against the constructed services object.

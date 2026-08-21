@@ -6,7 +6,7 @@ import { formatCostAttributionSection, type CostAttributionResult } from '../../
 import { localVoiceSetupOffer } from '../../input/voice-local-settings.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 5 — voice settings: the voice.local.* keys surface in their domain with
+// STEP 5, voice settings: the voice.local.* keys surface in their domain with
 // real option shapes; the provider selection shows "local" beside elevenlabs;
 // the not-configured state is honest (never an error); voice spend rides the
 // existing cost surfaces (metered renders unpriced with its source; local shows
@@ -33,7 +33,7 @@ describe('voice.local.* settings domain (STEP 5)', () => {
   });
 });
 
-describe('voice provider selection — local beside elevenlabs (STEP 5)', () => {
+describe('voice provider selection: local beside elevenlabs (STEP 5)', () => {
   function registryWithLocal(): VoiceProviderRegistry {
     const reg = new VoiceProviderRegistry();
     // The TUI passes a voice.local.* reader so the local provider registers;
@@ -61,7 +61,7 @@ describe('voice provider selection — local beside elevenlabs (STEP 5)', () => 
   });
 });
 
-describe('local-voice setup offer — size-labeled one-act beside ElevenLabs (STEP 5)', () => {
+describe('local-voice setup offer: size-labeled one-act beside ElevenLabs (STEP 5)', () => {
   test('unprovisioned local voice offers the size-labeled /voice setup one-act', () => {
     const offer = localVoiceSetupOffer(() => ''); // empty config = unconfigured
     expect(offer.provisioned).toBe(false);
@@ -119,7 +119,7 @@ describe('voice cost honesty (STEP 5)', () => {
     expect(lines).not.toContain('$0.0000'); // no fabricated zero
   });
 
-  test('a local (billing none) session emits no voice record — the honest empty cost state, not a fake $0', () => {
+  test('a local (billing none) session emits no voice record; the honest empty cost state, not a fake $0', () => {
     const empty = { ...voiceResult(), rows: [], unpricedRecordCount: 0 } as unknown as CostAttributionResult;
     const lines = formatCostAttributionSection(empty, false)!.join('\n');
     expect(lines).toContain('no attributed records');

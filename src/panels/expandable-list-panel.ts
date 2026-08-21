@@ -20,12 +20,12 @@ import {
  * detail view for that item, and Esc/← returns to the list.
  *
  * Subclasses implement (in addition to the `ScrollableListPanel` contract):
- *   - `getDetailLines(item, width)` — the detail body for the expanded item.
+ *   - `getDetailLines(item, width)`, the detail body for the expanded item.
  *
  * Optionally override:
- *   - `getDetailTitle(item)` — detail-view title (defaults to `this.name`).
- *   - `getListHints()` / `getDetailHints()` — footer keyboard hints per mode.
- *   - `renderListView(width, height)` — the list-mode body (defaults to
+ *   - `getDetailTitle(item)`, detail-view title (defaults to `this.name`).
+ *   - `getListHints()` / `getDetailHints()`, footer keyboard hints per mode.
+ *   - `renderListView(width, height)`, the list-mode body (defaults to
  *     `renderList` with the list hints footer).
  *
  * Do NOT override `render()`; it dispatches between list and detail modes.
@@ -160,7 +160,7 @@ export abstract class ExpandableListPanel<T> extends ScrollableListPanel<T> {
     return this.renderList(width, height, { hints: this.getListHints() });
   }
 
-  /** Detail-mode body — scrollable detail lines + standardized chrome. */
+  /** Detail-mode body, scrollable detail lines + standardized chrome. */
   protected renderDetailView(width: number, height: number, item: T): Line[] {
     this.needsRender = false;
     const palette = this.getPalette();

@@ -111,10 +111,10 @@ describe('SecretsManager', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Tier 1 — Environment variable resolution
+  // Tier 1, Environment variable resolution
   // -------------------------------------------------------------------------
 
-  describe('get() — env var resolution', () => {
+  describe('get(): env var resolution', () => {
     test('returns value from process.env when key is present', async () => {
       process.env['TEST_SECRET_KEY'] = 'super-secret-value';
       const mgr = createProjectStoreManager();
@@ -140,10 +140,10 @@ describe('SecretsManager', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Tier 2 — Encrypted file round-trip
+  // Tier 2, Encrypted file round-trip
   // -------------------------------------------------------------------------
 
-  describe('set() + get() — round-trip', () => {
+  describe('set() + get(): round-trip', () => {
     test('stores and retrieves a secret from encrypted file', async () => {
       const mgr = createProjectStoreManager();
       await mgr.set('API_KEY', 'abc123');
@@ -217,7 +217,7 @@ describe('SecretsManager', () => {
       expect(keys.sort()).toEqual(['KEY_ONE', 'KEY_TWO']);
     });
 
-    test('list() returns keys only — not values', async () => {
+    test('list() returns keys only: not values', async () => {
       const mgr = createProjectStoreManager();
       await mgr.set('SECRET', 'super-sensitive');
       const keys = await mgr.list();

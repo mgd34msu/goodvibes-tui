@@ -7,7 +7,7 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'git',
     aliases: ['g'],
-    description: 'Git repository commands — status, log, diff',
+    description: 'Git repository commands: status, log, diff',
     usage: '[status|log|diff]',
     argsHint: '[status|log|diff]',
     async handler(args, ctx) {
@@ -29,7 +29,7 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
             const st = await git.status();
             const lines: string[] = ['Git status:'];
             if (st.isClean()) {
-              lines.push('  Working tree clean — nothing to commit.');
+              lines.push('  Working tree clean: nothing to commit.');
             } else {
               if (st.staged.length > 0) {
                 lines.push(`  Staged (${st.staged.length}):`);
@@ -65,7 +65,7 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
         }
         case 'diff': {
           // Route the full, uncapped working-tree diff (GitService.diffStructured
-          // — parsed per-file/per-hunk with no size limit) into the real diff
+          //, parsed per-file/per-hunk with no size limit) into the real diff
           // panel. The old path sliced the raw text at 4,000 chars and printed a
           // stub; a large diff now renders complete.
           try {

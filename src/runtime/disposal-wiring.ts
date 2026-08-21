@@ -3,8 +3,8 @@
  *
  * Teardown for every poller this surface's runtime graph starts.
  *
- * The mechanics — the ordered, best-effort, idempotent scope and the
- * all-required owner list — live in the SDK (`platform/runtime/disposal`), so
+ * The mechanics, the ordered, best-effort, idempotent scope and the
+ * all-required owner list, live in the SDK (`platform/runtime/disposal`), so
  * this surface and the SDK's own composition root cannot drift into two
  * different ideas of what "stop the graph" means. What lives here is only the
  * mapping from this fork's assembled graph onto that list.
@@ -15,7 +15,7 @@
  * Ownership note, and the reason any of this exists: this surface builds the
  * graph and hands the SAME object to `DaemonServer`. The SDK facade disposes
  * only a graph it constructed itself, so it deliberately leaves this one alone
- * — nothing upstream will ever stop these pollers. The shutdown paths in
+ *, nothing upstream will ever stop these pollers. The shutdown paths in
  * daemon/cli.ts, main.ts's teardown registry and the one-shot CLI commands are
  * the only things that can.
  *
@@ -41,7 +41,7 @@ export interface SurfaceRuntimePollerOwners extends Omit<RuntimePollerOwners, 's
   /**
    * Fork-only: the wake-word recovery sweep and a pending boot provision
    * (voice-setup-services.ts). Started only when an entrypoint opted into boot
-   * provisioning, and a no-op otherwise — but it is on this list unconditionally,
+   * provisioning, and a no-op otherwise, but it is on this list unconditionally,
    * because "the graph did not start it this time" is not a reason for the
    * teardown path to have no way to stop it.
    */
@@ -50,7 +50,7 @@ export interface SurfaceRuntimePollerOwners extends Omit<RuntimePollerOwners, 's
 
 /**
  * The poller owners this fork holds that are NOT reachable from the assembled
- * graph — handles the factory keeps as locals.
+ * graph, handles the factory keeps as locals.
  */
 export interface RuntimeDisposalExtras {
   /** Handle returned by `ConfigManager.watchConfigFiles()` (durability-services.ts). */
@@ -61,7 +61,7 @@ export interface RuntimeDisposalExtras {
  * Register the stop call for every poller the graph started.
  *
  * `services` is the fully-assembled graph, which already exposes each poller
- * owner as a field — so a poller whose owner reaches the public surface is
+ * owner as a field, so a poller whose owner reaches the public surface is
  * wired by name rather than by threading another local out of the factory.
  */
 export function registerSurfaceRuntimePollers(

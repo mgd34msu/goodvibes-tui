@@ -1,7 +1,7 @@
 ## MANDATORY
 
 PRIMARY GOAL: Fully complete and functional code that meets or exceeds the minimum review score
-SECONDARY GOAL: Minimize token usage — use the minimum data necessary to complete each task
+SECONDARY GOAL: Minimize token usage. Use the minimum data necessary to complete each task
 
 GENERAL DIRECTIVES: 
  - Every plan must have a multi-agent execution strategy.

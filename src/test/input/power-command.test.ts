@@ -7,7 +7,7 @@ import { createTestManagers } from '../helpers/test-managers.ts';
 import type { PowerSurfaceState } from '../../core/power-status.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 3 — the /power command (ops/status idiom + toggle) and the power
+// STEP 3, the /power command (ops/status idiom + toggle) and the power
 // settings domain.
 // ---------------------------------------------------------------------------
 
@@ -69,7 +69,7 @@ describe('power settings domain (STEP 3)', () => {
     const groups = buildSettingGroups(configManager);
     const power = groups.get('power') ?? [];
     const keys = power.map((e) => e.setting.key);
-    // The keep-awake toggle is exactly one boolean — no timer, no AC-only option.
+    // The keep-awake toggle is exactly one boolean, no timer, no AC-only option.
     expect(keys).toContain('power.keepAwake');
     const toggle = power.find((e) => e.setting.key === 'power.keepAwake')!;
     expect(toggle.setting.type).toBe('boolean');

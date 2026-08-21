@@ -1,5 +1,5 @@
 /**
- * ACP module tests — AcpConnection, AcpManager, protocol types, error handling.
+ * ACP module tests, AcpConnection, AcpManager, protocol types, error handling.
  *
  * Strategy:
  *  - AcpConnection.run() uses Bun.spawn + ACP SDK internals that cannot be
@@ -53,7 +53,7 @@ function makeResult(overrides: Partial<SubagentResult> = {}): SubagentResult {
 }
 
 // ---------------------------------------------------------------------------
-// Protocol types — shape validation
+// Protocol types, shape validation
 // ---------------------------------------------------------------------------
 
 describe('Protocol types', () => {
@@ -165,7 +165,7 @@ describe('Protocol types', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AcpConnection — pure-logic tests (no spawn)
+// AcpConnection, pure-logic tests (no spawn)
 // ---------------------------------------------------------------------------
 
 describe('AcpConnection', () => {
@@ -214,7 +214,7 @@ describe('AcpConnection', () => {
     });
   });
 
-  describe('cancel — no active session', () => {
+  describe('cancel: no active session', () => {
     test('cancel when not yet running sets status to cancelled', async () => {
       const transportEvents: TransportEvent[] = [];
       runtimeBus.onDomain('transport', ({ payload }) => transportEvents.push(payload));
@@ -238,7 +238,7 @@ describe('AcpConnection', () => {
     });
   });
 
-  describe('run — error path (Bun.spawn throws)', () => {
+  describe('run: error path (Bun.spawn throws)', () => {
     let originalSpawn: typeof Bun.spawn;
 
     beforeEach(() => {
@@ -348,12 +348,12 @@ describe('AcpConnection', () => {
     });
   });
 
-  describe('run — with stubbed ACP stack', () => {
+  describe('run: with stubbed ACP stack', () => {
     let originalSpawn: typeof Bun.spawn;
 
     /** Build a minimal fake child process compatible with what AcpConnection uses. */
     function makeFakeChild() {
-      // FileSink stub — matches Bun's actual childProcess.stdin type (FileSink,
+      // FileSink stub, matches Bun's actual childProcess.stdin type (FileSink,
       // not WritableStream). AcpConnection wraps this in a WritableStream adapter
       // internally, so the mock must exercise the .write() / .end() surface.
       const stdinStub = {
@@ -423,7 +423,7 @@ describe('AcpConnection', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AcpManager — full lifecycle tests
+// AcpManager, full lifecycle tests
 // ---------------------------------------------------------------------------
 
 describe('AcpManager', () => {
@@ -474,7 +474,7 @@ describe('AcpManager', () => {
     test('spawn returns unique IDs for concurrent spawns', async () => {
       const proto = AcpConnection.prototype;
       const originalRun = proto.run;
-      // Intentionally don't resolve immediately — keep promises pending
+      // Intentionally don't resolve immediately, keep promises pending
       const resolvers: Array<() => void> = [];
       proto.run = mock(async function (this: AcpConnection) {
         return new Promise<SubagentResult>((resolve) => {
@@ -689,7 +689,7 @@ describe('AcpManager', () => {
       const proto = AcpConnection.prototype;
       const originalRun = proto.run;
 
-      // Deferred: first rejects, second fulfills — tests the Promise.allSettled filter
+      // Deferred: first rejects, second fulfills, tests the Promise.allSettled filter
       const resolvers: Array<() => void> = [];
       let callIdx = 0;
       proto.run = mock(async function (this: AcpConnection) {
@@ -730,7 +730,7 @@ describe('AcpManager', () => {
     });
   });
 
-  describe('resolveAgentCommand — ACP_AGENT_CMD env override', () => {
+  describe('resolveAgentCommand: ACP_AGENT_CMD env override', () => {
     test('spawn uses ACP_AGENT_CMD when set', async () => {
       const proto = AcpConnection.prototype;
       const originalRun = proto.run;
@@ -756,7 +756,7 @@ describe('AcpManager', () => {
       process.env.ACP_AGENT_CMD = savedEnv;
 
       proto.run = originalRun;
-      // Manager was created with env set — verify it ran without throwing
+      // Manager was created with env set, verify it ran without throwing
       expect(capturedSpawnCmd).toBeUndefined(); // run() was called
     });
 
@@ -779,7 +779,7 @@ describe('AcpManager', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Error handling — connection failure scenarios
+// Error handling, connection failure scenarios
 // ---------------------------------------------------------------------------
 
 describe('Error handling', () => {
@@ -849,7 +849,7 @@ describe('Error handling', () => {
     expect(errors).toContain('multi-fail-2');
   });
 
-  test('run does not throw — always returns a SubagentResult', async () => {
+  test('run does not throw: always returns a SubagentResult', async () => {
     (Bun as unknown as Record<string, unknown>).spawn = () => {
       throw new Error('catastrophic failure');
     };
@@ -873,7 +873,7 @@ describe('Error handling', () => {
       // (real timeout testing requires actual process control; we test the
       // cancel() API is available and functional)
       const conn = new AcpConnection('timeout-sim', makeTask(), ['bun'], undefined, runtimeBus);
-      // Cancel before run() — ensures cancel is safe to call at any time
+      // Cancel before run(), ensures cancel is safe to call at any time
       await conn.cancel();
       expect(conn.getInfo().status).toBe('cancelled');
     });

@@ -73,13 +73,13 @@ export interface BuiltinPanelDeps {
   forensicsRegistry?: import('@/runtime/index.ts').ForensicsRegistry;
   /**
    * EvalRegistry for the `/eval` command surface.: 'eval' the panel was
-   * deleted (DELETE-disposition), but this field is left in place — no
+   * deleted (DELETE-disposition), but this field is left in place, no
    * builtin panel factory reads it anymore, and it was never wired at
    * bootstrap in production either way (the eval CLI command reads its own
    * copy via CommandContext.extensions.evalRegistry).
    */
   evalRegistry?: import('../eval-registry.ts').EvalRegistry;
-  /** Host-vs-client memory access for the Memory modal — the spine client, never the raw registry (routes over the wire when a daemon is adopted). */
+  /** Host-vs-client memory access for the Memory modal, the spine client, never the raw registry (routes over the wire when a daemon is adopted). */
   memoryRegistry?: MemoryAccess;
   /** Shared policy runtime state for governance/policy diagnostics. */
   policyRuntimeState?: import('@/runtime/index.ts').PolicyRuntimeState;
@@ -105,7 +105,7 @@ export interface BuiltinPanelDeps {
   /** Shared sandbox session registry for sandbox surfaces and tools. */
   sandboxSessionRegistry: SandboxSessionRegistry;
   /**
-   * Resolved daemon home directory (e.g. `~/.goodvibes/daemon`) — owned by the composition root
+   * Resolved daemon home directory (e.g. `~/.goodvibes/daemon`), owned by the composition root
    * and passed explicitly so panel factories do not discover cwd/home implicitly.
    */
   daemonHomeDir?: string;
@@ -123,7 +123,7 @@ export interface BuiltinPanelDeps {
   workPlanStore?: import('@pellux/goodvibes-sdk/platform/workflow').WorkPlanStore;
   /** Explicit UI-facing runtime services for agent/process/WRFC/remote panels and modals. */
   uiServices?: UiRuntimeServices;
-  /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface — — so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
+  /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface, — so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
   pluginManager?: PluginManagerControls;
   /** Shared hook dispatcher for the hooks control-room panel. */
   hookDispatcher?: Pick<HookDispatcher, 'listHooks' | 'getChains'>;
@@ -153,7 +153,7 @@ export interface BuiltinPanelDeps {
   /**
    * Surface a Fleet act result/receipt/error to the operator (late-bound to the
    * command context's print, which the Fleet pick/conflict/discard acts use for
-   * their receipts — the same conversation sink the command flow prints to).
+   * their receipts, the same conversation sink the command flow prints to).
    */
   fleetActsNotify?: (message: string) => void;
   /**
@@ -309,7 +309,7 @@ export function requireKnowledgeApi(deps: BuiltinPanelDeps): KnowledgeApi {
  * was not wired at bootstrap for this build/session. Renders a single
  * "dependency not configured" empty state via `buildEmptyState` so opening
  * the panel id (`/panel open <id>`, a saved layout, a cross-panel jump)
- * always resolves to a real panel instead of "Unknown panel" — the panel
+ * always resolves to a real panel instead of "Unknown panel", the panel
  * type is always registered; only its data source is sometimes absent.
  */
 class UnconfiguredDependencyPanel extends BasePanel {

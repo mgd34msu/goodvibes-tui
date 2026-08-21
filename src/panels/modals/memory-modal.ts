@@ -12,7 +12,7 @@ import { classifyConsolidationFetchError } from '../memory-consolidation-gateway
 
 // ---------------------------------------------------------------------------
 // Memory → config-modal surface (group-B port). Two tabs: 'All Records'
-// (the full record list) and 'Review Queue' (the operator review queue) — the
+// (the full record list) and 'Review Queue' (the operator review queue), the
 // same split the panel toggled with Tab, now real host tabs. Review-state
 // mutations (reviewed/stale/contradicted/fresh) and record delete route to the
 // existing `/recall review` / `/recall remove` command path (charter: no
@@ -22,14 +22,14 @@ import { classifyConsolidationFetchError } from '../memory-consolidation-gateway
 // "not configured" copy renders as an honest degraded state.
 //
 // Read path (memory-spine adoption): reads go through the spine client's
-// `honestSearch` — the MemoryAccess shape — not the raw registry, so a session
+// `honestSearch`, the MemoryAccess shape, not the raw registry, so a session
 // that has adopted an external daemon reads the SAME wire-served records a
 // wire failure is deliberately surfaced (never a silently stale local copy).
 // `buildView()` stays synchronous/pure per the ConfigModalSurface contract;
 // `refresh()` is async and calls the `requestRender` callback `onOpen` hands
 // it when the data lands. The Review Queue ranking is recomputed client-side
 // from the same honestSearch batch (see `rankForReview` below) rather than
-// through a second wire call — `reviewQueue` is not part of MemoryAccess.
+// through a second wire call, `reviewQueue` is not part of MemoryAccess.
 // ---------------------------------------------------------------------------
 
 /** Minimal read shape of a `MemoryRecord` this modal renders. */
@@ -67,7 +67,7 @@ export interface MemoryModalDeps {
   };
   /**
    * Resolve the memory-consolidation-receipts gateway (memory-consolidation-gateway.ts),
-   * lazily — called fresh each time the Proposals tab (re)fetches, exactly like
+   * lazily, called fresh each time the Proposals tab (re)fetches, exactly like
    * the Fleet panel's `resolveGateway` (fleet-gateway.ts / fleet-acts.ts). Absent
    * in a session with no daemon-backed control plane wired: the Proposals tab
    * then renders its "unavailable" honest state without ever attempting a fetch.
@@ -75,7 +75,7 @@ export interface MemoryModalDeps {
   readonly resolveConsolidationGateway?: () => MemoryConsolidationGatewayResolution;
 }
 
-/** The Proposals tab's fetch state — one honest rendering per state, never a blend. */
+/** The Proposals tab's fetch state, one honest rendering per state, never a blend. */
 type ProposalsStatus =
   | { readonly kind: 'loading' }
   | { readonly kind: 'unavailable'; readonly reason: string }
@@ -86,7 +86,7 @@ type ProposalsStatus =
  * Client-side port of the SDK's MemoryStore.reviewQueue ranking
  * (memory-store-helpers.ts reviewQueueScore/isReviewCandidate): all four
  * review states are candidates, scored by state + inverse confidence (flagged
- * states penalized), tie-broken by recency. Presentation ordering only — not
+ * states penalized), tie-broken by recency. Presentation ordering only, not
  * a wire call, so exact parity with the server's own tie-breaking on ids it
  * has never seen is not load-bearing.
  */
@@ -119,9 +119,9 @@ class MemoryModalSurface implements ConfigModalSurface {
   readonly title = 'Memory';
   private allRecords: MemoryRecordLike[] = [];
   private reviewRecords: MemoryRecordLike[] = [];
-  /** Honest note on the last read: a wire failure (client mode) or the index-unavailable fallback reason — never silently dropped. */
+  /** Honest note on the last read: a wire failure (client mode) or the index-unavailable fallback reason, never silently dropped. */
   private loadNote: string | null = null;
-  /** The Proposals tab's fetch state — starts 'loading' whenever a gateway is wired (see refreshProposals). */
+  /** The Proposals tab's fetch state, starts 'loading' whenever a gateway is wired (see refreshProposals). */
   private proposalsStatus: ProposalsStatus = { kind: 'loading' };
   private requestRender: (() => void) | null = null;
 
@@ -141,7 +141,7 @@ class MemoryModalSurface implements ConfigModalSurface {
     // Review Queue tab. A DISTINCT key from 'enter' (not shared with
     // markReviewed): ConfigModal.resolveAction matches the FIRST action bound
     // to a key and returns null if THAT one's enabledFor fails, rather than
-    // trying the next action bound to the same key — so gating two different
+    // trying the next action bound to the same key, so gating two different
     // 'enter' actions by tabId alone would silently break one of them.
     { key: 'v', id: 'jumpToReviewQueue', label: 'view in review queue', enabledFor: this.proposalsGate },
   ];
@@ -175,11 +175,11 @@ class MemoryModalSurface implements ConfigModalSurface {
 
   /**
    * Lazy fetch of memory.consolidation.receipts (memory-consolidation-gateway.ts)
-   * — only attempted when this surface opens or refreshes, never polled. No
+   *, only attempted when this surface opens or refreshes, never polled. No
    * gateway resolver wired at all (session has no daemon-backed control
    * plane) renders the same honest "unavailable" state as a resolved-but-
    * refused gateway (daemon disabled / no control-plane URL) or a 501/404
-   * from an older daemon with no consolidation scheduler — three different
+   * from an older daemon with no consolidation scheduler, three different
    * causes, one bucket, because from the operator's seat they mean the same
    * thing: nothing to show, and no fault of theirs.
    */
@@ -239,7 +239,7 @@ class MemoryModalSurface implements ConfigModalSurface {
       // itself (the daemon sets reviewState 'contradicted' + staleReason); a
       // cross-scope-duplicate proposal marks the record 'fresh' with NO
       // staleReason, so without this correlation those rows are bare and
-      // unexplained (item 3) — fall back to the fetched proposal's own
+      // unexplained (item 3), fall back to the fetched proposal's own
       // reason only when the record didn't already carry one.
       const proposal = record.staleReason ? undefined : proposalByRecord.get(record.id);
       const reasonSuffix = record.staleReason
@@ -263,12 +263,12 @@ class MemoryModalSurface implements ConfigModalSurface {
   }
 
   /**
-   * The Proposals tab — WHAT the daemon's idle-time consolidation pass
+   * The Proposals tab, WHAT the daemon's idle-time consolidation pass
    * proposed (contradiction / cross-scope-duplicate / stale-delete) and is
    * holding for human judgment, read lazily over memory.consolidation.receipts
    * (memory-consolidation-gateway.ts). Three distinct honest states render as
-   * three distinct lines — 'loading' / 'unavailable' / 'error' never collapse
-   * into a shared "nothing to show" — plus the true empty state ('ready' with
+   * three distinct lines, 'loading' / 'unavailable' / 'error' never collapse
+   * into a shared "nothing to show", plus the true empty state ('ready' with
    * zero proposals) which is a fourth, equally honest line.
    */
   private proposalsTab(): ConfigModalTab {
@@ -285,14 +285,14 @@ class MemoryModalSurface implements ConfigModalSurface {
     }
     const rows: ConfigModalRow[] = status.proposals.map((proposal, index) => ({
       id: `proposal:${index}`,
-      label: `[${proposal.kind}] ${proposal.reason}  — ${proposal.ids.length} record${proposal.ids.length === 1 ? '' : 's'}: ${proposal.ids.join(', ')}`,
+      label: `[${proposal.kind}] ${proposal.reason}; ${proposal.ids.length} record${proposal.ids.length === 1 ? '' : 's'}: ${proposal.ids.join(', ')}`,
     }));
     return {
       id: 'proposals',
       label: 'Proposals',
       header,
       rows,
-      emptyText: 'No pending proposals — nothing awaiting judgment right now.',
+      emptyText: 'No pending proposals: nothing awaiting judgment right now.',
     };
   }
 
@@ -333,7 +333,7 @@ class MemoryModalSurface implements ConfigModalSurface {
 
   /**
    * The Proposals tab's "jump": move to the Review Queue tab with one of the
-   * selected proposal's affected records selected — the same host mechanism
+   * selected proposal's affected records selected, the same host mechanism
    * (`ctx.jumpToRow`) any future in-surface jump would use. A proposal's
    * `ids` are not guaranteed to all be inside the review queue's top-24
    * window, so this picks the first id that IS present there rather than
@@ -361,7 +361,7 @@ export function createMemoryModalSurface(deps: MemoryModalDeps): ConfigModalSurf
 
 /**
  * Deterministic golden fixture: fixed memory records with frozen createdAt
- * timestamps — no live registry, no wall-clock, no random ids. Promise-backed
+ * timestamps, no live registry, no wall-clock, no random ids. Promise-backed
  * (see ecosystem-modals-golden.test.ts): `honestSearch` is async even for this
  * in-memory fixture (matching the real MemoryAccess shape), so the factory
  * pre-awaits the initial `onOpen` refresh before handing back the surface.

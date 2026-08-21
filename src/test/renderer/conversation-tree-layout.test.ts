@@ -6,12 +6,12 @@
 //
 //   1. the status column IS the `●` bullet column (it used to be a separate
 //      gutter at column 0, left of the whole transcript);
-//   2. the vertical `│` runs unbroken from a row down to its next sibling —
+//   2. the vertical `│` runs unbroken from a row down to its next sibling,
 //      the connector used to be drawn only on a row's FIRST line, so every
 //      multi-line row (collapsed fragment box, expanded body) punched a hole
 //      in the rail;
 //   3. every level steps by exactly TREE_STEP_COLS and a result row lines up
-//      predictably under the tool row it belongs to — the tool row, its result
+//      predictably under the tool row it belongs to, the tool row, its result
 //      row and that result's fragment each used to compute their own margin.
 //
 // The assertions are on EXACT emitted rows and exact column indices, because
@@ -101,7 +101,7 @@ function mixedStatusTurn(): Message[] {
 }
 
 describe('tree column grid', () => {
-  test('the status column IS the bullet column — one definition, not two numbers', () => {
+  test('the status column IS the bullet column; one definition, not two numbers', () => {
     // Not a tautology in the direction that matters: the RENDERED tests below
     // prove writeTreeStatusMarker actually lands here, and this pins the column
     // itself to the depth-0 marker column rather than to a literal.
@@ -170,7 +170,7 @@ describe('rendered turn: status markers align with the assistant bullet', () => 
     expect(callRow).not.toContain('✓');
   });
 
-  test('a result row carries no marker of its own — the call row above already said it', () => {
+  test('a result row carries no marker of its own; the call row above already said it', () => {
     const rows = renderRows(mixedStatusTurn());
     const resultRow = rows.find((row) => row.includes('lines') || row.includes('line'))!;
     expect(resultRow.slice(0, STATUS_COL + 1).trim()).toBe('');
@@ -228,7 +228,7 @@ describe('rails are continuous through a subtree', () => {
 
     const railCol = treeBranchCol(treeIndentCols(1, WIDTH));
     // Exactly one row sits between the two call rows: the folded result. No
-    // ▄▄▄/▀▀▀ caps around it, no separate preview line, no blank gap — and that
+    // ▄▄▄/▀▀▀ caps around it, no separate preview line, no blank gap, and that
     // single row carries the rail down to the next sibling.
     const firstCall = rows.findIndex((row) => row.includes('needle'));
     const secondCall = rows.findIndex((row) => row.includes('second-command'));
@@ -239,7 +239,7 @@ describe('rails are continuous through a subtree', () => {
     expect(folded).not.toContain('▀');
   });
 
-  test('the last sibling ends the rail — nothing is drawn below its └', () => {
+  test('the last sibling ends the rail; nothing is drawn below its └', () => {
     const rows = renderRows(mixedStatusTurn()).filter((row) => row.length > 0);
     const railCol = treeBranchCol(treeIndentCols(1, WIDTH));
     const last = rows.findIndex((row) => row[railCol] === '└');

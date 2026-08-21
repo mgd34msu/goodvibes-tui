@@ -15,7 +15,7 @@ import { configGetStub } from '../helpers/config-manager-stub.ts';
 // through to its own defaults.
 const fakeConfig = { get: configGetStub() };
 
-describe('notification dispatch — the panel_only producer', () => {
+describe('notification dispatch: the panel_only producer', () => {
   test('a panel_only decision lands in the feed as a live item', () => {
     const feed = new PanelNotificationFeed();
     const dispatcher = createNotificationDispatcher(fakeConfig, feed);
@@ -72,17 +72,17 @@ describe('notification dispatch — the panel_only producer', () => {
  * surface's, and channel machinery is not.
  *
  * The tests above build the whole panel_only path out of a config stub and a
- * bare event bus — no delivery router, no channel registry, no secrets
+ * bare event bus, no delivery router, no channel registry, no secrets
  * manager. That is the proof the panel feed needs no daemon furniture, and it
  * is why the second delivery router this composition used to build was so easy
  * to miss: nothing here ever wanted it.
  */
-describe('notification dispatch — no second delivery router beside it', () => {
+describe('notification dispatch: no second delivery router beside it', () => {
   const services = readFileSync(join(import.meta.dir, '..', '..', 'runtime', 'services.ts'), 'utf8');
 
   test('the surface exposes the router its delivery manager replies through, not a copy', () => {
     // Two routers built from identical arguments is how a delivery strategy
-    // gets registered somewhere replies never leave from — and the exposed one
+    // gets registered somewhere replies never leave from, and the exposed one
     // had no reader at all, so nothing failed while they disagreed.
     expect(services).toContain('const channelDeliveryRouter = deliveryManager.getDeliveryRouter();');
     expect(services).not.toContain('new ChannelDeliveryRouter(');

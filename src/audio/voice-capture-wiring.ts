@@ -1,11 +1,11 @@
 /**
- * voice-capture-wiring.ts — composes the terminal's two voice consumers over ONE
+ * voice-capture-wiring.ts, composes the terminal's two voice consumers over ONE
  * capture path.
  *
  * Push-to-talk and wake detection are not two audio stacks. They share the
  * opener built here (capture.ts), the transcription gateway (core/voice-stt-gateway.ts)
- * and the same `voice.wake.*` capture rows — device, recorder, noise
- * suppression, ceiling — so a device that works for one works for the other and
+ * and the same `voice.wake.*` capture rows, device, recorder, noise
+ * suppression, ceiling, so a device that works for one works for the other and
  * a change in /settings applies to both.
  *
  * This is the composition root the shell calls once. It owns nothing the shell
@@ -30,7 +30,7 @@ import { wakeProvisionStatus } from '@pellux/goodvibes-sdk/platform/voice';
 
 export interface VoiceCaptureWiringDeps {
   readonly configManager: ConfigManager;
-  /** `<root>/voice` — the managed root the wake tree hangs off (same root /voice setup uses). */
+  /** `<root>/voice`, the managed root the wake tree hangs off (same root /voice setup uses). */
   readonly managedVoiceRoot: string;
   /** A directory this surface owns for the extracted onnxruntime assets. */
   readonly assetDirectory: string;
@@ -56,7 +56,7 @@ export interface VoiceCaptureWiring {
    * standing condition they already know about.
    */
   readonly status: () => VoiceCaptureIndicatorState | null;
-  /** Teardown, for the shell's `unsubs` registry — releases any open device. */
+  /** Teardown, for the shell's `unsubs` registry, releases any open device. */
   readonly unsubs: readonly (() => void)[];
 }
 

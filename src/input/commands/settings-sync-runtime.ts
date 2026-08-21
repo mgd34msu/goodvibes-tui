@@ -27,14 +27,14 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
     name: 'settings-sync',
     aliases: ['settingssync'],
     description: 'Open the settings sync modal (bare); review posture, export/import bundles, or resolve conflicts by subcommand',
-    usage: '[panel|report|review|show <key>|staged|conflicts|resolve <key> <local|synced>|failures|rollback-history|export <path>|inspect <path>|pull <path>|push <path>|lock <key> <source> <reason...>|unlock <key>] — bare opens the modal',
+    usage: '[panel|report|review|show <key>|staged|conflicts|resolve <key> <local|synced>|failures|rollback-history|export <path>|inspect <path>|pull <path>|push <path>|lock <key> <source> <reason...>|unlock <key>]: bare opens the modal',
     handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
       const controlPlaneConfigDir = ctx.platform.configManager.getControlPlaneConfigDir();
       const sub = (args[0] ?? '').toLowerCase();
       // item 3 (report-vs-modal front doors): settings-sync has a full
       // modal surface (settings-sync-modal), so the bare command now opens it
-      // — the old bare/`review` transcript report moved to an explicit
+      //, the old bare/`review` transcript report moved to an explicit
       // `report` subcommand (scriptability preserved: /settings-sync report).
       if (sub === '') {
         ctx.openModal?.('settings-sync-modal');

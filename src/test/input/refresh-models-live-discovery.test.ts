@@ -62,7 +62,7 @@ describe('/refresh-models live model discovery', () => {
   });
 });
 
-describe('composition parity — live model discovery init', () => {
+describe('composition parity: live model discovery init', () => {
   // Guards the composition-root fork-drift class: the shared services composition
   // must kick off live model discovery, not only custom providers. If this ever
   // regresses, the TUI silently stops refreshing provider model lists.

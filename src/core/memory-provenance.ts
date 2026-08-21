@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
-// memory-provenance.ts — the optional "used N memories" turn chip (owner-ruled
+// memory-provenance.ts, the optional "used N memories" turn chip (owner-ruled
 // 2026-07-13, default OFF).
 //
 // The SDK tags each turn payload with the memory-sourced injection ids it drew
-// on: `metadata.memory.recordIds: string[]` (absent when none) — the SAME
+// on: `metadata.memory.recordIds: string[]` (absent when none), the SAME
 // convention the webui's chip reads, so both surfaces name the same records.
 // When the memory-provenance setting is ON, a turn that used memories shows a
 // small chip naming how many, with a drill-in listing them. When OFF (default),
@@ -22,7 +22,7 @@ export const MEMORY_SHOW_PROVENANCE_DESCRIPTION =
 /**
  * Read the memory-provenance toggle defensively. `memory.*` is a TUI-local
  * section with no SDK DEFAULT_CONFIG entry, so ConfigManager.get() throws for
- * it until something has been written — an unset key means the default (OFF),
+ * it until something has been written, an unset key means the default (OFF),
  * not an error (same pattern as memory.projection.dir).
  */
 export function readMemoryShowProvenance(configManager: Pick<ConfigManager, 'get'>): boolean {
@@ -37,7 +37,7 @@ export function readMemoryShowProvenance(configManager: Pick<ConfigManager, 'get
  * Extract the memory-sourced record ids a turn drew on, from the SDK's
  * `metadata.memory.recordIds` convention. Structural (not a named import) so it
  * reads the field whether or not the pinned SDK's TurnEvent type surfaces it
- * yet, and yields an empty list for any turn without the field — never a guess,
+ * yet, and yields an empty list for any turn without the field, never a guess,
  * never a throw.
  */
 export function memoryRecordIdsFromTurn(turn: unknown): readonly string[] {
@@ -50,7 +50,7 @@ export function memoryRecordIdsFromTurn(turn: unknown): readonly string[] {
 
 /**
  * Build the settings-modal synthetic entry for memory.showProvenance (TUI-local,
- * default OFF). Read defensively — memory.* has no SDK DEFAULT_CONFIG entry, so
+ * default OFF). Read defensively, memory.* has no SDK DEFAULT_CONFIG entry, so
  * an unset key means the OFF default, not an error.
  */
 export function buildMemoryProvenanceSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): {

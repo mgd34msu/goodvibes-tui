@@ -1,12 +1,12 @@
 /**
- * bookmark-navigation.ts — fallback resolution for a bookmark whose direct
+ * bookmark-navigation.ts, fallback resolution for a bookmark whose direct
  * BlockMeta lookup misses.
  *
  * A bookmark stores a block's collapseKey at the time it was set (see
  * handler-content-actions.ts's handleBookmark). A tool-result message that is
  * a non-owning member of a folded tool-result group (see
  * conversation-tool-groups.ts) pushes no BlockMeta of its own while the group
- * stays collapsed — its own collapseKey (`msg_<absoluteIdx>`) never appears
+ * stays collapsed, its own collapseKey (`msg_<absoluteIdx>`) never appears
  * in getBlockRegistry() until the group is expanded. A direct
  * find(entry => entry.collapseKey === key) then reports "not found", even
  * though the message is still present in the transcript, just folded under
@@ -18,7 +18,7 @@
  * for a folded group member, already resolves to the group's own header line
  * rather than the position of whatever renders next (see getMessageLine's
  * doc and conversation-rendering.ts / conversation-line-cache.ts, which
- * anchor a folded member's registered line at its group's header) — landing
+ * anchor a folded member's registered line at its group's header), landing
  * on the header is an honest, reachable result rather than a false
  * "not found".
  */

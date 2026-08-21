@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// conversation-line-cache.test.ts — per-message Line[] cache correctness.
+// conversation-line-cache.test.ts, per-message Line[] cache correctness.
 //
 // CORRECTNESS IS THE ACCEPTANCE. The per-message cache is a pure memoisation: a
 // cache-served rebuild must be BYTE-IDENTICAL to a from-scratch (cold) rebuild in
@@ -198,15 +198,15 @@ describe('cache-vs-cold equivalence', () => {
   test('toggling an assistant turn invalidates exactly its rows', () => {
     // Two tool calls in one assistant turn hang under a single turn header
     // (see conversation-turn-structure.ts). A message entirely BEFORE the turn
-    // keeps its cached Line[] instance across the toggle — proof the turn's
+    // keeps its cached Line[] instance across the toggle, proof the turn's
     // collapseState key is read (and invalidates) only the entries that
     // actually depend on it, not the whole conversation.
     //
     // A message AFTER the turn is a different story: collapsing/expanding
     // this turn changes how many BlockMeta entries its rows contribute
     // (1 header collapsed vs. 1 header + 2 result blocks expanded), which
-    // shifts blockBase — the block-registry length embedded
-    // in every later message's cache key — for everything that follows. That
+    // shifts blockBase, the block-registry length embedded
+    // in every later message's cache key, for everything that follows. That
     // cascade is the SAME existing mechanism that already invalidates
     // everything after a code block whose collapse changes its line count
     // (see this file's blockBase doc comment); it is correct, not something
@@ -226,7 +226,7 @@ describe('cache-vs-cold equivalence', () => {
     cm.addUserMessage('a later message, also unrelated');
 
     // Warm the cache. Turns default EXPANDED, so both result blocks are
-    // present to begin with — the toggle sequence below runs the other way
+    // present to begin with, the toggle sequence below runs the other way
     // round from the retired folded-group model.
     const before = [...cm.getDisplayBlocks()];
 
@@ -234,11 +234,11 @@ describe('cache-vs-cold equivalence', () => {
     expect(turnBlock).toBeDefined();
     expect(cm.getBlockRegistry().filter((b) => b.type === 'tool').length).toBe(2);
 
-    // Collapse the turn — both result blocks leave the registry.
+    // Collapse the turn, both result blocks leave the registry.
     cm.toggleCollapseAtLine(turnBlock!.startLine);
     const afterCollapse = cm.getDisplayBlocks();
 
-    // The leading, unrelated message keeps the SAME Line[] object instance —
+    // The leading, unrelated message keeps the SAME Line[] object instance,
     // proof the turn's collapse key invalidates only the entries that read it.
     expect(afterCollapse[0]).toBe(before[0]);
 
@@ -247,7 +247,7 @@ describe('cache-vs-cold equivalence', () => {
     expect(collapsedRegistry.filter((b) => b.type === 'tool').length).toBe(0);
     assertCacheMatchesCold(cm);
 
-    // Expand it again — both result blocks come back.
+    // Expand it again, both result blocks come back.
     const turnBlock2 = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
     cm.toggleCollapseAtLine(turnBlock2!.startLine);
     assertCacheMatchesCold(cm);
@@ -299,7 +299,7 @@ describe('cache-vs-cold equivalence', () => {
     // on a single aggregate boolean ("does ANY call still lack a result").
     // With 3 calls, after only the first result arrives the aggregate is
     // STILL true (calls 2 and 3 are still pending), so the cached entry from
-    // before any result arrived stayed valid and was served unchanged — call
+    // before any result arrived stayed valid and was served unchanged, call
     // 1 kept showing the pending glyph (◌) instead of flipping to done (✓)
     // until the LAST of the three results arrived.
     const cm = new ConversationManager(() => 100);
@@ -353,7 +353,7 @@ describe('cache-vs-cold equivalence', () => {
     // Truncate the last message (cache NOT cleared) and re-add a different one at
     // the SAME index. The content signature must invalidate the stale entry.
     cm.removeMessagesAfter(1);
-    cm.addAssistantMessage('edited assistant content — completely different length and wrapping behaviour here');
+    cm.addAssistantMessage('edited assistant content: completely different length and wrapping behaviour here');
     assertCacheMatchesCold(cm);
 
     const text = cm.getDisplayBlocks().map((l) => l.map((c) => c.char).join('')).join('\n');

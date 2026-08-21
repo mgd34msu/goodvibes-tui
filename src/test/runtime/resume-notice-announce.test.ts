@@ -1,8 +1,8 @@
 /**
  * Integration coverage for announceResumeState(): the fixture-dir matrix the
  * work order calls for (session only / +checkpoints / +chain history / none),
- * exercised against REAL files — a real SessionManager-saved session, a real
- * last-session.json pointer, and a real WrfcChain array — not hand-parsed
+ * exercised against REAL files, a real SessionManager-saved session, a real
+ * last-session.json pointer, and a real WrfcChain array, not hand-parsed
  * JSON, so this proves the notice is grounded in the actual on-disk shapes.
  */
 import { describe, expect, test } from 'bun:test';
@@ -49,7 +49,7 @@ function baseDeps(workingDirectory: string): Omit<ResumeNoticeDeps, 'router' | '
   };
 }
 
-describe('announceResumeState — fixture-dir matrix', () => {
+describe('announceResumeState: fixture-dir matrix', () => {
   test('none: fresh directory with no session, no checkpoints, no chain history prints nothing', async () => {
     const dir = makeProjectTempDir('gv-resume-none');
     const messages: string[] = [];
@@ -79,7 +79,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
     });
 
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toBe('Previous session found: 3 turns, 0 checkpoints — /resume to continue (or /session resume sess-abc directly)');
+    expect(messages[0]).toBe('Previous session found: 3 turns, 0 checkpoints: /resume to continue (or /session resume sess-abc directly)');
     // Truthful: no fabricated checkpoints/recall/chain hints.
     expect(messages[0]).not.toContain('/checkpoints');
     expect(messages[0]).not.toContain('/recall');
@@ -100,7 +100,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
     });
 
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toBe('Previous session found: 1 turn, 2 checkpoints — /resume to continue (or /session resume sess-abc directly) · /checkpoints to browse');
+    expect(messages[0]).toBe('Previous session found: 1 turn, 2 checkpoints: /resume to continue (or /session resume sess-abc directly) · /checkpoints to browse');
   });
 
   test('+chain history: same session + checkpoints, plus a retained terminal chain (cancelled)', async () => {
@@ -119,7 +119,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toBe(
-      'Previous session found: 2 turns, 1 checkpoint, last chain: cancelled — /resume to continue (or /session resume sess-abc directly) · /checkpoints to browse',
+      'Previous session found: 2 turns, 1 checkpoint, last chain: cancelled: /resume to continue (or /session resume sess-abc directly) · /checkpoints to browse',
     );
   });
 
@@ -160,7 +160,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
     expect(messages[0]).toStartWith('Workspace history found:');
   });
 
-  test('a rejecting checkpoint manager (cached init() failure) is treated as unknown, not zero — no false "0 checkpoints" claim', async () => {
+  test('a rejecting checkpoint manager (cached init() failure) is treated as unknown, not zero; no false "0 checkpoints" claim', async () => {
     const dir = makeProjectTempDir('gv-resume-checkpoint-broken');
     saveFixtureSession(dir, 'sess-abc', 1);
     const messages: string[] = [];
@@ -173,7 +173,7 @@ describe('announceResumeState — fixture-dir matrix', () => {
       router: { high: (m) => messages.push(m) },
     });
 
-    expect(messages[0]).toBe('Previous session found: 1 turn — /resume to continue (or /session resume sess-abc directly)');
+    expect(messages[0]).toBe('Previous session found: 1 turn: /resume to continue (or /session resume sess-abc directly)');
     expect(messages[0]).not.toContain('checkpoint');
   });
 });

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// workstream-attempts.test.ts — best-of-N surface: plan validation + the
+// workstream-attempts.test.ts, best-of-N surface: plan validation + the
 // /workstream attempts list|diff|judge|pick subcommands.
 // ---------------------------------------------------------------------------
 
@@ -24,7 +24,7 @@ function spec(items: CreateWorkstreamInput['items'], isolation?: 'shared' | 'wor
   return { title: 't', phases: [], items, isolation };
 }
 
-describe('validateAttempts — worktree + stable-id constraints (non-leaf allowed)', () => {
+describe('validateAttempts: worktree + stable-id constraints (non-leaf allowed)', () => {
   test('a worktree-isolated leaf best-of-N item is valid', () => {
     const v = validateAttempts(spec([{ id: 'a', title: 'A', task: 'a', attempts: 3 }], 'worktree'));
     expect(v.hasAttempts).toBe(true);
@@ -54,7 +54,7 @@ describe('validateAttempts — worktree + stable-id constraints (non-leaf allowe
 
   test('a depended-upon best-of-N item WITHOUT a stable id is a violation', () => {
     // Express a dependency edge that names the item by its title (its only handle
-    // when it has no id) — the stable-id rule must reject it.
+    // when it has no id), the stable-id rule must reject it.
     const v = validateAttempts(spec([
       { title: 'A', task: 'a', attempts: 2 },
       { id: 'b', title: 'B', task: 'b', dependsOn: ['A'] },
@@ -195,7 +195,7 @@ describe('/workstream attempts', () => {
     const { engine, calls } = makeEngine();
     const { ctx, printed, getDiffPanel } = makeCtx();
     await handleAttemptsSubcommand(ctx, svc(engine), ['attempts', 'pick', 'grp-000001', '2']);
-    // Armed the confirm — no pick yet.
+    // Armed the confirm, no pick yet.
     expect(getDiffPanel()!.confirmOverlay.pending).toBe(true);
     expect(calls.some((c) => c.method === 'pick')).toBe(false);
 

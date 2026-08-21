@@ -36,12 +36,12 @@ import { createPlanningModalSurface } from './modals/planning-modal.ts';
  * panel-consolidation cleanup. Called once at startup from registerBuiltinPanels, AFTER the panels'
  * deps are resolved (the surfaces close over the same read-models the retired
  * panels used). For each surface migrated from a standalone panel this does two things:
- *   1. registerModalSurface — the data + actions the config-modal host renders.
- *   2. registerModalRedirect — so `/panel open <old-id>`, saved layouts, and any
+ *   1. registerModalSurface, the data + actions the config-modal host renders.
+ *   2. registerModalRedirect, so `/panel open <old-id>`, saved layouts, and any
  *      alias still resolve to the modal.
  *
  * The Providers & Connectivity + Security subset is registered first, followed by the
- * Ecosystem & Governance set — the 12 ported config-modal
+ * Ecosystem & Governance set, the 12 ported config-modal
  * surfaces plus the `sessions` fold into the existing session-picker modal.
  */
 export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
@@ -93,7 +93,7 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
 
   // plugins/hooks/knowledge deps are wired at bootstrap in production
   // (bootstrap-shell.ts) but may be absent in a partially-wired context (e.g. a
-  // release-gate harness) — register a degraded placeholder rather than throw,
+  // release-gate harness), register a degraded placeholder rather than throw,
   // so the surface + redirect always resolve (the "always register, degrade
   // honestly" charter pattern).
   manager.registerModalSurface(deps.pluginManager
@@ -133,8 +133,8 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
 
   manager.registerModalSurface(createMemoryModalSurface({
     memoryRegistry: deps.memoryRegistry as MemoryModalDeps['memoryRegistry'],
-    // Lazily resolved — a fresh factory call per Proposals-tab fetch, exactly
-    // like the Fleet gateway (fleet-gateway.ts) — so a daemon that comes up
+    // Lazily resolved, a fresh factory call per Proposals-tab fetch, exactly
+    // like the Fleet gateway (fleet-gateway.ts), so a daemon that comes up
     // AFTER this session started is still reachable on the next refresh.
     resolveConsolidationGateway: () => createMemoryConsolidationGateway({
       configManager: deps.configManager,
@@ -202,7 +202,7 @@ function buildPairingConnectionInfo(deps: ResolvedBuiltinPanelDeps): PairingModa
       // presentable; the web app declines it if the device has no authenticator.
       stepUpAvailable: true,
     });
-    // Mint a fresh per-device token and encode the canonical `#pair=` deep link —
+    // Mint a fresh per-device token and encode the canonical `#pair=` deep link,
     // the same mint the pairing.handoff.create verb performs, no raw JSON blob.
     const handoff = mintPairingHandoff({
       pairingTokens: ui.platform.pairingTokens,
@@ -224,7 +224,7 @@ function buildPairingConnectionInfo(deps: ResolvedBuiltinPanelDeps): PairingModa
 }
 
 /** A minimal config-modal surface that renders an honest "not wired" degraded
- *  state — used when a group-B surface's bootstrap dependency is absent. */
+ *  state, used when a group-B surface's bootstrap dependency is absent. */
 function unwiredSurface(name: string, title: string, reason: string): ConfigModalSurface {
   return {
     name,

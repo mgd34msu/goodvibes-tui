@@ -1,20 +1,20 @@
 /**
- * session-surface-pointer-journey.test.ts — the journey that was dead.
+ * session-surface-pointer-journey.test.ts, the journey that was dead.
  *
  * The defect this pins: the TUI's write path and its read paths derived their
  * own storage scope independently at each call site. A resume wrote the
  * last-session pointer through `writeLastSessionPointer` with no scope at all
- * (the unscoped `.goodvibes/` fallback — and, at the worst call site, with the
+ * (the unscoped `.goodvibes/` fallback, and, at the worst call site, with the
  * options argument dropped entirely, so the write threw and was swallowed into
  * a log line), while `--continue` and the boot notice read a scoped path under
  * `.goodvibes/tui/`. Nothing errored. The pointer simply never existed where
  * anyone looked, so `--continue` silently did nothing and the boot notice
- * silently reported no previous session — forever.
+ * silently reported no previous session, forever.
  *
  * These tests run the REAL write path (the per-turn persistence in
  * turn-event-wiring.ts) and then the REAL read paths (announceResumeState and
  * applyInitialTuiCliState's `--continue` branch) against a SEPARATELY
- * CONSTRUCTED surface over the same directories — which is exactly what a
+ * CONSTRUCTED surface over the same directories, which is exactly what a
  * relaunched process does. If the two sides ever disagree about a path again,
  * these fail.
  */
@@ -108,7 +108,7 @@ describe('the last-session pointer survives the process boundary', () => {
     expect(existsSync(relaunchSurface.lastSessionPointer)).toBe(true);
   });
 
-  test('the boot notice reports the persisted session — the report that used to always be silent', async () => {
+  test('the boot notice reports the persisted session; the report that used to always be silent', async () => {
     persistOneTurn('journey-2', tmpDir, [
       { role: 'user', content: 'first' },
       { role: 'assistant', content: 'reply' },
@@ -145,7 +145,7 @@ describe('the last-session pointer survives the process boundary', () => {
       } as never,
       commandContext: { workspace: {} } as never,
       shellPaths: makeStartupShellPaths(tmpDir) as never,
-      // A relaunched process's own surface — same inputs, different object.
+      // A relaunched process's own surface, same inputs, different object.
       surface: makeTestSurface(tmpDir),
       render: () => {},
     });
@@ -184,7 +184,7 @@ describe('the resume seam writes the pointer through a bound closure, not a bare
     expect(readLastSessionPointer({ surface: makeTestSurface(tmpDir) })).toBe('resumed-session');
   });
 
-  test('the raw SDK function in the same one-argument slot writes NOTHING — the shape of the original bug', () => {
+  test('the raw SDK function in the same one-argument slot writes NOTHING; the shape of the original bug', () => {
     // Structurally assignable to `(sessionId: string) => void`, so this
     // compiles; at runtime `options` is undefined, the legacy compat path
     // throws on the missing workingDirectory, and writeLastSessionPointer

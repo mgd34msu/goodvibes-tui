@@ -1,11 +1,11 @@
 /**
- * HostedSessionPanel — the conversation the daemon is running, rendered here.
+ * HostedSessionPanel, the conversation the daemon is running, rendered here.
  *
  * A hosted session's turn arrives on the same `turn` and `tools` event domains
  * a local turn does, so what this panel shows is the same thing the transcript
  * shows for a local conversation: what was said, what tool is running, and
  * whether text is still streaming. The difference is where the loop lives, and
- * the header says so plainly — including `effectiveDetachPolicy`, so a person
+ * the header says so plainly, including `effectiveDetachPolicy`, so a person
  * about to quit knows whether that ends the work.
  *
  * The panel renders; it decides nothing. Every fact in the header is a field of
@@ -33,7 +33,7 @@ import {
 
 const C = DEFAULT_PANEL_PALETTE;
 
-const INTRO = 'A conversation whose loop runs inside the daemon. Steer it with /hosted say, leave it with /hosted detach — the header says what leaving would do.';
+const INTRO = 'A conversation whose loop runs inside the daemon. Steer it with /hosted say, leave it with /hosted detach; the header says what leaving would do.';
 
 function rowColor(kind: HostedSessionRow['kind']): string {
   switch (kind) {
@@ -80,7 +80,7 @@ export function buildHostedHeaderLines(state: HostedSessionFeedState, width: num
     : 'detaching ends it (kill)';
   const policySource = record.detachPolicy === null ? 'from the setting' : 'per-session override';
   const rows: { text: string; fg: string }[] = [
-    { text: `${record.title.trim() || record.id} — ${record.status}`, fg: C.header },
+    { text: `${record.title.trim() || record.id}: ${record.status}`, fg: C.header },
     { text: `id ${record.id}`, fg: C.dim },
     { text: `workspace ${record.workspaceRoot}`, fg: C.dim },
     {
@@ -93,14 +93,14 @@ export function buildHostedHeaderLines(state: HostedSessionFeedState, width: num
     },
   ];
   if (record.status === 'terminated') {
-    rows.push({ text: `ended — ${record.terminatedReason ?? 'no reason recorded'}`, fg: C.bad });
+    rows.push({ text: `ended: ${record.terminatedReason ?? 'no reason recorded'}`, fg: C.bad });
   }
   if (record.restoredFromDisk) {
     rows.push({ text: 'restored from disk after a daemon restart', fg: C.warn });
   }
   rows.push(state.streaming
     ? { text: 'live event stream open', fg: C.good }
-    : { text: `no live stream — ${state.streamNote ?? 'not subscribed'}`, fg: C.warn });
+    : { text: `no live stream: ${state.streamNote ?? 'not subscribed'}`, fg: C.warn });
   if (state.runningToolCalls.length > 0) {
     rows.push({
       text: `running: ${state.runningToolCalls.map((call) => `${call.tool} (${call.callId})`).join(', ')}`,
@@ -108,7 +108,7 @@ export function buildHostedHeaderLines(state: HostedSessionFeedState, width: num
     });
   }
   if (state.droppedRows > 0) {
-    rows.push({ text: `${state.droppedRows} earlier row(s) dropped by this panel's buffer — reattach to backfill`, fg: C.dim });
+    rows.push({ text: `${state.droppedRows} earlier row(s) dropped by this panel's buffer; reattach to backfill`, fg: C.dim });
   }
   const lines: Line[] = [];
   for (const row of rows) {

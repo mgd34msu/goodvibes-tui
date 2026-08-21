@@ -6,8 +6,8 @@
  *
  * The bug class this pins: `isSensitiveConfigPath` matched a config path by its
  * trailing WORD (`(^|\.)(…|password|token|…)$`), so a key whose last segment
- * merely CONTAINS the word — `caldavPassword`, `imapPassword`, `appPassword`,
- * `authToken` — matched nothing and was written to the bundle in the clear. The
+ * merely CONTAINS the word, `caldavPassword`, `imapPassword`, `appPassword`,
+ * `authToken`, matched nothing and was written to the bundle in the clear. The
  * declared key list in redaction.ts is what closes it; these tests are what
  * keep it closed as keys are added.
  */
@@ -24,7 +24,7 @@ import {
 
 /** Every credential-bearing config path the TUI's own config surface can hold. */
 const CREDENTIAL_PATHS: readonly string[] = [
-  // Mail and calendar — the ones that used to slip through entirely.
+  // Mail and calendar, the ones that used to slip through entirely.
   'surfaces.email.password',
   'surfaces.email.imapPassword',
   'surfaces.email.imap.password',
@@ -56,7 +56,7 @@ const CREDENTIAL_PATHS: readonly string[] = [
   'surfaces.homeassistant.webhookSecret',
   'surfaces.googleChat.verificationToken',
   'cluster.secret',
-  // Cloudflare token references (backstop — these normally hold a ref).
+  // Cloudflare token references (backstop, these normally hold a ref).
   'cloudflare.apiTokenRef',
   'cloudflare.tunnelTokenRef',
   'cloudflare.accessServiceTokenRef',
@@ -150,7 +150,7 @@ describe('redactConfig', () => {
     for (const secret of ['mailbox-pw', 'imap-pw', 'imap-nested-pw', 'smtp-pw', 'caldav-pw']) {
       expect(serialized).not.toContain(secret);
     }
-    // Non-credential neighbours survive — a bundle that redacts the hostname is
+    // Non-credential neighbours survive, a bundle that redacts the hostname is
     // useless for diagnosing a connection.
     expect(serialized).toContain('imap.example.com');
     expect(serialized).toContain('someone@example.com');
@@ -163,7 +163,7 @@ describe('redactConfig', () => {
     ].sort());
   });
 
-  test('a goodvibes:// secret reference is left readable — it is a pointer, not a value', () => {
+  test('a goodvibes:// secret reference is left readable; it is a pointer, not a value', () => {
     const result = redactConfig(nest(
       'surfaces.email.password',
       'goodvibes://secrets/goodvibes/GOODVIBES_SURFACES_EMAIL_PASSWORD',
@@ -227,7 +227,7 @@ describe('redactText', () => {
 describe('a support bundle never carries card material', () => {
   /**
    * The defect this pins, in its exact original form: the redactor keyed on a
-   * naming habit — a trailing `password`/`token`/`secret` — and `cardNumber`,
+   * naming habit, a trailing `password`/`token`/`secret`, and `cardNumber`,
    * `cardExpiry` and `cardholderName` end in none of them. Four card fields
    * matched nothing and would have gone into a support bundle in the clear.
    *

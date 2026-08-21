@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// test-runtime.test.ts — /test runner surface coverage:
+// test-runtime.test.ts, /test runner surface coverage:
 //   (a) every Bun.spawn() call reachable from /test captures stderr (same
 //       tty-corruption guard as diff-runtime.test.ts, extended to this file).
 //   (b) no test script in package.json -> honest skip, no process spawned.
@@ -16,7 +16,7 @@
 //
 // (b)-(f) each also assert that the command's final state (pass/fail summary,
 // failing-file detail, timeout notice, or fallback exit code) is recorded via
-// conversationManager.addSystemMessage — the durable path. logToolResultBlock
+// conversationManager.addSystemMessage, the durable path. logToolResultBlock
 // and ctx.print only ever write into the display-only history buffer, which a
 // later full rebuildHistory() (rebuilt strictly from getMessageSnapshot())
 // wipes clean; without addSystemMessage the /test outcome would be visible
@@ -38,7 +38,7 @@ import { createShellPathService } from '@/runtime/index.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
- * Every `Bun.spawn(` call site's option object must include `stderr:` — a
+ * Every `Bun.spawn(` call site's option object must include `stderr:`, a
  * cheap static guard against reintroducing the tty-corruption bug fixed for
  * /diff (see diff-runtime.test.ts). Duplicated here (rather than imported)
  * because the original is a private test-file helper.
@@ -154,7 +154,7 @@ describe('(b) no test script in package.json', () => {
 
     expect(printed).toEqual(['Skipped: no test script in package.json']);
     expect(toolResults).toEqual([]);
-    // A skip is not a run outcome — nothing durable should be recorded.
+    // A skip is not a run outcome, nothing durable should be recorded.
     expect(systemMessages).toEqual([]);
   }));
 });
@@ -176,7 +176,7 @@ describe('(c) happy path', () => {
     expect(printed.some((line) => /Failing test files/.test(line))).toBe(false);
 
     // Persistence: the pass/fail summary must be recorded via addSystemMessage
-    // (a real conversation message — see ConversationManager.addSystemMessage
+    // (a real conversation message, see ConversationManager.addSystemMessage
     // in src/core/conversation.ts), not just printed to the display-only
     // history buffer, so it survives the next full history rebuild instead of
     // vanishing like the display-only logToolResultBlock render does.
@@ -229,7 +229,7 @@ describe('(e) timeout path', () => {
     expect(toolResults[0]!.status).toBe('error');
     expect(toolResults[0]!.errorMsg).toMatch(/timed out/);
 
-    // The timeout outcome is also a final state, not streaming — it must
+    // The timeout outcome is also a final state, not streaming, it must
     // persist the same way the pass/fail summary does.
     expect(systemMessages).toHaveLength(1);
     expect(systemMessages[0]).toMatch(/timed out/i);
@@ -253,7 +253,7 @@ describe('(f) unrecognized output fallback', () => {
     expect(printed.some((line) => line.includes('some other output'))).toBe(true);
 
     // Fallback path's compact summary must persist too, not just the raw
-    // tail (which is allowed to stay transient — no fabricated counts here).
+    // tail (which is allowed to stay transient, no fabricated counts here).
     expect(systemMessages).toHaveLength(1);
     expect(systemMessages[0]).toContain('exit code 1');
   }));
@@ -320,7 +320,7 @@ describe('(g) integration: a malicious pattern does not execute as a second comm
 });
 
 // ---------------------------------------------------------------------------
-// (h) registration sanity — /test is registered with the expected shape.
+// (h) registration sanity, /test is registered with the expected shape.
 // command-grammar.test.ts and command-aliases-lint.test.ts already validate
 // naming/description conventions repo-wide once registered; this just checks
 // the command exists under the expected name.

@@ -1,7 +1,7 @@
 /**
  * principals-runtime.ts
  *
- * `/principals` — identity-mapping admin over `principals.*`: named
+ * `/principals`, identity-mapping admin over `principals.*`: named
  * principals (people, bots, services, tokens) and the channel identities
  * ({channel, value} pairs, e.g. {channel:'slack', value:'U123'}) mapped to
  * them. Goes over the operator wire (see operator-rpc.ts) for the same
@@ -10,7 +10,7 @@
  *
  * `principals.resolve` is the honest lookup this command exists to make
  * reachable: an unmapped identity resolves to the shared "unknown" principal
- * with `known: false` — the registry never guesses, and this command never
+ * with `known: false`, the registry never guesses, and this command never
  * papers over that with a name that looks real.
  */
 import type { CommandRegistry } from '../command-registry.ts';
@@ -199,7 +199,7 @@ export function registerPrincipalsRuntimeCommands(registry: CommandRegistry): vo
         try {
           const result = await rpc.sdk.operator.invoke('principals.resolve', { channel, value });
           if (!result.known) {
-            ctx.print(`[principals resolve] unknown principal — ${channel}:${value} is not mapped to any registered principal.`);
+            ctx.print(`[principals resolve] unknown principal: ${channel}:${value} is not mapped to any registered principal.`);
             return;
           }
           ctx.print(`[principals resolve] ${channel}:${value} -> ${result.principal.name}\n${renderPrincipal(result.principal)}`);

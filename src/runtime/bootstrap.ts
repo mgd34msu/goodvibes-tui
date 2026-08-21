@@ -94,7 +94,7 @@ export type BootstrapContext = RuntimeContext & {
   lastGitInfoRef: { value: GitHeaderInfo | undefined };
   /** Unsubscribe functions owned by bootstrap (cleared on shutdown). */
   bootstrapUnsubs: Array<() => void>;
-  /** Ref holding the periodic agent-status interval (use ref — not local var — to keep shutdown in sync). */
+  /** Ref holding the periodic agent-status interval (use ref, not local var, to keep shutdown in sync). */
   agentStatusIntervalRef: { value: ReturnType<typeof setInterval> | null };
   /** Mutable refs for viewport/scroll/render functions; main.ts patches these after constructing UI state. */
   orchestratorRefs: { getViewportHeight: () => number; scrollToEnd: (vHeight: number) => void; requestRender: () => void };
@@ -198,7 +198,7 @@ export async function bootstrapRuntime(
     panelManager,
     pluginManager,
   } = services;
-  // A saved custom-provider model must never crash boot — see provider-fallback.ts.
+  // A saved custom-provider model must never crash boot, see provider-fallback.ts.
   await ensureBootModelResolvable(providerRegistry, configManager);
 
   // ── Phase 6: Orchestrator + AcpManager ───────────────────────────────────
@@ -241,7 +241,7 @@ export async function bootstrapRuntime(
       logger.debug('companion handleUserInput safety catch', { error: String(err) });
     });
   };
-  // Shared payload (single source of truth, includes the memoryRegistry —
+  // Shared payload (single source of truth, includes the memoryRegistry,
   // see orchestrator-core-services.ts) plus this site's cacheHitTracker.
   orchestrator.setCoreServices({
     ...buildSharedOrchestratorCoreServices({ services, configManager, providerRegistry }),
@@ -311,7 +311,7 @@ export async function bootstrapRuntime(
   const commandContext = shell.commandContext;
   // Boot resume notice (item 1): after rehydrate() so chain history is ready, before
   // the operator can type anything. Fire-and-forget, same as main.ts's non-blocking
-  // `void workspaceCheckpointManager.init().catch(() => {})` — local file I/O only,
+  // `void workspaceCheckpointManager.init().catch(() => {})`, local file I/O only,
   // resolves well before a human can react to the first rendered frame.
   void announceResumeState({
     surface: services.surface,
@@ -321,7 +321,7 @@ export async function bootstrapRuntime(
     memoryAvailable: Boolean(commandContext.clients?.knowledgeApi?.memory),
     router: systemMessageRouter,
   }).catch(() => {
-    // Best-effort — never let the resume notice block or crash boot.
+    // Best-effort, never let the resume notice block or crash boot.
   });
   announceInstallHealth(systemMessageRouter);
   const { gitStatusProvider, inputHistory, lastGitInfoRef } = shell;
@@ -352,7 +352,7 @@ export async function bootstrapRuntime(
   const deferredStartup = createDeferredStartupCoordinator();
 
   // Adopting a daemon: session identity, the inbound steer path, the
-  // cross-surface union read, and the memory spine — see client/spine-adoption.ts.
+  // cross-surface union read, and the memory spine, see client/spine-adoption.ts.
   const syncSessionSpineToHostStatus = createSpineAdoptionSync({
     sessionSpine,
     memorySpine: services.memorySpine,
@@ -384,7 +384,7 @@ export async function bootstrapRuntime(
       httpListenerPortInUse: hostServiceIsBlocked(httpListenerStatus),
       daemonStatus,
       httpListenerStatus,
-      // Honest session-spine posture, independent of daemonRunning — degrades to 'offline'
+      // Honest session-spine posture, independent of daemonRunning, degrades to 'offline'
       // when adopted-but-unreachable even though daemonRunning might still read a stale
       // handle as true; sessionSpine.status() alone is activity-gated, so it's derived
       // together with the union cache's 5s liveness probe (one signal, no new timer).
@@ -396,13 +396,13 @@ export async function bootstrapRuntime(
   // ADOPT ONLY. This app never constructs a DaemonServer or an HttpListener: the
   // daemon is a separate product with its own binary and its own service unit.
   // The factories carry the shared bearer and the daemon's state directory so an
-  // adopted daemon is authenticated the same way it always was — no factory that
+  // adopted daemon is authenticated the same way it always was, no factory that
   // BUILDS anything is passed, and `adoptOnly` makes the SDK refuse to start one
   // even if a future caller did.
   //
   // `daemonRuntimeDir` names the daemon's own STATE directory
   // (`<home>/.goodvibes/daemon`), which is where operator-tokens.json,
-  // auth-users.json and daemon-settings.json live — not the home above it. Every
+  // auth-users.json and daemon-settings.json live, not the home above it. Every
   // reader in this repository resolves it that way.
   const createExternalServiceFactories = (token: string): ExternalServiceFactories => ({
     sharedDaemonToken: token,
@@ -458,7 +458,7 @@ export async function bootstrapRuntime(
   platformExternalServices.externalServices = {
     // The relay is a DAEMON feature and reading an adopted daemon's relay state
     // is a verb this contract does not carry, so these two report 'unavailable'
-    // rather than a state this process is in no position to know — see
+    // rather than a state this process is in no position to know, see
     // relay-reachability-bridge.ts.
     ...relayReadAccessors,
     inspect: inspectExternalServices,
@@ -488,7 +488,7 @@ export async function bootstrapRuntime(
     },
   };
   // Attaching to a daemon settles both build floors and its undelivered
-  // receipts off one /status read — see client/daemon-attach-handshake.ts.
+  // receipts off one /status read, see client/daemon-attach-handshake.ts.
   const daemonHandshake = createDaemonAttachHandshake({
     clientBuildGuard: services.clientBuildGuard,
     readDaemonStatus: () => externalServices.daemonStatus,
@@ -509,8 +509,8 @@ export async function bootstrapRuntime(
       // Plugin loading stays here: a plugin's commands, tools, providers, voice
       // and media providers and embedding providers all reach things a turn
       // needs in THIS process. Three of the eleven registries a plugin can
-      // reach are the daemon's now — gateway methods, channel plugins and
-      // delivery strategies — and a registration into those reaches nothing
+      // reach are the daemon's now, gateway methods, channel plugins and
+      // delivery strategies, and a registration into those reaches nothing
       // from here. No plugin is affected today (none is installed, and this
       // package bundles none); the classification and the open question about
       // where a daemon-side plugin is loaded are recorded in
@@ -549,7 +549,7 @@ export async function bootstrapRuntime(
       const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir, GOODVIBES_TUI_SURFACE_ROOT);
       // Fix (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
       // token files so only the canonical <daemonHomeDir>/operator-tokens.json survives.
-      // The prune is best-effort — it silently skips missing files, no-ops when tokens
+      // The prune is best-effort, it silently skips missing files, no-ops when tokens
       // already match, and records un-deletable candidates in `failedPaths` for logging.
       // See `pruneStaleOperatorTokens` in the SDK for semantics.
       const prune = pruneStaleOperatorTokens({
@@ -710,12 +710,12 @@ export async function bootstrapRuntime(
       runtimeUnsubs.forEach((fn) => fn());
       runtimeUnsubs.length = 0;
       forensicsCollector.dispose();
-      // Honest close on exit — fire-and-forget (never blocks shutdown);
+      // Honest close on exit, fire-and-forget (never blocks shutdown);
       // a no-op when the spine was never activated (embedded/local-only topology).
       sessionSpine.close(runtime.sessionId);
       sessionSpine.dispose();
       sessionInboundInputs.dispose(); sessionUnionCache.dispose(); // stop the inbound-steer poll and the wire-refresh interval on exit
-      // Quitting has to SAY it is leaving: a hosted session's detach policy applies when the LAST client detaches, so an exit that never detaches leaves a kill-policy session (the shipped default) alive, attached to a process that is gone. Bounded and non-throwing — see client/hosted-exit.ts.
+      // Quitting has to SAY it is leaving: a hosted session's detach policy applies when the LAST client detaches, so an exit that never detaches leaves a kill-policy session (the shipped default) alive, attached to a process that is gone. Bounded and non-throwing, see client/hosted-exit.ts.
       await Promise.all([leaveHostedSessionOnExit({ configManager, homeDirectory: services.homeDirectory }), deferredStartup.drain(100)]);
       if (externalServicesPromise) {
         try {

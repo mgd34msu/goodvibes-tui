@@ -1,11 +1,11 @@
 /**
- * session-resume-liveness-confirm.test.ts — /session resume's multi-instance
+ * session-resume-liveness-confirm.test.ts, /session resume's multi-instance
  * liveness confirm gate (item 6b).
  *
  * A session with a LIVE pid liveness marker (see runtime/session-liveness-marker.ts)
- * means another still-running process is actively refreshing it — resuming it
+ * means another still-running process is actively refreshing it, resuming it
  * here would fork its live state out from under that other instance. /session
- * resume (also reachable via /resume and /sessions resume — same code path)
+ * resume (also reachable via /resume and /sessions resume, same code path)
  * warns and requires an explicit `--force` to proceed. A missing/stale marker,
  * or a marker that happens to be THIS process's own pid, never blocks anything.
  */
@@ -50,7 +50,7 @@ function makeCtx(sm: SessionManager, printed: string[]): CommandContext {
   } as unknown as CommandContext;
 }
 
-describe('/session resume — multi-instance liveness confirm', () => {
+describe('/session resume: multi-instance liveness confirm', () => {
   test('no liveness marker at all: resumes normally, no warning', async () => {
     const sm = new SessionManager(tmpDir, { surface: makeTestSurface(tmpDir) });
     sm.save('sess-a', [{ role: 'user', content: 'hi' }], { title: 'A', model: 'm', provider: 'p', timestamp: Date.now() });
@@ -69,7 +69,7 @@ describe('/session resume — multi-instance liveness confirm', () => {
     sm.save('sess-b', [{ role: 'user', content: 'hi' }], { title: 'B', model: 'm', provider: 'p', timestamp: Date.now() });
     // A pid guaranteed to differ from this test process's own pid, and (being
     // pid 1 / init on any real machine, but here just an arbitrary alive-ish
-    // pid) — use a pid this process itself IS, then assert against a marker
+    // pid), use a pid this process itself IS, then assert against a marker
     // for a pid that is NOT this process: init (pid 1) is virtually always a
     // real running process on any POSIX host running this test.
     const otherPid = 1;
@@ -84,7 +84,7 @@ describe('/session resume — multi-instance liveness confirm', () => {
     expect(output).toContain('appears open in another terminal');
     expect(output).toContain(`pid ${otherPid}`);
     expect(output).toContain('--force');
-    // Never actually resumed — no "Resumed session" receipt.
+    // Never actually resumed, no "Resumed session" receipt.
     expect(output).not.toContain('Resumed session: sess-b');
   });
 
@@ -115,7 +115,7 @@ describe('/session resume — multi-instance liveness confirm', () => {
     expect(printed.join('\n')).not.toContain('appears open in another terminal');
   });
 
-  test('a stale marker (pid no longer running) never blocks — best-effort, never a hard lock', async () => {
+  test('a stale marker (pid no longer running) never blocks; best-effort, never a hard lock', async () => {
     const sm = new SessionManager(tmpDir, { surface: makeTestSurface(tmpDir) });
     sm.save('sess-stale', [{ role: 'user', content: 'hi' }], { title: 'Stale', model: 'm', provider: 'p', timestamp: Date.now() });
     // A pid essentially guaranteed not to be running.

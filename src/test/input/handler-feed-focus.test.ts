@@ -4,7 +4,7 @@
  * Covers the tokenizer note: focus-reporting sequences (\x1b[I / \x1b[O)
  * arrive through the same input pipeline as every other keystroke, tokenized
  * by the SDK's InputTokenizer, and must be consumed by the FIRST branch in
- * the feed loop — never reaching the composer's text/key routing, and never
+ * the feed loop, never reaching the composer's text/key routing, and never
  * mutating `prompt`/`cursorPos`.
  *
  * Uses a deliberately minimal InputFeedContext: only the fields
@@ -20,7 +20,7 @@ import { feedInputTokens, type InputFeedContext } from '../../input/handler-feed
 import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 function unexpected(name: string) {
-  return () => { throw new Error(`unexpected call: ${name} — a focus token must never reach this`); };
+  return () => { throw new Error(`unexpected call: ${name}; a focus token must never reach this`); };
 }
 
 function buildMinimalContext(overrides: Partial<InputFeedContext> = {}): { context: InputFeedContext; renderCalls: number[] } {
@@ -35,7 +35,7 @@ function buildMinimalContext(overrides: Partial<InputFeedContext> = {}): { conte
     getViewportHeight: () => 24,
     getScrollTop: () => 0,
     requestRender: () => { renderCount++; renderCalls.push(renderCount); },
-    // Every other field is a throwing sentinel — a pure focus-token feed must
+    // Every other field is a throwing sentinel, a pure focus-token feed must
     // never touch any of these.
     handleCtrlC: unexpected('handleCtrlC'),
     selectionModal: {} as unknown as InputFeedContext['selectionModal'],
@@ -45,7 +45,7 @@ function buildMinimalContext(overrides: Partial<InputFeedContext> = {}): { conte
   return { context, renderCalls };
 }
 
-describe('feedInputTokens — focus token consumption', () => {
+describe('feedInputTokens: focus token consumption', () => {
   test('a focus-in token flips the tracker and does not throw', () => {
     const { context } = buildMinimalContext();
     const tokenizer = new InputTokenizer();

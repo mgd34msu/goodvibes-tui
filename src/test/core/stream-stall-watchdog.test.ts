@@ -109,10 +109,10 @@ describe('StreamStallWatchdog', () => {
     watchdog.dispose();
   });
 
-  test('DOES fire on a mid-stream stall — silence after a delta re-arms the watchdog', async () => {
+  test('DOES fire on a mid-stream stall; silence after a delta re-arms the watchdog', async () => {
     // Regression test for the reported multi-minute mid-turn stall: tokens
     // were already flowing (so a delta had arrived), then the stream went
-    // silent for longer than the threshold. The watchdog must still fire —
+    // silent for longer than the threshold. The watchdog must still fire,
     // it must NOT be permanently disarmed by the first delta.
     const events = makeEvents();
     const stallCalls: Array<{ provider: string; episode: number }> = [];
@@ -126,7 +126,7 @@ describe('StreamStallWatchdog', () => {
     events.emit('STREAM_START');
     await wait(5);
     events.emit('STREAM_DELTA');
-    // No further deltas — silence exceeds the threshold from this point on.
+    // No further deltas, silence exceeds the threshold from this point on.
     await wait(TEST_THRESHOLD_MS + 10);
 
     expect(stallCalls).toHaveLength(1);
@@ -170,7 +170,7 @@ describe('StreamStallWatchdog', () => {
     events.emit('STREAM_START');
     // Wait for the stall to fire
     await wait(TEST_THRESHOLD_MS + 10);
-    // Wait again well past the threshold — should not fire again
+    // Wait again well past the threshold, should not fire again
     await wait(TEST_THRESHOLD_MS + 10);
 
     expect(stallCalls).toHaveLength(1);
@@ -191,7 +191,7 @@ describe('StreamStallWatchdog', () => {
     await wait(TEST_THRESHOLD_MS + 10);
     expect(stallCalls).toHaveLength(1);
 
-    // Second turn also stalls — should fire again (re-armed)
+    // Second turn also stalls, should fire again (re-armed)
     events.emit('STREAM_START');
     await wait(TEST_THRESHOLD_MS + 10);
     expect(stallCalls).toHaveLength(2);
@@ -199,7 +199,7 @@ describe('StreamStallWatchdog', () => {
     watchdog.dispose();
   });
 
-  test('disarms on TURN_COMPLETED — no stall fires after turn ends', async () => {
+  test('disarms on TURN_COMPLETED: no stall fires after turn ends', async () => {
     const events = makeEvents();
     const stallCalls: string[] = [];
     const watchdog = createStreamStallWatchdog({
@@ -217,7 +217,7 @@ describe('StreamStallWatchdog', () => {
     watchdog.dispose();
   });
 
-  test('disarms on TURN_ERROR — no stall fires after error', async () => {
+  test('disarms on TURN_ERROR: no stall fires after error', async () => {
     const events = makeEvents();
     const stallCalls: string[] = [];
     const watchdog = createStreamStallWatchdog({
@@ -271,7 +271,7 @@ describe('StreamStallWatchdog', () => {
     watchdog.dispose();
   });
 
-  test('dispose() cancels pending timer — no stall fires after dispose', async () => {
+  test('dispose() cancels pending timer: no stall fires after dispose', async () => {
     const events = makeEvents();
     const stallCalls: string[] = [];
     const watchdog = createStreamStallWatchdog({

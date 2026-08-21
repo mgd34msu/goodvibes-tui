@@ -24,7 +24,7 @@ const GRADIENT_CYCLE_FRAMES = 50;
  * Ms since the last STREAM_DELTA before the whimsical phrase rotation freezes
  * and createThinkingFragment shows an honest "stalled Ns" / "reconnecting"
  * label instead. Deliberately much shorter than the 30s stream-stall-watchdog
- * hint threshold (stream-stall-watchdog.ts) — that threshold gates a
+ * hint threshold (stream-stall-watchdog.ts), that threshold gates a
  * low-priority system message about a likely-dead connection; this one gates
  * a cosmetic label so the UI stops claiming "Vibing..." within a couple of
  * seconds of real silence, well before the stall is confirmed as a problem.
@@ -35,7 +35,7 @@ const THINKING_STALL_FREEZE_MS = 2_500;
  * Stall/reconnect state for the live thinking indicator, computed by the
  * caller every render frame from streamMetrics (see stream-event-wiring.ts).
  * `reconnect` is populated only once the SDK's STREAM_RETRY event fires
- * (structurally consumed — absent from SDK 0.35.0's TurnEvent union today).
+ * (structurally consumed, absent from SDK 0.35.0's TurnEvent union today).
  */
 export interface ThinkingStallInfo {
   /** Ms since the last STREAM_DELTA (or STREAM_START if none yet this turn). */
@@ -61,7 +61,7 @@ function fmtCost(usd: number): string {
  */
 export class UIFactory {
   /**
-   * The header row. Delegates to renderHeaderLine (header-line.ts) — extracted
+   * The header row. Delegates to renderHeaderLine (header-line.ts), extracted
    * when the header gained the failover divergence marker and this file was
    * already on the 800-line source gate.
    *
@@ -85,7 +85,7 @@ export class UIFactory {
     strikethrough = false
   ): Line[] {
     // A historical user-message pill: it carries its own dark bodyBg, so its fg
-    // reads fg.secondary/state.reasoning (light-on-dark) — this is conversation
+    // reads fg.secondary/state.reasoning (light-on-dark), this is conversation
     // content, not the transparent-terminal chrome, so it is not part of the
     // light-terminal chrome flip.
     return renderConversationFragment(text, width, {
@@ -111,12 +111,12 @@ export class UIFactory {
     });
   }
 
-  /** The mid-turn queue as an editable list — see composer-fragments.ts. */
+  /** The mid-turn queue as an editable list, see composer-fragments.ts. */
   public static createQueuedMessageList(width: number, items: readonly { readonly id: string; readonly text: string }[]): Line[] {
     return renderQueuedMessageList(width, items);
   }
 
-  /** The optional "used N memories" provenance chip — see composer-fragments.ts. */
+  /** The optional "used N memories" provenance chip, see composer-fragments.ts. */
   public static createMemoryProvenanceChip(width: number, count: number, entries: readonly MemoryProvenanceEntry[], expanded: boolean): Line[] {
     return renderMemoryProvenanceChip(width, count, entries, expanded);
   }
@@ -150,10 +150,10 @@ export class UIFactory {
     // Session permission mode (config value). Rendered as a leading pill in the
     // posture block; undefined suppresses the pill (e.g. bare test callers).
     permissionMode?: string,
-    // The web surface's reachable URL, when that surface is enabled — a
+    // The web surface's reachable URL, when that surface is enabled, a
     // persistent low-priority context segment; undefined suppresses it.
     webSurfaceUrl?: string,
-    // True while power.keepAwake holds — renders the always-visible
+    // True while power.keepAwake holds, renders the always-visible
     // "sleep disabled" chip in the posture block (the danger-mode idiom: a
     // persistent, colored surface indicator, the safety mechanism itself).
     powerKeepAwake?: boolean,
@@ -180,7 +180,7 @@ export class UIFactory {
     promptLines.forEach((text, i) => {
       const contentW = boxWidth - 4;
       const prefix = i === 0 ? ' › ' : '   ';
-      // Render text without cursor insertion — cursor is overlaid after
+      // Render text without cursor insertion, cursor is overlaid after
       const rawText = `${prefix}${text}`;
       const paddedText = fitDisplay(rawText, contentW);
       const contentLine = createBaseLine();
@@ -218,7 +218,7 @@ export class UIFactory {
           }
         }
       } else if (promptFocused && i === promptLines.length - 1) {
-        // No cursorPos provided — show block at end (fallback)
+        // No cursorPos provided, show block at end (fallback)
         const endX = boxStartX + 2 + prefix.length + text.length;
         if (endX < boxStartX + boxWidth - 2) {
           contentLine[endX] = { char: GLYPHS.surface.cursor, fg: '252', bg: promptFocused ? BG_COLOR : '#334155', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
@@ -226,11 +226,11 @@ export class UIFactory {
       }
 
       // focus visibility (item 1c): when the panel workspace owns focus
-      // and the composer is empty, name the state and the way back — the
+      // and the composer is empty, name the state and the way back, the
       // dimmed prompt alone (TEXT_COLOR/BG_COLOR above) told you nothing was
       // wrong, but not why keystrokes weren't landing here.
       if (!promptFocused && text === '' && i === 0) {
-        const hintText = 'panel focused — Esc returns';
+        const hintText = 'panel focused: Esc returns';
         const hintStartX = boxStartX + 2 + prefix.length;
         let hx = hintStartX;
         for (const ch of hintText) {
@@ -296,7 +296,7 @@ export class UIFactory {
     // (light-terminal-aware); state.info reads on both light and dark terminals.
     const t = activeUiTones();
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
-    // Permission-mode pill — always shown so the active session posture (normal
+    // Permission-mode pill, always shown so the active session posture (normal
     // / plan / accept-edits / auto) is visible at a glance. Tone: normal reads
     // dim/neutral, plan reads info (read-only, safe), accept-edits and auto read
     // as caution (raised autonomy). Cycled by Shift+Tab, toggled by /plan.
@@ -305,7 +305,7 @@ export class UIFactory {
       const modeFg = modeTone === 'caution' ? t.chrome.warn : modeTone === 'info' ? t.state.info : '244';
       composerTokens.push({ text: ` mode:${permissionModeLabel(permissionMode)} `, fg: modeFg, bold: modeTone !== 'neutral', dim: modeTone === 'neutral' });
     }
-    // Context-usage chip — always-visible compaction-pressure indicator so the
+    // Context-usage chip, always-visible compaction-pressure indicator so the
     // user sees compaction approaching before it happens. Colored by proximity
     // to the auto-compact threshold (fraction; falls back to 0.85 when unset).
     if (contextWindow && contextWindow > 0) {
@@ -325,7 +325,7 @@ export class UIFactory {
             : t.chrome.warn;
       composerTokens.push({ text: ` risk:${composerPendingRisk} `, fg: riskColor, bold: true });
     }
-    // "sleep disabled" chip — always visible while keep-awake holds, in the
+    // "sleep disabled" chip, always visible while keep-awake holds, in the
     // danger-mode idiom (a persistent warn-tone indicator; the chip is the
     // safety mechanism, so there is no timer and no AC-only variant).
     if (powerKeepAwake) composerTokens.push({ text: ` ${SLEEP_DISABLED_CHIP} `, fg: t.chrome.warn, bold: true });
@@ -353,7 +353,7 @@ export class UIFactory {
       }
       lines.push(postureLine);
     } else if (compact && powerKeepAwake) {
-      // The keep-awake chip is a safety indicator — it survives compact height
+      // The keep-awake chip is a safety indicator, it survives compact height
       // even though the rest of the posture row (mode/ctx/risk/state/flags) is
       // dropped at height < 30. Its own compact-surviving slot.
       const chipLine = createBaseLine();
@@ -377,7 +377,7 @@ export class UIFactory {
     const tokenSep = ` ${GLYPHS.navigation.pipeSeparator} `;
     // 'n/a' (not 'unpriced') to stay compact in the single-line footer and
     // match the existing "no priceable data" convention used elsewhere
-    // (cockpit-panel formatCost, agent-inspector-shared) — the footer has no
+    // (cockpit-panel formatCost, agent-inspector-shared), the footer has no
     // room for a longer marker before truncation kicks in.
     const mainCostStr = model
       ? isModelPriced(model)
@@ -387,7 +387,7 @@ export class UIFactory {
     // Honest total = your main session + the delegated fleet. We show a SPLIT
     // ("you ~$X · fleet ~$Y") rather than one summed figure: the two costs are
     // tracked and attributed to different actors, and the split directly answers
-    // "where did the money go" — the exact confusion in the eval where the footer
+    // "where did the money go", the exact confusion in the eval where the footer
     // showed only the main session (~$0.046) while the fleet cost ~10x more
     // ($0.446). The fleet segment appears only when there is a real fleet cost, so
     // the idle single-session footer is unchanged.
@@ -405,7 +405,7 @@ export class UIFactory {
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
-    // Context usage progress bar — suppressed in compact mode.
+    // Context usage progress bar, suppressed in compact mode.
     if (!compact && contextWindow && contextWindow > 0) {
       const ctxTokens = lastInputTokens ?? 0;
       const label = '   Context Usage: ';
@@ -421,7 +421,7 @@ export class UIFactory {
       lines.push(this.createProgressBarLine(label, ctxPct, barWidth, width, suffix, thresholdFraction));
     }
     // Context info line (working dir, model+provider, tools, hitl).
-    // Suppressed in compact mode. mode/status/flags are intentionally omitted —
+    // Suppressed in compact mode. mode/status/flags are intentionally omitted,
     // the posture block above owns them, so they are not duplicated here.
     if (!compact && (workingDir || model)) {
       const home = typeof process !== 'undefined' ? process.env.HOME ?? '' : '';
@@ -433,25 +433,25 @@ export class UIFactory {
       // segment is character-truncated mid-word. cwd/model are the essential
       // orientation segments (priority 0); the spine liveness marker is the
       // daemon-honesty signal and must outlive the two decorative segments
-      // (tool count, notify mode) — it is ordered ahead of them too, so a
+      // (tool count, notify mode), it is ordered ahead of them too, so a
       // narrow line drops "N tools"/"notify:x" whole before spine is at risk.
       const ctxParts: PrioritizedSegment[] = [];
       if (displayDir) ctxParts.push({ text: displayDir, priority: 0 });
       if (model) {
         ctxParts.push({ text: model + (provider ? ` (${provider})` : ''), priority: 0 });
       }
-      // Divergence marker — its own segment so a narrow line drops it WHOLE
+      // Divergence marker, its own segment so a narrow line drops it WHOLE
       // (joinPrioritizedSegments breaks priority ties toward the later
       // segment) rather than truncating it into a half-word. Priority 0: it
       // outranks every decorative segment, and what survives without it is
       // still the SERVING backend, never a claim about the configured one.
       if (modelNote) ctxParts.push({ text: modelNote, priority: 0 });
-      // Cross-surface spine posture — plain words, no blame. Adopted mode only.
+      // Cross-surface spine posture, plain words, no blame. Adopted mode only.
       if (sessionSpineStatus) ctxParts.push({ text: `spine:${sessionSpineStatus}`, priority: 1 });
-      // Web surface reachability — plain, persistent; dropped first under width pressure.
+      // Web surface reachability, plain, persistent; dropped first under width pressure.
       if (webSurfaceUrl) ctxParts.push({ text: `web:${webSurfaceUrl}`, priority: 2 });
       if (toolCount) ctxParts.push({ text: `${toolCount} tools`, priority: 2 });
-      // Labeled "notify" (not "hitl") — /mode (aliased /hitl) governs UX
+      // Labeled "notify" (not "hitl"), /mode (aliased /hitl) governs UX
       // notification verbosity (quiet/balanced/operator), not tool
       // auto-approval, so it must not share vocabulary with the DANGER MODE
       // risk banner rendered a few lines below. Lowest priority: dropped first.
@@ -494,19 +494,19 @@ export class UIFactory {
   // wording (approval/reconnecting/pre-first-token/stalled/thinking) are no
   // longer minted here. They come from the SDK presentation contract's
   // waitingPhrase() (@pellux/goodvibes-sdk/platform/presentation, already
-  // adopted by the agent) — see createThinkingFragment
+  // adopted by the agent), see createThinkingFragment
   // below. This renderer still decides WHICH state applies from its own
   // stall/reconnect/approval signals (computeStallInfo/computeRenderStallInfo
   // stay renderer-local per the extraction decision record); only the exact
   // wording is shared.
 
-  // Gradient colors for thinking text — cyan→purple in dark, teal→purple in
+  // Gradient colors for thinking text, cyan→purple in dark, teal→purple in
   // light (matches splash/brand). Read live per render inside
   // createThinkingFragment via activeUiTones() rather than baked into a static
   // field, so a mode flip re-resolves without a module reload.
 
   /**
-   * Per-frame stall info from stream metrics — computed from lastDeltaAtMs every render (not
+   * Per-frame stall info from stream metrics, computed from lastDeltaAtMs every render (not
    * from any event) so it degrades gracefully with zero new SDK events. Undefined until the
    * first delta clock exists this turn.
    */
@@ -525,11 +525,11 @@ export class UIFactory {
    * never advanced during tool execution (the model isn't producing tokens
    * then), so without this gate any tool call longer than
    * THINKING_STALL_FREEZE_MS would make the thinking fragment print
-   * "Stalled Ns..." directly above the ticking "executing (Ns)" tool row — a
+   * "Stalled Ns..." directly above the ticking "executing (Ns)" tool row, a
    * false positive during ordinary tool execution (see stream-event-wiring.ts
    * TOOL_EXECUTING/TOOL_SUCCEEDED/TOOL_FAILED/TOOL_CANCELLED handlers).
-   * Genuine no-delta silence while waiting on the provider — including the
-   * pre-first-token case, where lastDeltaAtMs is seeded at STREAM_START —
+   * Genuine no-delta silence while waiting on the provider, including the
+   * pre-first-token case, where lastDeltaAtMs is seeded at STREAM_START,
    * still stall-detects normally here, since no tool is active then; that is
    * the honest stall case this indicator exists for.
    */
@@ -548,7 +548,7 @@ export class UIFactory {
     const tones = activeUiTones();
     // Freeze the whimsical phrase rotation once real silence has gone on
     // long enough to be misleading (THINKING_STALL_FREEZE_MS). Decide WHICH
-    // honest waiting state applies (renderer-local — this signal computation
+    // honest waiting state applies (renderer-local, this signal computation
     // stays here per the extraction decision record), then defer the exact
     // wording to the SDK presentation contract's waitingPhrase() (which
     // mirrors the agent's adoption). Precedence matches the contract:
@@ -567,7 +567,7 @@ export class UIFactory {
       frame,
     });
     // Token-rate and time-to-first-token readouts are meaningless while waiting on the user, and a
-    // "tok/s" figure next to an approval prompt reads as if the model were still working — suppress
+    // "tok/s" figure next to an approval prompt reads as if the model were still working, suppress
     // them; keep the elapsed timer since "how long the approval has waited" is honest.
     const speedSuffix = (!approvalPending && tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
     const elapsedSuffix = elapsedMs !== undefined ? ` (${formatElapsed(elapsedMs)})` : '';

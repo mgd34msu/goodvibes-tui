@@ -1,11 +1,11 @@
 /**
- * cost-attribution-format.ts — pure rendering helpers for /cost attribution.
+ * cost-attribution-format.ts, pure rendering helpers for /cost attribution.
  *
  * cost.attribution.get (SDK 1.6.1) is honest-unpriced by design: an unknown
  * model contributes to unpricedRecordCount with a null cost rather than a
  * fabricated amount, and costState is 'priced' | 'estimated' | 'unpriced'
  * (a mix across contributors). These helpers preserve that distinction all
- * the way to the rendered line — "unpriced" always reads as unpriced,
+ * the way to the rendered line, "unpriced" always reads as unpriced,
  * "estimated" is always labeled, and a dollar figure only ever comes from a
  * real priced/estimated costUsd.
  */
@@ -21,7 +21,7 @@ export const COST_ATTRIBUTION_PRIMARY_DIMENSIONS: readonly CostAttributionDimens
 /**
  * Dimensions that exist on the wire but return honest-empty until their
  * emit sites tag records with this dimension. Queried the same as the
- * primary set, but rendered ONLY when non-empty — never a fabricated
+ * primary set, but rendered ONLY when non-empty, never a fabricated
  * "0 tool calls" section implying tool-level attribution works today.
  */
 export const COST_ATTRIBUTION_OPTIONAL_DIMENSIONS: readonly CostAttributionDimension[] = ['tool', 'hook', 'mcp'];
@@ -47,6 +47,6 @@ export function formatCostAttributionSection(result: CostAttributionResult, isOp
   for (const row of result.rows) {
     lines.push(`  ${row.key.padEnd(24)} ${formatCostAmount(row.costUsd, row.costState).padEnd(20)} ${formatTokens(row.tokens)}`);
   }
-  lines.push(`  total: ${formatCostAmount(result.totalCostUsd, result.costState)} — ${result.pricedRecordCount} priced, ${result.unpricedRecordCount} unpriced record(s)`);
+  lines.push(`  total: ${formatCostAmount(result.totalCostUsd, result.costState)}; ${result.pricedRecordCount} priced, ${result.unpricedRecordCount} unpriced record(s)`);
   return lines;
 }

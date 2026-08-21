@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ecosystem-modals-golden.test.ts — golden frames for the group-B
+// ecosystem-modals-golden.test.ts, golden frames for the group-B
 // (ecosystem & governance) modal surfaces, RE-BASELINED through the canonical
 // config-modal host (group-B port).
 //
@@ -7,7 +7,7 @@
 // renderConfigModal → ModalFactory (the exact production render path), rather
 // than the retired BoundModalSurface.buildConfig() bridge. Each surface gets a
 // normal (100 wide) and hostile (28 wide) pair. The 24 committed goldens are
-// the same file names as before — re-baselined in place, per-file justification
+// the same file names as before, re-baselined in place, per-file justification
 // "re-baselined through canonical config-modal host (group-B port)".
 //
 // Update path: GOODVIBES_UPDATE_GOLDENS=1 bun test <this file>.
@@ -73,11 +73,11 @@ function assertGolden(surface: string, lines: Line[]): void {
 }
 
 /**
- * Open a surface in the real host and render it — the production render path.
+ * Open a surface in the real host and render it, the production render path.
  *
  * Note (c) harness fix: ConfigModal.open() freezes the tab structure from
  * buildView() BEFORE surface.onOpen()'s refresh() loads its rows, and
- * getRenderModel() only overlays live values onto the FROZEN row ids — so a
+ * getRenderModel() only overlays live values onto the FROZEN row ids, so a
  * naive render immediately after open() locks the pre-refresh chrome (empty
  * rows), not real content. We flush a microtask turn (settles any async
  * onOpen; the Promise-backed surfaces also pre-await inside their factory)

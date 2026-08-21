@@ -17,7 +17,7 @@ import type { CompactionQualityScore } from './compaction-quality.ts';
 // ─── formatCompactionEvent ────────────────────────────────────────────────────
 
 /**
- * Exported for direct unit testing () — the grade suffix is a pure
+ * Exported for direct unit testing (), the grade suffix is a pure
  * function of the event and an optional score, independent of whichever
  * runtime lookup (getCompactionQualityScore) supplies that score.
  */
@@ -35,7 +35,7 @@ export function formatCompactionEvent(
   const trigger = ev.trigger === 'auto' ? 'auto' : 'manual';
   // Honest omission: no score means none was computed for this event (e.g. it
   // pre-dates this feature, or ran through the small-window path, which has
-  // no CompactionEvent to key a score by) — never fabricate a grade.
+  // no CompactionEvent to key a score by), never fabricate a grade.
   const qualityStr = qualityScore ? `  quality=${qualityScore.grade} (${qualityScore.score.toFixed(2)})` : '';
   return (
     `#${n} ${timeStr} [${trigger}]  ` +
@@ -56,7 +56,7 @@ function fmtN(n: number): string {
 export function buildCompactionHistoryText(): string {
   const events = getCompactionEvents();
   if (events.length === 0) {
-    return '[Context] No compactions recorded this session. (Restore is not available — the SDK does not yet expose a snapshot restore API.)';
+    return '[Context] No compactions recorded this session. (Restore is not available: the SDK does not yet expose a snapshot restore API.)';
   }
   const lines: string[] = [
     `[Context] Compaction history (${events.length} total, most recent first):`,
@@ -66,6 +66,6 @@ export function buildCompactionHistoryText(): string {
     const ev = ordered[i]!;
     lines.push('  ' + formatCompactionEvent(ev, ordered.length - i, getCompactionQualityScore(ev.timestamp)));
   }
-  lines.push('  (Restore not available — the SDK does not yet expose a snapshot restore API.)');
+  lines.push('  (Restore not available: the SDK does not yet expose a snapshot restore API.)');
   return lines.join('\n');
 }

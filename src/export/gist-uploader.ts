@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// gist-uploader — upload export content to a GitHub Gist
+// gist-uploader, upload export content to a GitHub Gist
 // ---------------------------------------------------------------------------
 //
 // Architecture: UploadTarget interface with a single GistUploadTarget
@@ -7,12 +7,12 @@
 // UploadTarget without changing the caller in share-runtime.
 //
 // Token resolution:
-//   1. serviceRegistry.resolveAuth('github') — standard service registry path
+//   1. serviceRegistry.resolveAuth('github'), standard service registry path
 //      (configured via .goodvibes/tui/services.json with tokenKey: GITHUB_TOKEN)
 //   2. process.env.GITHUB_TOKEN fallback
 //   3. No token → honest guidance; no upload.
 //
-// Privacy: Gist is created as secret=true (unlisted, not private — anyone with
+// Privacy: Gist is created as secret=true (unlisted, not private, anyone with
 // the URL can view it).
 // ---------------------------------------------------------------------------
 
@@ -23,7 +23,7 @@ export type UploadResult =
   | { ok: false; error: string };
 
 /**
- * UploadTarget — interface for pluggable export upload backends.
+ * UploadTarget, interface for pluggable export upload backends.
  * Future HTTP PUT / other targets implement this.
  */
 export interface UploadTarget {
@@ -41,7 +41,7 @@ export interface GistUploaderOptions {
 }
 
 /**
- * resolveGithubToken — try auth header map then env var.
+ * resolveGithubToken, try auth header map then env var.
  * Returns undefined when no token is available.
  */
 export function resolveGithubToken(
@@ -65,7 +65,7 @@ export function resolveGithubToken(
 }
 
 /**
- * GistUploadTarget — uploads content to a secret (unlisted) GitHub Gist.
+ * GistUploadTarget, uploads content to a secret (unlisted) GitHub Gist.
  */
 export class GistUploadTarget implements UploadTarget {
   private readonly token: string;
@@ -127,7 +127,7 @@ export class GistUploadTarget implements UploadTarget {
 }
 
 /**
- * noTokenGuidance — message printed when no GitHub PAT is found.
+ * noTokenGuidance, message printed when no GitHub PAT is found.
  */
 export const NO_TOKEN_GUIDANCE = [
   'No GitHub token found for --upload.',

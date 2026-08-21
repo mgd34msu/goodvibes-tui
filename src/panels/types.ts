@@ -3,7 +3,7 @@ import type { StatusState } from '../renderer/status-glyphs.ts';
 import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
 // Routed through the `@/` alias (not `./panel-manager.ts`) so this foundational
 // types module stays a leaf in the relative-import graph the architecture
-// cycle-checker walks. Type-only, erased at runtime — no real dependency edge.
+// cycle-checker walks. Type-only, erased at runtime, no real dependency edge.
 import type { PanelManager } from '@/panels/panel-manager.ts';
 
 /**
@@ -20,7 +20,7 @@ export interface PanelIntegrationContext {
  * A cross-panel deep-link target (item 4): a specific node a panel
  * should select + reveal when opened via `PanelManager.open(id, pane, target)`,
  * e.g. a Fleet tree node keyed by its process id and (optionally) its
- * ProcessKind for disambiguation. Panel-agnostic on purpose — only panels that
+ * ProcessKind for disambiguation. Panel-agnostic on purpose, only panels that
  * have a "node" concept implement `Panel.receiveDeepLink`.
  */
 export interface PanelDeepLinkTarget {
@@ -56,7 +56,7 @@ export type NamedKey =
 export type KeyName = NamedKey | (string & {});
 
 /**
- * the former single 'monitoring' bucket held 33 panels pre-merge —
+ * the former single 'monitoring' bucket held 33 panels pre-merge,
  * too coarse for the picker to be useful and too large for any one operator
  * mental model. Split into named operator domains so each category holds a
  * bounded, coherent set (no category may exceed 10 registrations):
@@ -102,10 +102,10 @@ export interface Panel {
   /** Called by the compositor after a successful render to clear the dirty flag. */
   markRendered(): void;
 
-  // Resource contract (optional — panels may declare resource requirements)
+  // Resource contract (optional, panels may declare resource requirements)
   resourceContract?: Readonly<ComponentResourceContract>;
 
-  // Health state (optional — set by ComponentHealthMonitor when panel is registered)
+  // Health state (optional, set by ComponentHealthMonitor when panel is registered)
   healthState?: Readonly<ComponentHealthState>;
 
   // Input (optional)
@@ -114,8 +114,8 @@ export interface Panel {
   /**
    * Optional: report `true` while this panel has an active inline text
    * capture (e.g. a `/`-to-filter or search buffer) that deliberately wants
-   * every character of a burst — paste, or several keystrokes typed fast
-   * enough to land in one `input.feed()` call — delivered to `handleInput`
+   * every character of a burst, paste, or several keystrokes typed fast
+   * enough to land in one `input.feed()` call, delivered to `handleInput`
    * one at a time, same as it always has. When this returns `false` or is
    * not implemented, the input router treats a printable burst as never a
    * deliberate single-key panel hotkey and routes it to the composer
@@ -141,11 +141,11 @@ export interface Panel {
   /**
    * Optional: called by the global Ctrl+X (`panel-close`) shortcut BEFORE it
    * closes this panel (handler-shortcuts.ts). Return `true` to consume
-   * Ctrl+X for an in-panel action instead — e.g. FleetPanel (session
+   * Ctrl+X for an in-panel action instead, e.g. FleetPanel (session
    * tabs) detaches its active tab and leaves the panel open. Return `false`
    * (or omit this hook) to fall through to the ordinary close behavior.
    * Ctrl+X never reaches a panel's own `handleInput` (ctrl/meta combos are
-   * intercepted earlier — see handlePanelFocusToken in
+   * intercepted earlier, see handlePanelFocusToken in
    * src/input/handler-feed-routes.ts), so this is the one seam a panel has
    * to intervene before the global shortcut acts.
    */
@@ -153,12 +153,12 @@ export interface Panel {
 
   /**
    * Optional: consume a deep-link target handed in by `PanelManager.open(id,
-   * pane, target)` (item 4) — select + reveal the matching node on the
+   * pane, target)` (item 4), select + reveal the matching node on the
    * panel's next snapshot. A panel without a "node" concept simply doesn't
    * implement this (the call is a no-op via optional chaining in
    * PanelManager). A panel that DOES implement it owns its own honest
    * "not found" surface (e.g. FleetPanel.setError) when the target no longer
-   * resolves — PanelManager has no transcript/print seam to report on its
+   * resolves, PanelManager has no transcript/print seam to report on its
    * behalf.
    */
   receiveDeepLink?(target: PanelDeepLinkTarget): void;
@@ -168,19 +168,19 @@ export interface PanelRegistration extends Pick<Panel, 'id' | 'name' | 'icon' | 
   factory: () => Panel;
   description: string;
   /**
-   * lifecycle flags. `preload` and `retainOnClose` are independent —
+   * lifecycle flags. `preload` and `retainOnClose` are independent,
    * a panel can eagerly instantiate without being kept alive on close, or be
    * kept alive on close without eager bootstrap instantiation. They happened
    * to be identical for all builtin panels before this split (both driven by
    * a single `preload: true`); that existing 10-panel retained set is
    * preserved unchanged by giving each of those 10 registrations both flags.
    *
-   * - `preload` — instantiate this panel during `PanelManager.prewarmRegistered()`
+   * - `preload`, instantiate this panel during `PanelManager.prewarmRegistered()`
    *   (called once at bootstrap) so its factory runs and it starts
    *   accumulating background data (subscriptions, timers) before the user
    *   ever opens the workspace. Panels without `preload` are instantiated
    *   lazily on first `open()`.
-   * - `retainOnClose` — when this panel is closed, keep the live instance in
+   * - `retainOnClose`, when this panel is closed, keep the live instance in
    *   `PanelManager`'s retained-panel map (background subscriptions/timers
    *   keep running) instead of calling `onDestroy()`. Reopening returns the
    *   same instance with its accumulated state intact. Panels without

@@ -10,7 +10,7 @@ import type { PanelPalette, StyledPanelSegment } from './polish-core.ts';
 // Shared formatting primitives (the toolkit panels standardize on).
 //
 // All are display-width aware (via getDisplayWidth / truncateDisplay) so they
-// stay aligned across emoji, CJK, and other wide characters — never hand-roll
+// stay aligned across emoji, CJK, and other wide characters, never hand-roll
 // .slice()/.padEnd() truncation or alignment in panels.
 // ---------------------------------------------------------------------------
 
@@ -113,7 +113,7 @@ const STATUS_BADGES: Record<StatusBadgeKind, BadgeSpec> = {
 
 /**
  * Canonical status badge (glyph + label) with a consistent color per lifecycle
- * state. Returns StyledPanelSegment[] — spread into a buildPanelLine call:
+ * state. Returns StyledPanelSegment[], spread into a buildPanelLine call:
  *   buildPanelLine(width, [['  ', C.label], ...buildStatusBadge('running')])
  * Supersedes ad-hoc per-panel status→color maps.
  */

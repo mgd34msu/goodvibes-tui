@@ -6,7 +6,7 @@ import type { PermissionAttribution, PermissionPromptRequest, RememberTier } fro
  * Scoped to the `edit` tool only: EditInput.edits is already an array of
  * independent, atomic find/replace units (each a natural "hunk"), so no
  * diff/hunk-apply primitive is needed here. The `write` (whole-file
- * overwrite) tool stays whole-payload accept/reject — true whole-file hunk
+ * overwrite) tool stays whole-payload accept/reject, true whole-file hunk
  * splitting would require a genuinely new SDK diff/patch-apply primitive,
  * flagged as an explicit v2 follow-up, not built here.
  *
@@ -18,7 +18,7 @@ import type { PermissionAttribution, PermissionPromptRequest, RememberTier } fro
  * symbol, per the cross-repo compile contract for this wave.
  */
 
-/** Structural shape of one EditItem, read defensively — see module doc. */
+/** Structural shape of one EditItem, read defensively, see module doc. */
 export interface EditItemLike {
   readonly path: string;
   readonly find: string;
@@ -39,7 +39,7 @@ export type HunkCommit = 'apply' | 'cancel' | null;
  * (0.36.0, no `modifiedArgs` field yet) so main.ts can resolve a decision
  * carrying `modifiedArgs` without a nominal import of a not-yet-published
  * SDK symbol. Assign to a variable of this type before calling the SDK's
- * typed `resolve(decision: PermissionPromptDecision)` — passing a variable
+ * typed `resolve(decision: PermissionPromptDecision)`, passing a variable
  * (not an object literal) sidesteps TypeScript's excess-property check, and
  * the extra field is invisible to 0.36.0 callers, structurally compatible
  * once 0.37 adds it for real.
@@ -50,7 +50,7 @@ export interface PermissionPromptDecisionWithModifiedArgs {
   modifiedArgs?: Record<string, unknown>;
   /** Generalizing remember tier: 'session' | 'exact' | 'command-class' | 'path' | 'tool'. */
   rememberTier?: RememberTier;
-  /** Free-text from the user; most useful on deny — rides the structured "user declined" tool result. */
+  /** Free-text from the user; most useful on deny, rides the structured "user declined" tool result. */
   reason?: string;
 }
 
@@ -90,7 +90,7 @@ function readEditItems(args: Record<string, unknown>): EditItemLike[] | null {
 }
 
 /**
- * isHunkSelectable — true iff this is a multi-edit `edit` tool call. Single-edit
+ * isHunkSelectable, true iff this is a multi-edit `edit` tool call. Single-edit
  * `edit` calls, `write` calls, and everything else keep the exact current
  * y/a/n flow untouched (zero behavior change for the common case).
  */
@@ -100,7 +100,7 @@ export function isHunkSelectable(request: PermissionPromptRequest): boolean {
   return items !== null && items.length > 1;
 }
 
-/** Builds initial hunk-selection state — all hunks selected by default (matches today's "y = approve everything" expectation as the zero-navigation path). */
+/** Builds initial hunk-selection state, all hunks selected by default (matches today's "y = approve everything" expectation as the zero-navigation path). */
 export function buildHunkSelectionState(request: PermissionPromptRequest): HunkSelectionState {
   const hunks = readEditItems(request.args) ?? [];
   return {
@@ -111,7 +111,7 @@ export function buildHunkSelectionState(request: PermissionPromptRequest): HunkS
 }
 
 /**
- * applyHunkKey — pure reducer over raw stdin `data` for an active hunk-selection
+ * applyHunkKey, pure reducer over raw stdin `data` for an active hunk-selection
  * prompt. Mirrors the outer y/a/n prompt's raw-data key routing (not the
  * normalized panel key vocabulary) since Space must be distinguishable from
  * the trimmed/lowercased `key` the outer switch uses.
@@ -156,7 +156,7 @@ export function applyHunkKey(state: HunkSelectionState, data: string): HunkKeyRe
 }
 
 /**
- * buildModifiedEditArgs — returns request.args with `edits` filtered to exactly
+ * buildModifiedEditArgs, returns request.args with `edits` filtered to exactly
  * the selected hunks (in original order), preserving every other EditInput
  * field (match/transaction/output/dry_run/validate) untouched.
  */
@@ -178,7 +178,7 @@ export interface ApprovalRequesterLookup {
 }
 
 /**
- * Human label for a `mcp-server` or `sandbox-escalation` attribution — the two
+ * Human label for a `mcp-server` or `sandbox-escalation` attribution, the two
  * non-agent origins the approval broker can name (see PermissionAttribution in
  * the SDK). `background-agent` deliberately falls through to the
  * broker-metadata lookup below instead, which resolves a richer label
@@ -206,7 +206,7 @@ function describeNonAgentAttribution(attribution: PermissionAttribution): string
  * for a request exists by the time its local prompt is shown), preferring an
  * explicit requester recorded in the broker record's metadata (agentId /
  * agent / requestedBy / actor / actorSurface), then the owning session id.
- * Returns null when nothing identifying is available — the prompt then omits
+ * Returns null when nothing identifying is available, the prompt then omits
  * the attribution line rather than guessing a name.
  */
 export function resolveApprovalRequester(
@@ -238,11 +238,11 @@ export function resolveApprovalRequester(
 }
 
 /**
- * buildPendingPermissionExtras — the `hunkState` + wrapped `resolve` fields
+ * buildPendingPermissionExtras, the `hunkState` + wrapped `resolve` fields
  * (plus the input-debounce timestamp and requester attribution) main.ts spreads
  * onto its PendingPermissionState alongside `...request`. Bundled into one
  * helper (rather than inlined in main.ts) to keep main.ts's net line count at
- * zero for this change — main.ts sits at the 800-line architecture cap and must
+ * zero for this change, main.ts sits at the 800-line architecture cap and must
  * never grow it.
  *
  * `openedAt` is the moment the prompt appeared; the blocking-input handler uses
@@ -264,7 +264,7 @@ export function buildPendingPermissionExtras(
   replyBuffer: string | undefined;
 } {
   // An exec-prompt ask (a running command waiting on stdin) opens straight in
-  // answer mode: every printable key types the answer — a run whose prompt
+  // answer mode: every printable key types the answer, a run whose prompt
   // needs a literal 'y' must never have it eaten as a card command key.
   const isExecPrompt = request.attribution?.kind === 'exec-prompt';
   return {

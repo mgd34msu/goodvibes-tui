@@ -5,7 +5,7 @@
  * bootDaemon over a real HttpTransport (no mocked wire), mirroring the startup-latency test's
  * integration harness. Proves the adopted-mode union genuinely includes a
  * session that exists ONLY on the daemon (registered by a different surface),
- * which the local broker alone would miss — and that losing the daemon degrades
+ * which the local broker alone would miss, and that losing the daemon degrades
  * the served rows to local-only honestly.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
@@ -92,12 +92,12 @@ describe('SessionUnionCache against a real bootDaemon (adopted-mode union)', () 
     cache.dispose();
   });
 
-  test('bootstrap wiring shape: selfSessionIds drops this surface\'s own wire mirror — no +1 phantom (D-TUI-1)', async () => {
+  test('bootstrap wiring shape: selfSessionIds drops this surface\'s own wire mirror; no +1 phantom (D-TUI-1)', async () => {
     harness = await startHarness();
     // Another surface's session on the daemon.
     await harness.registerWireSession('companion-session-3');
     // This surface mirrors its OWN session to the wire under a DIFFERENT id
-    // than the local broker uses — the divergence the replay exposed.
+    // than the local broker uses, the divergence the replay exposed.
     await harness.registerWireSession('tui-wire-mirror-3');
 
     const local: LocalSessionReader = {

@@ -1,5 +1,5 @@
 /**
- * daemon-attach-handshake.ts — attaching to a daemon is a handshake, not a
+ * daemon-attach-handshake.ts, attaching to a daemon is a handshake, not a
  * pointer swap.
  *
  * ONE `/status` read carries the three things this terminal has to settle
@@ -8,7 +8,7 @@
  *
  *  - The DAEMON's own build. Every capability here is something the daemon
  *    performs on this terminal's behalf, so a daemon below this build's floor
- *    is refused rather than adopted — otherwise a verb it does not serve
+ *    is refused rather than adopted, otherwise a verb it does not serve
  *    surfaces as one broken feature instead of as an old daemon, and the
  *    terminal keeps running half-working against a peer it has no reason to
  *    suspect. Refused means local-only, which is a state this app already
@@ -17,7 +17,7 @@
  *    and the continuation runner stops taking shared-session work.
  *  - Its undelivered receipts (update applied, restarted after a crash,
  *    settings migrated), read from `/status?receipts=consume` where delivery is
- *    destructive — so the read that consumed them is the read that renders
+ *    destructive, so the read that consumed them is the read that renders
  *    them.
  *
  * Every one of those is decided from the same response, which is why this is
@@ -37,7 +37,7 @@ import { readExternalDaemonAttach } from '../daemon-attach-notices.ts';
 import { ClientBuildGuard, DaemonBuildFloor } from './build-floors.ts';
 
 export interface DaemonAttachHandshakeDeps {
-  /** The forward floor's latch — fed the floor this daemon announces. */
+  /** The forward floor's latch, fed the floor this daemon announces. */
   readonly clientBuildGuard: ClientBuildGuard;
   /** The daemon this terminal is currently pointed at. Re-read on every attach. */
   readonly readDaemonStatus: () => HostServiceStatus;
@@ -89,7 +89,7 @@ export function createDaemonAttachHandshake(deps: DaemonAttachHandshakeDeps): Da
         authToken: daemonToken,
         consumeReceipts: true,
       });
-      // Nothing was read, so nothing is known — adopt as before and leave a
+      // Nothing was read, so nothing is known, adopt as before and leave a
       // daemon that is not answering to the spine's own reachability handling.
       // Refusing on a failed read would turn one dropped request into a lost
       // mirror.

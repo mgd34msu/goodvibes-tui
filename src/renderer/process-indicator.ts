@@ -7,7 +7,7 @@ import { formatHints } from './hint-grammar.ts';
 import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
 
 /**
- * renderProcessIndicator — shows a one-line summary of active background
+ * renderProcessIndicator, shows a one-line summary of active background
  * processes below the input area.
  *
  * Dimmed when no processes are active, highlighted (cyan) when agents or
@@ -17,7 +17,7 @@ import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core
 /**
  * Agent-count label. The footer counts only ACTIVE agents, while the fleet
  * lists every node (running, terminal, chains, watchers). Label the count
- * "active" so it is never misread as a grand total — the [Enter] View hint
+ * "active" so it is never misread as a grand total, the [Enter] View hint
  * opens the fleet for the full picture. (item 5d.)
  */
 function agentCountLabel(agentCount: number): string {
@@ -100,21 +100,21 @@ export function renderProcessIndicator(
 /**
  * Sentence each capture state renders as. Written out per state rather than
  * assembled from fragments because these are the words that tell a user whether
- * their microphone is open — "listening" and "recording" mean different things
+ * their microphone is open, "listening" and "recording" mean different things
  * and a row that blurred them would be worse than no row.
  */
 const VOICE_CAPTURE_LABELS: Record<VoiceCaptureIndicatorState['kind'], string> = {
   requesting: 'opening the microphone',
-  recording: 'recording — press the voice-input key again to stop',
+  recording: 'recording: press the voice-input key again to stop',
   transcribing: 'transcribing what you said',
   'wake-listening': 'listening for the wake phrase',
-  'wake-capturing': 'wake heard — recording what follows',
-  'wake-restarting': 'capture stream ended — restarting',
+  'wake-capturing': 'wake heard: recording what follows',
+  'wake-restarting': 'capture stream ended: restarting',
   'wake-latched': 'wake detection stopped',
 };
 
 /**
- * renderVoiceCaptureIndicator — the persistent row shown while a microphone is
+ * renderVoiceCaptureIndicator, the persistent row shown while a microphone is
  * open, below the input area beside the process indicator.
  *
  * It exists because a held-open capture device is otherwise invisible: wake
@@ -125,7 +125,7 @@ const VOICE_CAPTURE_LABELS: Record<VoiceCaptureIndicatorState['kind'], string> =
  * moment ago and is waiting on it.
  *
  * Returns no lines when nothing is captured, or when the wake rows are turned
- * off — the caller splices whatever comes back, so an empty array is "no row".
+ * off, the caller splices whatever comes back, so an empty array is "no row".
  */
 export function renderVoiceCaptureIndicator(
   width: number,

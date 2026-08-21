@@ -71,7 +71,7 @@ function makeStack(config = createConfigState()) {
 // Auto-approve path
 // ---------------------------------------------------------------------------
 
-describe('Permission flow — auto-approve', () => {
+describe('Permission flow: auto-approve', () => {
   test('autoApprove=true approves every category', async () => {
     const { pm } = makeStack(createConfigState({}, true));
     for (const tool of ['read', 'write', 'exec', 'find', 'fetch']) {
@@ -97,7 +97,7 @@ describe('Permission flow — auto-approve', () => {
 // allow-all mode
 // ---------------------------------------------------------------------------
 
-describe('Permission flow — allow-all mode', () => {
+describe('Permission flow: allow-all mode', () => {
   test('allow-all approves read tools', async () => {
     const { pm } = makeStack(createConfigState({ mode: 'allow-all' }, false));
     expect(await pm.check('read', {})).toBe(true);
@@ -122,10 +122,10 @@ describe('Permission flow — allow-all mode', () => {
 });
 
 // ---------------------------------------------------------------------------
-// prompt mode — read tools auto-approved
+// prompt mode, read tools auto-approved
 // ---------------------------------------------------------------------------
 
-describe('Permission flow — prompt mode reads', () => {
+describe('Permission flow: prompt mode reads', () => {
   test('read is auto-approved in prompt mode', async () => {
     const { pm } = makeStack(createConfigState({ mode: 'prompt' }, false));
     expect(await pm.check('read', {})).toBe(true);
@@ -159,10 +159,10 @@ describe('Permission flow — prompt mode reads', () => {
 });
 
 // ---------------------------------------------------------------------------
-// custom mode — per-tool config
+// custom mode, per-tool config
 // ---------------------------------------------------------------------------
 
-describe('Permission flow — custom mode', () => {
+describe('Permission flow: custom mode', () => {
   test('custom mode with allow action approves immediately', async () => {
     const config = createConfigState({ mode: 'custom' }, false);
     config.setTool('read', 'allow');
@@ -184,7 +184,7 @@ describe('Permission flow — custom mode', () => {
 // Session approval cache
 // ---------------------------------------------------------------------------
 
-describe('Permission flow — session approval cache', () => {
+describe('Permission flow: session approval cache', () => {
   test('category function correctly maps tool names', () => {
     const { pm } = makeStack();
     // Public method tested via whitebox
@@ -215,7 +215,7 @@ describe('Permission flow — session approval cache', () => {
 // threading fails here rather than in a hand-written shape beside it.
 // ---------------------------------------------------------------------------
 
-describe('Permission flow — per-hunk modifiedArgs', () => {
+describe('Permission flow: per-hunk modifiedArgs', () => {
   const hunks = [
     { path: 'a.ts', find: 'x', replace: 'y' },
     { path: 'a.ts', find: 'p', replace: 'q' },
@@ -233,7 +233,7 @@ describe('Permission flow — per-hunk modifiedArgs', () => {
   }
 
   test('the narrowed edits an approval carries are the ones the result exposes', async () => {
-    // "The owner deselected hunk 1" — the exact handler shape blocking-input's
+    // "The owner deselected hunk 1", the exact handler shape blocking-input's
     // resolve() hands back.
     const { pm } = makeStackReturning({
       approved: true,

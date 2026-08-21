@@ -1,16 +1,16 @@
 // ---------------------------------------------------------------------------
-// wake-provision-status.ts — the surface-facing projection of wake-word
+// wake-provision-status.ts, the surface-facing projection of wake-word
 // provisioning and of the rows that are or are not in force.
 //
 // The wake models are checksum-pinned and arrive WITH THE INSTALLATION: the
 // installer and the npm postinstall provision them, and a daemon retries at boot
 // whatever the install could not fetch. `/voice wake setup` is the recovery act
-// for the case where that did not land, not the normal way in — so the lines
+// for the case where that did not land, not the normal way in, so the lines
 // below name it where it helps and do not imply it is a required step.
 //
 // This module is the read-only projection the /voice wake surfaces render from:
 // per-artifact present / verified / corrupt / bytes taken straight from the SDK's
-// wakeProvisionStatus, which verifies by CONTENT rather than by existence — a
+// wakeProvisionStatus, which verifies by CONTENT rather than by existence, a
 // truncated or wrong-asset file reports corrupt instead of present, because a
 // detector loading it would fail in a way the user could not diagnose.
 //
@@ -31,15 +31,15 @@ import { formatVoiceBytes } from './voice-provision-status.ts';
 
 /**
  * What a terminal can actually do, so a `voice.wake.*` row is refused or reported
- * rather than faked. Lives here — beside the status projection and away from the
- * inference runtime — so the command layer can resolve settings without pulling
+ * rather than faked. Lives here, beside the status projection and away from the
+ * inference runtime, so the command layer can resolve settings without pulling
  * onnxruntime into a `/voice wake status` call.
  */
 export function terminalWakeCapabilities(status?: Pick<WakeProvisionStatus, 'vadReady'>): WakeSurfaceCapabilities {
   return {
     // Asked of the SDK rather than declared here. The filter is a WebAssembly
     // module carried in the package, so the only question is whether this runtime
-    // has WebAssembly at all — which the SDK answers, with a reason a settings
+    // has WebAssembly at all, which the SDK answers, with a reason a settings
     // surface can show. A host constant would go stale the moment the stage
     // shipped, which is exactly what happened to the previous one.
     speexAvailable: noiseSuppressionSupport().supported,
@@ -58,14 +58,14 @@ export function terminalWakeCapabilities(status?: Pick<WakeProvisionStatus, 'vad
 export function wakeArtifactLine(label: string, artifact: WakeArtifactStatus): string {
   if (artifact.verified) return `  ${label}: verified (${formatVoiceBytes(artifact.bytes)})`;
   if (artifact.corrupt) {
-    return `  ${label}: PRESENT BUT FAILS VERIFICATION (${formatVoiceBytes(artifact.bytes)}) — torn, truncated, or the wrong asset; /voice wake setup replaces it`;
+    return `  ${label}: PRESENT BUT FAILS VERIFICATION (${formatVoiceBytes(artifact.bytes)}); torn, truncated, or the wrong asset; /voice wake setup replaces it`;
   }
   return `  ${label}: missing`;
 }
 
 /**
  * Blockers, in the SDK's own words. A blocker means the detector must NOT start,
- * so the row's key and the written reason are both shown — a swallowed blocker is
+ * so the row's key and the written reason are both shown, a swallowed blocker is
  * a user staring at a feature that is on and doing nothing.
  */
 export function describeWakeBlockers(settings: Pick<WakeRuntimeSettings, 'blockers'>): string[] {
@@ -102,14 +102,14 @@ export function wakeStatusLines(
     // someone turns it on, so a missing gate is not a broken detector. It is
     // printed rather than left out because vadThreshold above 0 refuses to start
     // when the gate is absent, and a reader needs to see why.
-    `  speech gate provisioned: ${status.vadReady ? 'yes' : 'no — voice.wake.vadThreshold above 0 will refuse to start'}`,
+    `  speech gate provisioned: ${status.vadReady ? 'yes' : 'no; voice.wake.vadThreshold above 0 will refuse to start'}`,
     wakeArtifactLine('speech gate', status.vad),
     wakeArtifactLine('attribution NOTICE (speech gate)', status.vadNotice),
   ];
   if (!status.ready) {
     lines.push(
       `  a fresh provision would download ${formatVoiceBytes(status.downloadBytes)}. Installing goodvibes normally does this,`,
-      '  and a running daemon retries at boot — run /voice wake setup to fetch it now (nothing downloads on its own).',
+      '  and a running daemon retries at boot; run /voice wake setup to fetch it now (nothing downloads on its own).',
     );
   }
   lines.push(
@@ -120,7 +120,7 @@ export function wakeStatusLines(
     `  retained audio: voice.wake.retainAudio=${settings.retainAudio}`,
   );
   if (status.recallIsSyntheticOnly) {
-    lines.push('  the published recall figures for this model are measured on synthesised speech only — no human recording of the phrase exists behind them.');
+    lines.push('  the published recall figures for this model are measured on synthesised speech only; no human recording of the phrase exists behind them.');
   }
   const blockers = describeWakeBlockers(settings);
   if (blockers.length > 0) lines.push('  rows blocking startup:', ...blockers);
@@ -136,15 +136,15 @@ export function wakeProvisionReceiptLines(result: WakeProvisionResult): string[]
     `  model version: ${result.modelVersion ?? 'unpinned'}`,
     // Separate from `ready` on purpose: this terminal loads the onnx build, so a
     // missing tflite twin is not a detector that cannot run.
-    `  tflite form (for runtimes that cannot load onnx): ${result.mobileFormatReady ? 'installed' : 'not installed — nothing on this terminal needs it'}`,
+    `  tflite form (for runtimes that cannot load onnx): ${result.mobileFormatReady ? 'installed' : 'not installed; nothing on this terminal needs it'}`,
     // Separate from `ready` for its own reason: voice.wake.vadThreshold ships at
-    // 0, so the detector runs without the gate — but a value above 0 refuses to
+    // 0, so the detector runs without the gate, but a value above 0 refuses to
     // start without it, which is what this line lets a reader act on.
-    `  speech gate (voice.wake.vadThreshold): ${result.vadReady ? 'installed' : 'not installed — voice.wake.vadThreshold above 0 will refuse to start'}`,
+    `  speech gate (voice.wake.vadThreshold): ${result.vadReady ? 'installed' : 'not installed; voice.wake.vadThreshold above 0 will refuse to start'}`,
   ];
   for (const outcome of result.outcomes) {
     const detail = outcome.state === 'failed'
-      ? ` — ${outcome.error ?? 'no reason reported'}`
+      ? `: ${outcome.error ?? 'no reason reported'}`
       : outcome.bytes !== undefined ? ` (${formatVoiceBytes(outcome.bytes)})` : '';
     lines.push(`  ${outcome.component}: ${outcome.state}${detail}`);
     lines.push(`    ${outcome.path}`);
@@ -156,7 +156,7 @@ export function wakeProvisionReceiptLines(result: WakeProvisionResult): string[]
     lines.push(`  attribution NOTICE (travels with the front end): ${result.embeddingNoticePath}`);
   }
   if (result.recallIsSyntheticOnly) {
-    lines.push('  the published recall figures for this model are measured on synthesised speech only — no human recording of the phrase exists behind them.');
+    lines.push('  the published recall figures for this model are measured on synthesised speech only; no human recording of the phrase exists behind them.');
   }
   return lines;
 }
@@ -165,6 +165,6 @@ export function wakeProvisionReceiptLines(result: WakeProvisionResult): string[]
 export const WAKE_SETUP_ANNOUNCEMENT = [
   'Wake-Word Setup',
   '  downloading the pinned "hey goodvibes" classifier (both runtime formats), the shared speech-embedding front end, and the speech gate voice.wake.vadThreshold runs…',
-  '  every artifact is checksum-verified and the download is resumable — one that already matches is skipped, so re-running this only fetches what is missing.',
+  '  every artifact is checksum-verified and the download is resumable; one that already matches is skipped, so re-running this only fetches what is missing.',
   '  installing goodvibes normally does this for you; running it by hand is how you recover an install that could not reach the network.',
 ].join('\n');

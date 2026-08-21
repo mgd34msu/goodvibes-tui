@@ -1,6 +1,6 @@
 // Deliberately per-repo test, byte-identical to the sibling product's copy by design: it walks THIS repo's own src/runtime tree to pin that product's store-write boundary, so a shared home would have nothing to scan.
 /**
- * GC-ARCH-003: Runtime store write enforcement — static architecture test.
+ * GC-ARCH-003: Runtime store write enforcement, static architecture test.
  *
  * Production runtime code must not call Zustand `store.setState(...)`
  * outside the store mutation layer in `src/runtime/store/index.ts`.
@@ -44,7 +44,7 @@ describe('GC-ARCH-003: runtime store write enforcement', () => {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.includes('.setState(')) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }

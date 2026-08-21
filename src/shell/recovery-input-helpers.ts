@@ -9,7 +9,7 @@
  * happen ONLY when the user explicitly asks (a CLI flag, a slash command, or
  * a prompt), never automatically at bare launch (owner ruling). A live
  * recovery snapshot is now surfaced, never applied, by the boot resume
- * notice — see announceResumeState in runtime/resume-notice.ts.
+ * notice, see announceResumeState in runtime/resume-notice.ts.
  */
 
 export interface ErrorAffordanceDeps {
@@ -24,7 +24,7 @@ export interface ErrorAffordanceDeps {
 /**
  * Handle one keypress while the error-retry affordance is active.
  * 'r' retries on the current provider when armed; 'm' opens the model
- * picker — also gated on armed, since switching models here only makes
+ * picker, also gated on armed, since switching models here only makes
  * sense in service of the same retry this affordance is offering, not as a
  * general-purpose model-picker shortcut. Returns true when the key was
  * consumed; any other key (or 'm'/'r' while unarmed) returns false so the

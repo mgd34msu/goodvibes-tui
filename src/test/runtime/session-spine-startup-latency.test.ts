@@ -2,13 +2,13 @@
  * session-spine-startup-latency.test.ts
  *
  * Perf evidence: with daemon.enabled defaulting ON,
- * the adopt-or-start probe now genuinely runs on every boot — this used to be
+ * the adopt-or-start probe now genuinely runs on every boot, this used to be
  * inert (danger.daemon defaulted off, the whole path was skipped). This test
  * measures the REAL wall-clock cost of the case this conversion actually
  * activates for: a compatible external daemon present, adopted rather than
  * started. That probe runs entirely inside `bootstrap.ts`'s
  * `deferredStartup.schedule({label:'external-services', ...})` task, which
- * fires AFTER the first render (see bootstrap.ts) — so this number is NOT on
+ * fires AFTER the first render (see bootstrap.ts), so this number is NOT on
  * the first-paint critical path; it documents the measured background cost
  * and guards it does not regress silently.
  *
@@ -17,7 +17,7 @@
  * test RuntimeServices' ConfigManager rather than the probe-decision config
  * passed to startHostServices, so a real system daemon on the default port
  * would collide with it on a dev machine. That shape is unaffected
- * either way — the session spine only activates in the adopt path.)
+ * either way, the session spine only activates in the adopt path.)
  */
 import { describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
@@ -38,14 +38,14 @@ disposeTestRuntimeServicesAfterAll();
  *
  * The old pair was broken as a pair: the assertion budget was 5 000 ms and
  * bun's implicit per-test default is also 5 000 ms, so the measurement could
- * never actually fail its own assertion — the test died of bun's timeout first
+ * never actually fail its own assertion, the test died of bun's timeout first
  * ("this test timed out after 5000ms", observed on every run of a loaded host),
  * with no measured number reported at all. And 5 000 ms was an idle machine's
  * figure for work that includes booting a real daemon and doing real socket
  * I/O; on a busy host the adopt path takes longer while behaving perfectly.
  *
  * The regression this guards is a probe that HANGS or silently falls back to
- * starting its own daemon — an order-of-magnitude change, not a few hundred
+ * starting its own daemon, an order-of-magnitude change, not a few hundred
  * milliseconds. A ceiling well clear of scheduling noise still catches that,
  * and the measured number is logged on every run either way, so a genuine creep
  * is visible rather than hidden behind a pass/fail line the host decides. The
@@ -55,7 +55,7 @@ const ADOPT_BUDGET_MS = 30_000;
 const TEST_BUDGET_MS = 120_000;
 
 /** Finds a free ephemeral TCP port (bootstrap-services.ts requires a concrete
- * 1-65535 port, not 0, for controlPlane.port/httpListener.port config values —
+ * 1-65535 port, not 0, for controlPlane.port/httpListener.port config values,
  * unlike bootDaemon's own `port: 0` OS-assignment convenience). */
 async function findFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {

@@ -1,5 +1,5 @@
 /**
- * sessions/manager.test.ts — the SDK SessionManager contract.
+ * sessions/manager.test.ts, the SDK SessionManager contract.
  *
  * DELIBERATE legacy-form survivor: constructions here pass the loose
  * `{ surfaceRoot }` option rather than a SessionSurface, because that compat
@@ -308,7 +308,7 @@ describe('SessionManager', () => {
       expect(meta.title).toBe('New Title');
     });
 
-    test('does not change the filename — only the in-file title', () => {
+    test('does not change the filename; only the in-file title', () => {
       sm.save('rename-file-check', [], META);
       sm.rename('rename-file-check', 'Updated Title');
       // Session must still be loadable under the original name
@@ -422,8 +422,8 @@ describe('SessionManager', () => {
       expect(results[1].session.name).toBe('one-match');
     });
 
-    test('skips meta line — only searches messages', () => {
-      // Title contains query but no messages do — should not match
+    test('skips meta line: only searches messages', () => {
+      // Title contains query but no messages do, should not match
       sm.save('title-only-match', [], { ...META, title: 'contains-the-keyword' });
       const results = sm.search('contains-the-keyword');
       expect(results).toHaveLength(0);

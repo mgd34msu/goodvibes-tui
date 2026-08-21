@@ -124,7 +124,7 @@ function modelKey(model: ModelDefinition): string {
 
 function targetSummary(info: ModelPickerTargetInfo): string {
   if (!info.enabled) return 'disabled';
-  // 'embeddings' has no model concept — configuredNote carries the honest
+  // 'embeddings' has no model concept, configuredNote carries the honest
   // provider id + dimensions + configured-state summary instead of a
   // computed provider:model route (which would print a phantom "model:").
   if (info.configuredNote) return info.configuredNote;
@@ -189,7 +189,7 @@ function detailLines(picker: ModelPickerModal, width: number): string[] {
   } else {
     lines.push(`Context cap overrides the detected local-model context window for this selection.`);
   }
-  // A visible cursor glyph on the query itself when search is focused —
+  // A visible cursor glyph on the query itself when search is focused,
   // the only prior affordance was a footer-hint text swap ('/ search' vs.
   // 'Typing filters search...'), buried at the end of a long hint line and
   // easy to miss (confirmed via live tmux repro). This puts the "you are
@@ -283,8 +283,8 @@ function renderModelRows(picker: ModelPickerModal, lines: Line[], rows: number, 
 /**
  * The effort step of the model picker.
  *
- * The list is exactly the levels the chosen model resolved to — not a fixed
- * four — and it is introduced by a headline naming what this model does with
+ * The list is exactly the levels the chosen model resolved to, not a fixed
+ * four, and it is introduced by a headline naming what this model does with
  * the setting (named levels, a thinking-token budget, an on/off toggle, or
  * nothing at all). A best-guess spec prints its caveat under the list rather
  * than presenting unverified levels as if the provider had confirmed them.
@@ -433,8 +433,8 @@ export function renderModelWorkspace(picker: ModelPickerModal, width: number, vi
   const details = detailLines(picker, contentW - 2);
   // Never drop detail lines (the modal rule: UI-authored descriptive text is
   // always shown in full). Size the detail band to the ACTUAL content,
-  // growing past the old fixed proportional default up to maxDetailRows —
-  // the ceiling that keeps at least a header row and one list row available —
+  // growing past the old fixed proportional default up to maxDetailRows,
+  // the ceiling that keeps at least a header row and one list row available,
   // rather than silently slicing off whatever didn't fit a 32% guess.
   const detailRows = clamp(Math.max(details.length, Math.round(bodyRows * 0.32)), minDetailRows, maxDetailRows);
   const listRows = Math.max(1, bodyRows - detailRows - 1);
@@ -475,7 +475,7 @@ export function renderModelWorkspace(picker: ModelPickerModal, width: number, vi
   const footer = contentLine(safeWidth, PALETTE.footerBg);
   const targetHint = picker.focusPane === 'targets' ? 'Focus targets' : 'Focus list';
   // W3 Finding 2: while search is focused, every printable key (including
-  // c/a/b/g) types into the query — handler-picker-routes.ts guards those
+  // c/a/b/g) types into the query, handler-picker-routes.ts guards those
   // single-key shortcuts with `!searchFocused` (Up/Down blur search first).
   // Advertising them here regardless of focus state was a footer that lied
   // about what the keys currently do. Tab still cycles price in both states

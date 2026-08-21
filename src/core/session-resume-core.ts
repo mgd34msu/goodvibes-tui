@@ -1,5 +1,5 @@
 /**
- * session-resume-core.ts — the ONE resume routine both resume seams call.
+ * session-resume-core.ts, the ONE resume routine both resume seams call.
  *
  * Two independent call sites used to duplicate (and diverge from) this
  * sequence: `/session resume` (session-workflow.ts) and the panel/session-
@@ -23,7 +23,7 @@
  * logging the outcome in their own idiom (`ctx.print` vs `conversation.log`),
  * and any extra plumbing that only one seam performs (hookDispatcher.fire,
  * sessionSpine.reopen, sharedSessionBroker.reopenSession,
- * writeLastSessionPointer — all bootstrap-hook-bridge-only, pre-existing
+ * writeLastSessionPointer, all bootstrap-hook-bridge-only, pre-existing
  * asymmetries out of this module's scope).
  */
 import type { SessionManager, SessionMeta } from '@pellux/goodvibes-sdk/platform/sessions';
@@ -52,7 +52,7 @@ export interface SessionResumeDeps {
    * The app's declare-once session-storage handle. Both resume seams pass the
    * SAME one the runtime writes through, so the anchor sidecar and the
    * transcript journal this routine reads are guaranteed to be the files the
-   * live session actually wrote — the scope can no longer be re-guessed per
+   * live session actually wrote, the scope can no longer be re-guessed per
    * seam.
    */
   readonly surface: SessionSurface;
@@ -65,7 +65,7 @@ export interface SessionResumeDeps {
   readonly selectModel?: (model: string) => Promise<{ readonly registryKey: string; readonly providerId: string }>;
   readonly hydrateSessionUsage?: () => void;
   /**
-   * Deliberate cap on how many saved panels are reopened at once — resuming
+   * Deliberate cap on how many saved panels are reopened at once, resuming
    * into a workspace crowded with every panel that happened to be open is
    * its own kind of surprise. Overflow beyond the cap is reported in the
    * outcome (`panels.notReopened`), never silently dropped. Defaults to 4.
@@ -76,7 +76,7 @@ export interface SessionResumeDeps {
 export interface PanelReopenOutcome {
   readonly reopened: readonly string[];
   readonly movedToModal: readonly string[];
-  /** Saved panel ids beyond `panelReopenLimit` — not attempted, honestly reported (see /panels to open the rest). */
+  /** Saved panel ids beyond `panelReopenLimit`, not attempted, honestly reported (see /panels to open the rest). */
   readonly notReopened: readonly string[];
 }
 
@@ -90,7 +90,7 @@ export interface SessionResumeOutcome {
 
 /**
  * Exported so both session-workflow.ts's standalone `reopenPanelsFromReturnContext`
- * (kept for its existing direct unit-test coverage — see
+ * (kept for its existing direct unit-test coverage, see
  * session-workflow-panel-restore.test.ts) and `resumeSessionCore` below share
  * the exact same default cap.
  */
@@ -107,7 +107,7 @@ export function reopenPanelsWithModalSkip(
   const reopened: string[] = [];
   const movedToModal: string[] = [];
   for (const panelId of within) {
-    // A MIGRATE-TO-MODAL id has no panel to restore — a modal is not part of
+    // A MIGRATE-TO-MODAL id has no panel to restore, a modal is not part of
     // the saved panel layout. Skip it (don't pop a modal mid-resume) and note
     // it once, rather than firing open() and revealing an empty workspace.
     if (panelManager.getModalRedirect(panelId) !== undefined) {
@@ -144,7 +144,7 @@ export async function resumeSessionCore(sessionId: string, deps: SessionResumeDe
   deps.runtime.sessionId = sessionId;
 
   // Restore this session's message-anchored rewind anchors from its sidecar
-  // so /rewind works identically before and after the resume — the in-memory
+  // so /rewind works identically before and after the resume, the in-memory
   // registry is process-local, so a fresh process starts with none for the
   // loaded session.
   const restoredAnchorCount = restoreTurnAnchors(sessionId, deps.surface);

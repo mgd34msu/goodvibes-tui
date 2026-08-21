@@ -22,7 +22,7 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
  * Behavioural coverage for the terminal's microphone path, driven entirely
- * through injected fakes — a fake recorder subprocess and stub inference
+ * through injected fakes, a fake recorder subprocess and stub inference
  * sessions. No real microphone, no real recorder, no model file, no network.
  *
  * What these assert is the chain that was missing outright before capture was
@@ -127,7 +127,7 @@ function pcmBytes(samples: readonly number[]): Uint8Array {
   return bytes;
 }
 
-/** A run of loud audio — well above the SDK's silence floor of 180 RMS. */
+/** A run of loud audio, well above the SDK's silence floor of 180 RMS. */
 function loudSamples(count: number, seed = 1): number[] {
   return Array.from({ length: count }, (_unused, index) => (index % 2 === 0 ? 9000 + seed : -9000 - seed));
 }
@@ -155,7 +155,7 @@ function stubEmbeddingSession(): WakeInferenceSession {
 
 /**
  * A stub classifier that returns a scripted score per call, holding the last one
- * once the script runs out — so a test says exactly when a wake should confirm.
+ * once the script runs out, so a test says exactly when a wake should confirm.
  */
 function scriptedClassifierSession(scores: readonly number[]): { session: WakeInferenceSession; calls: () => number } {
   let index = 0;
@@ -288,7 +288,7 @@ interface WakeHarnessOptions {
    * below, where stubbing the very check under test would prove nothing.
    */
   readonly realProvisionStatus?: boolean;
-  /** No daemon reachable — the honest refusal path. */
+  /** No daemon reachable, the honest refusal path. */
   readonly noTranscriber?: string;
   readonly managedRoot?: string;
 }
@@ -412,7 +412,7 @@ describe('recorder bytes become whole frames', () => {
 
     // A deliberately hostile chunking: 700, 700, 500 and 380 samples. None is a
     // multiple of 1280, and the third chunk both completes frame 1 and starts
-    // frame 2 — which is exactly where a dropped or padded remainder would show.
+    // frame 2, which is exactly where a dropped or padded remainder would show.
     const all = loudSamples(2280);
     recorder.emitBytes(pcmBytes(all.slice(0, 700)));
     expect(frames.length).toBe(0);
@@ -646,7 +646,7 @@ describe('disabled means no capture at all', () => {
     expect(harness.spawns.calls.length).toBe(0);
     const blocked = harness.notices.join('\n');
     expect(blocked).toContain('voice.wake.vadThreshold');
-    // The gate is pinned now, so the refusal is no longer "no model exists" — it
+    // The gate is pinned now, so the refusal is no longer "no model exists", it
     // is "this surface has not loaded it", which is what an unprovisioned host is.
     expect(blocked).toContain('has not loaded the speech gate');
     expect(blocked).toContain('goodvibes-vad');
@@ -656,7 +656,7 @@ describe('disabled means no capture at all', () => {
 /**
  * The inference runtime's two assets. They are embedded in the compiled binary and
  * extracted to a directory this surface owns, because onnxruntime-web loads its
- * WASM glue by dynamic PATH import — which a bun-compiled binary cannot satisfy
+ * WASM glue by dynamic PATH import, which a bun-compiled binary cannot satisfy
  * from its own bundle.
  */
 describe('the onnxruntime assets reach disk', () => {
@@ -676,7 +676,7 @@ describe('the onnxruntime assets reach disk', () => {
     // The real runtime, not a stub: ~13 MB of WebAssembly.
     expect(statSync(wasm).size).toBeGreaterThan(1_000_000);
 
-    // A second call with identical bytes rewrites nothing — otherwise every launch
+    // A second call with identical bytes rewrites nothing, otherwise every launch
     // would copy 13 MB.
     extractOnnxRuntimeAssets(directory);
     expect(statSync(glue).mtimeMs).toBe(firstGlue);
@@ -846,7 +846,7 @@ describe('the two rows that used to be refused now run a real stage', () => {
 
   test('vadThreshold above 0 with the gate NOT provisioned still refuses to start', async () => {
     // The artifact is its own download, so asking for a gate that is not on disk
-    // is a blocker with the row named — never a detector running ungated while
+    // is a blocker with the row named, never a detector running ungated while
     // the setting says otherwise.
     const harness = makeWakeHarness({ config: { ...ACTIVE_CONFIG, 'voice.wake.vadThreshold': 0.5 } });
     await harness.runtime.refresh();
@@ -866,7 +866,7 @@ describe('enabling wake detection after the installation provisioned the model',
     const managedRoot = makeProjectTempDir('wake-install');
     // The paths the install policy writes to. Nothing here re-derives them: they
     // come from the same SDK function the installer, the daemon and the detector
-    // all call, which is the whole point — an installer that wrote 6 MB into a
+    // all call, which is the whole point, an installer that wrote 6 MB into a
     // directory the detector never reads would report success and detect nothing.
     const paths = resolveManagedWakePaths(managedRoot);
 
@@ -926,7 +926,7 @@ describe('enabling wake detection after the installation provisioned the model',
     expect(outcome.state).toBe('degraded');
     expect(outcome.message).toContain('/voice wake setup');
 
-    // Now enable the feature, with the SDK's REAL content check — no stub, because
+    // Now enable the feature, with the SDK's REAL content check, no stub, because
     // the content check is the thing being trusted here.
     const harness = makeWakeHarness({ managedRoot, realProvisionStatus: true });
     await harness.runtime.refresh();

@@ -19,11 +19,11 @@ import type {
 
 // ---------------------------------------------------------------------------
 // Policy → config-modal surface (group-B port). Governance CONTENT view,
-// not a selectable list — current/candidate bundle state, diff, divergence
+// not a selectable list, current/candidate bundle state, diff, divergence
 // gate, history, permission audit, lint findings, preflight review, and
 // simulation samples render as non-selectable rows (the host windows/scrolls
 // them). EVERY dispatchable key in the original panel (s/f/l/p/b) already
-// routed to `/policy <sub>` via executeCommand — none were in-panel mutations;
+// routed to `/policy <sub>` via executeCommand, none were in-panel mutations;
 // the panel's promote/rollback confirm step is dropped per charter (never fold
 // a confirm into a modal) and the command dispatches directly. Determinism:
 // timestamps are formatted (fmtTime/fmtRate), never read from the clock.
@@ -111,7 +111,7 @@ class PolicyModalSurface implements ConfigModalSurface {
       push('No policy bundles loaded.');
       push('Bundle: none active, none candidate. Gate: n/a.', DIM);
       push('Get started');
-      push('/policy load — load a policy bundle to begin governance review', DIM);
+      push('/policy load: load a policy bundle to begin governance review', DIM);
       return { title: 'Policy And Governance', tabs: [{ id: 'governance', label: 'Governance', header, rows, emptyText: '' }] };
     }
 
@@ -181,7 +181,7 @@ class PolicyModalSurface implements ConfigModalSurface {
   }
 
   onAction(id: string, ctx: ConfigModalActionContext): void {
-    // "Rollout" in the WO brief maps to the registry's actual subcommand —
+    // "Rollout" in the WO brief maps to the registry's actual subcommand,
     // there is no separate `/policy rollout`.
     const sub = id === 'simulate' ? 'simulate' : id === 'preflight' ? 'preflight' : id === 'lint' ? 'lint' : id === 'promote' ? 'promote' : id === 'rollback' ? 'rollback' : null;
     if (!sub) return;

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// model-picker-effort-step.test.ts — the picker's effort step shows the
+// model-picker-effort-step.test.ts, the picker's effort step shows the
 // SELECTED model's real reasoning options.
 //
 // It used to render `model.reasoningEffort` as a bare list of level names, and

@@ -42,7 +42,7 @@ export interface UiSessionServices {
   readonly sessionManager: RuntimeServices['sessionManager'];
   /**
    * The panel-facing session READ source is the cross-surface union
-   * facade, not the raw local broker — in adopted-daemon ('external') mode the
+   * facade, not the raw local broker, in adopted-daemon ('external') mode the
    * local broker misses sessions hosted for other surfaces. Sync signature
    * preserved; the facade's cache makes that honest (see session-union-cache.ts).
    */
@@ -59,7 +59,7 @@ export interface UiPlatformServices {
   readonly surfaceRegistry: RuntimeServices['surfaceRegistry'];
   readonly subscriptionManager: RuntimeServices['subscriptionManager'];
   readonly secretsManager: SecretsManager;
-  /** Per-device pairing tokens — backs the pairing modal QR and the settings device surface. */
+  /** Per-device pairing tokens, backs the pairing modal QR and the settings device surface. */
   readonly pairingTokens: RuntimeServices['pairingTokens'];
   readonly tokenAuditor: RuntimeServices['tokenAuditor'];
   readonly replayEngine: RuntimeServices['replayEngine'];
@@ -119,7 +119,7 @@ export interface UiRuntimeSharedServices {
     readonly processRegistry: RuntimeServices['processRegistry'];
     /** The Fleet panel's read model: local rows union the adopted daemon's. */
     readonly fleetReadModel: RuntimeServices['fleetReadModel'];
-    /** The shared runtime event bus — the Fleet panel subscribes to its 'communication' domain for the honest steer-consumed signal. */
+    /** The shared runtime event bus, the Fleet panel subscribes to its 'communication' domain for the honest steer-consumed signal. */
     readonly runtimeBus: RuntimeServices['runtimeBus'];
   };
 }

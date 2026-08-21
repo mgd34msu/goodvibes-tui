@@ -166,7 +166,7 @@ describe('PermissionManager', () => {
   describe('check - permission prompt for non-read tools (autoApprove=false)', () => {
     test('emits permission:request event for write category when autoApprove=false', async () => {
       if (configManager.get('behavior.autoApprove')) {
-        // Skip assertion path — flag is set, no event fires
+        // Skip assertion path, flag is set, no event fires
         const result = await manager.check('write', { path: 'file.txt' });
         expect(result).toBe(true);
         return;
@@ -335,7 +335,7 @@ describe('PermissionManager', () => {
   });
 
   describe('session approval cache', () => {
-    test('caches approval when remember=true — only 1 prompt for 2 identical calls', async () => {
+    test('caches approval when remember=true: only 1 prompt for 2 identical calls', async () => {
       if (configManager.get('behavior.autoApprove')) {
         // autoApprove skips prompts; cache logic isn't exercised
         await manager.check('write', { path: 'cached.ts' });
@@ -352,7 +352,7 @@ describe('PermissionManager', () => {
       expect(requests).toHaveLength(1);
     });
 
-    test('different paths get separate cache entries — up to 2 prompts', async () => {
+    test('different paths get separate cache entries; up to 2 prompts', async () => {
       if (configManager.get('behavior.autoApprove')) {
         await manager.check('write', { path: 'file-a.ts' });
         await manager.check('write', { path: 'file-b.ts' });

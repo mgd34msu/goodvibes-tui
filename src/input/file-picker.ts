@@ -15,7 +15,7 @@ export class FilePickerModal {
   public searchFocused = true;
   public results: string[] = [];
   public selectedIndex = 0;
-  /** Position in the prompt where @ was typed — used to replace @query with the selected path */
+  /** Position in the prompt where @ was typed, used to replace @query with the selected path */
   public insertPos = 0;
   /** When true, selected file inserts as !@path (inject mode) instead of @path */
   public injectMode = false;

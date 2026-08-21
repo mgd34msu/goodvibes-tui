@@ -22,10 +22,10 @@ export type FirstOpenTrustLevel = 'trusted' | 'restricted';
 
 /**
  * What `resumeNamedSessionWithRecoveryCheck` needs to actually APPLY an
- * accepted crash-recovery snapshot — the same shape `buildRecoveryOfferWiring`
+ * accepted crash-recovery snapshot, the same shape `buildRecoveryOfferWiring`
  * (runtime/recovery-offer-wiring.ts) takes, minus `surface` and
  * `commandContext` which this module already has in scope. Optional: a caller
- * that omits it (or a snapshot-free boot) gets exactly today's behavior —
+ * that omits it (or a snapshot-free boot) gets exactly today's behavior,
  * straight resume from the durable store, no modal.
  */
 export interface TuiStartupRecoveryDeps {
@@ -37,7 +37,7 @@ export interface TuiStartupRecoveryDeps {
 }
 
 /**
- * resumeNamedSessionWithRecoveryCheck — the pre-resume guard for `--continue`
+ * resumeNamedSessionWithRecoveryCheck, the pre-resume guard for `--continue`
  * and the bare `--resume` (pointer) path.
  *
  * Resuming a named session straight from its durable store is exactly the
@@ -47,13 +47,13 @@ export interface TuiStartupRecoveryDeps {
  * read-only probe for that; when it finds one, this routes through the same
  * ask-then-retire modal flow the general boot offer uses
  * (runtime/recovery-prompt.ts), scoped to this one session via
- * `targetSessionId` — never auto-applied.
+ * `targetSessionId`, never auto-applied.
  *
  *   - No live snapshot (or `recovery` deps not wired): straight resume, same
  *     as before this check existed.
  *   - Resume chosen: the snapshot is applied (via `buildRecoveryOfferWiring`'s
  *     `applySnapshot`, which rebinds the runtime session id and replays any
- *     journal tail) and the plain store resume is skipped — the snapshot IS
+ *     journal tail) and the plain store resume is skipped, the snapshot IS
  *     the more complete copy.
  *   - "Not now" (or a dismissal, or a failed load): falls through to the
  *     plain store resume, after the follow-up Keep/Remove question the
@@ -63,7 +63,7 @@ export interface TuiStartupRecoveryDeps {
  * `scheduleRecoveryOffer`'s own reasoning: `applyInitialTuiCliState` runs
  * before the shell's first render, so asking a question here synchronously
  * would draw it at a blank terminal. The synchronous `checkRecoveryForSession`
- * probe above needs no such deferral — only opening the modal does.
+ * probe above needs no such deferral, only opening the modal does.
  */
 async function resumeNamedSessionWithRecoveryCheck(options: {
   readonly sessionId: string;
@@ -124,7 +124,7 @@ async function resumeNamedSessionWithRecoveryCheck(options: {
 }
 
 /**
- * decodeFirstOpenChoice — pure mapping from a chosen selection-item id (or
+ * decodeFirstOpenChoice, pure mapping from a chosen selection-item id (or
  * null on Escape/enter-through) to the trust decision. Kept pure so the
  * consequence-time trust prompt's semantics (raised by trustGatedAsk, wired
  * in main.ts's trustPromptRef.requestTrustDecision) are unit-testable
@@ -137,16 +137,16 @@ export function decodeFirstOpenChoice(id: string | null): FirstOpenTrustLevel {
 
 /**
  * Build the selection rows for the trust prompt. This used to also offer a
- * "register this directory?" half (a combined 2x2 when both were needed) —
+ * "register this directory?" half (a combined 2x2 when both were needed),
  * that half is gone: registration self-records (see
  * selfRecordWorkspaceRegistration below) rather than ever asking a question
  * about a registry the user hasn't met yet.
  */
 export function buildFirstOpenItems(): { readonly title: string; readonly items: SelectionItem[] } {
   return {
-    title: 'New workspace — choose a trust level',
+    title: 'New workspace: choose a trust level',
     items: [
-      { id: 'trusted', label: 'Trust this workspace', detail: 'Full capability — all tools may run', primaryAction: 'select' },
+      { id: 'trusted', label: 'Trust this workspace', detail: 'Full capability: all tools may run', primaryAction: 'select' },
       { id: 'restricted', label: 'Keep restricted (read-only)', detail: 'Explore safely; writes and commands are denied until trusted', primaryAction: 'select' },
     ],
   };
@@ -155,8 +155,8 @@ export function buildFirstOpenItems(): { readonly title: string; readonly items:
 /**
  * Registration self-records: a workspace the user actually works in becomes
  * its own registry entry with no question ever asked (the former "Register
- * this directory as a workspace?" prompt — sometimes a four-option 2x2 when
- * trust was undecided too — is gone entirely).
+ * this directory as a workspace?" prompt, sometimes a four-option 2x2 when
+ * trust was undecided too, is gone entirely).
  *
  * "Actually works in" is anchored to TRUST, not mere directory-open: this is
  * only ever called for a workspace that is (or has just become) trusted,
@@ -167,7 +167,7 @@ export function buildFirstOpenItems(): { readonly title: string; readonly items:
  * checkpoint-owning consumer's boundary. That boundary now reads the SAME
  * shared registration store this writes to, gated by each record's
  * `checkpointEligible` flag (absent means false). So the separation is no
- * longer "a separate list the agent owns" — it is one store, and this self
+ * longer "a separate list the agent owns", it is one store, and this self
  * record stays out of scope by stamping its `origin` ('tui') for honest
  * provenance while NEVER setting `checkpointEligible`. Only the consumer that
  * owns checkpointing re-stamps its own roots eligible on boot.
@@ -188,7 +188,7 @@ export function applyInitialTuiCliState(options: {
   readonly commandContext: CommandContext;
   readonly shellPaths: TuiStartupShellPaths;
   /**
-   * The app's declare-once session-storage handle — the SAME one the runtime
+   * The app's declare-once session-storage handle, the SAME one the runtime
    * writes the last-session pointer through. `--continue` and bare `--resume`
    * read that pointer below; deriving its path independently here is exactly
    * how this read used to land on a file nothing ever wrote.
@@ -199,7 +199,7 @@ export function applyInitialTuiCliState(options: {
    * Enables the crash-recovery check ahead of `--continue` / bare `--resume`
    * (see `resumeNamedSessionWithRecoveryCheck` above). Omitted, the two flags
    * resume straight from the durable store exactly as before this check
-   * existed — main.ts always wires this; only tests that don't care about
+   * existed, main.ts always wires this; only tests that don't care about
    * recovery snapshots leave it out.
    */
   readonly continueRecovery?: TuiStartupRecoveryDeps;
@@ -208,7 +208,7 @@ export function applyInitialTuiCliState(options: {
   const globalOnboardingMarker = readOnboardingCheckMarker(shellPaths, 'user');
 
   // Registration self-records on every launch of an already-trusted
-  // workspace (fire-and-forget — never blocks or gates startup, never a
+  // workspace (fire-and-forget, never blocks or gates startup, never a
   // modal). A workspace that is undecided or restricted is never
   // self-registered here; for one that becomes trusted just now (via the
   // consequence-time trust prompt), main.ts's trustPromptRef wiring calls
@@ -233,7 +233,7 @@ export function applyInitialTuiCliState(options: {
     }
   } else if (cli.flags.continueLast) {
     // --continue: resume the last session tracked by the pointer file. Checked
-    // for a live crash-recovery snapshot first — see
+    // for a live crash-recovery snapshot first, see
     // resumeNamedSessionWithRecoveryCheck's doc comment.
     const lastId = readLastSessionPointer({ surface });
     if (lastId) {
@@ -263,7 +263,7 @@ export function applyInitialTuiCliState(options: {
   } else if (!globalOnboardingMarker.exists) {
     // Fast path: get a brand-new user to a working session in the fewest steps.
     // Falls back to the full wizard when the surface can't detect providers.
-    // Trust stays undecided here on purpose — the first non-read tool
+    // Trust stays undecided here on purpose, the first non-read tool
     // request is what raises the trust question now (see main.ts's
     // trustPromptRef), not this startup branch.
     startOnboardingFastPath({ input, commandContext, shellPaths, render });
@@ -288,17 +288,17 @@ export function applyInitialTuiCliState(options: {
     }
     // Returning user, no wizard to resume, nothing else to do at startup:
     // trust (if still undecided) is asked at the first non-read tool
-    // request, not here — see main.ts's trustPromptRef wiring.
+    // request, not here, see main.ts's trustPromptRef wiring.
   }
 }
 
 /**
- * reportFatalStartupError — the main() catch handler. A bare Error
+ * reportFatalStartupError, the main() catch handler. A bare Error
  * JSON-serializes to {} in structured logs, and background timers keep the
- * process alive after a boot failure — the historical result was a blank
+ * process alive after a boot failure, the historical result was a blank
  * screen and a useless `Fatal error {"error": {}}` log line. Log real
  * fields, tell the user what broke, and exit. Both writes are individually
- * best-effort — a failing logger or torn-down stderr must never hide the
+ * best-effort, a failing logger or torn-down stderr must never hide the
  * original launch failure.
  */
 export function reportFatalStartupError(err: unknown): void {
@@ -314,7 +314,7 @@ export function reportFatalStartupError(err: unknown): void {
     // process.stderr to keep the rendered screen clean
     // (runtime/terminal-output-guard.ts), so a replaced writer that records
     // instead of printing would swallow the one line explaining why the screen
-    // is blank — and a stream write issued immediately before the exit below
+    // is blank, and a stream write issued immediately before the exit below
     // can still be in flight when the process stops existing. The descriptor
     // write is neither interceptable nor droppable. See
     // daemon/fatal-boot-report.ts.

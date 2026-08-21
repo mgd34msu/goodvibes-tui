@@ -933,7 +933,7 @@ describe('Orchestrator', () => {
 
       await withMockProvider(provider, () => orch.handleUserInput('check agent status'));
 
-      // Status mode should NOT end the loop — LLM is called twice (tool result sent back)
+      // Status mode should NOT end the loop, LLM is called twice (tool result sent back)
       expect(chatCallCount).toBe(2);
     });
   });

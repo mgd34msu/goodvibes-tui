@@ -76,7 +76,7 @@ describe('formatTurnInjectionEntry', () => {
       reason: 'no records cleared relevance floor',
     });
     const line = formatTurnInjectionEntry(entry);
-    expect(line).toContain('nothing injected this turn — nothing cleared the relevance floor');
+    expect(line).toContain('nothing injected this turn: nothing cleared the relevance floor');
     expect(line).toContain('considered 5');
     expect(line).toContain('floor 95');
   });

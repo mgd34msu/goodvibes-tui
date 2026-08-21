@@ -20,7 +20,7 @@ function makeSearch(entries: string[], draft = 'saved-draft'): HistorySearch {
   return hs;
 }
 
-describe('handleHistorySearchToken — INPUT-1: Enter accepts match', () => {
+describe('handleHistorySearchToken: INPUT-1: Enter accepts match', () => {
   test('Enter (logicalName=enter) writes match into prompt and closes search', () => {
     const hs = makeSearch(['npm install', 'npm run dev']);
     hs.search('npm');
@@ -57,7 +57,7 @@ describe('handleHistorySearchToken — INPUT-1: Enter accepts match', () => {
   });
 });
 
-describe('handleHistorySearchToken — cancel paths still restore saved draft', () => {
+describe('handleHistorySearchToken: cancel paths still restore saved draft', () => {
   test('Escape cancels and restores savedDraft', () => {
     const hs = makeSearch(['npm install'], 'saved-draft');
     hs.search('npm');
@@ -81,7 +81,7 @@ describe('handleHistorySearchToken — cancel paths still restore saved draft', 
   });
 });
 
-describe('handleHistorySearchToken — inactive guard', () => {
+describe('handleHistorySearchToken: inactive guard', () => {
   test('returns false when historySearch is inactive', () => {
     const hs = new HistorySearch(() => ['npm install']);
     // not opened → active = false

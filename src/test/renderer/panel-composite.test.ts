@@ -7,7 +7,7 @@ import { renderPanel } from '../../renderer/panel-composite.ts';
  * Minimal Panel implementation for render cache / race-guard tests.
  *
  * Each test creates fresh instances so module-level WeakMap state from a prior
- * test never leaks — WeakMap entries are keyed by object identity and are
+ * test never leaks, WeakMap entries are keyed by object identity and are
  * unreachable once the panel variable goes out of scope.
  */
 function makeMockPanel(
@@ -69,7 +69,7 @@ describe('panel-composite render cache race guard (Fix 3)', () => {
     renderPanel(panel, 80, 24);
 
     expect(renderFired).toBe(true);
-    // Generation changed during render — markRendered was skipped.
+    // Generation changed during render, markRendered was skipped.
     expect(panel.needsRender).toBe(true);
   });
 
@@ -105,12 +105,12 @@ describe('panel-composite render cache race guard (Fix 3)', () => {
     const panel = makeMockPanel('cache-hit');
     panel.render = () => { renderCallCount++; return []; };
 
-    // First render — cold cache
+    // First render, cold cache
     renderPanel(panel, 80, 24);
     expect(renderCallCount).toBe(1);
     expect(panel.needsRender).toBe(false);
 
-    // Second call with same dims and panel still clean — should be a cache hit
+    // Second call with same dims and panel still clean, should be a cache hit
     renderPanel(panel, 80, 24);
     expect(renderCallCount).toBe(1); // render() NOT called again
   });

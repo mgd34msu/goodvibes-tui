@@ -25,14 +25,14 @@ export interface ResumeSessionOptions {
   readonly onSessionIdChanged?: (sessionId: string) => void;
   readonly sharedSessionBroker: Pick<SharedSessionBroker, 'reopenSession'>;
   /** Fire-and-forget daemon-spine mirror. Reopen (not register) is the
-   * ONLY resume-time verb — see the SDK session-spine client.ts header doc. */
+   * ONLY resume-time verb, see the SDK session-spine client.ts header doc. */
   readonly sessionSpine: Pick<SessionSpineClient, 'reopen'>;
   readonly project: string;
   readonly writeLastSessionPointer: (sessionId: string) => void;
   readonly hookDispatcher: HookDispatcher;
   readonly sessionManager: SessionManager;
   readonly panelManager: PanelManager;
-  /** The app's declare-once session-storage handle — the same one /session resume threads. */
+  /** The app's declare-once session-storage handle, the same one /session resume threads. */
   readonly surface: SessionSurface;
   /**
    * Multi-instance guard for this seam. Resolves false when the operator
@@ -47,7 +47,7 @@ export interface ResumeSessionOptions {
   /**
    * Reselects the resumed session's saved model through the live provider
    * registry (matches session-workflow.ts's `/session resume` reselection
-   * fallback — see core/session-resume-core.ts). Optional so a caller without
+   * fallback, see core/session-resume-core.ts). Optional so a caller without
    * a provider API wired still gets the direct-assignment behavior this seam
    * always had.
    */
@@ -58,7 +58,7 @@ export interface ResumeSessionOptions {
  * Delegates the mechanical resume sequence to resumeSessionCore (the same
  * routine session-workflow.ts's `/session resume` calls) so the two seams
  * cannot diverge on restoreTurnAnchors, resetAll-before-fromJSON, model
- * reselection, or the modal-redirect panel-reopen skip — see
+ * reselection, or the modal-redirect panel-reopen skip, see
  * core/session-resume-core.ts's header doc for the full list of divergences
  * this closes. Everything below the resumeSessionCore call is plumbing only
  * this seam performs (hook fire, session-spine mirror, shared-broker
@@ -71,12 +71,12 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       // for the text path: never fork a session another terminal is holding
       // open without the operator saying so.
       if (options.confirmLiveResume && !(await options.confirmLiveResume(sessionId))) {
-        options.conversation.log('Resume cancelled — the session is still open in another terminal.', { fg: '244' });
+        options.conversation.log('Resume cancelled: the session is still open in another terminal.', { fg: '244' });
         options.requestRender();
         return;
       }
       // Pre-read purely for the emitSessionResumed announcement's turnCount,
-      // which reports the raw saved-snapshot size — resumeSessionCore performs
+      // which reports the raw saved-snapshot size, resumeSessionCore performs
       // its own load() right after this (SessionManager.load is a cheap JSONL
       // parse; the tiny duplicate read keeps this announcement's meaning
       // unchanged rather than repurposing it to a post-replay count).
@@ -104,11 +104,11 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       options.onSessionIdChanged?.(sessionId);
       options.writeLastSessionPointer(sessionId);
       void options.sharedSessionBroker.reopenSession(sessionId).catch((err) => { logger.debug('session broker reopen session failed', { err }); });
-      // Fire-and-forget spine mirror (reopen:true — the user resume verb).
+      // Fire-and-forget spine mirror (reopen:true, the user resume verb).
       options.sessionSpine.reopen({ sessionId, project: options.project, title: options.conversation.title || meta.title });
       options.conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
       if (panels.movedToModal.length > 0) {
-        options.conversation.log(`Resume: ${panels.movedToModal.join(', ')} moved to a modal — reopen via its command instead of as a panel.`, { fg: '244' });
+        options.conversation.log(`Resume: ${panels.movedToModal.join(', ')} moved to a modal; reopen via its command instead of as a panel.`, { fg: '244' });
       }
       if (panels.notReopened.length > 0) {
         options.conversation.log(`Resume: …and ${panels.notReopened.length} more not reopened (/panels to open)`, { fg: '244' });

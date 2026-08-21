@@ -1,5 +1,5 @@
 /**
- * computePromptContentWidth — content width available for prompt text inside
+ * computePromptContentWidth, content width available for prompt text inside
  * the footer input box, after the box margin, inner padding, and the ' > '
  * prefix are subtracted.
  *

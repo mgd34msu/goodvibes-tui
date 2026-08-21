@@ -65,7 +65,7 @@ describe('ComponentHealthMonitor: contract enforcement', () => {
 
   test('registered panel is permitted within rate budget', () => {
     monitor.register('panel-a', 'development'); // 10 updates/s
-    // 5 requests over 1 second — within budget
+    // 5 requests over 1 second, within budget
     const { permitted, suppressed } = simulateRequests(monitor, 'panel-a', 5, 1000, 200);
     expect(permitted).toBe(5);
     expect(suppressed).toBe(0);
@@ -77,7 +77,7 @@ describe('ComponentHealthMonitor: contract enforcement', () => {
       throttleIntervalMs: 200,
       degradeAfterViolations: 10, // high threshold so we stay throttled not degraded
     });
-    // 10 rapid requests in 50ms steps — 200ms window contains many
+    // 10 rapid requests in 50ms steps, 200ms window contains many
     const { suppressed } = simulateRequests(monitor, 'panel-b', 10, 2000, 50);
     expect(suppressed).toBeGreaterThan(0);
   });
@@ -175,7 +175,7 @@ describe('ComponentHealthMonitor: render cost enforcement', () => {
 describe('ComponentHealthMonitor: render storm containment', () => {
   test('100 rapid requests from one panel are contained without cascading', () => {
     const monitor = new ComponentHealthMonitor();
-    // Register multiple panels — only the storming panel should be affected
+    // Register multiple panels, only the storming panel should be affected
     monitor.register('storm-panel', 'monitoring', {
       maxUpdatesPerSecond: 2,
       throttleIntervalMs: 200,
@@ -226,7 +226,7 @@ describe('ComponentHealthMonitor: render storm containment', () => {
 
     const health = monitor.getHealth('degraded-panel')!;
     if (health.throttleStatus === 'degraded') {
-      // Attempt to render immediately after degradation — should be rejected
+      // Attempt to render immediately after degradation, should be rejected
       const allowed = monitor.canRender('degraded-panel', now);
       expect(allowed).toBe(false);
 

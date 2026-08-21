@@ -44,7 +44,7 @@ function makeReviewerOutput(score: number, passed: boolean): string {
       : [{ severity: 'major', description: 'Missing error handling', file: 'src/foo.ts', line: 10, pointValue: 1 }],
     // The review gate blocks deterministically when a reviewer emits no
     // acceptance checklist (on both review paths), so every fabricated review
-    // must carry one — exactly like a real reviewer.
+    // must carry one, exactly like a real reviewer.
     acceptanceChecklist: [
       { item: 'the task contract is met', verified: passed, evidence: passed ? 'exercised the change end-to-end' : 'verification failed', howExercised: 'ran the suite' },
     ],
@@ -406,7 +406,7 @@ describe('WrfcController', () => {
       mockConfigState['wrfc.maxFixAttempts'] = 1;
       mockConfigGetCategoryState.maxFixAttempts = 1;
       const controller = initTestWrfcController();
-      // A 'merged' planned-fix runner resolves each cycle merged — the controller
+      // A 'merged' planned-fix runner resolves each cycle merged, the controller
       // proceeds to the terminal-contract re-review (a fresh reviewer spawn),
       // replacing the old complete-the-fixer-agent step.
       controller.setFixWorkstreamRunner({ run: async () => ({ status: 'merged', taskCount: 1, workstreamId: 'ws-fix-1', mergedTitles: ['fix task'], filesModified: ['src/test.ts'] }) } as never);
@@ -529,9 +529,9 @@ describe('WrfcController', () => {
       expect(chain.ownerDecisions.map((d) => d.action)).toContain('review_passed');
     });
 
-    test('auto-commit merge failure is a non-fatal warning — the reviewed chain still passes', async () => {
+    test('auto-commit merge failure is a non-fatal warning; the reviewed chain still passes', async () => {
       // The full-scope review passed (10/10), so the chain SUCCEEDED. A commit/merge that could not
-      // complete is a warning on a passing chain, never a flip to FAILED — the terminal status
+      // complete is a warning on a passing chain, never a flip to FAILED, the terminal status
       // derives from review + gates, not from the auto-commit result.
       mockConfigState['wrfc.autoCommit'] = true;
       mockConfigGetCategoryState.autoCommit = true;

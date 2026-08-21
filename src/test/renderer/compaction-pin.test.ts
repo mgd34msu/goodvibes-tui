@@ -161,7 +161,7 @@ describe('pin count in compaction preview', () => {
 });
 
 // ---------------------------------------------------------------------------
-// /keep handler text contract — buildPinUsageText and buildPinSuccessText
+// /keep handler text contract, buildPinUsageText and buildPinSuccessText
 // (These functions are called directly by the shell-core /keep handler.)
 // ---------------------------------------------------------------------------
 

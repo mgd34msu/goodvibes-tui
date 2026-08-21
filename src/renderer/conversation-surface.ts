@@ -106,14 +106,14 @@ export function renderConversationFragment(
   indentCols = 0,
 ): Line[] {
   // A tree fragment is a continuation of the row above it, so it starts at that
-  // row's content column — which puts its ` ▸ ` prefix glyph in exactly the same
+  // row's content column, which puts its ` ▸ ` prefix glyph in exactly the same
   // column as the parent row's own ` ▸ N lines ` badge. A flush fragment (a user
   // message ghost box) keeps the box margin it has always used.
   const indent = Math.max(0, indentCols);
   const margin = indent > 0 ? treeContentCol(indent) : LAYOUT.USER_BOX_MARGIN;
   const prefixWidth = getDisplayWidth(palette.prefix);
   // The indent is charged to the content budget rather than allowed to push the
-  // fragment past the right edge — a narrow terminal shrinks the preview text
+  // fragment past the right edge, a narrow terminal shrinks the preview text
   // instead of silently truncating its tail.
   const maxContentWidth = Math.max(1, width - margin - LAYOUT.USER_BOX_MARGIN - prefixWidth - 2);
   const wrapped = wrapText(content, maxContentWidth);
@@ -177,15 +177,15 @@ export function renderConversationFragment(
  * A COLLAPSED block, as exactly one row: the event line, with its preview
  * riding on the same line right after the badges.
  *
- * Collapsed blocks used to render as a framed fragment — a `▄▄▄` cap, an
- * interior line of text, a `▀▀▀` cap — around what was, in every case, a single
+ * Collapsed blocks used to render as a framed fragment, a `▄▄▄` cap, an
+ * interior line of text, a `▀▀▀` cap, around what was, in every case, a single
  * line. Four rows of chrome per fold made a screen of collapsed output mostly
  * frame. The text those rows carried moves onto the event line and the frame
  * goes; the `▸ N lines` badge is the count, so nothing restates it.
  *
  * The preview is TRUNCATED to fit, never wrapped: wrapping would put the row
  * back to two lines, which is the thing being removed. Whitespace is flattened
- * by the caller's choice of preview text — a raw tab or newline would blow the
+ * by the caller's choice of preview text, a raw tab or newline would blow the
  * column out.
  */
 export function renderConversationFoldedRow(
@@ -202,7 +202,7 @@ export function renderConversationFoldedRow(
   // Whether a preview renders at all, and its flattening, are the policy's call
   // (foldPreviewText returns null for "no preview"). Only the TRUNCATION is
   // ours: display width is a product-local rule the policy deliberately leaves
-  // to the caller — and it must truncate, never wrap.
+  // to the caller, and it must truncate, never wrap.
   const trimmed = foldPreviewText(preview, availCols);
   if (trimmed === null) {
     return renderConversationEventLine(width, tone, details, indentCols);

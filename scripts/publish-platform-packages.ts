@@ -9,8 +9,8 @@
  *
  * Idempotent: before publishing, checks whether name@version already exists on
  * the target registry and skips (does not error) if so. A re-dispatched
- * release run — the tag-redo path, or a retry after a later job in the same
- * run failed — must be able to re-run this step without an npm E403 /
+ * release run, the tag-redo path, or a retry after a later job in the same
+ * run failed, must be able to re-run this step without an npm E403 /
  * GitHub Packages E409 "cannot publish over existing version" failure.
  *
  * Usage:
@@ -52,7 +52,7 @@ function rescopeName(name: string): string {
  * True if name@version already exists on the target registry. `npm view`
  * exits non-zero (unpublished name, unpublished version, or a registry that
  * 404s the lookup) when it does not, which we treat the same as "not
- * published yet" — the subsequent `npm publish` remains the source of truth
+ * published yet", the subsequent `npm publish` remains the source of truth
  * for any real failure.
  */
 function alreadyPublished(name: string, version: string): boolean {
@@ -86,14 +86,14 @@ for (const pkg of targets) {
       console.log(`skip ${pkg.name}: not assembled`);
       continue;
     }
-    throw new Error(`${pkg.name} is not assembled (missing binary in ${pkgDir}/bin) — run assemble-platform-packages first`);
+    throw new Error(`${pkg.name} is not assembled (missing binary in ${pkgDir}/bin); run assemble-platform-packages first`);
   }
 
   const pkgJsonPath = join(pkgDir, 'package.json');
   const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as { version: string; name: string };
   const version = pkgJson.version;
   if (version !== mainVersion) {
-    throw new Error(`${pkg.name} version ${version} does not match main package ${mainVersion} — re-run assembly`);
+    throw new Error(`${pkg.name} version ${version} does not match main package ${mainVersion}; re-run assembly`);
   }
 
   // Apply the mirror scope override in place before publishing. On the npm path

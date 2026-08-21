@@ -20,18 +20,18 @@ export interface WireSpokenTurnRuntimeOptions {
   readonly events: UiRuntimeEvents;
   readonly notify: (message: string) => void;
   /**
-   * Optional player factory — injected in tests to avoid spawning real
+   * Optional player factory, injected in tests to avoid spawning real
    * subprocesses. Defaults to LocalStreamingAudioPlayer.
    */
   readonly playerFactory?: () => StreamingAudioPlayer;
 }
 
 /**
- * wireSpokenTurnRuntime — wires the spoken-turn pipeline against the runtime
+ * wireSpokenTurnRuntime, wires the spoken-turn pipeline against the runtime
  * event bus.
  *
  * Always-speak mode: when `ui.voiceEnabled` is true in config, every
- * TURN_SUBMITTED event arms the turn for spoken output automatically — the
+ * TURN_SUBMITTED event arms the turn for spoken output automatically, the
  * user does not need to prefix the prompt with /tts. The availability check
  * inside SpokenTurnController still gates gracefully when no player is found.
  */
@@ -39,7 +39,7 @@ export function wireSpokenTurnRuntime(options: WireSpokenTurnRuntimeOptions): Sp
   const player = options.playerFactory ? options.playerFactory() : new LocalStreamingAudioPlayer();
   // The TUI's subprocess-based player already satisfies the SDK's AudioSink
   // interface unchanged (see docs/decisions/2026-07-06-spoken-turn-tts-policy-sdk-hoist.md
-  // in the SDK repo) — only the option name (`sink` not `player`) and the
+  // in the SDK repo), only the option name (`sink` not `player`) and the
   // attribution `source` are new.
   const controller = new SpokenTurnController({
     voiceService: options.voiceService,

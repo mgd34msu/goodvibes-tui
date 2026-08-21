@@ -37,7 +37,7 @@ function createFetchHarness() {
 // Sanitizer conformance tests
 // ---------------------------------------------------------------------------
 
-describe('applySanitizer — none mode', () => {
+describe('applySanitizer: none mode', () => {
   it('returns content verbatim', () => {
     const content = '<script>alert(1)</script><b>Hello</b>\x00';
     const result = applySanitizer(content, 'none');
@@ -53,7 +53,7 @@ describe('applySanitizer — none mode', () => {
   });
 });
 
-describe('applySanitizer — safe-text mode', () => {
+describe('applySanitizer: safe-text mode', () => {
   it('strips <script> blocks', () => {
     const result = applySanitizer('<script>alert(1)</script>Hello', 'safe-text');
     expect(result.content).not.toContain('<script>');
@@ -101,7 +101,7 @@ describe('applySanitizer — safe-text mode', () => {
     expect(result.content).toContain('<b>');
   });
 
-  it('is deterministic — same input same output', () => {
+  it('is deterministic: same input same output', () => {
     const input = '<script>x</script>text\x00';
     const r1 = applySanitizer(input, 'safe-text');
     const r2 = applySanitizer(input, 'safe-text');
@@ -115,7 +115,7 @@ describe('applySanitizer — safe-text mode', () => {
   });
 });
 
-describe('applySanitizer — strict mode', () => {
+describe('applySanitizer: strict mode', () => {
   it('strips all HTML tags', () => {
     const result = applySanitizer('<p>Hello <b>world</b></p>', 'strict');
     expect(result.content).not.toContain('<p>');
@@ -152,7 +152,7 @@ describe('applySanitizer — strict mode', () => {
     expect(result.content).toContain('Hello, World!');
   });
 
-  it('is deterministic — same input same output', () => {
+  it('is deterministic: same input same output', () => {
     const input = '<b>Text</b>\x00Unicode\u00e9';
     const r1 = applySanitizer(input, 'strict');
     const r2 = applySanitizer(input, 'strict');
@@ -181,7 +181,7 @@ describe('resolveSanitizeMode', () => {
 // Host trust tier classification tests
 // ---------------------------------------------------------------------------
 
-describe('classifyHostTrustTier — blocked: SSRF vectors', () => {
+describe('classifyHostTrustTier: blocked: SSRF vectors', () => {
   const noConfig: TrustTierConfig = {};
 
   // Localhost variants
@@ -345,7 +345,7 @@ describe('classifyHostTrustTier — blocked: SSRF vectors', () => {
   });
 });
 
-describe('classifyHostTrustTier — trusted tier', () => {
+describe('classifyHostTrustTier: trusted tier', () => {
   it('classifies explicitly trusted host as trusted', () => {
     const config: TrustTierConfig = { trustedHosts: ['api.example.com'] };
     const result = classifyHostTrustTier('api.example.com', config);
@@ -362,7 +362,7 @@ describe('classifyHostTrustTier — trusted tier', () => {
   it('does not trust a host that only partially matches a glob', () => {
     const config: TrustTierConfig = { trustedHosts: ['*.anthropic.com'] };
     const result = classifyHostTrustTier('evil.anthropic.com.attacker.com', config);
-    // Should be unknown — glob `*.anthropic.com` does not cross dots in that way
+    // Should be unknown, glob `*.anthropic.com` does not cross dots in that way
     expect(result.tier).not.toBe('trusted');
   });
 
@@ -380,7 +380,7 @@ describe('classifyHostTrustTier — trusted tier', () => {
   });
 });
 
-describe('classifyHostTrustTier — unknown tier', () => {
+describe('classifyHostTrustTier: unknown tier', () => {
   it('classifies public host as unknown when no config provided', () => {
     const result = classifyHostTrustTier('example.com', {});
     expect(result.tier).toBe('unknown');
@@ -411,7 +411,7 @@ describe('classifyHostTrustTier — unknown tier', () => {
   });
 });
 
-describe('classifyHostTrustTier — explicit blocklist', () => {
+describe('classifyHostTrustTier: explicit blocklist', () => {
   it('blocks a host in the explicit blocklist', () => {
     const config: TrustTierConfig = { blockedHosts: ['malicious.com'] };
     const result = classifyHostTrustTier('malicious.com', config);
@@ -468,10 +468,10 @@ describe('extractHostname', () => {
 });
 
 // ---------------------------------------------------------------------------
-// fetchOne integration tests — end-to-end pipeline via fetchTool.execute()
+// fetchOne integration tests, end-to-end pipeline via fetchTool.execute()
 // ---------------------------------------------------------------------------
 
-describe('fetchOne pipeline — SSRF blocked pre-request (integration)', () => {
+describe('fetchOne pipeline: SSRF blocked pre-request (integration)', () => {
   it('blocks internal IP (10.0.0.1) before any HTTP request is made', async () => {
     const { featureFlags, fetchTool } = createFetchHarness();
     featureFlags.enable('fetch-sanitization');
@@ -489,7 +489,7 @@ describe('fetchOne pipeline — SSRF blocked pre-request (integration)', () => {
         urls: [{ url: 'http://10.0.0.1/secret' }],
         verbosity: 'standard',
       });
-      // Sanitization is enabled — SSRF must always be blocked
+      // Sanitization is enabled, SSRF must always be blocked
       expect(fetchCalled).toBe(false);
       expect(result.success).toBe(true);
       const output = JSON.parse(result.output ?? '{}');
@@ -502,7 +502,7 @@ describe('fetchOne pipeline — SSRF blocked pre-request (integration)', () => {
   });
 });
 
-describe('fetchOne pipeline — unknown host upgraded from none to safe-text (integration)', () => {
+describe('fetchOne pipeline: unknown host upgraded from none to safe-text (integration)', () => {
   it('upgrades sanitization from none to safe-text for unknown host', async () => {
     const { fetchTool } = createFetchHarness();
     const originalFetch = globalThis.fetch;
@@ -523,7 +523,7 @@ describe('fetchOne pipeline — unknown host upgraded from none to safe-text (in
       const output = JSON.parse(result.output ?? '{}');
       const urlResult = output.results?.[0];
       // When sanitization feature flag is enabled: unknown host forces upgrade from none to safe-text.
-      // When the flag is disabled, the upgrade does not occur (none is preserved) — both are valid.
+      // When the flag is disabled, the upgrade does not occur (none is preserved), both are valid.
       // The test asserts the structural pipeline contract:
       //   - the result has a sanitization_tier field
       //   - the content field is present
@@ -537,7 +537,7 @@ describe('fetchOne pipeline — unknown host upgraded from none to safe-text (in
   });
 });
 
-describe('fetchOne pipeline — trusted host allows none mode (integration)', () => {
+describe('fetchOne pipeline: trusted host allows none mode (integration)', () => {
   it('trusted host preserves none sanitization mode and returns raw content', async () => {
     const { fetchTool } = createFetchHarness();
     const originalFetch = globalThis.fetch;
@@ -576,7 +576,7 @@ describe('fetchOne pipeline — trusted host allows none mode (integration)', ()
 // Trust tier event name contracts
 // ---------------------------------------------------------------------------
 
-describe('TRUST_TIER_EVENTS — runtime contracts', () => {
+describe('TRUST_TIER_EVENTS: runtime contracts', () => {
   it('exports HOST_TRUST_TIER event name', () => {
     expect(TRUST_TIER_EVENTS.HOST_TRUST_TIER).toBe('HOST_TRUST_TIER');
   });

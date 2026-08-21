@@ -4,7 +4,7 @@ import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { postureLine, kv } from './modal-surface-helpers.ts';
 
-/** Mutation surface the surface needs to gate p/d/b on — a subset of UserAuthManager,
+/** Mutation surface the surface needs to gate p/d/b on, a subset of UserAuthManager,
  *  mirroring LocalAuthPanel's own `hasLocalAuthMutations` guard. */
 type LocalAuthMutations = Pick<UserAuthManager, 'addUser' | 'deleteUser' | 'rotatePassword' | 'clearBootstrapCredentialFile'>;
 
@@ -29,7 +29,7 @@ function usernameOf(row: ConfigModalRow | null): string | null {
  * `inspect()` is synchronous, so buildView reads it live every tick. All
  * mutations (add-user, rotate-password, delete-user, clear-bootstrap-file)
  * dispatch through the existing `/local-auth` command rather than touching
- * the auth manager directly — the command opens masked password entry for
+ * the auth manager directly, the command opens masked password entry for
  * add-user/rotate-password when no password argument is supplied, which is
  * exactly how the retired panel kept plaintext out of history and the
  * transcript. This surface never renders, accepts, or holds a password.
@@ -37,7 +37,7 @@ function usernameOf(row: ConfigModalRow | null): string | null {
 class LocalAuthModalSurface implements ConfigModalSurface {
   readonly name = 'local-auth-modal';
   readonly title = 'Local Auth';
-  /** Cached from the last buildView() — read by the 'b' action's enabledFor,
+  /** Cached from the last buildView(), read by the 'b' action's enabledFor,
    *  set fresh every tick (buildView always runs before enabledFor is
    *  consulted; see settings-sync-modal's `hasStaged` for the same idiom). */
   private bootstrapPresent = false;
@@ -97,7 +97,7 @@ class LocalAuthModalSurface implements ConfigModalSurface {
       // which renders on the LocalAuthPanel and cannot draw or capture input
       // underneath this fullscreen modal. Point the operator at the command
       // (which opens masked entry) rather than dispatching it into a hidden
-      // surface — the secure flow stays a keystroke away, just not from here.
+      // surface, the secure flow stays a keystroke away, just not from here.
       case 'add-user':
         ctx.print('To add a user securely, run  /local-auth add-user <username>  (opens masked password entry).');
         ctx.setStatus('Run /local-auth add-user <username> for masked entry.');

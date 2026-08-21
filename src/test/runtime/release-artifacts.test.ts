@@ -23,7 +23,7 @@ describe('resolveSqliteVecAsset', () => {
 
   test('darwin uses the darwin tag (not the binaries\' "macos") and the .dylib suffix', () => {
     // The binaries map darwin→"macos" in their release names; the addon does NOT
-    // — it must match process.platform, which is what the SDK loader resolves.
+    //, it must match process.platform, which is what the SDK loader resolves.
     expect(resolveArtifactNames('darwin', 'arm64')?.app).toBe('goodvibes-macos-arm64');
     expect(resolveSqliteVecAsset('darwin', 'arm64')).toEqual({
       assetName: 'sqlite-vec-darwin-arm64.dylib',

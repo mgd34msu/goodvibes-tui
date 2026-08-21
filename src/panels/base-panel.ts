@@ -12,7 +12,7 @@ const ERROR_FG = '#ef4444';
 /**
  * Frame requester wired by main.ts to the render scheduler. Without it,
  * markDirty() only sets a flag the compositor reads when a frame is ALREADY
- * being composed for another reason (input, streaming) — so a live panel
+ * being composed for another reason (input, streaming), so a live panel
  * (fleet ticks, registry subscriptions) sat visibly stale while the app was
  * idle until the next keypress (a replay finding). The scheduler
  * coalesces same-tick requests, so this stays cheap.
@@ -67,7 +67,7 @@ export abstract class BasePanel implements Panel {
    * Last error message to surface in the panel footer.
    * Auto-cleared on the next keystroke by `ScrollableListPanel.handleInput()` (and any
    * subclass that calls `super.handleInput()` or manually calls `this.clearError()` at
-   * the start of its handler). BasePanel itself does NOT auto-clear — only subclasses
+   * the start of its handler). BasePanel itself does NOT auto-clear, only subclasses
    * that opt into the contract do.
    */
   protected lastError: string | null = null;
@@ -227,7 +227,7 @@ export abstract class BasePanel implements Panel {
     return consumed;
   }
 
-  /** Mark this panel dirty — it will be re-rendered on the next compositor frame. */
+  /** Mark this panel dirty, it will be re-rendered on the next compositor frame. */
   public invalidate(): void { this.needsRender = true; }
 
   /** Called by the compositor after a successful render to clear the dirty flag. */

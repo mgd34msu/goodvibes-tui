@@ -121,7 +121,7 @@ describe('applyHunkKey reducer', () => {
     expect(state.selected.size).toBe(3);
   });
 
-  test('enter with nothing selected is a no-op — does not commit', () => {
+  test('enter with nothing selected is a no-op; does not commit', () => {
     const state: HunkSelectionState = { ...makeState(3), selected: new Set() };
     const result = applyHunkKey(state, '\r');
     expect(result.commit).toBeNull();

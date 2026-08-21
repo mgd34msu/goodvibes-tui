@@ -1,5 +1,5 @@
 /**
- * build-floors.ts — the two build floors this terminal and the daemon hold
+ * build-floors.ts, the two build floors this terminal and the daemon hold
  * against each other.
  *
  * ── Forward: the daemon's floor on this client ────────────────────────────
@@ -8,7 +8,7 @@
  * running the build it started with: same rules, same bugs, still registered in
  * the shared session store, still able to execute shared-session work. That is
  * how a behavioral fix can land in the daemon, be verified present in the
- * installed binaries, and still not change what the owner observes — an older
+ * installed binaries, and still not change what the owner observes, an older
  * terminal beside the new daemon simply keeps doing the old thing.
  *
  * So the daemon publishes the minimum client build it will let participate, as
@@ -22,15 +22,15 @@
  * to a daemon it did not start, over a base URL that may point at another
  * machine, and every capability it has is something the daemon performs on its
  * behalf. A verb it depends on may simply not exist in the build that answers,
- * and what the owner sees then is a 400 or a 404 on one call — which reads as a
+ * and what the owner sees then is a 400 or a 404 on one call, which reads as a
  * broken feature rather than as an old daemon. So this terminal declares the
  * oldest daemon build it can work against and checks it on attach against the
  * `version` `/status` already returns, refusing to adopt a daemon below it.
  *
  * ── Where these rules live ────────────────────────────────────────────────
  *
- * Both comparisons — the header name, the verdict shapes, the version ordering
- * — are owned by the SDK (platform/control-plane/client-compatibility.ts and
+ * Both comparisons, the header name, the verdict shapes, the version ordering
+ *, are owned by the SDK (platform/control-plane/client-compatibility.ts and
  * daemon-compatibility.ts) and imported below rather than duplicated. What
  * stays here is this process's own state: the forward latch, the reverse
  * announce-once, and the daemon floor this product declares. The agent holds
@@ -73,7 +73,7 @@ export interface ClientBuildGuardOptions {
  * later read that fails to see the header (a restart, a truncated response)
  * must not silently re-enable work.
  *
- * The notice sink is attached after construction — this guard is built in the
+ * The notice sink is attached after construction, this guard is built in the
  * services composition root, and the surface that renders its one line is wired
  * in the bootstrap tail. A verdict reached before the sink attaches is held and
  * delivered on attach, the same buffered-until-attach idiom the daemon receipt
@@ -134,7 +134,7 @@ export class ClientBuildGuard {
  * the problem once instead of on every poll.
  *
  * Unlatched, unlike the forward guard: a daemon CAN become new enough while
- * this terminal runs — that is exactly what a daemon update does — and the
+ * this terminal runs, that is exactly what a daemon update does, and the
  * attach that sees the newer build must adopt it. What is remembered is only
  * which sentence has already been said.
  */

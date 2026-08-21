@@ -25,7 +25,7 @@ function parseSearchArgs(args: string[]): ParsedSearchArgs {
  * registerWebSearchRuntimeCommands - `/search <query> [--limit <n>]`.
  *
  * Calls webSearchService.search() directly (skipping the agent-tool wrapper's
- * JSON-stringify contract — same shape as /schedule's ctx.ops.automationManager
+ * JSON-stringify contract, same shape as /schedule's ctx.ops.automationManager
  * pattern: read the service off the context, guard on undefined, print) and
  * renders ranked results + the instant answer into the transcript with
  * source labels. webSearchService is already constructed in services.ts and
@@ -35,7 +35,7 @@ function parseSearchArgs(args: string[]): ParsedSearchArgs {
 export function registerWebSearchRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'search',
-    description: 'Web search — ranked results with source labels (searching THIS transcript? use /find)',
+    description: 'Web search, ranked results with source labels (searching THIS transcript? use /find)',
     usage: '<query> [--limit <n>]',
     argsHint: '<query> [--limit <n>]',
     async handler(args, ctx) {

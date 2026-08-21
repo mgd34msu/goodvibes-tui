@@ -14,7 +14,7 @@
  * The behavioural cases run in a CHILD process with both `HOME` and
  * `GOODVIBES_HOME` pointed at temporary directories, so the "real" home in
  * these tests is itself a sandbox and nothing here can touch the machine's
- * actual store — including when the assertion being made is that a write did
+ * actual store, including when the assertion being made is that a write did
  * NOT escape.
  */
 
@@ -197,7 +197,7 @@ describe('GOODVIBES_HOME has exactly one meaning', () => {
     // The disagreement, closed end-to-end. The client child in the tests above
     // writes its daemon-tier store to <sandbox>/.goodvibes/daemon/secrets.enc.
     // This runs the real audit script against the same redirect and checks it
-    // is looking at that same tree — not at <sandbox>, which is what it did
+    // is looking at that same tree, not at <sandbox>, which is what it did
     // when it read the variable as the .goodvibes directory itself.
     const treeDirectory = join(sandbox, '.goodvibes');
     mkdirSync(join(treeDirectory, 'tui'), { recursive: true });
@@ -220,13 +220,13 @@ describe('GOODVIBES_HOME has exactly one meaning', () => {
   test('nothing in this repository reads the variable', () => {
     // The behavioural twin of check-architecture's one-goodvibes-home-meaning
     // rule, so a second meaning cannot be reintroduced in either gate alone.
-    // Reads only — src/cli/service-posture.ts WRITES it into the systemd unit's
+    // Reads only, src/cli/service-posture.ts WRITES it into the systemd unit's
     // Environment= block, which is how the daemon receives the one meaning.
     //
     // The expected reader count is now ZERO, not one: the resolver moved to the
     // SDK (@pellux/goodvibes-sdk/platform/config) when the daemon turned out to
     // carry a byte-identical copy of it, and one meaning cannot live in two
-    // repositories. So there is no longer a local file allowed to ask — any
+    // repositories. So there is no longer a local file allowed to ask, any
     // match here is a surface re-deriving the tree root for itself, which is
     // exactly the shape of the incident this whole module exists to prevent.
     const readPattern = /\benv(?:ironment)?\s*(?:\[\s*['"]GOODVIBES_HOME['"]\s*\]|\.GOODVIBES_HOME\b)/;
@@ -265,8 +265,8 @@ describe('the client entry point resolves no home of its own', () => {
     // The pair this used to pin was src/main.ts and src/daemon/cli.ts: two
     // entry points in one tree, which had to resolve the home the same way or
     // an app and the daemon it embedded would read different trees. There is
-    // one entry point now — the daemon is a separate program with a separate
-    // repository — so the divergence this guarded against cannot happen here.
+    // one entry point now, the daemon is a separate program with a separate
+    // repository, so the divergence this guarded against cannot happen here.
     // What is pinned instead is that the second entry point is really gone.
     expect(existsSync(join(projectRoot, 'src', 'daemon'))).toBe(false);
     const pkg = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')) as { bin?: Record<string, string> };

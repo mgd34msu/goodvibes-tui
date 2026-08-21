@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// workstream-runtime-command.test.ts — /workstream
+// workstream-runtime-command.test.ts, /workstream
 //
 // Pure command-layer test: a fake WorkstreamCommandService on ctx.session
 // (no live OrchestrationEngine, no real agent spawning), following the
@@ -61,7 +61,7 @@ function makeWorkstream(overrides: Partial<Workstream> & { id: string }): Workst
   };
 }
 
-/** Minimal fake OrchestrationEngine — implements the full interface but only
+/** Minimal fake OrchestrationEngine, implements the full interface but only
  * getWorkstream/listWorkstreams/insertPhase/kill/createWorkstream/start carry
  * real behavior; the rest are honest no-ops the command module never calls. */
 function makeFakeEngine(seed: Workstream[] = []): OrchestrationEngine & { createdInputs: CreateWorkstreamInput[]; startedIds: string[]; killedIds: string[] } {
@@ -100,7 +100,7 @@ function makeFakeEngine(seed: Workstream[] = []): OrchestrationEngine & { create
     },
     start: (id: string) => { startedIds.push(id); },
     // Mirrors the real engine's kill() guard (engine.ts): only 'passed' and
-    // 'failed' are terminal — 'blocked-budget' (and every other non-terminal
+    // 'failed' are terminal, 'blocked-budget' (and every other non-terminal
     // state) is killable, same as 'pending'/'awaiting-capacity'/'in-phase'.
     kill: (itemId: string) => {
       killedIds.push(itemId);
@@ -255,7 +255,7 @@ function makeCtx(service?: WorkstreamCommandService) {
     provider: {},
     platform: {
       // Minimal enough for getOperatorRpc (checkFanoutQuotaWarning) to
-      // resolve honestly to "unavailable" — daemon.enabled:false means no
+      // resolve honestly to "unavailable", daemon.enabled:false means no
       // live quota check, so /workstream launch's own behavior is what these
       // tests exercise, not a real network round-trip.
       configManager: {
@@ -284,7 +284,7 @@ describe('workstream-runtime command registration', () => {
 // (b) engine-absent guard
 // ---------------------------------------------------------------------------
 
-describe('workstream-runtime — engine-absent guard', () => {
+describe('workstream-runtime: engine-absent guard', () => {
   test('every subcommand prints the same honest guard when workstreamEngine is absent', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
@@ -295,11 +295,11 @@ describe('workstream-runtime — engine-absent guard', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (c) create — renders the REAL launchable spec (phases + items), not a
+// (c) create, renders the REAL launchable spec (phases + items), not a
 // fictional decomposition (see workstream-services.ts's buildSpec doc).
 // ---------------------------------------------------------------------------
 
-describe('workstream-runtime — create', () => {
+describe('workstream-runtime: create', () => {
   test('create renders the proposal id, phases, and work items to ctx.print', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
@@ -434,7 +434,7 @@ describe('workstream-runtime — create', () => {
     await registry.execute('workstream', ['create', 'ship', 'the', 'feature'], ctx);
 
     const output = printed[0]!;
-    expect(output).toContain('Mapping: multi-item plan — 3 items run the engineer→review pipeline, dependency-scheduled.');
+    expect(output).toContain('Mapping: multi-item plan; 3 items run the engineer→review pipeline, dependency-scheduled.');
     const idxA = output.indexOf('1. set up schema');
     const idxB = output.indexOf('2. build API (after: set up schema)');
     const idxC = output.indexOf('3. write docs (after: set up schema, build API)');
@@ -445,10 +445,10 @@ describe('workstream-runtime — create', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (d) approve / edit / launch — drive the fake service's draft state
+// (d) approve / edit / launch, drive the fake service's draft state
 // ---------------------------------------------------------------------------
 
-describe('workstream-runtime — approve / edit / launch', () => {
+describe('workstream-runtime: approve / edit / launch', () => {
   test('launch without approval refuses honestly and never calls the engine', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
@@ -463,7 +463,7 @@ describe('workstream-runtime — approve / edit / launch', () => {
     expect(service.engine.createdInputs).toHaveLength(0);
   });
 
-  test('approve launches in one act — engine.createWorkstream + start — and drops the draft', async () => {
+  test('approve launches in one act (engine.createWorkstream + start) and drops the draft', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
     const service = makeFakeService();
@@ -571,7 +571,7 @@ describe('workstream-runtime — approve / edit / launch', () => {
 // (e) list / status / insert-phase / cancel
 // ---------------------------------------------------------------------------
 
-describe('workstream-runtime — list / status / insert-phase / cancel', () => {
+describe('workstream-runtime: list / status / insert-phase / cancel', () => {
   test('list with nothing pending or running says so honestly', async () => {
     const registry = new CommandRegistry();
     registerWorkstreamRuntimeCommands(registry);
@@ -775,7 +775,7 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
     expect(printed.at(-1)).toContain('Cancelled 1 of 1');
   });
 
-  test('cancel reaches blocked-budget items too — not just pending/awaiting-capacity/in-phase', async () => {
+  test('cancel reaches blocked-budget items too; not just pending/awaiting-capacity/in-phase', async () => {
     const live = makeWorkstream({
       id: 'ws-blocked',
       title: 'blocked target',
@@ -912,7 +912,7 @@ describe('workstream-runtime — list / status / insert-phase / cancel', () => {
     const output = printed.at(-1)!;
     expect(output).toContain('custom: "security audit"');
     expect(output).toContain('engineer template');
-    // Must not render the free text as if it were a real phase role like "custom — security audit".
+    // Must not render the free text as if it were a real phase role like "custom, security audit".
     expect(output).not.toContain('custom — security audit');
   });
 });

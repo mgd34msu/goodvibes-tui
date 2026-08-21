@@ -143,7 +143,7 @@ describe('FileUndoManager', () => {
 
     expect(manager.undoDepth()).toBe(50);
     // Oldest entry (file-0) should have been evicted
-    // Walk the stack — peekUndo returns most recent (file-50)
+    // Walk the stack, peekUndo returns most recent (file-50)
     const top = manager.peekUndo();
     expect(top!.path).toBe('/tmp/file-50.ts');
   });
@@ -166,7 +166,7 @@ describe('FileUndoManager', () => {
   });
 
   it('redo stack cap: undo capping redoStack at 50 evicts oldest entry', () => {
-    // Fill undo with 51 ops, undo all — the 51st undo push should evict the oldest redo entry
+    // Fill undo with 51 ops, undo all, the 51st undo push should evict the oldest redo entry
     for (let i = 0; i < 51; i++) {
       manager.snapshot(makeOp({
         path: `/tmp/file-${i}.ts`,
@@ -196,7 +196,7 @@ describe('FileUndoManager', () => {
       manager.undo();
     }
     expect(manager.redoDepth()).toBe(50);
-    // Redo all — each redo pushes to undoStack; 51st push should evict oldest
+    // Redo all, each redo pushes to undoStack; 51st push should evict oldest
     for (let i = 0; i < 50; i++) {
       manager.redo();
     }

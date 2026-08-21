@@ -32,14 +32,14 @@ import type { ConversationMessageSnapshot } from '../core/conversation.ts';
 
 /** Shutdown grace period before the "saving session…" line prints. Below this, exit stays quiet. */
 const SAVE_NOTICE_AFTER_MS = 300;
-/** Hard shutdown timeout — matches the pre-existing race below (was previously an inline literal). */
+/** Hard shutdown timeout, matches the pre-existing race below (was previously an inline literal). */
 const SHUTDOWN_HARD_TIMEOUT_MS = 3000;
 
 /**
  * Whether a recovery snapshot actually exists on disk for this session. The
  * periodic autosave (see recovery-autosave.ts) only writes on a 60s tick and
  * skips empty conversations entirely, so a session that dies sooner than that
- * (or never had anything in it) has no snapshot at all — the exit receipt
+ * (or never had anything in it) has no snapshot at all, the exit receipt
  * must not claim otherwise. Never throws: a stat failure just means "absent".
  */
 function defaultRecoverySnapshotExists(surface: SessionSurface, sessionId: string): boolean {
@@ -58,7 +58,7 @@ export interface ProcessLifecycleAnsi {
   readonly KEYBOARD_EXT_DISABLE: string;
   readonly MOUSE_DISABLE: string;
   readonly CURSOR_SHOW: string;
-  /** Disables terminal focus-event reporting (DECSET ?1004l) — see main.ts FOCUS_ENABLE. */
+  /** Disables terminal focus-event reporting (DECSET ?1004l), see main.ts FOCUS_ENABLE. */
   readonly FOCUS_DISABLE: string;
 }
 
@@ -88,7 +88,7 @@ export interface ProcessLifecycleDeps {
   readonly shutdownHardTimeoutMs?: number;
   /**
    * Overridable for tests; defaults to a real filesystem existence check
-   * (defaultRecoverySnapshotExists). Never throws — a stat failure reads as
+   * (defaultRecoverySnapshotExists). Never throws, a stat failure reads as
    * "absent" rather than taking the exit path down.
    */
   readonly recoverySnapshotExists?: (surface: SessionSurface, sessionId: string) => boolean;
@@ -145,7 +145,7 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     _unhandledRejectionCount++;
     const msg = summarizeError(reason);
     if (_unhandledRejectionCount > 3) {
-      logger.error('CRITICAL: cascading unhandled rejections — consider restarting', {
+      logger.error('CRITICAL: cascading unhandled rejections; consider restarting', {
         count: _unhandledRejectionCount,
         windowMs: now - _unhandledRejectionWindowStart,
         error: String(reason),
@@ -176,7 +176,7 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
   // The injected `ansi` restore sequences are mapped onto the package's escape
   // set so the exact bytes the TUI has always emitted are preserved. The no-alt
   // exit deliberately uses the package's CLEAR_VIEWPORT_HOME ('\x1b[2J\x1b[H',
-  // no ESC[3J) — never ansi.CLEAR_SCREEN, which carries the scrollback-wiping 3J.
+  // no ESC[3J), never ansi.CLEAR_SCREEN, which carries the scrollback-wiping 3J.
   const terminalLifecycle = createTerminalLifecycle({
     write: (data) => { stdout.write(data); },
     noAltScreen,
@@ -200,17 +200,17 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
 
   const uncaughtExceptionHandler = (err: Error): void => {
     restoreTerminal();
-    logger.error('uncaughtException — terminal restored, exiting', { error: summarizeError(err) });
+    logger.error('uncaughtException: terminal restored, exiting', { error: summarizeError(err) });
     // The line naming the crash is the only record of it. process.exit does not
     // drain the activity log's buffer, so it goes to disk here rather than
-    // relying on the exit hook that also runs — the crash log is worth stating
+    // relying on the exit hook that also runs, the crash log is worth stating
     // the intent for at the site that produces it.
     flushActivityLogSync();
     process.exit(1);
   };
   const terminationSignalHandler = (signal: NodeJS.Signals): void => {
     restoreTerminal();
-    logger.error(`Received ${signal} — terminal restored, exiting`, {});
+    logger.error(`Received ${signal}: terminal restored, exiting`, {});
     flushActivityLogSync();
     process.exit(signal === 'SIGHUP' ? 129 : 143);
   };
@@ -251,7 +251,7 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
       try { stdout.write('saving session…\n'); } catch { /* best-effort */ }
     }, saveNoticeAfterMs);
     try {
-      // Race the graceful shutdown against a hard timeout — externalServices.stop() can hang
+      // Race the graceful shutdown against a hard timeout, externalServices.stop() can hang
       // and we must still exit; deferredStartup.drain only budgets 100ms internally.
       // The spoken-audio drain runs concurrently and is internally capped below
       // this budget, so it never extends the exit beyond the hard timeout.
@@ -273,17 +273,17 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
     if (shutdownOk) {
       deleteRecoveryFile({ surface: ctx.services.surface }, ctx.runtime.sessionId);
     } else {
-      // The hard timeout won the race — the durable save never confirmed, so
+      // The hard timeout won the race, the durable save never confirmed, so
       // whatever the periodic autosave last wrote (see recovery-autosave.ts)
       // is deliberately kept above. But that autosave only ticks every 60s
       // and skips empty conversations, so a session that dies sooner than
-      // that (or never had anything in it) has no snapshot to keep — check
+      // that (or never had anything in it) has no snapshot to keep, check
       // before claiming otherwise, since a silent exit here previously left
       // no trace that anything was amiss.
       const kept = recoverySnapshotExists(ctx.services.surface, ctx.runtime.sessionId);
       const line = kept
-        ? 'exit before save completed — a recovery snapshot was kept for next launch\n'
-        : 'exit before save completed — no recovery snapshot had been written yet\n';
+        ? 'exit before save completed: a recovery snapshot was kept for next launch\n'
+        : 'exit before save completed: no recovery snapshot had been written yet\n';
       try { stdout.write(line); } catch { /* best-effort */ }
     }
     // Best-effort, unconditional: this process is exiting either way, so its

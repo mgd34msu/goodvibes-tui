@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
-// fleet-observed-steer.test.ts — the drill-in steer composer for observed
+// fleet-observed-steer.test.ts, the drill-in steer composer for observed
 // FOREIGN coding agents:
 //   • a row with a live tmux channel opens a compose input on 's', and Enter
 //     round-trips fleet.observed.steer against a mocked daemon carrying the
 //     node id + the typed text (the daemon routes the send-keys server-side);
-//   • a channel-less row opens NO input — its detail states the honest reason.
+//   • a channel-less row opens NO input, its detail states the honest reason.
 // Owner ruling: steer is drill-in only, and stop is never offered on an
 // observed row.
 // ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ function observedNode(steerKind: 'tmux' | 'none'): ObservedNode {
       externalKind: 'claude-code',
       pid: 4242,
       cwd: '/home/dev/project',
-      liveness: { state: 'active', cpuSeconds: 3, detail: 'active — CPU advanced since the last scan' },
+      liveness: { state: 'active', cpuSeconds: 3, detail: 'active: CPU advanced since the last scan' },
       steer: steerKind === 'tmux'
         ? { kind: 'tmux', paneId: '%90', tty: '/dev/pts/11' }
         : { kind: 'none', reason: 'no controlling tty; not inside tmux' },
@@ -119,7 +119,7 @@ describe('observed-agent drill-in steer', () => {
 
   test('detail render: no-channel row shows the reason and NO compose input', () => {
     const text = renderObservedDetailLines(observedNode('none'), 80).map(lineToString).join('\n');
-    expect(text).toContain('unavailable — no controlling tty');
+    expect(text).toContain('unavailable: no controlling tty');
     expect(text).not.toContain('send');
     expect(text).not.toContain('s: steer'); // no channel ⇒ no steer affordance at all
   });

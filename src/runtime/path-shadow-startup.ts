@@ -1,5 +1,5 @@
 /**
- * path-shadow-startup.ts — this terminal's boot-time reachability report.
+ * path-shadow-startup.ts, this terminal's boot-time reachability report.
  *
  * The check itself (the PATH scan, the `--version` probes, the cost discipline
  * that keeps a healthy start free of spawns and network calls, and the wording)
@@ -21,7 +21,7 @@ const TERMINAL_PACKAGE_NAME = '@pellux/goodvibes-tui';
 /** The command name the shell resolves this terminal by. */
 const TERMINAL_COMMAND_NAME = 'goodvibes';
 
-/** The same release lookup `/update` uses — there is deliberately no second source of truth. */
+/** The same release lookup `/update` uses, there is deliberately no second source of truth. */
 function resolveLatestRelease(): Promise<string | undefined> {
   return boundedLatestRelease(async () => {
     const result = await checkForUpdate(fetch as UpdateFetchLike, VERSION);
@@ -32,7 +32,7 @@ function resolveLatestRelease(): Promise<string | undefined> {
 /**
  * Boot-time wiring. Prints one high-priority system message per line so the
  * report reads as prose rather than a single wrapped paragraph, and swallows
- * everything — a reachability check must never block or crash boot.
+ * everything, a reachability check must never block or crash boot.
  */
 export async function announceInstallReachability(router: SystemMessageRouter): Promise<void> {
   await announceReachability(

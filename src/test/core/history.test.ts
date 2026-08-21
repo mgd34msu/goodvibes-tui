@@ -83,7 +83,7 @@ describe('InfiniteBuffer', () => {
     test('startLine offset slices from the correct position', () => {
       for (let i = 0; i < 5; i++) buffer.addLine(makeLine(`line${i}`));
       const snapshot = buffer.getSnapshot(2, 3, WIDTH);
-      // Lines 2,3,4 — the char at position 0 of line2 should be 'l' (from 'line2')
+      // Lines 2,3,4, the char at position 0 of line2 should be 'l' (from 'line2')
       expect(snapshot[0][0].char).toBe('l');
     });
 

@@ -363,7 +363,7 @@ describe('extractSymbols (TypeScript grammar)', () => {
       await svc.initialize();
       const tree = await svc.parse('x.ts', TS_CODE, 'typescript');
       const lang = svc['languages'].get('typescript')!;
-      // Line 2 is the class declaration line — inside the class, outside any method
+      // Line 2 is the class declaration line, inside the class, outside any method
       const scope = findEnclosingScope(tree!, lang, 'typescript', 2);
       expect(scope).not.toBeNull();
       expect(scope!.name).toBe('Greeter');

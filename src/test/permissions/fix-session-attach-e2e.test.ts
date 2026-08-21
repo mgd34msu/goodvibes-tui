@@ -14,14 +14,14 @@ disposeTestRuntimeServicesAfterAll();
 /**
  * End-to-end proof against the linked SDK tarball (round 10): the CI fix-session
  * id stamped on an accepted approval record is now a REAL, attach/resume-
- * resolvable shared-session id — it round-trips through a SharedSessionBroker
+ * resolvable shared-session id, it round-trips through a SharedSessionBroker
  * lookup and never carries the 'auto-' automation-job-id shape. The TUI
  * affordance turns that id into a one-key jump whose attach runs the resume (the
  * machine does what the retype instruction used to ask the user to do), and a
  * FAILED spawn stamps fixSessionError, which the surface renders honestly with
  * no dead action.
  */
-describe('CI fix-session attach — end-to-end against the linked SDK', () => {
+describe('CI fix-session attach: end-to-end against the linked SDK', () => {
   afterAll(() => resetTestRuntimeServices());
 
   async function acceptedApprovalFor(callId: string): Promise<{ approvalBroker: ReturnType<typeof getTestRuntimeServices>['approvalBroker'] }> {

@@ -1,5 +1,5 @@
 /**
- * model-picker-filter — pure filtering, sorting, and cache-key helpers for ModelPickerModal.
+ * model-picker-filter, pure filtering, sorting, and cache-key helpers for ModelPickerModal.
  *
  * All functions are stateless: they receive inputs and return results without
  * side-effects. The class in model-picker.ts uses these as delegates.
@@ -139,7 +139,7 @@ export function buildFilteredModels(
     result = result.filter(m => m.capabilities?.multimodal === true);
   }
 
-  // Query filter — fuzzy: every space-separated word must appear somewhere
+  // Query filter, fuzzy: every space-separated word must appear somewhere
   if (query.trim().length > 0) {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     result = result.filter(m => {
@@ -168,7 +168,7 @@ export function buildFilteredModels(
           scoreB = bB ? compositeScore(bB.benchmarks) : null;
         }
       } else {
-        // swe/gpqa sort — individual scores not available for synthetic models
+        // swe/gpqa sort, individual scores not available for synthetic models
         const bA = a.provider === 'synthetic' ? null : (benchmarkStore.getBenchmarks(a.id) ?? benchmarkStore.getBenchmarks(a.displayName));
         const bB = b.provider === 'synthetic' ? null : (benchmarkStore.getBenchmarks(b.id) ?? benchmarkStore.getBenchmarks(b.displayName));
         if (benchmarkSort === 'swe') {

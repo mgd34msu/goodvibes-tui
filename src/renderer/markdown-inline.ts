@@ -1,5 +1,5 @@
 /**
- * markdown-inline.ts — inline markdown tokenizer (bold, italic, inline code,
+ * markdown-inline.ts, inline markdown tokenizer (bold, italic, inline code,
  * links, bare URLs, absolute file paths).
  *
  * Extracted from markdown.ts so both the block renderer (markdown.ts) and the
@@ -63,7 +63,7 @@ export function renderInlineMarkdown(text: string): InlineToken[] {
         i = end + 3;
         continue;
       }
-      // No closing *** found — emit the leading * as plain text so the ** bold
+      // No closing *** found, emit the leading * as plain text so the ** bold
       // check can handle the remaining ** on the next iteration.
       tokens.push({ type: 'text', text: '*', style: {} });
       i += 1;
@@ -108,7 +108,7 @@ export function renderInlineMarkdown(text: string): InlineToken[] {
       }
     }
 
-    // Plain text — accumulate until next special char, detect bare URLs and file paths
+    // Plain text, accumulate until next special char, detect bare URLs and file paths
     let end = i + 1;
     while (end < text.length && !INLINE_SPECIAL_CHARS.has(text[end])) {
       const code = text.charCodeAt(end);

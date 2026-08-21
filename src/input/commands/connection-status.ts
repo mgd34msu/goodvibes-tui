@@ -1,5 +1,5 @@
 /**
- * connection-status.ts — honest connection state for the mail and calendar
+ * connection-status.ts, honest connection state for the mail and calendar
  * capabilities, derived from the daemon's own answer rather than re-decided
  * here.
  *
@@ -7,7 +7,7 @@
  * settings resolution, the credential read, the connectors, the confirmation
  * posture (see src/daemon/handlers/email and src/daemon/handlers/calendar).
  * The TUI holds no second copy of any of it. So "is mail connected?" is not a
- * question this file answers from config — it is a question it ASKS, by
+ * question this file answers from config, it is a question it ASKS, by
  * invoking the cheapest read verb and reading the failure code that comes back:
  *
  *   EMAIL_NOT_CONFIGURED       host/user are missing
@@ -23,7 +23,7 @@
  * Every `email.*` / `calendar.*` descriptor the SDK catalogs carries
  * `invokable: false`. On the generic HTTP/WS dispatch path that flag is checked
  * by `validateGatewayInvocation` BEFORE any handler lookup and answered with a
- * flat 400 `NOT_INVOKABLE` — so `sdk.operator.invoke('email.inbox.list', …)`
+ * flat 400 `NOT_INVOKABLE`, so `sdk.operator.invoke('email.inbox.list', …)`
  * cannot reach these verbs no matter what is configured, and a surface built on
  * it would be a dead button.
  *
@@ -32,7 +32,7 @@
  * own method works. This product registers those handlers into its own catalog
  * at composition time (`createDaemonHandlerComposition`, called by the shared
  * `createRuntimeServices` root that both the TUI and the daemon boot from), so
- * the in-process catalog is a live, correct route to the same code — the same
+ * the in-process catalog is a live, correct route to the same code, the same
  * seam `/review` already uses for `checkpoints.*`. That is what these surfaces
  * call.
  *
@@ -48,7 +48,7 @@ export type ConnectionSurface = 'mail' | 'calendar';
  * What a surface can be.
  *
  * `checking` exists because the probe is real I/O and the settings workspace
- * renders synchronously — a row has to say something true while the answer is
+ * renders synchronously, a row has to say something true while the answer is
  * in flight, and "checking" is true where "not configured" would be invented.
  */
 export type ConnectionState = 'ready' | 'needs-setup' | 'unreachable' | 'checking';
@@ -67,7 +67,7 @@ export function connectionSurfaceLabel(surface: ConnectionSurface): string {
   return surface === 'mail' ? 'Mail' : 'Calendar';
 }
 
-/** The read verb each surface is probed with — the cheapest read it has. */
+/** The read verb each surface is probed with, the cheapest read it has. */
 export const CONNECTION_PROBE_METHOD = {
   mail: 'email.inbox.list',
   calendar: 'calendar.events.list',
@@ -78,12 +78,12 @@ export const CONNECTION_PROBE_METHOD = {
  *
  * The `surfaces.*` settings are daemon-owned by prefix (see the SDK's
  * `config-ownership`), so `/config set` on them lands in the daemon's own
- * store and keeps working with this client closed — which is the requirement.
+ * store and keeps working with this client closed, which is the requirement.
  *
  * The PASSWORDS now have it too, and these steps changed the round the platform
  * gave it to them. A credential is filed in the daemon's tier only when a
  * daemon-owned config path declares it, and the two keys this product's daemon
- * reads — `surfaces.email.password` and `surfaces.calendar.caldavPassword` —
+ * reads, `surfaces.email.password` and `surfaces.calendar.caldavPassword`,
  * were declared in neither `CONFIG_SCHEMA` nor the platform's non-schema
  * daemon-owned path list. `isDaemonOwnedSecretKey()` answered false for both,
  * so a `/secrets set` filed them in THIS client's store where the daemon never
@@ -144,7 +144,7 @@ export function daemonErrorCode(error: unknown): string | null {
 }
 
 /**
- * Turn a probe outcome into a status. Pure — the caller does the I/O, so every
+ * Turn a probe outcome into a status. Pure, the caller does the I/O, so every
  * daemon answer is exercised in tests without a daemon.
  *
  * `error === null` means the read verb returned. That is the only evidence
@@ -160,7 +160,7 @@ export function describeConnectionProbe(
     return {
       surface,
       state: 'ready',
-      detail: `${label} is connected — the daemon reached the server and returned a result.`,
+      detail: `${label} is connected: the daemon reached the server and returned a result.`,
       nextActions: [],
     };
   }
@@ -215,7 +215,7 @@ export const READ_INVOCATION_CONTEXT = { context: { clientKind: 'tui' as const }
  * The daemon's register wrapper demands BOTH `body.confirm === true` and
  * `context.metadata.explicitUserRequest === true`. The second is set only on
  * paths where a person typed the command that performs the write, which is the
- * whole point of the flag — it is never set on a read or on a background
+ * whole point of the flag, it is never set on a read or on a background
  * refresh.
  */
 export const EXPLICIT_WRITE_INVOCATION_CONTEXT = {
@@ -225,7 +225,7 @@ export const EXPLICIT_WRITE_INVOCATION_CONTEXT = {
 /**
  * Probe one surface against the in-process gateway catalog.
  *
- * Asks for a single item — enough to prove the whole path (settings →
+ * Asks for a single item, enough to prove the whole path (settings →
  * credential → connector → server) without pulling a mailbox into memory.
  */
 export async function probeConnection(

@@ -1,4 +1,4 @@
-# Project Planning
+# Project planning
 
 GoodVibes TUI owns the active project-planning loop. The SDK provides passive storage and readiness evaluation only.
 
@@ -24,7 +24,7 @@ The SDK owns:
 
 Daemon, web, webhook, ntfy, Home Assistant, Slack, Discord, and companion surfaces do not enter planning loops. They can use the SDK routes as storage/evaluation APIs, but conversation control stays in the TUI.
 
-## TUI Behavior
+## TUI behavior
 
 The TUI derives a stable `projectId` from the workspace path and passes it to the SDK `ProjectPlanningService`. Planning artifacts are stored under the matching `project:<projectId>` knowledge space, so unrelated workspaces do not share planning state.
 
@@ -38,7 +38,7 @@ Normal conversation can start planning when the user uses planning language such
 
 The planning loop can be paused with natural language such as "stop planning" or "pause planning".
 
-## Planning Panel
+## Planning panel
 
 Open the panel through the panel picker or with `/plan panel`.
 
@@ -58,7 +58,7 @@ Panel keys:
 
 - `r` refreshes SDK-backed planning artifacts.
 - `a` marks the current structurally ready plan as approved for execution.
-- `Ctrl+R` / `Ctrl+A` are alternate bindings for refresh/approve that stay reachable while a question is active — plain `r`/`a` type into the draft answer in that mode instead.
+- `Ctrl+R` / `Ctrl+A` are alternate bindings for refresh/approve that stay reachable while a question is active. Plain `r`/`a` type into the draft answer in that mode instead.
 - Up/Down chooses available answer actions when a question is active, or scrolls panel content when there is no active answer list.
 - Type while the panel is focused to draft a custom answer.
 - `Enter` submits the selected or drafted answer through the normal planning chat path.
@@ -101,7 +101,7 @@ Panel keys:
 - `x` exports the current plan to a Markdown file next to the JSON store (`<store-file>.md`) using the same rendering `/work-plan list` and `toMarkdown()` share.
 - When the selected item has linked ids (`item.linked`: `agentId`/`wrfcId`/`taskId`/`sessionId`), the detail block shows them with their jump key: `i` opens the Inspector on the linked agent, `w` opens the WRFC panel on the linked chain.
 
-## SDK Routes And Operator Methods
+## SDK routes and operator methods
 
 The TUI does not need to call daemon routes for its own local planning loop, but the updated SDK exposes passive routes and methods:
 

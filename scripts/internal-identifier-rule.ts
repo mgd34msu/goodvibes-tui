@@ -1,23 +1,23 @@
 /**
- * internal-identifier-rule.ts — architecture-gate rule.
+ * internal-identifier-rule.ts, architecture-gate rule.
  *
  * Bans internal planning identifiers (wave ids, work-order ids, debt-register
  * ids, UX-workstream ids, and lettered finding/brief ids) from appearing
  * anywhere in this repo's tracked text. These are coordination shorthand for
- * planning documents only — the owner's doctrine, quoted verbatim in the
+ * planning documents only, the owner's doctrine, quoted verbatim in the
  * failure message below, is that they must never leak into code, comments,
  * docs, or test names. A prior sweep found and removed every instance of
  * these patterns from this repo; this rule exists so a new one can never
  * land again without failing the build.
  *
  * Provenance belongs in decision-record paths (docs/decisions/*.md) or
- * version numbers (docs/releases/*.md) instead — so this rule exempts
+ * version numbers (docs/releases/*.md) instead, so this rule exempts
  * docs/releases/**, which are dated, self-contained historical records.
  *
  * Lettered finding/brief ids (a follow-up sweep, second occurrence of this
  * class): a single capital letter in the A-through-E range immediately
  * followed by one or two digits recurs throughout this codebase's comments
- * and test titles as informal review-finding or planning-brief shorthand —
+ * and test titles as informal review-finding or planning-brief shorthand,
  * the same coordination-shorthand problem as the wave/work-order ids above,
  * one letter-range narrower. F is deliberately excluded from that range: an
  * F-plus-digits token is a terminal function key, a genuine technical
@@ -28,10 +28,10 @@
  *      immediately followed by a colon or an em-dash;
  *   3. two or more of the tokens chained by forward slashes.
  * Deliberately NOT banned: the bare token with no surrounding delimiter
- * anywhere in running text — that shape has too many genuine technical uses
+ * anywhere in running text, that shape has too many genuine technical uses
  * in this repo (the ASCII control-character-set names, quoted-printable/MIME
- * transfer-encoding examples, Slack channel ids — which really do start with
- * a bare letter followed by digits in Slack's own API shape — IMAP command
+ * transfer-encoding examples, Slack channel ids, which really do start with
+ * a bare letter followed by digits in Slack's own API shape, IMAP command
  * tags, and plain short test-fixture names) to ban without an unacceptable
  * false-positive rate.
  */
@@ -53,7 +53,7 @@ const INTERNAL_IDENTIFIER_PATTERNS: readonly RegExp[] = [
   // followed by a dotted numeric label ("item N.N.N", "plan item N.N").
   // Word-anchored on purpose: a BARE dotted number is indistinguishable from a
   // release version ("(1.2.0)", isCompatible with two semver args), and
-  // versions are the doctrine's sanctioned provenance — so only the worded
+  // versions are the doctrine's sanctioned provenance, so only the worded
   // shape is banned.
   /\b(?:plan\s+)?item\s+[0-9]+\.[0-9]+(?:\.[0-9]+)?\b/gi,
   /\([A-E][0-9]{1,2}\)/g, // a lettered finding id (A-E, one or two digits) alone inside parentheses — F excluded (function keys)
@@ -85,7 +85,7 @@ export function checkNoInternalIdentifiers(
         const match = pattern.exec(line);
         if (match) {
           violations.push(
-            `${relPath}:${i + 1}: internal planning identifier "${match[0]}" — ${OWNER_DOCTRINE} [internal-identifier]`,
+            `${relPath}:${i + 1}: internal planning identifier "${match[0]}"; ${OWNER_DOCTRINE} [internal-identifier]`,
           );
           break;
         }

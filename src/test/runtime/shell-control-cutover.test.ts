@@ -53,7 +53,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
         const line = lines[i];
         for (const eventName of FORBIDDEN_EVENTS) {
           if (line.includes(eventName)) {
-            violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+            violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
           }
         }
       }
@@ -98,7 +98,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.includes('render:request')) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -121,10 +121,10 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   test('known panel-local repaint files do not emit render:request', () => {
     const violations: string[] = [];
     // (the purge): debug-panel.ts was DELETE-disposition and no longer
-    // exists — removed from this list (a deleted file trivially can't emit
+    // exists, removed from this list (a deleted file trivially can't emit
     // render:request).
     // (config-modal migration, same wave): provider-health-panel.ts was
-    // migrated to a config-modal surface and deleted — removed from this
+    // migrated to a config-modal surface and deleted, removed from this
     // list for the same reason.
     const restrictedFiles: string[] = [];
 
@@ -135,7 +135,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.includes('render:request')) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -158,10 +158,10 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   test('typed turn-consumer panels do not subscribe to legacy turn bus events', () => {
     const violations: string[] = [];
     // (the purge): thinking-panel.ts and debug-panel.ts were
-    // DELETE-disposition and no longer exist — removed from this list (a
+    // DELETE-disposition and no longer exist, removed from this list (a
     // deleted file trivially can't subscribe to anything).
     // (config-modal migration, same wave): provider-health-panel.ts was
-    // migrated to a config-modal surface and deleted — removed from this
+    // migrated to a config-modal surface and deleted, removed from this
     // list for the same reason.
     const restrictedFiles = [
       // context-visualizer-panel.ts merged into token-budget-panel.ts;
@@ -178,7 +178,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.includes("bus.on('turn:") || line.includes('bus.on("turn:')) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -201,7 +201,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   test('typed agent-consumer files do not subscribe to legacy subagent bus events', () => {
     const violations: string[] = [];
     // (the purge): agent-inspector-panel.ts ('inspector') was
-    // RETIRE-INTO-FLEET and no longer exists — removed from this list.
+    // RETIRE-INTO-FLEET and no longer exists, removed from this list.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
       'src/panels/cost-tracker-panel.ts',
@@ -214,7 +214,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.includes("bus.on('subagent:") || line.includes('bus.on("subagent:')) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -237,7 +237,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   test('WRFC typed-consumer files do not subscribe to legacy wrfc bus events', () => {
     const violations: string[] = [];
     // (the purge): wrfc-panel.ts was RETIRE-INTO-FLEET and no longer
-    // exists — removed from this list.
+    // exists, removed from this list.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
     ];
@@ -249,7 +249,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.includes("bus.on('wrfc:") || line.includes('bus.on("wrfc:')) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -272,9 +272,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   test('provider and planner typed-consumer files do not subscribe to legacy provider/planner bus events', () => {
     const violations: string[] = [];
     // (the purge): ops-strategy-panel.ts ('ops') was RETIRE-INTO-FLEET
-    // and no longer exists — removed from this list.
+    // and no longer exists, removed from this list.
     // (config-modal migration, same wave): provider-health-panel.ts was
-    // migrated to a config-modal surface and deleted — removed from this
+    // migrated to a config-modal surface and deleted, removed from this
     // list for the same reason.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
@@ -294,7 +294,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
         const line = lines[i];
         if (!line.includes('bus.on(') && !line.includes('.on(')) continue;
         if (legacyTokens.some((token) => line.includes(token))) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -317,7 +317,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   test('tool typed-consumer files do not subscribe to legacy tool bus events', () => {
     const violations: string[] = [];
     // (the purge): tool-inspector-panel.ts ('tools') was
-    // DELETE-disposition and no longer exists — removed from this list.
+    // DELETE-disposition and no longer exists, removed from this list.
     const restrictedFiles = [
       'src/main.ts',
     ];
@@ -334,7 +334,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
         const line = lines[i];
         if (!line.includes('bus.on(') && !line.includes('.on(')) continue;
         if (legacyTokens.some((token) => line.includes(token))) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -374,7 +374,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
         const line = lines[i];
         if (!line.includes('.emit(')) continue;
         if (legacyTokens.some((token) => line.includes(token))) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -395,8 +395,8 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   });
 
   test('orchestrator is the SDK\'s, not a local re-implementation the repo could regress', () => {
-    // The enforcement this test used to run — reading src/core/orchestrator.ts's
-    // content for legacy turn/tool lifecycle emits — has nothing left to read:
+    // The enforcement this test used to run, reading src/core/orchestrator.ts's
+    // content for legacy turn/tool lifecycle emits, has nothing left to read:
     // Orchestrator is `@pellux/goodvibes-sdk/platform/core`'s own class, and the
     // SDK owns that regression check on its own source. This repo only needs to
     // confirm it is not carrying a local re-implementation that could drift.
@@ -419,7 +419,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       const line = lines[i];
       if (!line.includes('bus.on(')) continue;
       if (legacyTokens.some((token) => line.includes(token))) {
-        violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+        violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
       }
     }
 
@@ -472,7 +472,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
         const line = lines[i];
         if (!line.includes('.emit(')) continue;
         if (legacyTokens.some((token) => line.includes(token))) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -510,7 +510,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (legacyTokens.some((token) => line.includes(token))) {
-        violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+        violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
       }
     }
 
@@ -540,7 +540,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.includes('attachToEventBus(')) {
-          violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
         }
       }
     }
@@ -571,7 +571,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (line.includes('EventBus.getInstance()') || line.includes('replay:loaded') || line.includes('replay:position-changed') || line.includes('replay:diff-complete')) {
-        violations.push(`${relPath}:${i + 1} — ${line.trim()}`);
+        violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
       }
     }
 

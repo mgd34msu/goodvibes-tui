@@ -26,7 +26,7 @@ function commandNames(cmd: string): string[] {
 
 // ── Simple commands ───────────────────────────────────────────────────────────
 
-describe('parseCommandAST — simple commands', () => {
+describe('parseCommandAST: simple commands', () => {
   it('parses a bare command', () => {
     const ast = parseCommandAST('ls');
     expect(ast.kind).toBe('command');
@@ -72,7 +72,7 @@ describe('parseCommandAST — simple commands', () => {
 
 // ── Pipe expressions ──────────────────────────────────────────────────────────
 
-describe('parseCommandAST — pipe expressions', () => {
+describe('parseCommandAST: pipe expressions', () => {
   it('parses a simple pipe', () => {
     const ast = parseCommandAST('cat file.txt | grep pattern');
     expect(ast.kind).toBe('pipe');
@@ -106,7 +106,7 @@ describe('parseCommandAST — pipe expressions', () => {
 
 // ── Sequence operators ────────────────────────────────────────────────────────
 
-describe('parseCommandAST — sequence operators', () => {
+describe('parseCommandAST: sequence operators', () => {
   it('parses && sequence', () => {
     const ast = parseCommandAST('mkdir /tmp/foo && cd /tmp/foo');
     expect(ast.kind).toBe('sequence');
@@ -149,7 +149,7 @@ describe('parseCommandAST — sequence operators', () => {
 
 // ── Mixed pipes and sequences ─────────────────────────────────────────────────
 
-describe('parseCommandAST — mixed pipes and sequences', () => {
+describe('parseCommandAST: mixed pipes and sequences', () => {
   it('parses pipe within && chain', () => {
     // cat file | grep pat && echo done
     // Parsed as: sequence(pipe(cat|grep), echo)
@@ -170,11 +170,11 @@ describe('parseCommandAST — mixed pipes and sequences', () => {
 
 // ── Subshell expressions ──────────────────────────────────────────────────────
 
-describe('parseCommandAST — subshell expressions', () => {
+describe('parseCommandAST: subshell expressions', () => {
   it('parses backtick subshell as subshell node', () => {
     const ast = parseCommandAST('echo `date`');
     // The backtick token causes parseAtom to return a SubshellNode
-    // (the echo portion is lost — conservative approach)
+    // (the echo portion is lost, conservative approach)
     // We validate the subshell is parsed
     const nodes = collectCommandNodes(ast);
     // Should have at least one node (the subshell inner or echo)
@@ -194,7 +194,7 @@ describe('parseCommandAST — subshell expressions', () => {
     }
   });
 
-  it('handles nested subshell $(cmd) — tokenizer extracts as subshell token', () => {
+  it('handles nested subshell $(cmd): tokenizer extracts as subshell token', () => {
     // The tokenizer may not handle $(...) perfectly in all positions;
     // we verify no crash and some structure is produced.
     const ast = parseCommandAST('echo $(date +%s)');
@@ -205,7 +205,7 @@ describe('parseCommandAST — subshell expressions', () => {
 
 // ── Redirects ─────────────────────────────────────────────────────────────────
 
-describe('parseCommandAST — redirects', () => {
+describe('parseCommandAST: redirects', () => {
   it('parses command with output redirect', () => {
     const ast = parseCommandAST('echo hello > /tmp/out.txt');
     expect(ast.kind).toBe('command');
@@ -230,7 +230,7 @@ describe('parseCommandAST — redirects', () => {
 
 // ── parseAST from token list ───────────────────────────────────────────────────
 
-describe('parseAST — from token list', () => {
+describe('parseAST: from token list', () => {
   it('produces empty command node for empty token list', () => {
     const ast = parseAST([]);
     expect(ast.kind).toBe('command');

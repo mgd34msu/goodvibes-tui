@@ -184,7 +184,7 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
             lines.push(`\n  [${tool.serverName}]`);
             lastServer = tool.serverName;
           }
-          lines.push(`    ${tool.toolName}${tool.description ? `  — ${tool.description}` : ''}`);
+          lines.push(`    ${tool.toolName}${tool.description ? `: ${tool.description}` : ''}`);
         }
         ctx.print(lines.join('\n'));
         return;

@@ -73,7 +73,7 @@ describe('rewind-turn-anchors persistence', () => {
     clearTurnAnchors(sessionId);
 
     restoreTurnAnchors(sessionId, makeTestSurface(workingDir));
-    // A live turn re-records the same turnId after resume — must not duplicate.
+    // A live turn re-records the same turnId after resume, must not duplicate.
     recordTurnAnchor(sessionId, anchor('t1', 6));
     expect(getTurnAnchors(sessionId)).toHaveLength(1);
     clearTurnAnchors(sessionId);

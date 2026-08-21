@@ -48,7 +48,7 @@ export function syncVersionSurfaces(root = ROOT): string {
     writeFileSync(versionTsPath, versionTs);
     console.log(`prebuild: src/version.ts fallback → ${version}`);
   } catch {
-    console.log('prebuild: src/version.ts — not found, skipping');
+    console.log('prebuild: src/version.ts; not found, skipping');
   }
 
   const readmePath = join(root, 'README.md');
@@ -60,10 +60,10 @@ export function syncVersionSurfaces(root = ROOT): string {
       writeFileSync(readmePath, readme);
       console.log(`prebuild: README.md → ${version}`);
     } else {
-      console.log('prebuild: README.md — no version badge found, skipping');
+      console.log('prebuild: README.md; no version badge found, skipping');
     }
   } catch {
-    console.log('prebuild: README.md — not found, skipping');
+    console.log('prebuild: README.md; not found, skipping');
   }
 
   return version;

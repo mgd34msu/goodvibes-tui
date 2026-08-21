@@ -11,7 +11,7 @@ export interface ShellFooterBuildOptions {
   readonly promptFocused?: boolean;
   /**
    * True when the panel workspace owns keyboard focus. Only consulted as a
-   * fallback when `promptFocused` is not supplied — see buildShellFooter's
+   * fallback when `promptFocused` is not supplied, see buildShellFooter's
    * default expression. Callers that already compute `promptFocused`
    * themselves (main.ts does) do not need to also pass this.
    */
@@ -64,7 +64,7 @@ export interface ShellFooterBuildOptions {
   /**
    * The one-key retry/switch-model affordance's transient hint text (see
    * retry-affordance.ts). Rendered as its own line ABOVE the context
-   * pressure hint while armed; present here only means "show it now" — the
+   * pressure hint while armed; present here only means "show it now", the
    * caller is responsible for passing null the instant it disarms, so this
    * is a time-bounded status line, never a lingering claim.
    */
@@ -83,10 +83,10 @@ export interface ShellFooterBuildOptions {
   readonly sessionSpineStatus?: 'online' | 'offline';
   /** The web surface's reachable URL, when that surface is enabled; a persistent footer segment. */
   readonly webSurfaceUrl?: string;
-  /** True while power.keepAwake holds — renders the always-visible "sleep disabled" chip. */
+  /** True while power.keepAwake holds, renders the always-visible "sleep disabled" chip. */
   readonly powerKeepAwake?: boolean;
   /**
-   * Live microphone state — a push-to-talk recording, or the wake detector for
+   * Live microphone state, a push-to-talk recording, or the wake detector for
    * as long as it runs. Rendered as a persistent row beside the process
    * indicator, because a capture device held open with nothing on screen saying
    * so is the one state a voice feature must never be in. Null (or a wake state
@@ -131,7 +131,7 @@ const DIM_STATUS_FG = '#64748b';
 let lastRenderedFooterHeight: { compact: boolean; height: number } | null = null;
 
 /**
- * The wrapped-prompt shape the composer reports each frame — the subset
+ * The wrapped-prompt shape the composer reports each frame, the subset
  * promptCursorOffset needs (see InputHandler.getWrappedPromptInfo).
  */
 export interface WrappedPromptCursorInfo {
@@ -226,17 +226,17 @@ export function buildShellFooter(
     // indicator: an open microphone is a live condition the user is acting inside,
     // while the process indicator is a background summary.
     lines.splice(inputBoxRows, 0, ...renderVoiceCaptureIndicator(options.width, options.voiceCapture ?? null), ...processIndicator);
-    // Scriptable status line — dim informational line above the prompt. Unshifted
+    // Scriptable status line, dim informational line above the prompt. Unshifted
     // before the context hint so the context hint (if any) sits above it.
     if (options.scriptableStatusLine) {
       lines.unshift(UIFactory.stringToLine(options.scriptableStatusLine, options.width, { fg: DIM_STATUS_FG }));
     }
-    // Passive context status hint — rendered as a dim informational line before the prompt.
+    // Passive context status hint, rendered as a dim informational line before the prompt.
     if (options.contextStatusHint) {
       const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: DIM_STATUS_FG });
       lines.unshift(hintLine);
     }
-    // Retry affordance — topmost of the passive hint lines while armed (an
+    // Retry affordance, topmost of the passive hint lines while armed (an
     // actionable, time-bounded prompt outranks the passive status hints
     // below it); simply absent the instant it disarms.
     if (options.retryHint) {

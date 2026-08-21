@@ -5,7 +5,7 @@ describe('footer-tips', () => {
   test('default tip leads with panels; F2 names the Fleet panel and quit advertises the double-press honestly', () => {
     // e: F2 opens Fleet (not the retired process modal). f: an empty
     // composer needs Ctrl+C TWICE within ~1s to exit, so the tip says "x2".
-    // Ctrl+P is a TOGGLE (open+focus / hide), not just "panels" —
+    // Ctrl+P is a TOGGLE (open+focus / hide), not just "panels",
     // naming the verb keeps the tip honest.
     expect(buildFooterTip({ agentActive: false }))
       .toBe('Ctrl+P toggle panels · F2 fleet · ? help · Ctrl+C x2 quit');

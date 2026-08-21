@@ -4,22 +4,22 @@
 // The Fleet panel's waiting-on-human ACTS: the flagged pick row, the flagged
 // conflict row, and the worktree discard all act from the panel selection with
 // no id ever typed. This controller owns that flow so fleet-panel.ts stays under
-// the 800-line architecture cap — the panel delegates the trigger keys, the
+// the 800-line architecture cap, the panel delegates the trigger keys, the
 // pick-mode input, and the pick-mode render here.
 //
-//   • Pick  — the flagged workstream row (needsAttention 'pick') opens a
+//   • Pick , the flagged workstream row (needsAttention 'pick') opens a
 //     candidate picker (best-of-N held attempts, from fleet.attempts.list);
 //     ↑↓ chooses the winner, its diff shows in the shared DiffPanel, and Enter
 //     drives fleet.attempts.pick preview (confirm:false) -> confirm (confirm:true)
 //     through the DiffPanel's existing confirm overlay. No group/candidate id is
-//     ever typed — the panel derives them from the node and the selection.
-//   • Conflict — the flagged work-item row (needsAttention 'conflict') runs
+//     ever typed, the panel derives them from the node and the selection.
+//   • Conflict, the flagged work-item row (needsAttention 'conflict') runs
 //     fleet.conflicts.resolve and hands the STAMPED resolution session id to the
 //     shared one-key jump/attach affordance (the CI fix-session machinery). On
 //     resolution the SDK reclaims the tree and the row clears on the next tick.
-//   • Discard — a worktree-owning work-item row runs worktrees.discard behind a
+//   • Discard, a worktree-owning work-item row runs worktrees.discard behind a
 //     confirm and renders the honest receipt (branch KEPT, dirty state preserved
-//     as a commit) — no path retyping.
+//     as a commit), no path retyping.
 // ---------------------------------------------------------------------------
 
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
@@ -91,7 +91,7 @@ function shortId(id: string): string {
   return id.length > 10 ? `${id.slice(0, 10)}…` : id;
 }
 
-/** The held (pick-ready) candidates of a group, in attempt order — the only ones a winner can be chosen from. */
+/** The held (pick-ready) candidates of a group, in attempt order, the only ones a winner can be chosen from. */
 export function heldCandidates(group: FleetHeldMergeGroup): FleetAttemptCandidate[] {
   return group.candidates.filter((c) => c.state === 'held-merge').slice().sort((a, b) => a.attemptIndex - b.attemptIndex);
 }
@@ -147,7 +147,7 @@ export class FleetActs {
     return this.observedSteer !== null;
   }
 
-  /** The active observed-steer draft for `nodeId`, or null — the detail renderer shows the compose line only for the composing row. */
+  /** The active observed-steer draft for `nodeId`, or null, the detail renderer shows the compose line only for the composing row. */
   public observedSteerDraftFor(nodeId: string): string | null {
     return this.observedSteer && this.observedSteer.nodeId === nodeId ? this.observedSteer.draft : null;
   }
@@ -161,7 +161,7 @@ export class FleetActs {
   public openObservedSteer(node: ObservedNode): boolean {
     const channel = node.observed.steer;
     if (channel.kind !== 'tmux') {
-      this.deps.notify(`Cannot steer this ${observedKindLabel(node.observed.externalKind)} session — ${channel.reason}.`);
+      this.deps.notify(`Cannot steer this ${observedKindLabel(node.observed.externalKind)} session: ${channel.reason}.`);
       return true;
     }
     this.observedSteer = { nodeId: node.id, draft: '' };
@@ -246,7 +246,7 @@ export class FleetActs {
       this.deps.notify(`Could not read the best-of-N candidates: ${summarizeError(err)}`);
       return;
     }
-    if (!group) { this.deps.notify('No ready best-of-N group on this workstream — every attempt must settle first.'); return; }
+    if (!group) { this.deps.notify('No ready best-of-N group on this workstream; every attempt must settle first.'); return; }
     this.pick = { workstreamNodeId: node.id, group, selectedHeldIndex: 0 };
     this.showSelectedDiff();
     this.deps.markDirty();
@@ -284,7 +284,7 @@ export class FleetActs {
 
   /**
    * Drive fleet.attempts.pick preview (confirm:false) then, behind the DiffPanel
-   * confirm overlay, confirm (confirm:true). No id is typed — the group id and
+   * confirm overlay, confirm (confirm:true). No id is typed, the group id and
    * the winner item id both come from the picker state.
    */
   private async confirmSelectedPick(): Promise<void> {
@@ -307,7 +307,7 @@ export class FleetActs {
     this.deps.diffSurface.armConfirm({
       id: `${group.groupId}:${cand.itemId}`,
       verb: 'Pick',
-      label: `Pick attempt ${cand.attemptIndex + 1} ("${cand.title}") — merge it, clean the ${losers} other worktree(s)`,
+      label: `Pick attempt ${cand.attemptIndex + 1} ("${cand.title}"): merge it, clean the ${losers} other worktree(s)`,
       onConfirm: async () => {
         try {
           const result = await gateway.pick({ groupId: group.groupId, winnerItemId: cand.itemId, confirm: true });
@@ -315,7 +315,7 @@ export class FleetActs {
             const losersCleaned = result.loserItemIds?.length ?? losers;
             this.deps.notify(`[Fleet] Winner picked for group ${shortId(group.groupId)}: attempt ${cand.attemptIndex + 1} merged, ${losersCleaned} loser worktree(s) cleaned.`);
           } else {
-            this.deps.notify(`[Fleet] Pick not applied for group ${shortId(group.groupId)} — the daemon still requires confirmation.`);
+            this.deps.notify(`[Fleet] Pick not applied for group ${shortId(group.groupId)}: the daemon still requires confirmation.`);
           }
         } catch (err) {
           this.deps.notify(`Pick failed: ${summarizeError(err)}`);
@@ -327,7 +327,7 @@ export class FleetActs {
       onCancel: () => {
         this.deps.diffSurface.close();
         this.pick = null;
-        this.deps.notify('Pick cancelled — nothing merged, no worktree cleaned.');
+        this.deps.notify('Pick cancelled: nothing merged, no worktree cleaned.');
         this.deps.markDirty();
       },
     });
@@ -344,7 +344,7 @@ export class FleetActs {
     try {
       const result = await gateway.resolveConflict(itemId);
       const files = result.files.length > 0 ? ` over ${result.files.length} conflicted file(s)` : '';
-      this.deps.notify(`[Fleet] Conflict resolution session started for ${shortId(itemId)}${files} — press j to jump to it.`);
+      this.deps.notify(`[Fleet] Conflict resolution session started for ${shortId(itemId)}${files}; press j to jump to it.`);
       // Reuse the CI fix-session machinery: hand the STAMPED session id to the
       // shared one-key jump affordance. The kept tree is reclaimed by the SDK on
       // a successful re-merge, and the flagged row clears on the next snapshot.
@@ -370,12 +370,12 @@ export class FleetActs {
     this.deps.diffSurface.armConfirm({
       id: `discard:${path}`,
       verb: 'Discard',
-      label: `Discard worktree ${path} — the branch is KEPT and dirty state preserved as a commit`,
+      label: `Discard worktree ${path}: the branch is KEPT and dirty state preserved as a commit`,
       onConfirm: async () => {
         try {
           const receipt = await gateway.discardWorktree(path);
           if (receipt.ok) {
-            this.deps.notify(`[Fleet] Worktree discarded: ${receipt.path}\n  branch kept: ${receipt.branch || '(unknown)'}\n  preservation commit: ${receipt.preservedCommit || '(none — nothing to preserve)'}\n  ${receipt.detail}`);
+            this.deps.notify(`[Fleet] Worktree discarded: ${receipt.path}\n  branch kept: ${receipt.branch || '(unknown)'}\n  preservation commit: ${receipt.preservedCommit || '(none; nothing to preserve)'}\n  ${receipt.detail}`);
           } else {
             this.deps.notify(`[Fleet] Worktree discard refused for ${receipt.path}: ${receipt.detail}`);
           }
@@ -387,7 +387,7 @@ export class FleetActs {
       },
       onCancel: () => {
         this.deps.diffSurface.close();
-        this.deps.notify('Discard cancelled — the worktree is untouched.');
+        this.deps.notify('Discard cancelled: the worktree is untouched.');
         this.deps.markDirty();
       },
     });
@@ -404,7 +404,7 @@ export class FleetActs {
     const held = heldCandidates(group);
     const lines: Line[] = [];
     lines.push(buildPanelLine(width, [
-      [' Best-of-N winner pick — ', P.label],
+      [' Best-of-N winner pick: ', P.label],
       [group.sourceTitle, P.value],
     ]));
     lines.push(buildPanelLine(width, [[' Choose the winner; its diff shows in the diff panel. No id is typed.', P.dim]]));
@@ -435,7 +435,7 @@ export class FleetActs {
       { keys: 'Enter', label: 'pick (confirm)' },
       { keys: 'Esc', label: 'cancel' },
     ], P)];
-    return buildPanelWorkspace(width, height, { title: 'Fleet — Pick winner', sections: [{ lines }], footerLines, palette: P });
+    return buildPanelWorkspace(width, height, { title: 'Fleet: Pick winner', sections: [{ lines }], footerLines, palette: P });
   }
 
   private requireGateway(): FleetGateway | null {

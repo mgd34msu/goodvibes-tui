@@ -3,12 +3,12 @@
  *
  * Acceptance evidence for the memory-spine adoption wiring (WO memory-adopt):
  * drives MemorySpineClient against a REAL bootDaemon instance (isolated home,
- * ephemeral port) over the TUI's createTuiMemorySpineTransport — no mocked
+ * ephemeral port) over the TUI's createTuiMemorySpineTransport, no mocked
  * wire for the adoption proof. Proves:
  *   - local/offline mode never reaches the daemon (writes stay on the local store);
  *   - activate() on an adopted daemon routes add/get/search/review/delete through
  *     the wire to the DAEMON's own canonical registry (`daemon.memory`), not a
- *     detached copy — the one-writer invariant, proven, not asserted;
+ *     detached copy, the one-writer invariant, proven, not asserted;
  *   - a recall-honesty degraded reason (indexUnavailableReason) survives the
  *     wire transport to the caller unchanged (a spy transport, since forcing a
  *     real sqlite-vec unavailability is not a deterministic condition to boot).
@@ -38,16 +38,16 @@ const TOKEN = 'memory-spine-integration-token';
  * tens of milliseconds and the ceiling costs nothing, because nothing in the
  * file waits out a fixed delay. bun's implicit 5 s default was an idle
  * machine's number: on a loaded host these failed with "this test timed out
- * after 5000ms" while the daemon was still coming up normally — the file as a
+ * after 5000ms" while the daemon was still coming up normally, the file as a
  * whole takes far longer than 5 s there.
  */
 const TEST_BUDGET_MS = 120_000;
 
 /**
  * A minimal, isolated in-memory MemoryAccess standing in for the TUI's own
- * local registry — the offline/host backend. Exposes its record map so tests
+ * local registry, the offline/host backend. Exposes its record map so tests
  * can assert a write never reached it (or did). Implements the full 1.2.0
- * MemoryAccess (core + extended) with simple in-memory behavior — this fake
+ * MemoryAccess (core + extended) with simple in-memory behavior, this fake
  * is never exercised through its extended methods by the tests below (they
  * only assert core-verb local/wire routing), so the extended stubs just need
  * to satisfy the type honestly, not model every edge case the real registry
@@ -206,7 +206,7 @@ describe('MemorySpineClient against a real bootDaemon (isolated home, ephemeral 
     expect(client.mode()).toBe('local');
     expect(records.has(record.id)).toBe(true);
 
-    // The daemon's own canonical registry never saw this write — local mode
+    // The daemon's own canonical registry never saw this write, local mode
     // structurally never touches the transport.
     expect(harness.daemon.memory.get(record.id)).toBeNull();
 
@@ -223,7 +223,7 @@ describe('MemorySpineClient against a real bootDaemon (isolated home, ephemeral 
 
     const record = await client.add({ cls: 'decision', summary: 'wire-routed record' });
 
-    // Visible on the DAEMON's own registry — not a detached local copy — proving
+    // Visible on the DAEMON's own registry, not a detached local copy, proving
     // the write actually crossed the wire rather than landing in `local`.
     expect(harness.daemon.memory.get(record.id)?.summary).toBe('wire-routed record');
 
@@ -254,7 +254,7 @@ describe('MemorySpineClient against a real bootDaemon (isolated home, ephemeral 
 });
 
 describe('memory-spine version-skew wire honesty (route-not-found vs record-missing 404)', () => {
-  // A fake fetch that answers every request with one canned JSON response — lets a
+  // A fake fetch that answers every request with one canned JSON response, lets a
   // test drive the transport's 404 discrimination without a live daemon.
   function cannedFetch(status: number, body: object): typeof fetch {
     return (async () => new Response(JSON.stringify(body), {
@@ -296,7 +296,7 @@ describe('memory-spine version-skew wire honesty (route-not-found vs record-miss
 describe('memory-spine recall honesty passthrough', () => {
   test('indexUnavailableReason from the wire transport survives to the caller unchanged (never dropped or re-derived)', async () => {
     const reason = 'semantic index unavailable: sqlite-vec extension not loaded';
-    // Typed as MemoryTransport (core-only) rather than the full MemoryAccess —
+    // Typed as MemoryTransport (core-only) rather than the full MemoryAccess,
     // version tolerance: a transport implementing only the CORE verbs is valid;
     // this spy never exercises an extended verb.
     const spyTransport: MemoryTransport = {
@@ -333,6 +333,6 @@ describe('memory-spine recall honesty passthrough', () => {
 // exercised `syncMemorySpineToHostStatus`, which was retired in the
 // memory-spine SDK convergence (2026-07-31): activation is now folded into
 // the SDK's `createSpineAdoptionSync` (see `spine-adoption.ts`), and that
-// adoption policy — including deactivate-on-loss reverting to local access —
+// adoption policy, including deactivate-on-loss reverting to local access,
 // is pinned in the SDK's own test suite
 // (test/client-seam-spine-adoption.test.ts), not duplicated here.

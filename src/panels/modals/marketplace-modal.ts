@@ -46,7 +46,7 @@ const KINDS: readonly EcosystemEntryKind[] = ['plugin', 'skill', 'hook-pack', 'p
  * destructive confirm folded into a modal).
  *
  * Honest empty-state: the panel's original "No curated marketplace
- * entries found yet." copy implied a curated remote catalog. It isn't one —
+ * entries found yet." copy implied a curated remote catalog. It isn't one,
  * loadEcosystemCatalog only ever reads .goodvibes/ecosystem/<kind>s.json under
  * the project/home, populated solely by `/marketplace publish` and
  * `/marketplace bundle import`. The empty-state copy below (locked byte-for-byte
@@ -126,7 +126,7 @@ class MarketplaceModalSurface implements ConfigModalSurface {
       if (!this.deps.ecosystemPaths) {
         rows.push(infoRow('empty:unwired', 'Marketplace catalog roots aren’t wired into this session, so there’s nothing to read yet.'));
       } else {
-        rows.push(infoRow('empty:0', 'This is your local plugin, skill, hook-pack, and policy-pack catalog — not a remote store.'));
+        rows.push(infoRow('empty:0', 'This is your local plugin, skill, hook-pack, and policy-pack catalog; not a remote store.'));
         rows.push(infoRow('empty:1', 'It’s empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle.'));
       }
       rows.push(infoRow('empty:title', 'Populate it', { bold: true }));
@@ -152,7 +152,7 @@ class MarketplaceModalSurface implements ConfigModalSurface {
       rows.push(infoRow(`issue:${i}`, `⚠ ${issue}`, { fg: MODAL_TONES.warn }));
     }
 
-    // Catalog list — selection-blind: fold provenance/compat/risk/state into the label.
+    // Catalog list, selection-blind: fold provenance/compat/risk/state into the label.
     for (const row of this.rows) {
       const review = row.review;
       const provenance = row.entry.provenance ?? 'local';

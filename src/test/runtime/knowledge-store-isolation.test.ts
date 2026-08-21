@@ -9,7 +9,7 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { trackDisposables } from '../helpers/disposables.ts';
 
 /**
- * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * A composed runtime graph starts a dozen pollers while it builds, the fleet
  * registry tick, the config-file watch, the memory governor, the knowledge
  * scheduler, the cross-session sweep, the orchestration snapshot writer, the
  * push-subscription sweep and the snapshot / retention / consolidation

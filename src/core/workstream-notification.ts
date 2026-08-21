@@ -1,16 +1,16 @@
 /**
- * workstream-notification.ts — the desktop notification a finished workstream
+ * workstream-notification.ts, the desktop notification a finished workstream
  * pushes, in words rather than identifiers.
  *
  * These three notifications used to read:
  *
- *     GoodVibes — WRFC chain failed
+ *     GoodVibes, WRFC chain failed
  *     chain 7f3a91c02b4e failed: review rejected
  *
  * A desktop notification is a message TO a person, so the standing rule applies
  * to it the same way it applies to a chat message: no internal name for the
  * machinery, and no register id. `WRFC` is the first; `7f3a91c02b4e` is the
- * second, and it is not something the reader can do anything with — it is not
+ * second, and it is not something the reader can do anything with, it is not
  * the commit, not the branch, not the session.
  *
  * What the reader can act on is why the work stopped, so that is what the body
@@ -19,7 +19,7 @@
  * plain words, never by an opaque identifier.
  *
  * Split out of turn-event-wiring.ts as a pure function so the text is testable
- * on its own — the wiring itself cannot be asserted against without mocking a
+ * on its own, the wiring itself cannot be asserted against without mocking a
  * process-global notifier.
  */
 import { formatTurnBudgetOutcome } from './turn-budget-outcome.ts';
@@ -40,7 +40,7 @@ export interface WorkstreamNotification {
 /**
  * Title and body for a workstream that reached a terminal state.
  *
- * An operator cancellation is an intended stop, not a failure — it is narrated
+ * An operator cancellation is an intended stop, not a failure, it is narrated
  * as cancelled (the reason already carries the landed-work count from the
  * workstream's edit ledger) so the notification never contradicts the cancelled
  * workstream/owner/cohort surfaces. A turn-budget exhaustion is a spent ceiling
@@ -52,18 +52,18 @@ export function workstreamFailureNotification(
 ): WorkstreamNotification {
   if (payload.failureKind === 'cancelled') {
     return {
-      title: 'GoodVibes — workstream cancelled',
+      title: 'GoodVibes: workstream cancelled',
       body: `Cancelled: ${payload.reason}`,
     };
   }
   if (payload.failureKind === 'max_turns') {
     return {
-      title: 'GoodVibes — workstream hit its turn budget',
+      title: 'GoodVibes: workstream hit its turn budget',
       body: `The workstream ${formatTurnBudgetOutcome({ limit: payload.turnLimit, source: payload.turnLimitSource })}`,
     };
   }
   return {
-    title: 'GoodVibes — workstream failed',
+    title: 'GoodVibes: workstream failed',
     body: `Failed: ${payload.failureKind === 'transport' ? 'transient transport error' : payload.reason}`,
   };
 }

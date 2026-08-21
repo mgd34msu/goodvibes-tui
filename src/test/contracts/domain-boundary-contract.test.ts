@@ -104,7 +104,7 @@ describe('GC-ARCH-001 domain import boundary contract', () => {
       for (const specifier of localImports) {
         const importedDomain = specifierToDomain(specifier);
 
-        // Not a domain import — skip (e.g. relative import to a non-domain file)
+        // Not a domain import, skip (e.g. relative import to a non-domain file)
         if (importedDomain === null) continue;
 
         if (!allowedReads.has(importedDomain)) {

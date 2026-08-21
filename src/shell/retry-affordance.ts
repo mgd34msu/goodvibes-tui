@@ -1,11 +1,11 @@
 /**
- * retry-affordance.ts — the one-key retry/switch-model affordance shown
+ * retry-affordance.ts, the one-key retry/switch-model affordance shown
  * right after a user-visible TURN_ERROR: 'r' re-submits on the current
  * provider, 'm' opens the model picker, any other key disarms it silently.
  *
  * Rendered as a transient FOOTER status line (see retryAffordanceHint,
  * wired into ShellFooterBuildOptions.retryHint in shell-surface.ts) rather
- * than a permanent transcript message — it disappears the moment it's
+ * than a permanent transcript message, it disappears the moment it's
  * disarmed, instead of sitting in the scrollback claiming an affordance
  * that no longer does anything. Extracted from main.ts to keep the
  * entrypoint under the architecture line cap.
@@ -13,7 +13,7 @@
  * The affordance is also time-bounded: arming starts a disarm timer so a
  * stray 'r' hours later can never fire a real, paid retry against the
  * provider. The timer's window is exactly what the footer hint's visibility
- * implies — when it fires, the state disarms AND retryAffordanceHint(state)
+ * implies, when it fires, the state disarms AND retryAffordanceHint(state)
  * goes back to null in the same tick, so the key dies at the same moment
  * the hint disappears.
  */
@@ -37,7 +37,7 @@ export interface RetryAffordanceState {
   exhausted: boolean;
   /** Internal: the pending disarm timer's handle, or null while unarmed. */
   timer: ReturnType<typeof setTimeout> | null;
-  /** Internal: injected timer primitives — real setTimeout/clearTimeout in production. */
+  /** Internal: injected timer primitives, real setTimeout/clearTimeout in production. */
   readonly schedule: RetryAffordanceSchedule;
   /** Internal: the disarm window in ms. */
   readonly windowMs: number;
@@ -50,7 +50,7 @@ export interface CreateRetryAffordanceStateOptions {
   readonly windowMs?: number;
   /** Overridable for tests so the disarm timer doesn't require a real 60s wait. */
   readonly schedule?: RetryAffordanceSchedule;
-  /** Called once the window elapses with no keypress and the state has been disarmed — main.ts hooks this to its render loop so the footer hint clears the instant the key goes dead. */
+  /** Called once the window elapses with no keypress and the state has been disarmed, main.ts hooks this to its render loop so the footer hint clears the instant the key goes dead. */
   readonly onExpire?: () => void;
 }
 
@@ -72,7 +72,7 @@ function clearPendingTimer(state: RetryAffordanceState): void {
   }
 }
 
-/** Arm the affordance — call only when a retry is actually possible (a live retryCtx).
+/** Arm the affordance, call only when a retry is actually possible (a live retryCtx).
  *  Starts (or restarts, if already armed) the disarm timer. */
 export function armRetryAffordance(state: RetryAffordanceState, exhausted: boolean): void {
   clearPendingTimer(state);
@@ -83,13 +83,13 @@ export function armRetryAffordance(state: RetryAffordanceState, exhausted: boole
     state.armed = false;
     state.onExpire?.();
   }, state.windowMs);
-  // Never let this timer hold the process open — a background retry-window
+  // Never let this timer hold the process open, a background retry-window
   // countdown is not a reason to keep the event loop alive.
   (timer as unknown as { unref?: () => void }).unref?.();
   state.timer = timer;
 }
 
-/** Disarm the affordance — any key other than the ones it recognizes disarms it,
+/** Disarm the affordance, any key other than the ones it recognizes disarms it,
  *  and cancels the pending disarm timer so it never fires on a state that's
  *  already been reset (or re-armed by a subsequent error). */
 export function disarmRetryAffordance(state: RetryAffordanceState): void {
@@ -106,7 +106,7 @@ export function retryAffordanceHint(state: RetryAffordanceState): string | null 
 }
 
 /** Arm the affordance whenever a user-visible error surfaces AND a retry is
- *  actually possible — wired here (not inline in main.ts) to keep the
+ *  actually possible, wired here (not inline in main.ts) to keep the
  *  entrypoint under the architecture line cap. */
 export function wireRetryAffordanceOnError(
   onErrorSurfaced: (cb: (exhausted: boolean) => void) => void,

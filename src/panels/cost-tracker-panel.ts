@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// CostTrackerPanel — per-session / per-agent / per-plan cost estimates
+// CostTrackerPanel, per-session / per-agent / per-plan cost estimates
 // ---------------------------------------------------------------------------
 
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
@@ -107,9 +107,9 @@ export class CostTrackerPanel extends BasePanel {
   private agents = new Map<string, AgentEntry>();
 
   // Budget alert threshold in USD (0 = disabled). Mutable at runtime via the
-  // in-panel 'b' numeric entry or the /cost budget <usd> command — both call
+  // in-panel 'b' numeric entry or the /cost budget <usd> command, both call
   // setBudgetThreshold() below. When configAccess is wired (production path),
-  // this field is a cache only — currentBudgetThreshold() re-reads
+  // this field is a cache only, currentBudgetThreshold() re-reads
   // behavior.budgetAlertUsd from config on every use so the panel and the
   // background budget-breach notifier (core/budget-breach-notifier.ts) never
   // disagree about the threshold. Tests that omit configAccess fall back to
@@ -147,7 +147,7 @@ export class CostTrackerPanel extends BasePanel {
   // Getter for live orchestrator usage
   private readonly getOrchestratorUsage: () => UsageSnapshot & { model?: string };
 
-  // Optional resolver for agent usage on completion — enables real cost attribution.
+  // Optional resolver for agent usage on completion, enables real cost attribution.
   // When omitted, completed agents show $0 (honest: data unavailable).
   private readonly getAgentStatus: ((agentId: string) => AgentRecord | null) | undefined;
 
@@ -188,7 +188,7 @@ export class CostTrackerPanel extends BasePanel {
 
     // Refresh mid-turn too: a single turn can span many LLM calls (tool
     // loops), so waiting for TURN_COMPLETED leaves the meter frozen for the
-    // whole turn. LLM_RESPONSE_RECEIVED fires per call — same refresh path.
+    // whole turn. LLM_RESPONSE_RECEIVED fires per call, same refresh path.
     this.unsubs.push(
       turnEvents.on('LLM_RESPONSE_RECEIVED', () => this.refreshSessionCost()),
     );
@@ -209,7 +209,7 @@ export class CostTrackerPanel extends BasePanel {
       }),
     );
 
-    // Agent completed — capture real token usage via AgentRecord when available
+    // Agent completed, capture real token usage via AgentRecord when available
     this.unsubs.push(
       agentEvents.on('AGENT_COMPLETED', (payload) => {
         const entry = this.agents.get(payload.agentId);
@@ -281,7 +281,7 @@ export class CostTrackerPanel extends BasePanel {
   }
 
   override onDeactivate(): void {
-    // Stop polling while hidden — nothing to catch up on that a fresh
+    // Stop polling while hidden, nothing to catch up on that a fresh
     // onActivate() poll won't cover.
     this.stopStatusPollTimer();
   }
@@ -306,7 +306,7 @@ export class CostTrackerPanel extends BasePanel {
   /**
    * Poll getAgentStatus() for every agent still marked 'running'. Completion
    * already captures real usage via AGENT_COMPLETED, but a long-running agent
-   * would otherwise show 'unknown' tokens / $0 cost for its entire lifetime —
+   * would otherwise show 'unknown' tokens / $0 cost for its entire lifetime,
    * this fills the row in as usage becomes available mid-flight.
    */
   private pollRunningAgents(): void {
@@ -349,7 +349,7 @@ export class CostTrackerPanel extends BasePanel {
   /**
    * The budget-threshold entry field wants every character of a burst
    * (paste, or fast typing landing in one input.feed() call) delivered one
-   * at a time, same as it always has — see the interface doc on
+   * at a time, same as it always has, see the interface doc on
    * `Panel.isCapturingTextBurst`.
    */
   isCapturingTextBurst(): boolean {
@@ -369,7 +369,7 @@ export class CostTrackerPanel extends BasePanel {
 
     if (key === 'p') {
       // One action from any price display: edit the manual price for the
-      // session's provider:model. Needs a wired config (production path) —
+      // session's provider:model. Needs a wired config (production path),
       // without one the key falls through rather than opening a dead editor.
       if (!this.configAccess) return false;
       this.priceEntry = '';
@@ -410,7 +410,7 @@ export class CostTrackerPanel extends BasePanel {
       }
       return true;
     }
-    // Digits and a single decimal point only — this is a USD amount, not free text.
+    // Digits and a single decimal point only, this is a USD amount, not free text.
     if (key.length === 1 && /[0-9.]/.test(key) && !(key === '.' && this.budgetEntry?.includes('.'))) {
       this.budgetEntry = (this.budgetEntry ?? '') + key;
       this.markDirty();
@@ -456,7 +456,7 @@ export class CostTrackerPanel extends BasePanel {
       }
       return true;
     }
-    // Two USD amounts separated by a comma (or space) — digits, dots, comma, space.
+    // Two USD amounts separated by a comma (or space), digits, dots, comma, space.
     if (key.length === 1 && /[0-9., ]/.test(key)) {
       this.priceEntry = (this.priceEntry ?? '') + key;
       this.markDirty();
@@ -467,7 +467,7 @@ export class CostTrackerPanel extends BasePanel {
 
   /**
    * Scroll the agent list. Over-consumption fix: only absorbs the key (and
-   * only advances) when the agent list is actually long enough to scroll —
+   * only advances) when the agent list is actually long enough to scroll,
    * mirrors the same `> 5` threshold render() uses to decide whether to show
    * scroll hints (below). Previously this always returned true and grew
    * scrollOffset unboundedly even with a handful of agents, swallowing
@@ -506,7 +506,7 @@ export class CostTrackerPanel extends BasePanel {
     const sourceDescription = sessionPriced ? describePricingSource(this.sessionModel) : null;
     const sourceStr = sessionPriced
       ? (sourceDescription ? ` (${sourceDescription})` : '')
-      : ' — press p to set a price';
+      : ': press p to set a price';
     const budgetStr = budgetThreshold > 0
       ? ` / ${formatCost(budgetThreshold)}`
       : '';
@@ -514,7 +514,7 @@ export class CostTrackerPanel extends BasePanel {
     const sessionLines: Line[] = [
       this.renderKeyValue(width, ' Total', `${costStr}${budgetStr}${alertStr}${sourceStr}`, costFg),
     ];
-    // Budget meter — the single most important glance for this panel: how much
+    // Budget meter, the single most important glance for this panel: how much
     // of the configured budget the session has consumed. Only shown when a
     // budget is set (otherwise the bar would be meaningless).
     if (budgetThreshold > 0) {
@@ -570,7 +570,7 @@ export class CostTrackerPanel extends BasePanel {
       const planCost = agentList.reduce((sum, a) => sum + a.cost, 0);
       const running = agentList.filter((a) => a.status === 'running').length;
       const failed = agentList.filter((a) => a.status === 'failed').length;
-      // Plan total mixes the session model with every agent's model — flag it
+      // Plan total mixes the session model with every agent's model, flag it
       // as unpriced (rather than showing a sum that silently omits unpriced
       // agents' contribution) if any one of them has no real pricing.
       const planHasUnpriced = !isModelPriced(this.sessionModel) || agentList.some((a) => !isModelPriced(a.model));
@@ -582,7 +582,7 @@ export class CostTrackerPanel extends BasePanel {
           ...(running > 0 ? [{ text: `  ${running} running`, fg: C.running }] : []),
           ...(failed > 0 ? [{ text: `  ${failed} failed`, fg: C.bad }] : []),
         ]),
-        // Per-agent cost ledger as an aligned table — agent, model, tokens, cost
+        // Per-agent cost ledger as an aligned table, agent, model, tokens, cost
         // line up in columns instead of wrapping across two ragged rows.
         ...buildTable(
           width,
@@ -684,7 +684,7 @@ export class CostTrackerPanel extends BasePanel {
     ]);
   }
 
-  // Non-masked numeric entry for the 'b' budget-alert key — the value is a
+  // Non-masked numeric entry for the 'b' budget-alert key, the value is a
   // USD amount, not a secret, so (unlike LocalAuthPanel's masked entry) it is
   // echoed directly rather than dotted out.
   private renderBudgetEntryPrompt(width: number, height: number): Line[] {
@@ -698,7 +698,7 @@ export class CostTrackerPanel extends BasePanel {
       buildPanelLine(width, [[' [Enter] Confirm   [Esc] Cancel   [Backspace] Delete char', C.dim]]),
     ];
     const workspace = buildPanelWorkspace(width, height, {
-      title: ' Cost Tracker — Budget',
+      title: ' Cost Tracker: Budget',
       intro: 'Type a USD amount and press Enter to set the budget alert threshold.',
       sections: [{ lines: promptLines }],
       palette: DEFAULT_PANEL_PALETTE,
@@ -710,7 +710,7 @@ export class CostTrackerPanel extends BasePanel {
   // Non-masked entry for the 'p' manual-price key. Two USD-per-1M-token
   // amounts (input,output); persists to pricing.modelPrices for the session's
   // provider:model live. A model without a provider prefix cannot carry a
-  // manual price (the settings key is keyed provider:model) — the prompt says
+  // manual price (the settings key is keyed provider:model), the prompt says
   // so instead of accepting a value it could not store.
   private renderPriceEntryPrompt(width: number, height: number): Line[] {
     const editable = this.canEditSessionModelPrice();
@@ -719,7 +719,7 @@ export class CostTrackerPanel extends BasePanel {
     const promptLines: Line[] = editable
       ? [
           buildPanelLine(width, [[` Set your manual price for ${this.sessionModel} (USD per 1M tokens).`, C.label]]),
-          buildPanelLine(width, [[' Format: input,output — for example 3.00,15.00', C.dim]]),
+          buildPanelLine(width, [[' Format: input,output, for example 3.00,15.00', C.dim]]),
           buildPanelLine(width, [['', C.label]]),
           buildPanelLine(width, [[' Price  ', C.label], [display, C.cost]]),
           buildPanelLine(width, [['', C.label]]),
@@ -732,7 +732,7 @@ export class CostTrackerPanel extends BasePanel {
           buildPanelLine(width, [[' [Esc] Close', C.dim]]),
         ];
     const workspace = buildPanelWorkspace(width, height, {
-      title: ' Cost Tracker — Model Price',
+      title: ' Cost Tracker: Model Price',
       intro: editable
         ? 'Your price wins over provider and catalog prices, immediately and everywhere.'
         : 'Manual prices are stored per provider:model.',

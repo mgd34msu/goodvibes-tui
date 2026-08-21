@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // pairing-tailscale-gateway.ts
 //
-// The two tailscale verbs the pairing surfaces drive — a read-only detection
-// (tailscale.get) and the one-action serve (tailscale.serve.run) — over the
+// The two tailscale verbs the pairing surfaces drive, a read-only detection
+// (tailscale.get) and the one-action serve (tailscale.serve.run), over the
 // same generic operator invoke path the fleet acts use (resolveOperatorRpc ->
 // sdk.operator.invoke), reaching the SAME daemon the command layer does.
 //
@@ -25,7 +25,7 @@ export interface PairingTailscaleGatewayDeps {
 
 /**
  * Probe tailscale (tailscale.get). Returns the honest status, or null when the
- * daemon is unreachable / the call fails — the pairing surface then stays quiet.
+ * daemon is unreachable / the call fails, the pairing surface then stays quiet.
  */
 export async function probePairingTailscale(
   deps: PairingTailscaleGatewayDeps,

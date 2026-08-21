@@ -2,7 +2,7 @@
  * UX Anti-Regression: Resume/Recovery With Active State (v3 §18.5)
  *
  * Verifies that recovering a session with active panels and overlays
- * restores correct state — panels reopen, overlays remain in their
+ * restores correct state, panels reopen, overlays remain in their
  * pre-suspend visibility state, and session metadata is reconciled.
  *
  * Also covers the blocking-input recovery prompt contract:
@@ -11,7 +11,7 @@
  * - Ctrl+R restores messages, title, titleSource and reopens panels
  * - File is deleted only after a successful restore
  *
- * All tests use pure state manipulation — no real I/O, no event bus.
+ * All tests use pure state manipulation, no real I/O, no event bus.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
@@ -56,7 +56,7 @@ function makePanelState(openPanelIds: PanelId[], focusedPanelId: PanelId): Panel
   };
 }
 
-/** Simulate a suspended state — panels closed, session status suspended. */
+/** Simulate a suspended state, panels closed, session status suspended. */
 function buildSuspendedState(activeState: RuntimeState): RuntimeState {
   const activePanelState = selectPanels(activeState);
   const closedPanels = new Map(activePanelState.panels);
@@ -114,7 +114,7 @@ function applyResume(
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('ux:resume-recovery — restore session with active panels and overlays', () => {
+describe('ux:resume-recovery; restore session with active panels and overlays', () => {
   let state: RuntimeState;
 
   beforeEach(() => {

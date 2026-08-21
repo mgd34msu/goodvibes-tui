@@ -1,12 +1,12 @@
 /**
- * recovery-decisions-housekeeping.test.ts — the reaping half of the removal
+ * recovery-decisions-housekeeping.test.ts, the reaping half of the removal
  * ledger: that its bounds are actually applied to DISK (not merely filtered on
  * read), that every discard is disclosed rather than silent, and that a torn or
  * concurrently-written ledger is never mistaken for an empty one.
  *
  * The defect this covers: the ledger's 200-record cap and 90-day TTL were both
  * correct, but expired records were only filtered in memory on read and only
- * removed from disk the next time the user happened to answer "Remove" — which
+ * removed from disk the next time the user happened to answer "Remove", which
  * on most machines is never. And whatever was dropped was dropped in silence,
  * which is indistinguishable from data loss.
  */
@@ -85,7 +85,7 @@ describe('the ledger is actually reaped on disk, not just filtered on read', () 
     expect(outcome.expired).toBe(2);
     expect(outcome.kept).toBe(1);
 
-    // The reap landed on disk — the old defect was that it only ever happened
+    // The reap landed on disk, the old defect was that it only ever happened
     // in memory, so the file kept both expired records forever.
     const onDisk = JSON.parse(readLedgerRaw()) as RecoveryRemovalRecord[];
     expect(onDisk.map((r) => r.sessionId)).toEqual(['still-live']);
@@ -125,7 +125,7 @@ describe('the ledger is actually reaped on disk, not just filtered on read', () 
     expect((JSON.parse(readLedgerRaw()) as RecoveryRemovalRecord[]).map((r) => r.sessionId)).toEqual(['real']);
   });
 
-  test('a prune that drops nothing rewrites nothing — idempotent and safe to repeat', () => {
+  test('a prune that drops nothing rewrites nothing; idempotent and safe to repeat', () => {
     const now = Date.now();
     seedLedger(JSON.stringify([record('keeper', now - DAY_MS)], null, 2));
     const before = statSync(recoveryDecisionsPathFor(surface)).mtimeMs;
@@ -156,7 +156,7 @@ describe('the ledger is actually reaped on disk, not just filtered on read', () 
     expect(again.kept).toBe(1);
   });
 
-  test('no ledger on disk is a clean no-op — nothing is created', () => {
+  test('no ledger on disk is a clean no-op; nothing is created', () => {
     const outcome = pruneRecoveryDecisions(surface, Date.now());
     expect(outcome).toEqual({ expired: 0, malformed: 0, overCap: 0, kept: 0, unreadable: false });
     expect(existsSync(recoveryDecisionsPathFor(surface))).toBe(false);
@@ -184,7 +184,7 @@ describe('nothing is deleted in silence', () => {
     expect(disclosure?.data?.maxRecords).toBe(200);
   });
 
-  test('a prune with nothing to discard says nothing — disclosure is for deletions, not for boots', () => {
+  test('a prune with nothing to discard says nothing; disclosure is for deletions, not for boots', () => {
     const now = Date.now();
     seedLedger(JSON.stringify([record('keeper', now - DAY_MS)], null, 2));
     const { infos } = withCapturedLogs(() => pruneRecoveryDecisions(surface, now));
@@ -209,7 +209,7 @@ describe('nothing is deleted in silence', () => {
     expect(onDisk.map((r) => r.sessionId).sort()).toEqual(['brand-new', 'live']);
   });
 
-  test('an unreadable ledger is reported and LEFT ALONE — "cannot read" never becomes "forgot everything"', () => {
+  test('an unreadable ledger is reported and LEFT ALONE; "cannot read" never becomes "forgot everything"', () => {
     seedLedger('{ this is not, valid json');
     const before = readLedgerRaw();
 
@@ -256,7 +256,7 @@ describe('a crash-damaged ledger is rejected by content, never trusted because i
 });
 
 describe('the ledger write survives being interrupted', () => {
-  test('writes go through a temp file and land atomically — no torn ledger is ever visible', () => {
+  test('writes go through a temp file and land atomically; no torn ledger is ever visible', () => {
     const now = Date.now();
     recordRecoveryRemoval(surface, 'sess-atomic', now);
     const path = recoveryDecisionsPathFor(surface);

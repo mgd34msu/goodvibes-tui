@@ -150,7 +150,7 @@ export function handleEscape(state: EscapeState): {
         state.autocompleteReset();
         // Esc's palette-dismiss convention: a bare '/' with nothing typed
         // after it IS the palette, so Esc clears it along with the slash
-        // (first Esc, one step, done — no lingering '/' to backspace out).
+        // (first Esc, one step, done, no lingering '/' to backspace out).
         // Once the user has typed a command name (or anything else) past
         // the slash, Esc's job is only to dismiss the ghost-suggestion
         // overlay; the typed text is real composer content and stays put,

@@ -187,7 +187,7 @@ describe('CodeIntelligence.getEnclosingScope', () => {
 describe('CodeIntelligence.hasLsp', () => {
   it('returns false when no server configured', async () => {
     const ci = makeFreshIntelligence();
-    // No server registered, command not on PATH — both conditions cause false
+    // No server registered, command not on PATH, both conditions cause false
     const result = await ci.hasLsp('file.ts');
     expect(result).toBe(false);
   });
@@ -485,7 +485,7 @@ describe('pathToUri / uriToPath', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Minimal mock for TreeSitterService — returns a fake tree and language
+ * Minimal mock for TreeSitterService, returns a fake tree and language
  * so the facade can exercise its delegation logic without WASM.
  */
 function makeMockTreeSitter() {
@@ -506,7 +506,7 @@ function makeMockTreeSitter() {
 }
 
 /**
- * Minimal mock for LspService — no real servers, returns predictable data.
+ * Minimal mock for LspService, no real servers, returns predictable data.
  */
 function makeMockLspService(responses: Record<string, unknown> = {}) {
   const mockClient = {
@@ -549,7 +549,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
     const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     // findEnclosingScope returns null when no matching scope is found in fake tree
     const result = await ci.getEnclosingScope('src/index.ts', 'function foo() {}', 0);
-    // Result is null or a scope object — either is acceptable; it must not throw
+    // Result is null or a scope object, either is acceptable; it must not throw
     expect(result === null || typeof result === 'object').toBe(true);
   });
 
@@ -623,7 +623,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
 
   it('getDocumentSymbols falls back to tree-sitter when LSP returns empty', async () => {
     const ts = makeMockTreeSitter();
-    // LSP returns empty array — should fall back to tree-sitter
+    // LSP returns empty array, should fall back to tree-sitter
     const lsp = makeMockLspService({ 'textDocument/documentSymbol': [] });
     const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     // Fake tree-sitter returns [] too (no real grammar), but execution reaches tree-sitter path

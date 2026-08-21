@@ -23,7 +23,7 @@ export const UNDO_COALESCE_MS = 500;
 export type EditKind = 'text' | 'kill' | 'yank' | 'other';
 
 /**
- * shouldCoalesceUndo — returns true when the new edit should be merged into
+ * shouldCoalesceUndo, returns true when the new edit should be merged into
  * the most recent undo group rather than creating a new snapshot.
  *
  * Coalesces only when:

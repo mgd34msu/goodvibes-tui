@@ -1,5 +1,5 @@
 /**
- * light-transcript-chrome.test.ts — ux/light-transcript wiring.
+ * light-transcript-chrome.test.ts, ux/light-transcript wiring.
  *
  * The transcript-side chrome that paints on the TRANSPARENT terminal background
  * (tool-call status glyphs, the footer risk:remote marker, the idle
@@ -9,9 +9,9 @@
  * mode those foregrounds invert toward dark so they read on a light terminal.
  *
  * Each site is proven two ways:
- *   1. The flip is real — the light render's colour set differs from dark, and
+ *   1. The flip is real, the light render's colour set differs from dark, and
  *      the exact designed light hex appears (dark hex disappears).
- *   2. The dark path is untouched — the dark render is byte-identical across
+ *   2. The dark path is untouched, the dark render is byte-identical across
  *      renders AND carries the pre-change dark hex (the values are byte-equal to
  *      the old static reads, so every dark golden in the suite stays put).
  *
@@ -55,7 +55,7 @@ describe('tool-call status glyph flips with themeMode', () => {
   const doneCall: ToolCall = { id: 'c1', name: 'read', arguments: { path: 'src/x.ts' } };
   const errorCall: ToolCall = { id: 'c2', name: 'write', arguments: { path: 'src/y.ts' } };
 
-  test('done ✓ uses chrome.good — #22c55e dark, #15803d light', () => {
+  test('done ✓ uses chrome.good: #22c55e dark, #15803d light', () => {
     const dark = fgSet(renderToolCallBlock(doneCall, 'done', '3 lines', W, 1_500));
     const light = fgSet(underLight(() => renderToolCallBlock(doneCall, 'done', '3 lines', W, 1_500)));
     expect(dark.has('#22c55e')).toBe(true);
@@ -64,7 +64,7 @@ describe('tool-call status glyph flips with themeMode', () => {
     expect(light.has('#22c55e')).toBe(false);
   });
 
-  test('error ✕ + error suffix use chrome.bad — #ef4444 dark, #dc2626 light', () => {
+  test('error ✕ + error suffix use chrome.bad: #ef4444 dark, #dc2626 light', () => {
     const dark = fgSet(renderToolCallBlock(errorCall, 'error', undefined, W, undefined, 'permission denied'));
     const light = fgSet(underLight(() => renderToolCallBlock(errorCall, 'error', undefined, W, undefined, 'permission denied')));
     expect(dark.has('#ef4444')).toBe(true);
@@ -89,7 +89,7 @@ describe('footer risk:remote marker flips with themeMode', () => {
     'plan', 'idle', undefined, 'remote', false,
   );
 
-  test('risk:remote uses chrome.remote — #a78bfa dark, #6d28d9 light (distinct from reasoningAccent #7c3aed)', () => {
+  test('risk:remote uses chrome.remote; #a78bfa dark, #6d28d9 light (distinct from reasoningAccent #7c3aed)', () => {
     const dark = fgSet(footer());
     const light = fgSet(underLight(footer));
     expect(dark.has('#a78bfa')).toBe(true);
@@ -102,7 +102,7 @@ describe('footer risk:remote marker flips with themeMode', () => {
 
 // ── idle process-indicator status line (accent.brand) ──────────────────────
 describe('process-indicator plain status flips with themeMode', () => {
-  test('active status uses accent.brand — #00ffff dark, #0077aa light', () => {
+  test('active status uses accent.brand: #00ffff dark, #0077aa light', () => {
     const dark = fgSet(renderProcessIndicator(W, 1, 0));
     const light = fgSet(underLight(() => renderProcessIndicator(W, 1, 0)));
     expect(dark.has('#00ffff')).toBe(true);
@@ -114,7 +114,7 @@ describe('process-indicator plain status flips with themeMode', () => {
 
 // ── system-message left-border notices (BORDERS sweep) ─────────────────────
 describe('system-message border/text flip with themeMode', () => {
-  test('error border uses chrome.bad — #ef4444 dark, #dc2626 light', () => {
+  test('error border uses chrome.bad: #ef4444 dark, #dc2626 light', () => {
     const dark = fgSet(renderSystemMessage('the build failed with an error', W, 'error'));
     const light = fgSet(underLight(() => renderSystemMessage('the build failed with an error', W, 'error')));
     expect(dark.has('#ef4444')).toBe(true);
@@ -122,7 +122,7 @@ describe('system-message border/text flip with themeMode', () => {
     expect(light.has('#ef4444')).toBe(false);
   });
 
-  test('warning border uses chrome.warn — #f59e0b dark, #b45309 light', () => {
+  test('warning border uses chrome.warn: #f59e0b dark, #b45309 light', () => {
     const dark = fgSet(renderSystemMessage('context usage is high', W, 'warning'));
     const light = fgSet(underLight(() => renderSystemMessage('context usage is high', W, 'warning')));
     expect(dark.has('#f59e0b')).toBe(true);
@@ -130,7 +130,7 @@ describe('system-message border/text flip with themeMode', () => {
     expect(light.has('#f59e0b')).toBe(false);
   });
 
-  test('info border=state.info + text=chrome.faint — #38bdf8/#475569 dark, #0369a1/#94a3b8 light', () => {
+  test('info border=state.info + text=chrome.faint: #38bdf8/#475569 dark, #0369a1/#94a3b8 light', () => {
     const dark = fgSet(renderSystemMessage('[Plan] step complete', W, 'info'));
     const light = fgSet(underLight(() => renderSystemMessage('[Plan] step complete', W, 'info')));
     expect(dark.has('#38bdf8')).toBe(true); // state.info (dark)
@@ -145,7 +145,7 @@ describe('system-message border/text flip with themeMode', () => {
 describe('thinking block accent/text flip with themeMode', () => {
   const TEXT = 'Weighing the two approaches and going with the second one.';
 
-  test('accent=state.reasoning + text=chrome.faint — #a855f7/#475569 dark, #7c3aed/#94a3b8 light', () => {
+  test('accent=state.reasoning + text=chrome.faint: #a855f7/#475569 dark, #7c3aed/#94a3b8 light', () => {
     const dark = fgSet(renderThinkingBlock(TEXT, W));
     const light = fgSet(underLight(() => renderThinkingBlock(TEXT, W)));
     expect(dark.has('#a855f7')).toBe(true); // state.reasoning (dark)

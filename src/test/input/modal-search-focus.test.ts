@@ -152,7 +152,7 @@ describe('modal search focus routing', () => {
       },
     ], 'gpt-1');
     // Search starts focused by default now (see openAllModels() doc
-    // comment) — this test is specifically about hotkey behavior OUTSIDE
+    // comment), this test is specifically about hotkey behavior OUTSIDE
     // search, so set up that precondition explicitly.
     picker.blurSearch();
 
@@ -227,7 +227,7 @@ describe('modal search focus routing', () => {
         tier: 'premium',
       },
     ], 'gpt-1');
-    // This test is specifically "outside search" — search now starts
+    // This test is specifically "outside search", search now starts
     // focused by default (see openAllModels() doc comment).
     picker.blurSearch();
 
@@ -250,7 +250,7 @@ describe('modal search focus routing', () => {
     expect(picker.benchmarkSort).toBe('composite');
   });
 
-  test('model picker appends space to search query when searchFocused — no context-cap hijack', () => {
+  test('model picker appends space to search query when searchFocused; no context-cap hijack', () => {
     // Regression test for #21: space while searchFocused must go to query even
     // when the highlighted item is a local model.
     const local: Parameters<typeof ModelPickerModal.prototype.openAllModels>[0][0] = {
@@ -319,7 +319,7 @@ describe('modal search focus routing', () => {
     for (const ch of 'claude') {
       handleModelPickerToken(state, { type: 'text', value: ch });
     }
-    // The whole word reached the query — none of it was hijacked by the
+    // The whole word reached the query, none of it was hijacked by the
     // c/a hotkeys (capabilityFilter/availableOnly must be untouched).
     expect(picker.query).toBe('claude');
     expect(picker.capabilityFilter).toBe('none');

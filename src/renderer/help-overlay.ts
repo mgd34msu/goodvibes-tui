@@ -1,8 +1,8 @@
 /**
- * renderHelpOverlay — renders the help overlay with keyboard shortcuts and slash commands.
+ * renderHelpOverlay, renders the help overlay with keyboard shortcuts and slash commands.
  *
  * Opened via `/commands`. `?` and `/help` open the searchable command
- * browser (a selection modal that runs the picked command) instead — they
+ * browser (a selection modal that runs the picked command) instead, they
  * are a different, complementary surface, not this one.
  */
 
@@ -80,7 +80,7 @@ export function renderHelpOverlay(
     `  ${'Shift+Enter'.padEnd(20)}  Insert newline`,
     `  ${kb('paste').padEnd(20)}  Paste (image priority)`,
     `  ${(kb('undo') + ' / ' + kb('redo')).padEnd(20)}  Undo / redo`,
-    shortcutLine('(paste >8 lines)', 'Folds to [TEXT: pN, M lines] — /pastes previews it before you submit'),
+    shortcutLine('(paste >8 lines)', 'Folds to [TEXT: pN, M lines]; /pastes previews it before you submit'),
     '',
     '  Overlays And Panels',
     '  ' + '\u2500'.repeat(40),
@@ -213,7 +213,7 @@ export function renderHelpOverlay(
 
   const allRows = [...shortcutRows, ...commandRows];
 
-  // Apply scroll offset — show a window of rows
+  // Apply scroll offset, show a window of rows
   const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
     chromeRows: 4,
     minContentRows: 8,
@@ -249,7 +249,7 @@ export function renderHelpOverlay(
 }
 
 /**
- * renderShortcutsOverlay — renders keyboard shortcuts as Line[].
+ * renderShortcutsOverlay, renders keyboard shortcuts as Line[].
  * Accessed via /shortcuts command. Reflects live keybindings (user overrides included).
  */
 export function renderShortcutsOverlay(

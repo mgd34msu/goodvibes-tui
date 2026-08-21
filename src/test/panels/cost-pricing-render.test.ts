@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// cost-pricing-render.test.ts — the cost surfaces render dollars with their
+// cost-pricing-render.test.ts, the cost surfaces render dollars with their
 // source ("your price" vs "catalog price, as of <date>"), the explicit
 // "price unknown" marker (never $0.00) with its one-key fix, the manual
 // price editor persisting to pricing.modelPrices live, and unpriced-spend
 // honesty wherever budget state shows.
 //
 // Line assertions on descriptive text are FULL-STRING at 80 and 60 columns.
-// The resolver is injected per test and cleared after — never live state.
+// The resolver is injected per test and cleared after, never live state.
 // ---------------------------------------------------------------------------
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
@@ -104,7 +104,7 @@ describe('cost panel: dollars carry their source; unknown prices carry the fix',
     await completeTurn(bus, flush);
     const texts = linesToText(panel.render(60, 24));
     const totalLine = texts.find((t) => t.trimStart().startsWith('Total'));
-    expect(totalLine).toBe(' Total    : price unknown — press p to set a price          ');
+    expect(totalLine).toBe(' Total    : price unknown: press p to set a price           ');
     expect(totalLine).not.toContain('$0.00');
   });
 

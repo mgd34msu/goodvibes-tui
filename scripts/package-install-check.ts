@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * package-install-check.ts — static "as it would install" verification.
+ * package-install-check.ts, static "as it would install" verification.
  *
  * The shared tarball path/size policy + bin-shim (present/executable/shebang)
  * checks are owned by @pellux/goodvibes-toolchain and driven by this repo's

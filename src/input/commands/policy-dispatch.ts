@@ -219,7 +219,7 @@ async function handlePreflight(_args: string[], context: CommandContext): Promis
   context.print(`[policy] ${review.summary}`);
   for (const issue of review.issues.slice(0, 8)) {
     const subject = issue.serverName ? ` ${issue.serverName}` : '';
-    const detail = issue.detail ? ` — ${issue.detail}` : '';
+    const detail = issue.detail ? `: ${issue.detail}` : '';
     context.print(`  [${issue.severity.toUpperCase()}] ${issue.source}${subject}: ${issue.message}${detail}`);
   }
 }
@@ -235,14 +235,14 @@ async function handlePromote(args: string[], context: CommandContext): Promise<v
   if (!result.ok) {
     context.print(`[policy] Promotion blocked: ${result.error}`);
     if (result.gate) {
-      context.print(`[policy] Gate: ${result.gate.status} — divergence rate ${result.gate.divergenceRate !== undefined ? fmtRate(result.gate.divergenceRate) : 'unknown'} (threshold ${fmtRate(result.gate.threshold)}, ${result.gate.totalEvaluations} evaluations).`);
+      context.print(`[policy] Gate: ${result.gate.status}; divergence rate ${result.gate.divergenceRate !== undefined ? fmtRate(result.gate.divergenceRate) : 'unknown'} (threshold ${fmtRate(result.gate.threshold)}, ${result.gate.totalEvaluations} evaluations).`);
     }
     return;
   }
   const current = registry.getCurrent();
   context.print(`[policy] Promoted: "${result.bundleId}" is now the active enforcement policy.`);
   if (result.gate) {
-    context.print(`[policy] Gate at promotion: ${result.gate.status} — divergence rate ${result.gate.divergenceRate !== undefined ? fmtRate(result.gate.divergenceRate) : 'unknown'} (threshold ${fmtRate(result.gate.threshold)}).`);
+    context.print(`[policy] Gate at promotion: ${result.gate.status}; divergence rate ${result.gate.divergenceRate !== undefined ? fmtRate(result.gate.divergenceRate) : 'unknown'} (threshold ${fmtRate(result.gate.threshold)}).`);
   }
   if (current) context.print(bundleSummary('[policy] Active bundle', current));
   policyState.notify();
@@ -280,7 +280,7 @@ async function handleStatus(_args: string[], context: CommandContext): Promise<v
   const dashboard = policyState.getDashboard();
   if (dashboard) {
     const snap = dashboard.getSnapshot();
-    context.print(`[policy] Divergence gate: ${snap.gate.status} — ${snap.gate.divergenceRate !== undefined ? fmtRate(snap.gate.divergenceRate) : fmtRate(snap.report.overall.divergenceRate)} (${snap.report.overall.totalEvaluations} evaluations).`);
+    context.print(`[policy] Divergence gate: ${snap.gate.status}; ${snap.gate.divergenceRate !== undefined ? fmtRate(snap.gate.divergenceRate) : fmtRate(snap.report.overall.divergenceRate)} (${snap.report.overall.totalEvaluations} evaluations).`);
   } else {
     context.print('[policy] No active simulation dashboard.');
   }
@@ -306,11 +306,11 @@ export function renderPolicyUsage(): string {
 // this._state.recordTrendEntry() directly and /policy had no equivalent verb.
 // This exposes it as a thin wrapper: recordTrendEntry() forwards to the attached
 // DivergencePanel, so it only captures a sample while a simulation dashboard is
-// active — reported honestly here rather than silently no-op'ing.
+// active, reported honestly here rather than silently no-op'ing.
 function handleRecordTrend(_args: string[], context: CommandContext): void {
   const policyState = getPolicyState(context);
   if (!policyState.getDashboard()) {
-    context.print('[policy] No active simulation dashboard — nothing to sample. Run `/policy simulate` first, then `/policy record-trend`.');
+    context.print('[policy] No active simulation dashboard; nothing to sample. Run `/policy simulate` first, then `/policy record-trend`.');
     return;
   }
   policyState.recordTrendEntry();

@@ -2,15 +2,15 @@
 // memory-diagnostics-gateway.ts
 //
 // The daemon-backed verb the /health memory (doctor) surface reads:
-// ops.memory.get (GET /api/ops/memory) — the read-only MemoryGovernor snapshot.
-// No named facade exists on the in-process OperatorClient, so — exactly like
-// the memory-consolidation and voice-provisioning gateways — it goes over the
+// ops.memory.get (GET /api/ops/memory), the read-only MemoryGovernor snapshot.
+// No named facade exists on the in-process OperatorClient, so, exactly like
+// the memory-consolidation and voice-provisioning gateways, it goes over the
 // generic operator invoke path (operator-rpc.ts's resolveOperatorRpc ->
 // sdk.operator.invoke), reaching the SAME daemon the command layer does.
 //
 // A daemon that predates the memory governor answers an honest 501 (the verb is
 // cataloged but has no handler when no live governor is composed) or a 404 (an
-// older daemon without the route) — both mean "this daemon does not serve
+// older daemon without the route), both mean "this daemon does not serve
 // memory diagnostics", NOT a fabricated all-zero snapshot (see
 // classifyMemoryDiagnosticsError). The interface is injectable so the command
 // and its tests round-trip against a mocked daemon.
@@ -30,7 +30,7 @@ export interface MemoryDiagnosticsGateway {
 /**
  * Why the gateway could not be built (daemon disabled / no control-plane URL),
  * surfaced verbatim so the surface prints an honest "unavailable" line rather
- * than guessing — mirrors the memory-consolidation / voice gateways.
+ * than guessing, mirrors the memory-consolidation / voice gateways.
  */
 export type MemoryDiagnosticsGatewayResolution =
   | { readonly available: true; readonly gateway: MemoryDiagnosticsGateway }
@@ -43,7 +43,7 @@ export interface MemoryDiagnosticsGatewayDeps {
 
 /**
  * Build the live memory-diagnostics gateway over the generic operator invoke
- * path — the same daemon resolution the command layer uses. Returns an honest
+ * path, the same daemon resolution the command layer uses. Returns an honest
  * unavailable reason when no daemon is reachable.
  */
 export function createMemoryDiagnosticsGateway(deps: MemoryDiagnosticsGatewayDeps): MemoryDiagnosticsGatewayResolution {
@@ -66,7 +66,7 @@ export const MEMORY_DIAGNOSTICS_UNAVAILABLE = 'this daemon does not serve memory
 
 /**
  * Classify an ops.memory.get rejection: a 501 (a daemon composed without a live
- * governor — the verb is cataloged but unhandled) or a 404 (an older daemon
+ * governor, the verb is cataloged but unhandled) or a 404 (an older daemon
  * without the route) are both "verb unavailable"; anything else (network,
  * 401/403, 500) is a generic error.
  */
@@ -79,7 +79,7 @@ export function classifyMemoryDiagnosticsError(error: unknown): MemoryDiagnostic
 
 /**
  * Render the /health memory (doctor) block from an already-resolved gateway
- * resolution — the testable core the command wraps. Kept separate from the live
+ * resolution, the testable core the command wraps. Kept separate from the live
  * gateway construction so a wire test injects a fake resolution (available /
  * unavailable / failing) with no HTTP.
  */

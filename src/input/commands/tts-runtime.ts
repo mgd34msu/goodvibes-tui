@@ -8,14 +8,14 @@ export function registerTtsRuntimeCommands(registry: CommandRegistry): void {
     handler(args, ctx) {
       const first = (args[0] ?? '').toLowerCase();
 
-      // /tts stop — cancel active playback
+      // /tts stop, cancel active playback
       if (first === 'stop' || first === 'cancel') {
         ctx.stopSpokenOutput?.();
         ctx.print('Live TTS playback stopped.');
         return;
       }
 
-      // /tts on — enable always-speak mode (every turn spoken automatically)
+      // /tts on, enable always-speak mode (every turn spoken automatically)
       if (first === 'on') {
         if (!ctx.platform.voiceService) {
           ctx.print('Live TTS is not available in this runtime.');
@@ -28,7 +28,7 @@ export function registerTtsRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      // /tts off — disable always-speak mode
+      // /tts off, disable always-speak mode
       if (first === 'off') {
         ctx.platform.configManager.setDynamic('ui.voiceEnabled', false);
         ctx.platform.configManager.save();
@@ -37,7 +37,7 @@ export function registerTtsRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      // /tts <prompt> — mark this prompt for spoken output
+      // /tts <prompt>, mark this prompt for spoken output
       const prompt = args.join(' ').trim();
       if (!prompt) {
         const enabled = ctx.platform.configManager.get('ui.voiceEnabled');

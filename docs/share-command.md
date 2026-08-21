@@ -1,4 +1,4 @@
-# /share — Session Export
+# /share: session export
 
 Export the current session to a local file and optionally share it.
 
@@ -12,9 +12,9 @@ Export the current session to a local file and optionally share it.
 
 | Format | Description |
 |--------|-------------|
-| `html` | Self-contained HTML with syntax highlighting — best for sharing |
-| `json` | Structured JSON (machine-readable) — includes token/cost summary |
-| `md`   | Markdown — portable plain-text format |
+| `html` | Self-contained HTML with syntax highlighting, best for sharing |
+| `json` | Structured JSON (machine-readable), includes token/cost summary |
+| `md`   | Markdown, portable plain-text format |
 
 ## Options
 
@@ -22,7 +22,7 @@ Export the current session to a local file and optionally share it.
 |------------|-------------|
 | `--redact` | Redact API keys, tokens, and personal home-directory paths from the output |
 | `--upload` | Upload the export as a secret GitHub Gist and print the share link |
-| `--copy`   | Copy the output file path to the clipboard (OSC 52 — terminal must support it) |
+| `--copy`   | Copy the output file path to the clipboard (OSC 52; terminal must support it) |
 | `--open`   | Open an HTML export in the default browser (`xdg-open` / `open` / `start`) |
 
 Flags can be combined:
@@ -54,7 +54,7 @@ also redacted. The original conversation is never modified.
 
 ## Upload privacy
 
-Gist upload creates a **secret** (unlisted) Gist — it is not indexed by GitHub search
+Gist upload creates a **secret** (unlisted) Gist. It is not indexed by GitHub search
 and is not shown on your profile. However, **anyone with the URL can view it**. Do not
 upload sessions containing secrets without first using `--redact`.
 
@@ -92,6 +92,6 @@ The directory is created automatically.
 
 ## Related
 
-- `/plugin` — manage plugins
-- `/services` — configure external service credentials (including GitHub PAT for upload)
+- `/plugin`: manage plugins
+- `/services`: configure external service credentials (including GitHub PAT for upload)
 - [Deployment and services](deployment-and-services.md)

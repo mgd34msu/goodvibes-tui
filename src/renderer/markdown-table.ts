@@ -1,11 +1,11 @@
 /**
- * markdown-table.ts — box-drawn markdown tables whose cells WRAP.
+ * markdown-table.ts, box-drawn markdown tables whose cells WRAP.
  *
  * The previous implementation (inside markdown.ts) allocated each column a
  * proportional slice of the terminal width and then ellipsized any cell that
  * did not fit: a comparison table rendered "Files, code, and…" in its label
  * column and "citation coverage, checkpoin…" in its content columns, and the
- * cut text was unrecoverable — it was never written to the buffer at all, so
+ * cut text was unrecoverable, it was never written to the buffer at all, so
  * no scroll, copy, or expand could bring it back.
  *
  * This renderer never ellipsizes. A cell that exceeds its column width wraps
@@ -17,7 +17,7 @@
  * gets its full natural width, so a narrow label column is never starved down
  * to one word plus an ellipsis while a wide prose column takes the rest:
  *
- *   1. Each column asks for `desiredMin` — enough to hold its longest single
+ *   1. Each column asks for `desiredMin`, enough to hold its longest single
  *      word (capped at WORD_MIN_CAP so one long URL cannot starve the table),
  *      but never more than the column's natural width and never less than
  *      MIN_COL when the budget allows it.
@@ -31,7 +31,7 @@
  * When even HARD_MIN_COL per column plus the borders exceeds the terminal
  * width, no allocation helps: the box drawing itself does not fit. That case
  * used to write the overflowing columns past the end of the line buffer, where
- * they were discarded — an eight-column table at width 40 lost its last
+ * they were discarded, an eight-column table at width 40 lost its last
  * columns, headers included, with nothing on screen to say so. The renderer now
  * abandons the box at that point and stacks each row as `Header: value` records
  * wrapped to the available width, so every column header and every cell is
@@ -131,7 +131,7 @@ function flattenCellChars(raw: string, isHdr: boolean): StyledChar[] {
 /**
  * Word-aware wrap of a styled character run into lines no wider than `maxW`
  * display columns. A word wider than `maxW` is broken across lines character
- * by character — the text is always emitted in full, never cut.
+ * by character, the text is always emitted in full, never cut.
  */
 function wrapStyledChars(chars: readonly StyledChar[], maxW: number): StyledChar[][] {
   if (maxW <= 0) return [[]];
@@ -306,7 +306,7 @@ function emitStyledLines(
  * Each data row becomes a block of `Header: value` lines wrapped to the
  * available width, separated by a rule. Header text is styled as a header and
  * force-broken rather than cut if it is somehow wider than the terminal, so the
- * guarantee the box layout makes — every column present, nothing truncated —
+ * guarantee the box layout makes, every column present, nothing truncated,
  * holds at any width.
  */
 function renderStackedTable(
@@ -370,7 +370,7 @@ export function renderTable(rows: string[], width: number, indent: number): Line
   const availW = width - indent;
 
   // Measure using stripped text (no markdown markers), both the natural width
-  // and the widest single word — the latter is what a column needs before it
+  // and the widest single word, the latter is what a column needs before it
   // has to start breaking words apart.
   const naturalWidths: number[] = new Array(colCount).fill(0);
   const minWordWidths: number[] = new Array(colCount).fill(0);

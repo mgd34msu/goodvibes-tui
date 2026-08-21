@@ -11,7 +11,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 // ---------------------------------------------------------------------------
 // Knowledge (graph) → config-modal surface (group-B port). Two tabs:
 // 'Browse' (sources/nodes/issues + schedules) and 'Review' (the open-issue
-// queue) — the panel's browse/review toggle, now host tabs. Issue review
+// queue), the panel's browse/review toggle, now host tabs. Issue review
 // mutations (accept/reject/resolve/reopen) route to the `/knowledge
 // review-issue` command. 'm' cross-opens the memory surface. Selection-blind
 // port: the panel's selected-row id/detail is folded into each row label.
@@ -140,7 +140,7 @@ export function createKnowledgeModalSurface(deps: KnowledgeModalDeps): ConfigMod
 }
 
 /**
- * Deterministic golden fixture: fixed node/source/issue/schedule records —
+ * Deterministic golden fixture: fixed node/source/issue/schedule records,
  * no live SDK calls, no random ids, no wall-clock reads.
  */
 export function knowledgeModalGoldenSurface(): ConfigModalSurface {

@@ -1,12 +1,12 @@
 /**
- * hosted-exit.ts — leaving a hosted session because the terminal is closing.
+ * hosted-exit.ts, leaving a hosted session because the terminal is closing.
  *
  * ── Why this exists at all ────────────────────────────────────────────────
  *
  * The detach policy is applied when the LAST attached client detaches. A
  * terminal that simply exits never detaches: the daemon keeps this window in
- * `attachedClients` forever, so a `kill`-policy session — the shipped default,
- * and the behavior closing a client has always had — would quietly NOT be
+ * `attachedClients` forever, so a `kill`-policy session, the shipped default,
+ * and the behavior closing a client has always had, would quietly NOT be
  * killed, and would sit there attached to a process that no longer exists.
  *
  * That is not a cosmetic gap. The owner's ruling is that the capability lands
@@ -52,7 +52,7 @@ export async function leaveHostedSessionOnExit(
 ): Promise<'none' | 'detached' | 'failed'> {
   const feed = options.feed ?? getSharedHostedSessionFeed();
   const record = feed.getState().record;
-  // Closing the socket is this process's own business and is done either way —
+  // Closing the socket is this process's own business and is done either way,
   // an already-terminated session has nothing to detach from, but the stream
   // watching it is still open.
   feed.closeStream();

@@ -21,7 +21,7 @@ export const DEFAULT_CAPABILITIES: readonly OnboardingStep1CapabilityItem[] = [
     // Honest wording (One-Platform daemon-by-default): this avoids browser/LAN/
     // webhook/external-app exposure, but the loopback-only GoodVibes daemon
     // still runs by default for cross-surface visibility on this machine.
-    detail: 'Use GoodVibes only in this terminal. No browser access, HTTP listener, external app surface, or network setup. A loopback-only background daemon still runs by default so sessions here stay visible to other GoodVibes surfaces on this machine — turn it off in Settings > daemon if you want none at all.',
+    detail: 'Use GoodVibes only in this terminal. No browser access, HTTP listener, external app surface, or network setup. A loopback-only background daemon still runs by default so sessions here stay visible to other GoodVibes surfaces on this machine; turn it off in Settings > daemon if you want none at all.',
   },
   {
     id: 'browser-access',

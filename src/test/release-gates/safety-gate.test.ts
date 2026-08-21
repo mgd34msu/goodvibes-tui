@@ -1,5 +1,5 @@
 /**
- * Safety Gate — Release Gate 1
+ * Safety Gate, Release Gate 1
  *
  * Verifies that:
  * - All tool execution goes through the phased executor with permission checks
@@ -90,7 +90,7 @@ describe('safety gate: permission phase', () => {
 
     const result = await permissionPhase(call, {} as Tool, throwingCtx, record);
 
-    // Must NOT pass silently — errors must abort
+    // Must NOT pass silently, errors must abort
     expect(result.success).toBe(false);
     expect(result.abort).toBe(true);
     expect(result.error).toContain('Permission check threw');

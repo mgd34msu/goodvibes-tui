@@ -1,5 +1,5 @@
 /**
- * model-picker-items — pure item-building helpers for ModelPickerModal.
+ * model-picker-items, pure item-building helpers for ModelPickerModal.
  *
  * Converts filtered ModelDefinition/provider arrays into PickerItem lists
  * with group headers, quality-tier badges, pin markers, and configured-via flags.
@@ -55,7 +55,7 @@ export function getModelGroupKey(
 }
 
 // ---------------------------------------------------------------------------
-// toModelItem — single model -> PickerItem
+// toModelItem, single model -> PickerItem
 // ---------------------------------------------------------------------------
 
 export function toModelItem(
@@ -94,7 +94,7 @@ export function toModelItem(
 }
 
 // ---------------------------------------------------------------------------
-// buildModelItems — filtered models -> PickerItem[] with group headers
+// buildModelItems, filtered models -> PickerItem[] with group headers
 // ---------------------------------------------------------------------------
 
 export function buildModelItems(
@@ -151,7 +151,7 @@ export function buildModelItems(
 }
 
 // ---------------------------------------------------------------------------
-// buildProviderItems — filtered providers -> PickerItem[] with group headers
+// buildProviderItems, filtered providers -> PickerItem[] with group headers
 // ---------------------------------------------------------------------------
 
 export function buildProviderItems(
@@ -200,7 +200,7 @@ export function buildProviderItems(
 }
 
 // ---------------------------------------------------------------------------
-// buildEffortItems — effort levels -> PickerItem[]
+// buildEffortItems, effort levels -> PickerItem[]
 // ---------------------------------------------------------------------------
 
 /**

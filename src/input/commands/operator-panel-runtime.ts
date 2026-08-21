@@ -8,7 +8,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
  * [top|bottom]` (item 4). Splits the args array in place (removing the
  * flag + its value) so positional `pane` parsing downstream is unaffected by
  * where the flag appears. Only `open fleet` currently has a deep-link
- * consumer (FleetPanel.receiveDeepLink) — other panel ids just ignore an
+ * consumer (FleetPanel.receiveDeepLink), other panel ids just ignore an
  * unused target via PanelManager's optional-chaining delivery.
  */
 function extractTargetFlag(rest: string[]): PanelDeepLinkTarget | undefined {
@@ -33,7 +33,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
       const sub = args[0]?.toLowerCase() ?? '';
       if (!sub || sub === 'toggle') {
         // (the purge): 'panel-list' (the browse-all-panels picker) was
-        // DELETE-disposition — a picker over a handful of panels is dead
+        // DELETE-disposition, a picker over a handful of panels is dead
         // weight now (see the Ctrl+P selectionModal repoint in
         // shell/ui-openers.ts for its interactive replacement). Bare
         // `/panel` and `/panel toggle` now do what "toggle" actually means:
@@ -43,7 +43,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
         pm.toggle();
         ctx.renderRequest();
       } else if (sub === 'list') {
-        // Print a text listing instead of opening a picker panel — grouped
+        // Print a text listing instead of opening a picker panel, grouped
         // by category from the live registry, so this can never drift from
         // what's actually registered.
         const byCategory = pm.getTypesByCategory();
@@ -51,7 +51,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
         for (const [category, entries] of byCategory) {
           lines.push(`${category}:`);
           for (const entry of entries) {
-            lines.push(`  ${entry.icon} ${entry.id} — ${entry.name}`);
+            lines.push(`  ${entry.icon} ${entry.id}: ${entry.name}`);
           }
         }
         ctx.print(lines.length > 0 ? lines.join('\n') : 'No panels registered.');
@@ -72,7 +72,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           // claiming "Panel opened: <id>".
           const redirectTarget = pm.getModalRedirect(id);
           // focus rule 1a: the command path leaves focus in the composer
-          // ("mid-command-flow") — showPanel does not grab panel focus here.
+          // ("mid-command-flow"), showPanel does not grab panel focus here.
           // forward the deep-link target so the panel lands on the row.
           if (ctx.showPanel) ctx.showPanel(id, pane as 'top' | 'bottom' | undefined, target);
           else {
@@ -81,13 +81,13 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
             ctx.renderRequest();
           }
           if (redirectTarget) {
-            ctx.print(`"${id}" moved to the ${redirectTarget} modal — opening it.`);
+            ctx.print(`"${id}" moved to the ${redirectTarget} modal; opening it.`);
           } else {
             ctx.print(`Panel opened: ${id}${pane ? ` (${pane} pane)` : ''}`);
           }
         } catch (e) {
           // A deleted/unknown panel id throws "No panel type registered with
-          // id: <id>" from PanelManager.open — surface the same friendly line
+          // id: <id>" from PanelManager.open, surface the same friendly line
           // the bare-/panel path uses instead of leaking the raw error. Any
           // genuinely unexpected failure still shows its real message.
           const message = summarizeError(e);
@@ -170,7 +170,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
         const id = args[0]!;
         try {
           // bare `/panel <id>` is the same command path as `/panel open
-          // <id>` — composer stays focused.
+          // <id>`, composer stays focused.
           if (ctx.showPanel) ctx.showPanel(id);
           else {
             pm.open(id);

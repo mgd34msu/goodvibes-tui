@@ -7,7 +7,7 @@ export { CostTrackerPanel } from './cost-tracker-panel.ts';
 export { GitPanel } from './git-panel.ts';
 export { registerBuiltinPanels } from './builtin-panels.ts';
 export type { BuiltinPanelDeps } from './builtin-panels.ts';
-// (the purge) — group B: plugins/skills panels are register-retired but
+// (the purge), group B: plugins/skills panels are register-retired but
 // their modules are retained for shared non-class exports (PluginManagerControls;
 // discoverSkills + SkillRecord/SkillOrigin, consumed by command runtimes and the
 // skills modal). The other group-A and group-B panel classes are deleted outright

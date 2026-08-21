@@ -8,7 +8,7 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
   registry.register({
     name: 'welcome',
     aliases: ['guide'],
-    description: 'Open the product entry surface for the onboarding wizard, security, marketplace, remote, and operator workflows',
+    description: 'Open the product entry point for the onboarding wizard, security, marketplace, remote, and operator workflows',
     usage: '[open|print]',
     handler(args, ctx) {
       const sub = args[0] ?? 'open';

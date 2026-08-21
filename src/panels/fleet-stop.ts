@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // fleet-stop.ts
 //
-// d1 — the "stopping…" write-window overlay, split out of fleet-panel.ts
+// d1, the "stopping…" write-window overlay, split out of fleet-panel.ts
 // to keep that file under the architecture 800-line gate (same rationale as
 // fleet-steer.ts). FleetPanel owns nothing here beyond a FleetStopTracker
 // instance; all the state->display logic lives in these pure helpers.
@@ -26,7 +26,7 @@ export const BLOCKED_GLYPH = '⚑';
 /**
  * Tracks node ids the operator just asked to stop (kill/interrupt/pause) mapped
  * to the keypress time. While an id is present AND within STOP_SETTLE_MS its row
- * renders a display-only 'stopping…' instead of the raw state — so the tree
+ * renders a display-only 'stopping…' instead of the raw state, so the tree
  * never claims the past-tense 'killed'/'interrupted' during the brief write
  * window between the keypress and the state actually flipping. After the settle
  * window the TRUE state is ALWAYS shown, so a genuinely stuck kill is never
@@ -90,7 +90,7 @@ export interface FleetPauseDeps {
  * resumable node is resumed (interrupt's inverse); a live pausable node is
  * paused via the registry's interrupt() (its disable path). Honest refusal for
  * non-resumable/non-pausable kinds. Returns true when the key is consumed,
- * false to fall through (terminal, non-paused node — nothing to toggle).
+ * false to fall through (terminal, non-paused node, nothing to toggle).
  */
 export function toggleFleetPause(node: ProcessNode, deps: FleetPauseDeps): boolean {
   if (node.state === 'paused') {
@@ -141,7 +141,7 @@ export function buildFleetTreeHints(
   ];
   // Jump-to-blocked is offered whenever something is waiting on the operator,
   // in either view (the blocked nodes live in the active fleet, and the jump
-  // switches back to it) — so it is placed before the view-specific branch.
+  // switches back to it), so it is placed before the view-specific branch.
   if (blockedCount > 0) hints.push({ keys: 'b', label: `blocked (${blockedCount})` });
   if (viewMode === 'archived') {
     // Archive view: restore + return to the live fleet; nothing here is live,
@@ -194,7 +194,7 @@ export function countDescendantStats(rows: readonly FleetTreeRow[], nodeId: stri
 }
 
 /**
- * Build the confirm-overlay arm options for a cascade Kill of one node — the
+ * Build the confirm-overlay arm options for a cascade Kill of one node, the
  * label carries the descendant count so the operator sees what a confirm takes
  * down. Extracted from FleetPanel to keep that file under the 800-line cap.
  */

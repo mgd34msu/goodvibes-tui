@@ -135,7 +135,7 @@ export const selectSurfacePerf = selectUiPerf;
 // Derived selectors
 // ---------------------------------------------------------------------------
 
-/** Active model summary — the three most-used fields for display and routing. */
+/** Active model summary, the three most-used fields for display and routing. */
 export interface ActiveModelSummary {
   providerId: string;
   modelId: string;

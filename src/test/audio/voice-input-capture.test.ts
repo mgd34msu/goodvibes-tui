@@ -273,7 +273,7 @@ describe('the recorder command line is what the real tools accept', () => {
 
   test('a named-but-missing backend resolves to nothing instead of falling back', async () => {
     const spawns = recordingSpawn();
-    // arecord IS installed here — a fallback would find it. The point is that a
+    // arecord IS installed here, a fallback would find it. The point is that a
     // pinned choice must not be silently overridden by one.
     const open = createTuiCaptureOpener({ spawn: spawns.spawn, isInstalled: (cmd) => cmd === 'arecord', platform: 'linux' });
 
@@ -307,7 +307,7 @@ describe('the recorder command line is what the real tools accept', () => {
     // No speexAvailable passed: the default is what a real launch uses, and it must
     // refuse rather than capture unfiltered audio through a stage the user believes
     // is running. The flag means "this surface applies suppression", not "the box
-    // has the library" — nothing in the platform applies speex today.
+    // has the library", nothing in the platform applies speex today.
     const spawns = recordingSpawn();
     const open = createTuiCaptureOpener({ spawn: spawns.spawn, isInstalled: () => true, platform: 'linux' });
 
@@ -327,7 +327,7 @@ describe('the recorder command line is what the real tools accept', () => {
     expect(spawns.calls.length).toBe(0);
   });
 
-  test('noiseSuppression "none" — the default, and the only value that runs — opens normally', async () => {
+  test('noiseSuppression "none": the default, and the only value that runs; opens normally', async () => {
     const spawns = recordingSpawn();
     const open = createTuiCaptureOpener({ spawn: spawns.spawn, isInstalled: () => true, platform: 'linux' });
 

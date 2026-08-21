@@ -1,5 +1,5 @@
 /**
- * GC-ARCH-002: Typed emission enforcement — static lint test.
+ * GC-ARCH-002: Typed emission enforcement, static lint test.
  *
  * Scans all TypeScript source files and verifies that direct calls to
  * `RuntimeEventBus.emit(` (i.e. `bus.emit(` or `this._bus.emit(` patterns
@@ -29,7 +29,7 @@ import { join, relative } from 'node:path';
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 // ---------------------------------------------------------------------------
-// Allowlist — files permitted to call RuntimeEventBus.emit() directly
+// Allowlist, files permitted to call RuntimeEventBus.emit() directly
 // ---------------------------------------------------------------------------
 
 /**
@@ -113,7 +113,7 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
     for (const absPath of allFiles) {
       const relPath = relative(projectRoot, absPath);
 
-      // Skip allowlisted paths — they are permitted to call emit directly
+      // Skip allowlisted paths, they are permitted to call emit directly
       if (isAllowlisted(relPath)) continue;
 
       const content = readFileSync(absPath, 'utf8');
@@ -126,7 +126,7 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
       if (emitLines.length === 0) continue;
 
       for (const { line, text } of emitLines) {
-        violations.push(`${relPath}:${line} — ${text}`);
+        violations.push(`${relPath}:${line}; ${text}`);
       }
     }
 

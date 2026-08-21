@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// checkpoint-runtime-command.test.ts — /checkpoints, /checkpoint
+// checkpoint-runtime-command.test.ts, /checkpoints, /checkpoint
 //
 // Exercises the real WorkspaceCheckpointManager (@pellux/goodvibes-sdk,
-// installed in node_modules — no mock needed for the manager itself) against
+// installed in node_modules, no mock needed for the manager itself) against
 // a scratch workspace directory. Only the TUI context plumbing (print/render)
 // is mocked, per the project's existing command-test pattern.
 //
@@ -70,7 +70,7 @@ describe('checkpoint-runtime commands registration', () => {
 // (b) missing-service guard
 // ---------------------------------------------------------------------------
 
-describe('checkpoint-runtime commands — workspaceCheckpointManager not wired', () => {
+describe('checkpoint-runtime commands: workspaceCheckpointManager not wired', () => {
   test('both commands print a graceful message and never throw', async () => {
     const dir = makeScratchWorkspace();
     const registry = new CommandRegistry();
@@ -85,10 +85,10 @@ describe('checkpoint-runtime commands — workspaceCheckpointManager not wired',
 });
 
 // ---------------------------------------------------------------------------
-// (c) /checkpoints — empty state
+// (c) /checkpoints, empty state
 // ---------------------------------------------------------------------------
 
-describe('/checkpoints — empty state', () => {
+describe('/checkpoints: empty state', () => {
   test('prints a helpful message when no checkpoints exist yet', async () => {
     const dir = makeScratchWorkspace();
     const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
@@ -103,10 +103,10 @@ describe('/checkpoints — empty state', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (d) /checkpoint — manual create (+ forensic retention, + no-op dedupe)
+// (d) /checkpoint, manual create (+ forensic retention, + no-op dedupe)
 // ---------------------------------------------------------------------------
 
-describe('/checkpoint — manual create', () => {
+describe('/checkpoint: manual create', () => {
   test('creates a manual, forensic-retention checkpoint and prints its id/label', async () => {
     const dir = makeScratchWorkspace();
     writeFileSync(join(dir, 'a.txt'), 'v1');
@@ -143,10 +143,10 @@ describe('/checkpoint — manual create', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (e) /checkpoints — listing, newest first
+// (e) /checkpoints, listing, newest first
 // ---------------------------------------------------------------------------
 
-describe('/checkpoints — lists newest first', () => {
+describe('/checkpoints: lists newest first', () => {
   test('shows both checkpoints with the most recent listed first', async () => {
     const dir = makeScratchWorkspace();
     const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
@@ -173,10 +173,10 @@ describe('/checkpoints — lists newest first', () => {
 });
 
 // ---------------------------------------------------------------------------
-// (f) manager present but init() has already failed — reject-forever guard
+// (f) manager present but init() has already failed, reject-forever guard
 // ---------------------------------------------------------------------------
 
-describe('checkpoint-runtime commands — manager present but init() failed', () => {
+describe('checkpoint-runtime commands: manager present but init() failed', () => {
   test('both commands report the failure instead of throwing or hanging', async () => {
     const dir = makeScratchWorkspace();
     const blockerFile = join(dir, 'blocker-file');

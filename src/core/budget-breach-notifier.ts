@@ -1,5 +1,5 @@
 /**
- * budget-breach-notifier — fires an unfocused-user alert the moment session
+ * budget-breach-notifier, fires an unfocused-user alert the moment session
  * cost crosses the configured budget threshold (behavior.budgetAlertUsd).
  *
  * One-shot semantics: fires exactly once on the false→true edge (crossing
@@ -12,12 +12,12 @@
  * Delivery mirrors long-task-notifier.ts: desktop notification
  * (notifyCompletion) + outbound webhook (WebhookNotifier), both gated by
  * the shared focus/config gating in alert-gating.ts. Skips evaluation
- * entirely when the session model is unpriced — a $0 placeholder cost must
+ * entirely when the session model is unpriced, a $0 placeholder cost must
  * never be reported as a real breach (mirrors CostTrackerPanel's "unpriced"
  * display convention).
  *
  * PRIVACY: message text is built from cost/threshold numbers and the
- * session id prefix only — no conversation content.
+ * session id prefix only, no conversation content.
  */
 import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -40,7 +40,7 @@ export interface BudgetBreachNotifierDeps {
   readonly sessionId: string;
 }
 
-/** Stateful edge-trigger checker — construct once per session, call on every TURN_COMPLETED. */
+/** Stateful edge-trigger checker, construct once per session, call on every TURN_COMPLETED. */
 export interface BudgetBreachNotifier {
   /**
    * Evaluate current usage against the configured threshold and fire an
@@ -57,7 +57,7 @@ export function createBudgetBreachNotifier(deps: BudgetBreachNotifierDeps): Budg
   return {
     check(usage, sessionModel, budgetThresholdUsd) {
       if (budgetThresholdUsd !== lastThreshold) {
-        // Threshold raised, lowered, or cleared since the last check — re-arm
+        // Threshold raised, lowered, or cleared since the last check, re-arm
         // the latch so a breach against the new threshold can fire again.
         lastThreshold = budgetThresholdUsd;
         notified = false;
@@ -85,7 +85,7 @@ export function createBudgetBreachNotifier(deps: BudgetBreachNotifierDeps): Budg
 function fireBudgetBreachAlert(deps: BudgetBreachNotifierDeps, sessionCost: number, budgetThresholdUsd: number): void {
   if (!shouldFireAlert(deps.focusTracker, deps.configGet, 'behavior.notifyOnBudgetBreach')) return;
 
-  const title = 'GoodVibes — budget breach';
+  const title = 'GoodVibes: budget breach';
   const message = `session cost $${sessionCost.toFixed(2)} exceeded budget $${budgetThresholdUsd.toFixed(2)}  ·  session ${deps.sessionId.slice(0, 8)}`;
 
   try {

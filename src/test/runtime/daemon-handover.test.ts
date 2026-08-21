@@ -22,7 +22,7 @@ import type { UpdateFetchLike } from '@/runtime/update-check.ts';
 // probe never spawns a binary, fetch never reaches the network, the filesystem
 // is a map, and systemctl is a recorded call list. Versions are fixtures
 // ('1.27.1' as the shipped pre-split build, 'v1.28.0' as the first release from
-// the daemon's own repository) — never the live build VERSION.
+// the daemon's own repository), never the live build VERSION.
 
 const PRE_SPLIT_VERSION = '1.27.1';
 const SPLIT_TAG = 'v1.28.0';
@@ -48,7 +48,7 @@ function stubRunCommand(script: {
 /**
  * A fetch stub serving the daemon repository's release: a HEAD redirect naming
  * `tag`, a SHA256SUMS.txt, and the asset bytes themselves. `publishedAssets`
- * decides which asset names exist — everything else 404s, which is exactly how
+ * decides which asset names exist, everything else 404s, which is exactly how
  * a missing terminal binary behaves against the daemon's real releases.
  */
 function stubDaemonReleaseFetch(options: {
@@ -131,7 +131,7 @@ describe('parseDaemonVersionOutput', () => {
     expect(parseDaemonVersionOutput('goodvibes-daemon v1.28.0')).toBe('1.28.0');
   });
 
-  test('refuses output with no dotted version — an unidentifiable binary is never a number', () => {
+  test('refuses output with no dotted version; an unidentifiable binary is never a number', () => {
     expect(parseDaemonVersionOutput('unknown flag: --version')).toBeNull();
     expect(parseDaemonVersionOutput('')).toBeNull();
     expect(parseDaemonVersionOutput('goodvibes-daemon')).toBeNull();

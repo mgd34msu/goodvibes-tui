@@ -9,14 +9,14 @@ import type { GoodVibesCliOutputFormat } from '@pellux/goodvibes-terminal-shell'
 import { buildHooksValidation } from './hooks-report.ts';
 
 // ---------------------------------------------------------------------------
-// `goodvibes doctor <explain|routing|hooks>` — the diagnostician subcommands.
+// `goodvibes doctor <explain|routing|hooks>`, the diagnostician subcommands.
 // Each one explains a decision the platform already makes, reading the LIVE
 // config and reusing the platform's OWN decision machinery. None of them
 // changes config or fires a real action:
-//   explain  — walks the real PermissionManager to say why a tool/command
+//   explain , walks the real PermissionManager to say why a tool/command
 //              would be allowed / asked / denied under the current mode.
-//   routing  — prints which model/provider serves which role, from live config.
-//   hooks    — lists registered hooks, from where, and their validation status
+//   routing , prints which model/provider serves which role, from live config.
+//   hooks   , lists registered hooks, from where, and their validation status
 //              (reuses the hooks-validate core in hooks-report.ts).
 // ---------------------------------------------------------------------------
 
@@ -124,7 +124,7 @@ function reasonExplanation(result: PermissionCheckResult, mode: string, toolKey:
     case 'mode_allow_all':
       if (mode === 'plan') return 'Plan mode allows read-class tools.';
       if (mode === 'accept-edits') return 'Accept-edits mode allows read-class tools.';
-      return 'Permission mode is "allow-all" — every tool call is auto-approved.';
+      return 'Permission mode is "allow-all": every tool call is auto-approved.';
     case 'mode_denied': return 'The active permission mode denies this tool class.';
     case 'plan_mode': return 'Plan mode refuses mutating / execute / delegate tools and steers the model to present a plan instead.';
     case 'mode_accept_edits': return 'Accept-edits mode auto-approves file write/edit tools.';
@@ -134,7 +134,7 @@ function reasonExplanation(result: PermissionCheckResult, mode: string, toolKey:
     case 'session_cached_allow': return 'A remembered session decision ([A] allow-always) approves this call.';
     case 'session_cached_deny': return 'A remembered session decision denies this call.';
     case 'user_approved':
-    case 'user_denied': return 'This reaches a Human-in-the-Loop approval prompt — the outcome depends on your response at the prompt.';
+    case 'user_denied': return 'This reaches a Human-in-the-Loop approval prompt; the outcome depends on your response at the prompt.';
     default: return 'Decided by the platform permission machinery.';
   }
 }
@@ -205,7 +205,7 @@ async function explain(options: DoctorSubcommandOptions): Promise<CliCommandOutp
 
   const a = result.analysis;
   const lines: string[] = [
-    'GoodVibes doctor — explain permission decision',
+    'GoodVibes doctor: explain permission decision',
     `  subject     : ${args.join(' ')}`,
     `  resolved as : ${target.interpretation}`,
     `  tool        : ${target.tool}  (category: ${category})`,
@@ -222,7 +222,7 @@ async function explain(options: DoctorSubcommandOptions): Promise<CliCommandOutp
     `  summary     : ${a.summary}`,
     ...a.reasons.slice(0, 3).map((r) => `  reason      : ${r}`),
     '',
-    'Layers walked (priority order — the platform PermissionManager decides; this shows the order it walks):',
+    'Layers walked (priority order: the platform PermissionManager decides; this shows the order it walks):',
     ...LAYER_NAMES.map((name, i) => `  ${i === decidedIdx ? '▶' : ' '} ${i + 1}. ${name}${i === decidedIdx ? '   ← DECIDED HERE' : ''}`),
     '',
     `Decision: ${verdict}`,
@@ -284,7 +284,7 @@ function buildRoutingRoles(config: ConfigManager): RoutingRole[] {
       provider: emptyProvider(toolProvider),
       model: toolModel || '(unset)',
       keys: ['tools.llmEnabled', 'tools.llmProvider', 'tools.llmModel'],
-      ...(config.get('tools.llmEnabled') === true ? {} : { note: 'disabled — no tool-LLM route active' }),
+      ...(config.get('tools.llmEnabled') === true ? {} : { note: 'disabled: no tool-LLM route active' }),
     },
     {
       role: 'Helper (cache/compaction/commit-message/etc.)',
@@ -292,7 +292,7 @@ function buildRoutingRoles(config: ConfigManager): RoutingRole[] {
       provider: emptyProvider(helperProvider),
       model: helperModel || '(unset)',
       keys: ['helper.enabled', 'helper.globalProvider', 'helper.globalModel'],
-      ...(config.get('helper.enabled') === true ? {} : { note: 'disabled — helper tasks stay on the main model' }),
+      ...(config.get('helper.enabled') === true ? {} : { note: 'disabled: helper tasks stay on the main model' }),
     },
     {
       role: 'Narration LLM (TTS phrasing)',
@@ -312,7 +312,7 @@ function routing(options: DoctorSubcommandOptions): CliCommandOutput {
     return { output: JSON.stringify({ roles }, null, 2), exitCode: 0 };
   }
   const lines: string[] = [
-    'GoodVibes doctor — model / provider routing (live config)',
+    'GoodVibes doctor: model / provider routing (live config)',
     '',
   ];
   for (const role of roles) {
@@ -345,11 +345,11 @@ function hooks(options: DoctorSubcommandOptions): CliCommandOutput {
   }
 
   const lines: string[] = [
-    'GoodVibes doctor — registered hooks',
+    'GoodVibes doctor: registered hooks',
     `  source file : ${report.path}`,
   ];
   if (!report.present) {
-    lines.push('  no hooks file present — nothing registered.');
+    lines.push('  no hooks file present: nothing registered.');
     return { output: lines.join('\n'), exitCode: 0 };
   }
   if (report.reason && report.checks.length === 0 && report.topLevelIssues.length === 0) {

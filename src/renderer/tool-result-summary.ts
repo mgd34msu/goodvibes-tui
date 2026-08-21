@@ -1,12 +1,12 @@
 /**
- * summarizeToolResult — one-line human summaries for tool RESULTS, so the
+ * summarizeToolResult, one-line human summaries for tool RESULTS, so the
  * transcript (and the fleet attach view, which shares the same rendering seam
  * in conversation-rendering.ts) shows "wrote haiku.txt (532 B)" instead of a
  * raw `{"files_written":1,"bytes_written":532,...}` JSON blob. The full payload
- * stays reachable behind the existing collapse/expand toggle — this only
+ * stays reachable behind the existing collapse/expand toggle, this only
  * changes the collapsed preview line, never destroys data. (item 3.)
  *
- * Returning `null` means "no honest summary for this shape" — the caller then
+ * Returning `null` means "no honest summary for this shape", the caller then
  * falls back to the previous raw-first-line preview, so an unrecognised tool or
  * an unexpected payload is never mis-summarised.
  */
@@ -95,7 +95,7 @@ function summarizeEdit(obj: Record<string, unknown>): string | null {
 
 // The credential scrub's withheld_env report stays OUT of the collapsed line
 // entirely. It withholds the same standing set of names on every spawn, so any
-// per-result rendering repeats identical env-var noise all session long — the
+// per-result rendering repeats identical env-var noise all session long, the
 // dominant transcript spam for anyone with several keys exported. The report
 // only matters when a command fails because a needed credential was scrubbed,
 // and for that case the full name list is one expand away in the raw payload.
@@ -104,7 +104,7 @@ function summarizeEdit(obj: Record<string, unknown>): string | null {
  * Compact per-command exec-sandbox suffix: `sandboxed` fields are present
  * only when the sandbox was active for the run (SDK's attachSandboxMeta stays
  * quiet otherwise), so absence here means "ran unsandboxed" and the suffix is
- * empty — never a fabricated claim either way.
+ * empty, never a fabricated claim either way.
  *
  *   sandboxed, network disabled            -> " · sandboxed (net off)"
  *   sandboxed, network enabled, escalation -> " · sandboxed (net on, +1 escalation)"
@@ -151,7 +151,7 @@ function summarizeExec(obj: Record<string, unknown>): string | null {
     const failed = obj.commands.filter(
       (c) => c && typeof c === 'object' && (c as Record<string, unknown>).success === false,
     ).length;
-    // Count sandboxed commands across the batch — a compact "N sandboxed" beats
+    // Count sandboxed commands across the batch, a compact "N sandboxed" beats
     // repeating each command's full boundary detail on the collapsed line.
     const sandboxedCount = obj.commands.filter(
       (c) => c && typeof c === 'object' && (c as Record<string, unknown>).sandboxed === true,

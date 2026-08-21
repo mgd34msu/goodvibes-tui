@@ -11,7 +11,7 @@ beforeEach(() => {
 });
 
 // An enabled schedule owns a live setInterval, and disposing the runtime graph
-// does not reach into ScheduleManager to stop it — removing the schedule is
+// does not reach into ScheduleManager to stop it, removing the schedule is
 // what clears its timer, which is also the contract these tests exercise.
 afterEach(() => {
   const manager = getTestScheduleManager();

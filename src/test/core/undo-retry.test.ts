@@ -2,7 +2,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConversationManager } from '../../core/conversation';
 
-describe('ConversationManager — undo/redo/getLastUserMessage', () => {
+describe('ConversationManager: undo/redo/getLastUserMessage', () => {
   let cm: ConversationManager;
 
   beforeEach(() => {
@@ -137,7 +137,7 @@ describe('ConversationManager — undo/redo/getLastUserMessage', () => {
 
   test('getLastUserMessage: returns null when content is ContentPart[]', () => {
     cm.addUserMessage([{ type: 'text', text: 'hello' }, { type: 'image', data: 'abc', mediaType: 'image/png' }]);
-    // Content is ContentPart[], not string — should return null
+    // Content is ContentPart[], not string, should return null
     expect(cm.getLastUserMessage()).toBeNull();
   });
 

@@ -1,5 +1,5 @@
 /**
- * Main-session passive-injection WIRING tests — the regression
+ * Main-session passive-injection WIRING tests, the regression
  * class the stubbed /recall tests could not catch.
  *
  * Background: the SDK turn loop hard-gates per-turn passive knowledge
@@ -8,7 +8,7 @@
  * and main.ts) originally omitted `memoryRegistry`, so main-session injection
  * was dead in production while every /recall test passed against stubs.
  *
- * SDK 1.2.0 update: `memoryRegistry` is no longer forwarded by identity — the
+ * SDK 1.2.0 update: `memoryRegistry` is no longer forwarded by identity, the
  * turn loop needs a SYNCHRONOUS `getAll()`, but the memory spine's wire reads
  * are asynchronous, so the builder now synthesizes `memoryRegistry` from the
  * spine's freshness-stamped, synchronously-readable `recallSnapshot()` (see
@@ -17,12 +17,12 @@
  * updated to build a fake `memorySpine` (exposing `recallSnapshot()`) rather
  * than a raw `{ getAll }` registry, while preserving their original intent:
  *
- *  1. Seam: buildSharedOrchestratorCoreServices() — the REAL payload builder
- *     both call sites now spread — must derive `memoryRegistry.getAll()` from
+ *  1. Seam: buildSharedOrchestratorCoreServices(), the REAL payload builder
+ *     both call sites now spread, must derive `memoryRegistry.getAll()` from
  *     the injected `memorySpine`'s current recall snapshot.
  *  2. Full turn: a REAL Orchestrator (the TUI's re-export), fed the REAL
  *     builder output via the REAL setCoreServices(), runs handleUserInput()
- *     against a canned LLM provider — and the turn must (a) compose the
+ *     against a canned LLM provider, and the turn must (a) compose the
  *     relevant record onto the systemPrompt actually sent to provider.chat()
  *     and (b) surface a TurnInjectionRecord through getTurnInjections(), the
  *     exact accessor `/recall injections` (no agent id) renders. This
@@ -39,7 +39,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ChatResponse, LLMProvider, ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { MemoryRecord } from '@pellux/goodvibes-sdk/platform/state';
 
-/** A minimal fake memory spine exposing just `recallSnapshot()` — the only method `buildSharedOrchestratorCoreServices` reads. */
+/** A minimal fake memory spine exposing just `recallSnapshot()`, the only method `buildSharedOrchestratorCoreServices` reads. */
 function makeFakeMemorySpine(records: readonly MemoryRecord[]): { recallSnapshot: () => { records: readonly MemoryRecord[] } } {
   return { recallSnapshot: () => ({ records }) };
 }
@@ -122,8 +122,8 @@ function makeCapturingProviderRegistry(): { providerRegistry: ProviderRegistry; 
   return { providerRegistry, capturedSystemPrompts };
 }
 
-describe('buildSharedOrchestratorCoreServices — the shared setCoreServices payload (seam)', () => {
-  test('derives memoryRegistry.getAll() from the injected memorySpine\'s recall snapshot — the main-session injection gate', () => {
+describe('buildSharedOrchestratorCoreServices: the shared setCoreServices payload (seam)', () => {
+  test('derives memoryRegistry.getAll() from the injected memorySpine\'s recall snapshot; the main-session injection gate', () => {
     const record = makeRelevantRecord();
     const payload = buildSharedOrchestratorCoreServices({
       services: makeServicesSource(makeFakeMemorySpine([record])),
@@ -131,7 +131,7 @@ describe('buildSharedOrchestratorCoreServices — the shared setCoreServices pay
       providerRegistry: makeCapturingProviderRegistry().providerRegistry,
     });
     // The load-bearing assertion: if memoryRegistry is ever dropped from the
-    // builder again, main-session passive injection dies silently — this fails loudly.
+    // builder again, main-session passive injection dies silently, this fails loudly.
     expect(payload.memoryRegistry).toBeDefined();
     expect(payload.memoryRegistry?.getAll()).toEqual([record]);
   });
@@ -170,7 +170,7 @@ describe('main-session per-turn passive injection through the REAL wiring (full 
       },
     });
 
-    // The REAL payload builder — exactly what bootstrap.ts and main.ts spread.
+    // The REAL payload builder, exactly what bootstrap.ts and main.ts spread.
     orchestrator.setCoreServices(
       buildSharedOrchestratorCoreServices({
         services: makeServicesSource(memorySpine),
@@ -183,7 +183,7 @@ describe('main-session per-turn passive injection through the REAL wiring (full 
     return { orchestrator, capturedSystemPrompts };
   }
 
-  test('a relevant record reaches the sent systemPrompt and getTurnInjections() — the /recall injections source', async () => {
+  test('a relevant record reaches the sent systemPrompt and getTurnInjections(); the /recall injections source', async () => {
     const { orchestrator, capturedSystemPrompts } = await runOneTurn(makeFakeMemorySpine([makeRelevantRecord()]));
 
     expect(capturedSystemPrompts.length).toBeGreaterThan(0);

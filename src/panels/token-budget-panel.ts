@@ -43,7 +43,7 @@ interface TurnUsage {
 // ---------------------------------------------------------------------------
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  // Token data-series colors (input/output/cache) — categorical, no shared equivalent
+  // Token data-series colors (input/output/cache), categorical, no shared equivalent
   input: '#00ffff',
   output: '#d000ff',
   cacheRead: '#00d700',
@@ -96,11 +96,11 @@ function fmtTok(n: number): string {
 export class TokenBudgetPanel extends BasePanel {
   /** Snapshot of cumulative usage from the Orchestrator after each turn. */
   private sessionUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-  /** lastInputTokens from the Orchestrator — current context window occupancy. */
+  /** lastInputTokens from the Orchestrator, current context window occupancy. */
   private lastInputTokens = 0;
   /** Context window size from the model config (0 = unknown). */
   private contextWindow = 0;
-  /** Per-turn snapshots — at most MAX_TURN_HISTORY entries. */
+  /** Per-turn snapshots, at most MAX_TURN_HISTORY entries. */
   private turnHistory: TurnUsage[] = [];
   /** Previous cumulative snapshot to compute per-turn delta. */
   private prevCumulative = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -115,7 +115,7 @@ export class TokenBudgetPanel extends BasePanel {
   private readonly configManager: Pick<ConfigManager, 'get'>;
   private readonly requestRender: () => void;
 
-  /** Turn-event bus subscriptions — absorbed from ContextVisualizerPanel. */
+  /** Turn-event bus subscriptions, absorbed from ContextVisualizerPanel. */
   private unsubs: Array<() => void> = [];
 
   /** Manual scroll cursor into turnHistory; -1 = auto-follow the latest turn. */
@@ -261,7 +261,7 @@ export class TokenBudgetPanel extends BasePanel {
   }
 
   handleInput(key: string): boolean {
-    // Confirmation dialog — use the shared handleConfirmInput for y/n/Esc UX
+    // Confirmation dialog, use the shared handleConfirmInput for y/n/Esc UX
     const confirmResult = handleConfirmInput(this.confirm, key);
     if (confirmResult === 'confirmed') {
       this.confirm = null;
@@ -462,11 +462,11 @@ export class TokenBudgetPanel extends BasePanel {
       const nextStep = status.nextSteps[0]!;
       // when the recommended next step is /compact and C is armed
       // (see handleInput's elevated-only C branch and the footer hint),
-      // advertise the key instead of the command — pressing C already
+      // advertise the key instead of the command, pressing C already
       // dispatches it for real, so printing '/compact' here was a redundant
       // action substitute.
       if (nextStep === '/compact' && this._pressureElevated()) {
-        lines.push(buildGuidanceLine(width, 'C', 'compact context now — the recommended next maintenance action', DEFAULT_PANEL_PALETTE));
+        lines.push(buildGuidanceLine(width, 'C', 'compact context now: the recommended next maintenance action', DEFAULT_PANEL_PALETTE));
       } else {
         lines.push(buildGuidanceLine(width, nextStep, 'open the next maintenance action directly', DEFAULT_PANEL_PALETTE));
       }
@@ -569,14 +569,14 @@ export class TokenBudgetPanel extends BasePanel {
     const suffix = ` ${fmtTok(this.lastInputTokens)}/${fmtTok(this.contextWindow)} (${pctInt}%)${warnSuffix}`;
     const BAR_W = Math.max(8, width - label.length - suffix.length - 2);
     const filled = Math.round(pct * BAR_W);
-    // Context fill is the headline metric — render it with the shared meter
+    // Context fill is the headline metric, render it with the shared meter
     // primitive so the bar glyphs and width handling match every other panel.
     lines.push(buildMeterLine(width, filled, BAR_W,
       { filled: barColor, empty: C.barBg, label: C.label },
       { prefix: label, suffix },
     ));
 
-    // Pressure pill — absorbed from ContextVisualizerPanel's headline indicator.
+    // Pressure pill, absorbed from ContextVisualizerPanel's headline indicator.
     const overLimit = this.contextWindow > 0 && this.lastInputTokens > this.contextWindow;
     const pressureState = overLimit || pct >= WARN_RED ? 'bad' : pct >= WARN_YELLOW ? 'warn' : 'good';
     const pressureLabel = overLimit ? 'over limit' : pct >= WARN_RED ? 'critical' : pct >= WARN_YELLOW ? 'elevated' : 'healthy';
@@ -612,7 +612,7 @@ export class TokenBudgetPanel extends BasePanel {
       ]));
     }
 
-    // Inline cost estimate — absorbed pricing wiring (cost-utils.ts), shown
+    // Inline cost estimate, absorbed pricing wiring (cost-utils.ts), shown
     // whenever the active model id is known.
     if (this.getCurrentModelId) {
       const modelId = this.getCurrentModelId();
@@ -628,7 +628,7 @@ export class TokenBudgetPanel extends BasePanel {
           ? [{ text: ` (${source})`, fg: C.dim }]
           : priced
             ? []
-            : [{ text: ' — set it with p on the cost panel', fg: C.dim }]),
+            : [{ text: ': set it with p on the cost panel', fg: C.dim }]),
       ]));
     }
 

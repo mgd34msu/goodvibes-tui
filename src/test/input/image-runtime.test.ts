@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// image-runtime.test.ts — /imagine
+// image-runtime.test.ts, /imagine
 //
 // Pure command-layer test: fake MediaProviderRegistry + ArtifactStore on
 // ctx.platform (no real network calls, no real filesystem writes),
@@ -98,7 +98,7 @@ describe('/imagine command registration', () => {
   });
 });
 
-describe('/imagine — honest degradation', () => {
+describe('/imagine: honest degradation', () => {
   test('prints an honest message when mediaProviders/artifactStore are not available', async () => {
     const registry = new CommandRegistry();
     registerImageRuntimeCommands(registry);
@@ -169,7 +169,7 @@ describe('/imagine — honest degradation', () => {
   });
 });
 
-describe('/imagine — success paths', () => {
+describe('/imagine: success paths', () => {
   test('persists an inline-bytes artifact and renders its id', async () => {
     const registry = new CommandRegistry();
     registerImageRuntimeCommands(registry);
@@ -215,7 +215,7 @@ describe('/imagine — success paths', () => {
     expect(JSON.parse(stored['text'] as string)).toMatchObject({ remoteUrl: 'https://provider.example/out.png' });
 
     const text = printed.join('\n');
-    expect(text).toContain('remote reference — not downloaded');
+    expect(text).toContain('remote reference; not downloaded');
     expect(text).toContain('url: https://provider.example/out.png');
   });
 

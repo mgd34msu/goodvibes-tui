@@ -28,7 +28,7 @@ afterEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('FilePickerModal — inject mode', () => {
+describe('FilePickerModal: inject mode', () => {
   test('open() with injectMode=true sets injectMode flag', () => {
     const picker = new FilePickerModal({ workingDirectory: tmpDir });
     picker.open(0, true);

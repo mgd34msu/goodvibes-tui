@@ -30,7 +30,7 @@ describe('ConversationManager - title', () => {
     expect(cm.title.length).toBeLessThanOrEqual(50);
     // Title should be a prefix of the original message (word boundary cut)
     expect('Please help me fix the TypeScript errors in my large codebase project files'.startsWith(cm.title)).toBe(true);
-    // Should not end with a partial word — the next char after the title should be a space or end
+    // Should not end with a partial word, the next char after the title should be a space or end
     const original = 'Please help me fix the TypeScript errors in my large codebase project files';
     const nextChar = original[cm.title.length];
     expect(nextChar === ' ' || nextChar === undefined).toBe(true);
@@ -81,7 +81,7 @@ describe('ConversationManager - title', () => {
 
 // ---------------------------------------------------------------------------
 // Token budget warnings
-// NOTE: These tests verify runtime event envelope shape only — they do not test the
+// NOTE: These tests verify runtime event envelope shape only, they do not test the
 // actual Orchestrator.runTurn() path, which requires a mock provider and full
 // initialization. The cooldown bracket logic (lastWarningBracket) cannot be
 // unit-tested here without substantially refactoring Orchestrator dependencies.

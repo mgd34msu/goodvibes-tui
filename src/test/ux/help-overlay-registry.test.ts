@@ -62,7 +62,7 @@ describe('renderHelpOverlay Quick Start sourced from live registry (β3)', () =>
   });
 
   test('omits /cockpit when cockpit is not registered', () => {
-    // Only setup registered — cockpit missing from registry
+    // Only setup registered, cockpit missing from registry
     const commands: SlashCommand[] = [makeCmd('setup'), makeCmd('settings')];
     const text = renderText(commands);
     expect(text).not.toContain('/cockpit');

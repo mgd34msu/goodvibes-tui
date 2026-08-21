@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// conversation-fold.test.ts — the local fold adapter against the shared policy.
+// conversation-fold.test.ts, the local fold adapter against the shared policy.
 //
 // src/core/conversation-fold.ts is deliberately a THREADING layer: it reads the
 // product's own shapes (tool messages, RenderNode, collapse state) and hands
 // the facts to @pellux/goodvibes-terminal-shell's conversation-fold-policy,
 // which owns every decision. These tests import the policy DIRECTLY and assert
-// the local wrappers answer identically — so if the adapter ever grows a
+// the local wrappers answer identically, so if the adapter ever grows a
 // decision of its own, or the policy changes underneath it, this fails rather
 // than the two renderers drifting apart silently again.
 // ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ function toolMessage(toolName: string, content: string): ToolMessage {
   return { role: 'tool', callId: 'c1', toolName, content } as ToolMessage;
 }
 
-/** A long payload — comfortably past the policy's short-content threshold. */
+/** A long payload, comfortably past the policy's short-content threshold. */
 const LONG = 'x'.repeat(FOLDED_SHORT_CONTENT_CHARS + 50);
 /** A short payload with no summarizable shape. */
 const SHORT = 'ok';

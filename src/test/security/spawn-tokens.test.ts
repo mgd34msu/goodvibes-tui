@@ -163,7 +163,7 @@ describe('validate', () => {
 
   test('rejects a token that is not registered', () => {
     const manager = getTestSpawnTokenManager('sess-003');
-    // Create token with a different manager (different secret) — not registered here
+    // Create token with a different manager (different secret), not registered here
     resetTestSpawnTokenManagers();
     const other = getTestSpawnTokenManager('sess-003b');
     const foreignToken = other.createOrchestratorToken();
@@ -293,7 +293,7 @@ describe('token expiry', () => {
   test('expiresAt is included in HMAC signature (tampered expiresAt rejected)', () => {
     const manager = getTestSpawnTokenManager('sess-exp-005');
     const token = manager.createOrchestratorToken();
-    // Move expiresAt far into future — signature should no longer match
+    // Move expiresAt far into future, signature should no longer match
     const tampered: SpawnToken = { ...token, expiresAt: token.expiresAt + 999_999_999 };
     const result = manager.validate(tampered);
     expect(result.valid).toBe(false);

@@ -1,5 +1,5 @@
 /**
- * Release-artifact naming and checksum verification — re-exported from the
+ * Release-artifact naming and checksum verification, re-exported from the
  * SDK's canonical update policy module (platform/runtime/self-update), which
  * was hoisted from this file's semantics. One mechanism everywhere: the
  * asset naming convention (`goodvibes[-daemon]-{platform}-{arch}`), the

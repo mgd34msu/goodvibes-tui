@@ -1,5 +1,5 @@
 /**
- * panel-resume-liveness-confirm.test.ts — the multi-instance guard on the
+ * panel-resume-liveness-confirm.test.ts, the multi-instance guard on the
  * session-browser / panel resume seam.
  *
  * `/session resume <id>` already refused to fork a session another terminal
@@ -47,21 +47,21 @@ function operator(answer: string | null): { open: LiveResumeSelectionOpener; tit
   return { open, titles, details, asked: () => titles.length };
 }
 
-describe('confirmLiveResume — when it asks at all', () => {
+describe('confirmLiveResume: when it asks at all', () => {
   test('no marker: proceeds without asking', async () => {
     const op = operator('cancel');
     expect(await confirmLiveResume('sess-none', { surface, openSelection: () => op.open })).toBe(true);
     expect(op.asked()).toBe(0);
   });
 
-  test("this process's OWN marker never asks — re-resuming the session already open here is not a fork", async () => {
+  test("this process's OWN marker never asks; re-resuming the session already open here is not a fork", async () => {
     writeLivenessMarker(surface, 'sess-self', process.pid);
     const op = operator('cancel');
     expect(await confirmLiveResume('sess-self', { surface, openSelection: () => op.open, selfPid: process.pid })).toBe(true);
     expect(op.asked()).toBe(0);
   });
 
-  test('a stale marker never asks and never blocks — best-effort, not a lock', async () => {
+  test('a stale marker never asks and never blocks; best-effort, not a lock', async () => {
     writeLivenessMarker(surface, 'sess-stale', process.pid);
     // Rewrite the marker as older than the staleness window by writing it,
     // then asserting through a check whose clock has moved past the cutoff:
@@ -83,7 +83,7 @@ describe('confirmLiveResume — when it asks at all', () => {
   });
 });
 
-describe('confirmLiveResume — the question and its answers', () => {
+describe('confirmLiveResume: the question and its answers', () => {
   test('a live marker from a DIFFERENT pid asks, naming that pid where it cannot be clipped', async () => {
     writeLivenessMarker(surface, 'sess-other', process.pid);
     const op = operator('resume');
@@ -104,7 +104,7 @@ describe('confirmLiveResume — the question and its answers', () => {
     expect(await confirmLiveResume('sess-other', { surface, openSelection: () => op.open, selfPid: 999_999 })).toBe(false);
   });
 
-  test('a dismissed modal refuses — the safe answer to an unanswered fork question is no', async () => {
+  test('a dismissed modal refuses: the safe answer to an unanswered fork question is no', async () => {
     writeLivenessMarker(surface, 'sess-other', process.pid);
     const op = operator(null);
     expect(await confirmLiveResume('sess-other', { surface, openSelection: () => op.open, selfPid: 999_999 })).toBe(false);
@@ -119,7 +119,7 @@ describe('confirmLiveResume — the question and its answers', () => {
     }
     expect(items[0]!.detail).toContain('4242');
     // The title must survive the narrowest box the overlay builds (see
-    // getOverlaySurfaceMetrics: margin 4, maxWidth 72 — ~28 inner columns at
+    // getOverlaySurfaceMetrics: margin 4, maxWidth 72, ~28 inner columns at
     // a 40-column terminal), because titles are truncated, not wrapped.
     expect(LIVE_RESUME_CONFIRM_TITLE.length).toBeLessThanOrEqual(28);
   });

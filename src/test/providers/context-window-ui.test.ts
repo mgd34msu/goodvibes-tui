@@ -121,10 +121,10 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// enrichModelEntries — contextWindow and contextWindowSource fields
+// enrichModelEntries, contextWindow and contextWindowSource fields
 // ---------------------------------------------------------------------------
 
-describe('enrichModelEntries — contextWindow fields', () => {
+describe('enrichModelEntries: contextWindow fields', () => {
   test('entry includes contextWindow equal to model.contextWindow when no OpenRouter cache', () => {
     const model = makeModel({ contextWindow: 32_768 });
     const entries = enrichModelEntries(

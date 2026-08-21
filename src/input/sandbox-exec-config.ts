@@ -1,29 +1,29 @@
 /**
- * sandbox-exec-config.ts — TUI-local synthetic settings entries for
+ * sandbox-exec-config.ts, TUI-local synthetic settings entries for
  * sandbox.egressAllowlist / sandbox.workspaceWritable.
  *
  * The SDK's per-command exec sandbox (bubblewrap on Linux, gated by the
  * graduation-tracked `exec-sandbox` feature flag) reads its full configuration
  * straight off `configManager.getCategory('sandbox')` inside
- * `registerAllTools` (platform/tools/index.ts) — `sandbox.enabled`,
+ * `registerAllTools` (platform/tools/index.ts), `sandbox.enabled`,
  * `sandbox.egressAllowlist`, `sandbox.workspaceWritable`. `sandbox.enabled` is
  * already a real CONFIG_SCHEMA key (with its own honest "requires bubblewrap
  * on Linux, reports unavailable elsewhere" description) and needs no synthetic
- * entry — the CONFIG_SCHEMA loop in settings-modal-data.ts already surfaces it.
+ * entry, the CONFIG_SCHEMA loop in settings-modal-data.ts already surfaces it.
  * `egressAllowlist`/`workspaceWritable` are NOT in CONFIG_SCHEMA, so this file
  * mirrors worktree-setup-config.ts's synthetic-entry pattern for them.
  *
  * UNLIKE worktree.setup.* / learning.consolidation.*, no defensive try/catch is
  * needed here: DEFAULT_CONFIG.sandbox already carries both fields (as empty
  * arrays), so ConfigManager.resolvePath finds the `sandbox` section on a plain
- * get()/set() without throwing — only a missing SECTION throws, and `sandbox`
+ * get()/set() without throwing, only a missing SECTION throws, and `sandbox`
  * has existed since before this repack (it backs the older VM/REPL isolation
  * settings). Writing through these entries takes effect for real: the exec
  * sandbox reads the same `sandbox` config category at tool-registration time.
  *
  * Both keys hold a JSON array of strings on disk. The settings modal's inline
- * editor is a single-line text field, so — matching worktree.setup.* and
- * controlPlane.cors.allowedOrigins — they are displayed and edited as a
+ * editor is a single-line text field, so, matching worktree.setup.* and
+ * controlPlane.cors.allowedOrigins, they are displayed and edited as a
  * comma-separated list and parsed back into an array on commit (see
  * isSandboxExecListConfigKey's use in settings-modal.ts#commitEdit).
  */
@@ -50,7 +50,7 @@ export function readSandboxExecList(configManager: Pick<ConfigManager, 'get'>, k
   return raw.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
 }
 
-/** Parse a comma-separated edit-buffer submission back into a string array (trimmed, empties dropped). Shared with worktree.setup.* — same convention. */
+/** Parse a comma-separated edit-buffer submission back into a string array (trimmed, empties dropped). Shared with worktree.setup.*, same convention. */
 export function parseSandboxExecListInput(text: string): string[] {
   return text.split(',').map((part) => part.trim()).filter((part) => part.length > 0);
 }
@@ -59,14 +59,14 @@ export const SANDBOX_EGRESS_ALLOWLIST_SYNTHETIC_SETTING: ConfigSetting = {
   key: SANDBOX_EGRESS_ALLOWLIST_CONFIG_KEY,
   type: 'string',
   default: [],
-  description: 'Comma-separated command base names (or "*" for all) whose network access is re-enabled inside the per-command exec sandbox boundary, as a named escalation the approval flow surfaces ("wants network"). Empty = the sandbox disables network for every command. Only takes effect when sandbox.enabled is on, the exec-sandbox setting is on, and bubblewrap is available (Linux only — reports unavailable elsewhere).',
+  description: 'Comma-separated command base names (or "*" for all) whose network access is re-enabled inside the per-command exec sandbox boundary, as a named escalation the approval flow surfaces ("wants network"). Empty = the sandbox disables network for every command. Only takes effect when sandbox.enabled is on, the exec-sandbox setting is on, and bubblewrap is available (Linux only; reports unavailable elsewhere).',
 };
 
 export const SANDBOX_WORKSPACE_WRITABLE_SYNTHETIC_SETTING: ConfigSetting = {
   key: SANDBOX_WORKSPACE_WRITABLE_CONFIG_KEY,
   type: 'string',
   default: [],
-  description: 'Comma-separated absolute paths outside the workspace bound writable into the per-command exec sandbox boundary, as a named escalation the approval flow surfaces ("wants path outside workspace"). Empty = only the workspace (and an isolated /tmp) is writable. Only takes effect when sandbox.enabled is on, the exec-sandbox setting is on, and bubblewrap is available (Linux only — reports unavailable elsewhere).',
+  description: 'Comma-separated absolute paths outside the workspace bound writable into the per-command exec sandbox boundary, as a named escalation the approval flow surfaces ("wants path outside workspace"). Empty = only the workspace (and an isolated /tmp) is writable. Only takes effect when sandbox.enabled is on, the exec-sandbox setting is on, and bubblewrap is available (Linux only; reports unavailable elsewhere).',
 };
 
 function buildSandboxExecListEntry(configManager: Pick<ConfigManager, 'get'>, setting: ConfigSetting): SettingEntry {

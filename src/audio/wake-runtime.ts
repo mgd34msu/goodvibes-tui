@@ -1,11 +1,11 @@
 /**
- * wake-runtime.ts — wake-word detection on the terminal.
+ * wake-runtime.ts, wake-word detection on the terminal.
  *
  * The SDK owns the policy that would otherwise be rewritten per surface: the
  * front end, the patience/cooldown rules, keeping ONE stream open across a wake
  * so the utterance that follows is not clipped, resetting the engine afterwards
  * so the command just spoken is not scored again, and the supervisor's restart
- * and latch decisions. What is local is everything that touches this machine —
+ * and latch decisions. What is local is everything that touches this machine,
  * the recorder subprocess (capture.ts), the inference runtime (wake-inference.ts),
  * transcription over the daemon (core/voice-stt-gateway.ts), the activation sound, and
  * the shell's indicator row.
@@ -14,7 +14,7 @@
  *
  *  - **ENABLING NEVER DOWNLOADS.** The model ships with the installation, so on a
  *    normal machine `start()` below finds the artifacts already there and needs
- *    nothing else — that is the whole point of provisioning at install time. What
+ *    nothing else, that is the whole point of provisioning at install time. What
  *    it must never do is FETCH: the check here is read-only and content-verified,
  *    and a host whose artifacts are missing or torn gets told which and gets the
  *    recovery command named, instead of a switch that silently pulls 6 MB. A
@@ -65,7 +65,7 @@ export interface WakeRuntimeDeps {
   /** Runtime toggling: `voice.wake.enabled` and `voice.wake.surfaces.tui`. */
   readonly subscribeConfig: (key: string, listener: () => void) => () => void;
   readonly openCapture: AudioCaptureOpener;
-  /** Managed root the wake tree hangs off — `<managed>/wake` (SDK resolveManagedWakePaths). */
+  /** Managed root the wake tree hangs off, `<managed>/wake` (SDK resolveManagedWakePaths). */
   readonly managedRoot: string;
   /** Directory this surface owns for the extracted onnxruntime assets. */
   readonly assetDirectory: string;
@@ -95,7 +95,7 @@ export interface WakeRuntimeDeps {
 
 /**
  * What this runtime reads out of provisioning: whether the wake models are usable
- * at all, and whether the SPEECH GATE's own artifact is there — they are separate
+ * at all, and whether the SPEECH GATE's own artifact is there, they are separate
  * answers, because `voice.wake.vadThreshold` defaults to 0 and a detector runs
  * perfectly well with no gate provisioned.
  */
@@ -200,7 +200,7 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
       if (settings.autoSubmit) deps.submitTurn(text);
       else {
         deps.writeDraft(text);
-        deps.notify('[Wake] Transcript placed in the composer (voice.wake.autoSubmit is off — press Enter to send it).');
+        deps.notify('[Wake] Transcript placed in the composer (voice.wake.autoSubmit is off: press Enter to send it).');
         deps.render();
       }
     } catch (error) {
@@ -215,14 +215,14 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
       deps.notify(
         `[Wake] voice.wake.enabled is on, but the wake models are not provisioned (${provision.reason ?? 'not-provisioned'}), `
         + 'so nothing is listening. Installing goodvibes provisions them and a running daemon retries at boot, so this '
-        + 'means the download has not succeeded yet — run /voice wake setup to fetch and verify them now.',
+        + 'means the download has not succeeded yet; run /voice wake setup to fetch and verify them now.',
       );
       deps.render();
       return;
     }
     const paths = resolveManagedWakePaths(deps.managedRoot);
     // The SDK resolves `voice.wake.models` to files: the pinned id inside the
-    // managed tree, any other id against voice.wake.customModelDir — and when that
+    // managed tree, any other id against voice.wake.customModelDir, and when that
     // row is empty, against the managed `custom` directory, which is the fallback
     // the row's description promises and the one a host would otherwise get wrong
     // by looking in the process's working directory.
@@ -249,7 +249,7 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
         models: modelFiles.map((model) => ({ id: model.id, path: model.path })),
         settings,
         // The speech gate, when the row asks for one. `voice.wake.vadThreshold`
-        // above 0 with the artifact missing never reaches here — it is a blocker
+        // above 0 with the artifact missing never reaches here, it is a blocker
         // from resolveWakeRuntimeSettings, so the detector does not start at all
         // rather than starting with the gate quietly absent.
         ...(settings.vadThreshold > 0 ? { vadPath: paths.vadPath } : {}),
@@ -273,7 +273,7 @@ export function wireWakeRuntime(deps: WakeRuntimeDeps): WakeRuntime {
           // Reported to the user, not only logged: a detector that stopped
           // listening is exactly the thing a silent log entry hides.
           deps.notify(restarting
-            ? `[Wake] The capture stream ended (${error.message}) — ${failureDetail}.`
+            ? `[Wake] The capture stream ended (${error.message}): ${failureDetail}.`
             : `[Wake] The wake-word detector stopped: ${failureDetail}. It stays off until voice.wake.enabled is turned off and on again.`);
           deps.render();
         },

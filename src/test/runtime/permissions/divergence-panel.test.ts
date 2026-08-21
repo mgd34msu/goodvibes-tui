@@ -37,7 +37,7 @@ function makePanel(dash?: DivergenceDashboard) {
 
 // ── subscribe / notify lifecycle ──────────────────────────────────────────────
 
-describe('DivergencePanel — subscribe / notify', () => {
+describe('DivergencePanel: subscribe / notify', () => {
   it('calls subscriber when recordTrendEntry is invoked', () => {
     const panel = makePanel();
     const cb = mock(() => {});
@@ -77,7 +77,7 @@ describe('DivergencePanel — subscribe / notify', () => {
 
 // ── unsubscribe ───────────────────────────────────────────────────────────────
 
-describe('DivergencePanel — unsubscribe', () => {
+describe('DivergencePanel: unsubscribe', () => {
   it('unsubscribe removes the listener', () => {
     const panel = makePanel();
     const cb = mock(() => {});
@@ -110,7 +110,7 @@ describe('DivergencePanel — unsubscribe', () => {
 
 // ── dispose ───────────────────────────────────────────────────────────────────
 
-describe('DivergencePanel — dispose', () => {
+describe('DivergencePanel: dispose', () => {
   it('dispose() clears all subscribers', () => {
     const panel = makePanel();
     const cb1 = mock(() => {});
@@ -139,7 +139,7 @@ describe('DivergencePanel — dispose', () => {
 
 // ── error handling in _notify ─────────────────────────────────────────────────
 
-describe('DivergencePanel — subscriber error handling', () => {
+describe('DivergencePanel: subscriber error handling', () => {
   it('a throwing subscriber does not crash the panel', async () => {
     const panel = makePanel();
     panel.subscribe(() => {
@@ -164,7 +164,7 @@ describe('DivergencePanel — subscriber error handling', () => {
 
 // ── getSnapshot bufferLimit slicing ───────────────────────────────────────────
 
-describe('DivergencePanel — getSnapshot() bufferLimit', () => {
+describe('DivergencePanel: getSnapshot() bufferLimit', () => {
   it('getSnapshot() trend is capped at bufferLimit', () => {
     const dash = makeDashboard();
     // Record 5 trend entries in the dashboard

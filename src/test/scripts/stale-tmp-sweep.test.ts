@@ -44,7 +44,7 @@ describe('sweepStaleTestTmp', () => {
     expect(existsSync(stale)).toBe(false);
   });
 
-  test('keeps a fresh entry — a live concurrent runner is never touched', () => {
+  test('keeps a fresh entry: a live concurrent runner is never touched', () => {
     const fresh = makeEntry('run-12345', 0);
     const freshLeftover = makeEntry('gv-plugin-test-xy99zz', 5_000);
     const removed = sweepStaleTestTmp(root);

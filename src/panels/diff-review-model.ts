@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// Diff review model — pure parsing + steering-payload helpers for the
+// Diff review model, pure parsing + steering-payload helpers for the
 // comment-on-hunk review loop (see diff-review-panel.ts).
 //
 // The diff this operates on is the git working tree vs a base ref (HEAD),
 // filtered to the files the current session actually edited (the SDK's
 // SessionChangeTracker). That is the honest source: it is CURRENT working-tree
-// content, not a turn-start snapshot — the panel labels it exactly that way.
+// content, not a turn-start snapshot, the panel labels it exactly that way.
 // ---------------------------------------------------------------------------
 
 /** One hunk of one file's diff, with enough structure to steer a comment at it. */
@@ -126,7 +126,7 @@ export function hunkExcerpt(hunk: ReviewHunk, maxLines = 8): string {
   return [hunk.header, ...body, ...truncated].join('\n');
 }
 
-/** The full unified-diff hunk text (header + body) for one ReviewHunk — the input checkpoints.revertHunk takes. */
+/** The full unified-diff hunk text (header + body) for one ReviewHunk, the input checkpoints.revertHunk takes. */
 export function hunkPatchText(hunk: ReviewHunk): string {
   return [hunk.header, ...hunk.bodyLines].join('\n');
 }
@@ -148,10 +148,10 @@ export interface HunkRevertReceiptInput {
 export function buildHunkRevertReceiptBlock(receipt: HunkRevertReceiptInput): string {
   const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
   const lines = [
-    `[Revert] Receipt — reverted one hunk in ${receipt.path} (${receipt.hunkHeader}).`,
+    `[Revert] Receipt: reverted one hunk in ${receipt.path} (${receipt.hunkHeader}).`,
     `  Restored ${plural(receipt.removedLinesRestored, 'deleted line')}, removed ${plural(receipt.addedLinesRemoved, 'added line')}.`,
     receipt.safetyCheckpointId
-      ? `  Reversible: a pre-revert checkpoint was taken — /checkpoints restore ${receipt.safetyCheckpointId} undoes it.`
+      ? `  Reversible: a pre-revert checkpoint was taken; /checkpoints restore ${receipt.safetyCheckpointId} undoes it.`
       : '  Reversible: the working tree already matched the latest checkpoint (nothing extra to snapshot).',
   ];
   return lines.join('\n');

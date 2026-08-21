@@ -8,7 +8,7 @@
  * - Storm batching: after N rapid events only last-wins state is retained
  * - Throttled notification slots: bounded history of reconnect events
  *
- * All tests use pure state manipulation — no real I/O, no event bus.
+ * All tests use pure state manipulation, no real I/O, no event bus.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
@@ -22,7 +22,7 @@ import type { McpServerRecord, McpServerLifecycleState } from '@/runtime/index.t
 const TEST_TIMESTAMP = 1700000000000;
 
 /**
- * Reconnect event descriptor — represents a single MCP lifecycle transition.
+ * Reconnect event descriptor, represents a single MCP lifecycle transition.
  */
 interface ReconnectEvent {
   readonly serverName: string;
@@ -127,7 +127,7 @@ function applyReconnectStorm(
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('ux:notification-throttle — MCP reconnect storms', () => {
+describe('ux:notification-throttle; MCP reconnect storms', () => {
   let state: RuntimeState;
 
   beforeEach(() => {
@@ -173,7 +173,7 @@ describe('ux:notification-throttle — MCP reconnect storms', () => {
     });
   });
 
-  describe('reconnect storm behavior — rapid cycling', () => {
+  describe('reconnect storm behavior: rapid cycling', () => {
     test('10-cycle storm produces monotonically increasing revision', () => {
       const stormStates = applyReconnectStorm(state, 'srv-storm', 10);
 
@@ -213,7 +213,7 @@ describe('ux:notification-throttle — MCP reconnect storms', () => {
       }
     });
 
-    test('multiple server storms are isolated — no cross-server state leakage', () => {
+    test('multiple server storms are isolated; no cross-server state leakage', () => {
       let s = state;
 
       // Interleave storms for 3 servers
@@ -236,7 +236,7 @@ describe('ux:notification-throttle — MCP reconnect storms', () => {
   describe('last-wins state during rapid events', () => {
     test('rapid same-type events produce idempotent last-wins state', () => {
       let s = state;
-      // Apply 20 consecutive disconnected events — final state = disconnected
+      // Apply 20 consecutive disconnected events, final state = disconnected
       for (let i = 0; i < 20; i++) {
         s = applyMcpEvent(s, { serverName: 'srv-rapid', type: 'disconnected' });
       }
@@ -252,11 +252,11 @@ describe('ux:notification-throttle — MCP reconnect storms', () => {
       expect(selectMcp(s).revision).toBe(initialRevision + 20);
     });
 
-    test('server registry size stays stable under storm — no duplicate entries', () => {
+    test('server registry size stays stable under storm; no duplicate entries', () => {
       let s = applyMcpEvent(state, { serverName: 'srv-1', type: 'connecting' });
       expect(selectMcp(s).servers.size).toBe(1);
 
-      // Apply storm — server count must not grow beyond 1
+      // Apply storm, server count must not grow beyond 1
       for (let i = 0; i < 30; i++) {
         s = applyMcpEvent(s, {
           serverName: 'srv-1',

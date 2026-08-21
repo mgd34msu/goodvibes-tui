@@ -132,7 +132,7 @@ describe('WorkspaceRegistrationManager', () => {
     expect(record).toBeDefined();
     expect(record!.origin).toBe('tui');
     expect(record!.label).toBe('via TUI');
-    // Absent means false — a TUI self-record must never widen the checkpoint boundary.
+    // Absent means false, a TUI self-record must never widen the checkpoint boundary.
     expect(record!.checkpointEligible ?? false).toBe(false);
   });
 

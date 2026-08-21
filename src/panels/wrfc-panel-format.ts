@@ -120,7 +120,7 @@ export function constraintStatusMarker(
   if (finding.satisfied) {
     return { tag: '[SAT]', fg: C.good, dim: false };
   }
-  // Unsatisfied — use severity to pick colour and tag text
+  // Unsatisfied, use severity to pick colour and tag text
   const sev = finding.severity ?? 'major';
   let sevTag: string;
   let fg: string;

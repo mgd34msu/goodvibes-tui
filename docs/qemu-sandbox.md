@@ -1,8 +1,8 @@
-# QEMU Sandbox Bootstrapping
+# QEMU sandbox bootstrapping
 
 GoodVibes can run REPL and MCP isolation through a local QEMU guest. The TUI owns the setup bundle that turns the user-level `~/.goodvibes/tui/sandbox` directory into a repeatable Debian cloud-image sandbox.
 
-## Isolation Modes
+## Isolation modes
 
 QEMU is one option within a broader sandbox control plane that governs both evaluation runtimes and MCP isolation. The available modes are:
 
@@ -13,7 +13,7 @@ QEMU is one option within a broader sandbox control plane that governs both eval
 
 The rest of this document covers the `qemu` VM backend specifically: bootstrapping the guest, generated files, guest runtime packages, and troubleshooting.
 
-## When To Use It
+## When to use it
 
 Use QEMU when you want tool and REPL execution isolated from the host while still giving GoodVibes a synced workspace at `/workspace`.
 
@@ -34,7 +34,7 @@ sandbox.replIsolation = shared-vm
 sandbox.mcpIsolation = shared-vm
 ```
 
-## Host Prerequisites
+## Host prerequisites
 
 Install these on the host before building the image:
 
@@ -50,7 +50,7 @@ tar
 
 KVM is optional but strongly recommended. On Linux, `/dev/kvm` should exist and be readable/writable by the user running GoodVibes.
 
-## Bootstrap Workflow
+## Bootstrap workflow
 
 From inside a project:
 
@@ -78,7 +78,7 @@ Then validate:
 
 Use `/sandbox qemu setup [dir]` when you want to scaffold and inspect the bundle before applying it. Use `/sandbox qemu inspect-setup <manifest>` and `/sandbox qemu apply-setup <manifest>` to review or reapply a generated manifest.
 
-## Generated Files
+## Generated files
 
 The setup bundle creates:
 
@@ -101,7 +101,7 @@ The setup bundle creates:
 
 `create-image.sh` is generated as a bootstrap implementation detail. Normal setup should use `/sandbox qemu bootstrap` so image creation, settings application, guest launch, and runtime provisioning stay in one recoverable TUI-managed flow.
 
-## Guest Boot Details
+## Guest boot details
 
 The QEMU wrapper uses:
 
@@ -128,7 +128,7 @@ The generated user-data creates a `goodvibes` sudo user, injects the generated S
 
 The wrapper waits up to `GOODVIBES_QEMU_SSH_TIMEOUT` seconds for SSH. The default is `300` because first boot cloud-init can be slow.
 
-## Wrapper Modes
+## Wrapper modes
 
 The generated wrapper supports:
 
@@ -142,7 +142,7 @@ GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh
 
 The wrapper prepends `$HOME/.bun/bin`, `$HOME/.deno/bin`, and `$HOME/.local/bin` to the guest command PATH before execution. The setup manifest also sets `sandbox.replJavaScriptCommand` to `/home/goodvibes/.bun/bin/bun`, so JavaScript-family REPL snippets use the guest Bun runtime instead of a host absolute executable path.
 
-## Guest Runtime Packages
+## Guest runtime packages
 
 `guest-bootstrap.sh` installs the runtime/tooling set needed by GoodVibes REPLs and common MCP servers:
 

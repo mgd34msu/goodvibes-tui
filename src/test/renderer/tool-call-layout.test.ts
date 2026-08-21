@@ -119,7 +119,7 @@ describe('tool call layout', () => {
   });
 
   // item 2c: a tool still awaiting a decision (approval) must not show the
-  // completed green ✓ — it uses the hollow idle glyph until it actually runs.
+  // completed green ✓, it uses the hollow idle glyph until it actually runs.
   test('pending tool shows the idle glyph, not the completed check', () => {
     const toolCall: ToolCall = { id: 'call_p', name: 'write', arguments: { path: 'a.txt' } };
     const [line] = renderToolCallBlock(toolCall, 'pending', undefined, 72);

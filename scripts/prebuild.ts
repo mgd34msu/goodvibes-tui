@@ -3,7 +3,7 @@ import { syncProjectSurfaces } from './project-surfaces.ts';
 import { patchBunCompileCompatibility } from './bun-compile-compat.ts';
 
 /**
- * Prebuild script — syncs versioned surfaces and foundation artifacts before
+ * Prebuild script, syncs versioned surfaces and foundation artifacts before
  * compilation or staging so release assets cannot race stale source files.
  */
 try {
@@ -12,6 +12,6 @@ try {
     syncProjectSurfaces(process.cwd());
   });
 } catch (error) {
-  console.error('prebuild: failed —', error);
+  console.error('prebuild: failed:', error);
   process.exit(1);
 }

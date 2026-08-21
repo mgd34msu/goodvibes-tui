@@ -1,5 +1,5 @@
 /**
- * calendar-runtime.ts — `/calendar`, the terminal surface over the daemon's
+ * calendar-runtime.ts, `/calendar`, the terminal surface over the daemon's
  * calendar capability.
  *
  * As with `/mail`, no calendar logic lives here. CalDAV, ICS parsing, settings
@@ -17,7 +17,7 @@
  * nuisance to undo.
  *
  * `calendar.ics.import` and `calendar.ics.export` are deliberately NOT given a
- * command. They are bulk file-level transfers of a whole calendar — an
+ * command. They are bulk file-level transfers of a whole calendar, an
  * operation whose natural home is a file path and a scheduled job, not a line
  * typed into a coding session. They stay available to any surface through the
  * same catalog; this product simply does not claim to be the right place for
@@ -52,7 +52,7 @@ const MAX_LIST_LIMIT = 200;
  * Render a timestamp for a terminal agenda.
  *
  * An unparseable value is printed verbatim rather than replaced with a
- * placeholder — showing what the server actually returned is more useful than
+ * placeholder, showing what the server actually returned is more useful than
  * hiding it behind "invalid date".
  */
 export function formatWhen(raw: string): string {
@@ -70,12 +70,12 @@ function truncate(value: string, width: number): string {
 
 export function renderAgenda(events: readonly CalendarEvent[]): string {
   if (events.length === 0) return 'No events in this window.';
-  const lines = [`Agenda — ${events.length} event${events.length === 1 ? '' : 's'}:`];
+  const lines = [`Agenda: ${events.length} event${events.length === 1 ? '' : 's'}:`];
   for (const event of events) {
     const where = event.location ? `  @ ${truncate(event.location, 24)}` : '';
     lines.push(`  ${formatWhen(event.start)}  ${truncate(event.title, 44).padEnd(44)}${where}`);
   }
-  lines.push('', '  /calendar get <id> — open one event');
+  lines.push('', '  /calendar get <id>: open one event');
   return lines.join('\n');
 }
 
@@ -95,7 +95,7 @@ export function renderEvent(event: CalendarEvent): string {
 }
 
 /**
- * Split `title | start | end` on unescaped pipes — same separator rule as
+ * Split `title | start | end` on unescaped pipes, same separator rule as
  * `/mail`, for the same reason: titles contain spaces and per-command quoting
  * conventions are their own bug source.
  */
@@ -188,7 +188,7 @@ async function listEvents(ctx: CommandContext, gateway: Gateway, limit: number, 
       ctx.print(renderConnectionStatus({
         surface: 'calendar',
         state: 'ready',
-        detail: 'Calendar is connected — the daemon reached the server and returned a result.',
+        detail: 'Calendar is connected: the daemon reached the server and returned a result.',
         nextActions: [],
       }));
     }
@@ -198,7 +198,7 @@ async function listEvents(ctx: CommandContext, gateway: Gateway, limit: number, 
 
 async function getEvent(ctx: CommandContext, gateway: Gateway, eventId: string | undefined): Promise<void> {
   if (!eventId) {
-    ctx.print('Usage: /calendar get <id> — the id from /calendar list.');
+    ctx.print('Usage: /calendar get <id>; the id from /calendar list.');
     return;
   }
   await withStatusOnFailure(ctx, gateway, 'get', async () => {
@@ -217,7 +217,7 @@ async function createEvent(ctx: CommandContext, gateway: Gateway, rest: readonly
   if (parsed === null) {
     ctx.print([
       'Usage: /calendar create <title | start | end>',
-      '  Three fields separated by | — for example:',
+      '  Three fields separated by |, for example:',
       '  /calendar create Design review | 2026-08-01T14:00:00Z | 2026-08-01T15:00:00Z',
     ].join('\n'));
     return;

@@ -1,5 +1,5 @@
 /**
- * Router-level tests for handleSettingsModalToken — reset-confirm gate.
+ * Router-level tests for handleSettingsModalToken, reset-confirm gate.
  *
  * Follows the existing handler-modal-routes test pattern:
  * - Builds a real SettingsModal (real state class, not a mock) so the
@@ -49,7 +49,7 @@ function textToken(value: string): InputToken {
 // Fixture
 // ---------------------------------------------------------------------------
 
-describe('handleSettingsModalToken — reset-confirm gate', () => {
+describe('handleSettingsModalToken: reset-confirm gate', () => {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
   let tmpDir: string;
@@ -120,7 +120,7 @@ describe('handleSettingsModalToken — reset-confirm gate', () => {
     expect(modal.resetAllConfirm).toBeNull();
   });
 
-  test('Shift+R: Enter confirms — values reset, gate cleared', () => {
+  test('Shift+R: Enter confirms; values reset, gate cleared', () => {
     cm.setDynamic('display.stream', false);
     // Re-open so the modal picks up the changed value
     const secrets = new SecretsManager({ projectRoot: tmpDir, globalHome: tmpDir, configManager: cm });
@@ -147,7 +147,7 @@ describe('handleSettingsModalToken — reset-confirm gate', () => {
     expect(renderCalls).toBeGreaterThanOrEqual(2);
   });
 
-  test('Shift+R: Esc cancels — values unchanged, gate cleared', () => {
+  test('Shift+R: Esc cancels; values unchanged, gate cleared', () => {
     cm.setDynamic('display.stream', false);
     const state = makeState();
     handleSettingsModalToken(state, keyToken('r', { shift: true }));
@@ -219,7 +219,7 @@ describe('handleSettingsModalToken — reset-confirm gate', () => {
   test('gate intercepts keys regardless of editingMode/searchFocused state', () => {
     const state = makeState();
     handleSettingsModalToken(state, keyToken('r', { shift: true }));
-    // Simulate a search-focused scenario — gate must still intercept
+    // Simulate a search-focused scenario, gate must still intercept
     modal.focusSearch();
     const consumed = handleSettingsModalToken(state, keyToken('up'));
     expect(consumed).toBe(true);
@@ -269,7 +269,7 @@ describe('handleSettingsModalToken — reset-confirm gate', () => {
     // After confirm the gate should be cleared and runtime.model should
     // have been overwritten by syncRuntimeAfterSettingReset.
     expect(modal.resetCategoryConfirm).toBeNull();
-    // provider.model is included in provider category — runtime must now reflect
+    // provider.model is included in provider category, runtime must now reflect
     // the schema default (not the stale value the runtime held before reset).
     expect(fakeRuntime.model).toBe(String(providerModelDefault));
     expect(fakeRuntime.model).not.toBe(staleModel);

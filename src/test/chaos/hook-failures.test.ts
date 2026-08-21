@@ -39,7 +39,7 @@ function registerPlugin(manager: PluginLifecycleManager, name: string) {
 // ---------------------------------------------------------------------------
 
 describe('chaos: hook/plugin failures', () => {
-  describe('recordError — non-fatal error on discovered plugin', () => {
+  describe('recordError: non-fatal error on discovered plugin', () => {
     test('non-fatal error on discovered plugin does not throw', () => {
       const manager = makeManager();
       registerPlugin(manager, 'my-plugin');
@@ -64,7 +64,7 @@ describe('chaos: hook/plugin failures', () => {
     });
   });
 
-  describe('recordError — fatal error transitions active plugin to error', () => {
+  describe('recordError: fatal error transitions active plugin to error', () => {
     // recordError only fires transition on active | loaded | degraded state.
     // Since registerDiscovered puts plugins in 'discovered', we check that
     // fatal error records the error but doesn't crash on discovered state.
@@ -84,7 +84,7 @@ describe('chaos: hook/plugin failures', () => {
     });
   });
 
-  describe('degradePlugin — partial failure', () => {
+  describe('degradePlugin: partial failure', () => {
     test('degraded plugin records degraded capabilities', () => {
       const manager = makeManager();
       registerPlugin(manager, 'partial-plugin');
@@ -100,7 +100,7 @@ describe('chaos: hook/plugin failures', () => {
     });
   });
 
-  describe('lifecycle state machine — valid transitions', () => {
+  describe('lifecycle state machine: valid transitions', () => {
     test('discovered -> loading is a valid transition', () => {
       expect(canTransition('discovered', 'loading')).toBe(true);
     });
@@ -134,7 +134,7 @@ describe('chaos: hook/plugin failures', () => {
     });
   });
 
-  describe('lifecycle state machine — invalid transitions', () => {
+  describe('lifecycle state machine: invalid transitions', () => {
     test('active -> discovered is NOT a valid transition', () => {
       expect(canTransition('active', 'discovered')).toBe(false);
     });
@@ -150,7 +150,7 @@ describe('chaos: hook/plugin failures', () => {
     });
   });
 
-  describe('applyTransition — result shape', () => {
+  describe('applyTransition: result shape', () => {
     test('valid transition returns ok: true with from/to', () => {
       const result = applyTransition('discovered', 'loading');
       expect(result.ok).toBe(true);
@@ -169,7 +169,7 @@ describe('chaos: hook/plugin failures', () => {
     });
   });
 
-  describe('getPluginsInState — state queries', () => {
+  describe('getPluginsInState: state queries', () => {
     test('newly registered plugin is in discovered state', () => {
       const manager = makeManager();
       registerPlugin(manager, 'new-plugin');

@@ -3,7 +3,7 @@
  *
  * `feedInputTokens` snapshots the prompt into the shortcut route state BEFORE
  * dispatching a key, then restores from that snapshot afterwards. Paste, undo
- * and redo do not edit that route state — they call InputHandler methods that
+ * and redo do not edit that route state, they call InputHandler methods that
  * edit the handler's own prompt and sync it into the live feed context. So the
  * restore has to be conditional, and it is: handler-feed.ts only writes the
  * snapshot back for a field the dispatched action left untouched (the

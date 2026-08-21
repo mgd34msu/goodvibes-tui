@@ -11,7 +11,7 @@ export type AgentInspectorEntryKind = 'user' | 'assistant' | 'tool_call' | 'tool
 // AgentDetailModal, which was retired in).
 // ---------------------------------------------------------------------------
 
-/** Terminal statuses — cancel not offered; stall check skipped. */
+/** Terminal statuses, cancel not offered; stall check skipped. */
 export const AGENT_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
 /** Agents in a non-terminal state for longer than this are considered STALLED. */
@@ -172,7 +172,7 @@ export function formatAgentCost(usd: number): string {
 export interface AgentUsageSummary {
   readonly tokens: number;
   readonly cost: number;
-  /** False when the model never resolved to a real price — `cost` is a zero placeholder, not a real reading. */
+  /** False when the model never resolved to a real price, `cost` is a zero placeholder, not a real reading. */
   readonly priced: boolean;
 }
 
@@ -190,12 +190,12 @@ interface AgentUsageLike {
  * True when a usage object carries actual reported token data rather than
  * being present-but-empty.: the SDK's AgentRecord.usage is initialised
  * to an all-zero object at agent spawn (platform/tools/agent/manager.ts) and
- * — in the currently pinned SDK version — is never updated past that, so a
+ *, in the currently pinned SDK version, is never updated past that, so a
  * plain truthiness check on `rec.usage` treats every agent, including ones
  * that did real work, as "has data" and renders a fabricated $0.00/0-token
  * reading. Guarding on real (nonzero) counts instead keeps today's "n/a"
  * honest and lights up automatically once a future SDK actually populates
- * usage — no further TUI change needed.
+ * usage, no further TUI change needed.
  */
 export function hasReportedUsage(
   usage: AgentUsageLike['usage'],
@@ -262,7 +262,7 @@ export function buildWrfcCostSegments(
 export interface AgentActivityHooks {
   /** Any AGENT_* activity event for this agent (running/progress/stream/awaiting/finalizing/spawning). */
   readonly onActivity: (agentId: string) => void;
-  /** AGENT_SPAWNING only — used for auto-select-newest-agent. */
+  /** AGENT_SPAWNING only, used for auto-select-newest-agent. */
   readonly onSpawn: (agentId: string) => void;
   /** AGENT_COMPLETED/FAILED/CANCELLED. */
   readonly onTerminal: (agentId: string) => void;

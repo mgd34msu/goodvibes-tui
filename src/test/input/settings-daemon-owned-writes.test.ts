@@ -1,12 +1,12 @@
 /**
- * settings-daemon-owned-writes.test.ts — a setting the DAEMON applies is
+ * settings-daemon-owned-writes.test.ts, a setting the DAEMON applies is
  * written where the daemon reads it.
  *
  * ── The failure this covers ───────────────────────────────────────────────
  *
  * The platform's oldest recurring defect, in its exact shape: a Telegram bot
  * token typed into a settings modal, saved with a confirmation, landing in
- * `~/.goodvibes/tui/settings.json`, and configuring nothing — because the
+ * `~/.goodvibes/tui/settings.json`, and configuring nothing, because the
  * daemon is the process that answers Telegram and it reads a different file.
  * Nothing errors. The capability is simply dead, and the person who set it up
  * has a receipt saying it worked.
@@ -18,7 +18,7 @@
  * ── What is asserted, and what is deliberately not ────────────────────────
  *
  * The classification comes from the SDK's config-ownership tables and is not
- * re-listed here — a second copy of those lists is how the web UI's ownership
+ * re-listed here, a second copy of those lists is how the web UI's ownership
  * badge drifted. What is pinned is the ROUTING: a daemon-owned key reaches the
  * daemon writer, a surface-owned key does not, and a daemon that refuses is
  * reported rather than swallowed.
@@ -197,7 +197,7 @@ describe('a credential the daemon spends is stored by the daemon, in one call', 
 
 // ---------------------------------------------------------------------------
 // The other way in. `/config set <key> <value>` sets the same keys the modal
-// does, so it has to route a credential the same way — otherwise the two ways
+// does, so it has to route a credential the same way, otherwise the two ways
 // of setting one key disagree about where the value lands, and the command
 // line is the one that puts a mailbox password in cleartext on disk.
 //

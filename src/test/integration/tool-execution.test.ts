@@ -42,7 +42,7 @@ function buildStack(configManager?: ConfigManager) {
 // ToolRegistry unit integration
 // ---------------------------------------------------------------------------
 
-describe('Tool execution pipeline — ToolRegistry', () => {
+describe('Tool execution pipeline: ToolRegistry', () => {
   test('registered tool executes and returns success result', async () => {
     const { registry } = buildStack();
     registry.register({
@@ -80,7 +80,7 @@ describe('Tool execution pipeline — ToolRegistry', () => {
       execute: async () => { throw new Error('kaboom'); },
     });
 
-    // ToolRegistry.execute() rethrows tool errors — callers are responsible for handling them
+    // ToolRegistry.execute() rethrows tool errors, callers are responsible for handling them
     await expect(registry.execute('call-3', 'exploder', {})).rejects.toThrow('kaboom');
   });
 
@@ -157,7 +157,7 @@ describe('Tool execution pipeline — ToolRegistry', () => {
 // Permission + registry integration
 // ---------------------------------------------------------------------------
 
-describe('Tool execution pipeline — permission + registry', () => {
+describe('Tool execution pipeline: permission + registry', () => {
   let savedAutoApprove: boolean;
   let savedPermissionMode: 'prompt' | 'allow-all' | 'custom';
   let tmpConfigDir: string;
@@ -197,7 +197,7 @@ describe('Tool execution pipeline — permission + registry', () => {
     configManager.set('behavior.autoApprove', false);
     configManager.set('permissions.mode', 'prompt');
     const { pm } = buildStack(configManager);
-    // 'read' is a read-category tool — auto-approved in prompt mode
+    // 'read' is a read-category tool, auto-approved in prompt mode
     const approved = await pm.check('read', {});
     expect(approved).toBe(true);
   });

@@ -1,5 +1,5 @@
 /**
- * WRFC chain persistence — snapshot active chains to disk on every lifecycle
+ * WRFC chain persistence, snapshot active chains to disk on every lifecycle
  * event so that a crash/restart can surface interrupted chains to the operator,
  * and so that terminal chains (passed/failed/cancelled) remain visible as
  * bounded history rather than vanishing the moment they finish.
@@ -20,14 +20,14 @@
  *
  *    A chain that looked interrupted (non-terminal) in the old snapshot can be
  *    reaped to terminal IN PLACE by `WrfcController.importChain` (the zombie-reap pass:
- *    no member agent survived the restart — see wrfc-controller.ts). This
+ *    no member agent survived the restart, see wrfc-controller.ts). This
  *    module always re-checks `chain.state` AFTER the import call, never the
  *    pre-import classification, so a reaped chain is treated as history, not
  *    re-surfaced as interrupted and never re-imported again on a later restart.
  *
  * 3. Terminal-history retention (bounded, most-recently-completed first):
  *    Previously, every terminal chain was pruned from the snapshot the moment
- *    it was written or rehydrated — a killed/finished chain vanished from
+ *    it was written or rehydrated, a killed/finished chain vanished from
  *    wrfc-chains.json entirely, including across a restart, so nothing could
  *    ever honestly report "last chain: <state>". Terminal chains are now
  *    RETAINED, capped at MAX_TERMINAL_HISTORY (20) most-recently-completed,
@@ -38,7 +38,7 @@
  *      - across a restart, via rehydrate() seeding that cache from whatever
  *        was already terminal in the prior snapshot instead of discarding it.
  *    A corrupt or version-mismatched snapshot is quarantined by renaming it
- *    to `<path>.unrecognized` — never a hard crash.
+ *    to `<path>.unrecognized`, never a hard crash.
  *
  * Snapshot path: `.goodvibes/tui/wrfc-chains.json`
  * Snapshot schema: `{ version: 1, writtenAt: number, chains: WrfcChain[] }`
@@ -58,7 +58,7 @@ const DEBOUNCE_MS = 250;
 /** Bounded terminal-history retention: keep the most recent K chains, prune beyond. */
 const MAX_TERMINAL_HISTORY = 20;
 
-/** Terminal states — chains in these states will not be surfaced as interrupted. */
+/** Terminal states, chains in these states will not be surfaced as interrupted. */
 const TERMINAL_STATES = new Set<WrfcState>(['passed', 'failed']);
 
 /** Non-terminal (interruptible) states. */
@@ -90,7 +90,7 @@ export interface WrfcControllerReader {
    * Re-import a chain recovered from a previous process so it reappears in the
    * controller's in-memory map and becomes selectable/resumable from the panel.
    * Optional so read-only test doubles can omit it; the real WrfcController
-   * provides it. `force` is left at its default — on a fresh start the map is
+   * provides it. `force` is left at its default, on a fresh start the map is
    * empty so importing never clobbers a live chain.
    */
   importChain?(chain: WrfcChain, force?: boolean): boolean;
@@ -99,9 +99,9 @@ export interface WrfcControllerReader {
 export interface WrfcPersistenceOptions {
   /** Absolute path to the snapshot file, e.g. `.goodvibes/tui/wrfc-chains.json`. */
   readonly snapshotPath: string;
-  /** Factory for the current SystemMessageRouter — may return null before it is wired. */
+  /** Factory for the current SystemMessageRouter, may return null before it is wired. */
   readonly getSystemMessageRouter: () => SystemMessageRouter | null;
-  /** WrfcController access — listChains() (read) plus optional importChain() (re-import on rehydrate). */
+  /** WrfcController access, listChains() (read) plus optional importChain() (re-import on rehydrate). */
   readonly controller: WrfcControllerReader;
 }
 
@@ -152,7 +152,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
   /**
    * Bounded terminal-history cache (most-recently-completed first once
    * trimmed). Survives past WrfcController's own in-memory cleanup of
-   * terminated chains (60s after termination — see wrfc-controller.ts
+   * terminated chains (60s after termination, see wrfc-controller.ts
    * scheduleChainCleanup) so a chain that ages out of listChains() is not
    * silently dropped from the persisted snapshot.
    */
@@ -209,7 +209,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
       // chain. The accessor is optional for read-only test doubles.
       //
       // NOTE: importChain may reap this chain to a terminal state IN PLACE
-      // (zombie reap: no member agent survived the restart) —
+      // (zombie reap: no member agent survived the restart),
       // always read chain.state AFTER this call below, never the pre-import
       // classification captured by candidateInterrupted.
       this.controller.importChain?.(chain);
@@ -218,7 +218,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
     // Re-partition after the reap check: a chain that looked interrupted
     // before import may now be terminal. Only genuinely still-live chains are
     // surfaced to the operator as interrupted; anything reaped just now joins
-    // history instead — it is done, not a resurrection candidate, and must
+    // history instead, it is done, not a resurrection candidate, and must
     // never be handed to importChain again on a future restart (a chain only
     // ever lands in candidateInterrupted while its persisted state is
     // non-terminal; once it's history its state is terminal for good).
@@ -230,7 +230,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
     for (const chain of this._interruptedChains) {
       const msg =
         `[WRFC] Chain ${chain.id.slice(0, 12)} (${chain.task.slice(0, 60).trim()}) ` +
-        `was interrupted by a restart — state was '${chain.state}' ` +
+        `was interrupted by a restart; state was '${chain.state}' ` +
         `after ${chain.reviewCycles} review cycle${chain.reviewCycles !== 1 ? 's' : ''}`;
       router?.wrfc(msg, 'high');
     }
@@ -238,7 +238,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
     // Rewrite the snapshot only when something actually changed: a chain was
     // reaped just now, or the history cap pruned an entry that was on disk.
     // Terminal chains are RETAINED (bounded to MAX_TERMINAL_HISTORY, most
-    // recently completed first) instead of erased — post-restart surfaces
+    // recently completed first) instead of erased, post-restart surfaces
     // (fleet, the resume notice, /wrfc history) need this to honestly report
     // e.g. "last chain: cancelled".
     if (reapedJustNow.length > 0 || alreadyTerminal.length !== this._terminalHistory.length) {
@@ -299,7 +299,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
   /**
    * Combine the live chains the controller is currently tracking with any
    * historical terminal chains the live map has already forgotten (e.g. after
-   * WrfcController's own 60s in-memory cleanup) — so the persisted file never
+   * WrfcController's own 60s in-memory cleanup), so the persisted file never
    * loses a terminal chain just because the live map stopped carrying it.
    * Live entries win on id collision since they are always the freshest copy.
    */
@@ -313,7 +313,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
     try {
       atomicWriteFileSync(this.snapshotPath, JSON.stringify(snapshot), { mkdirp: true });
     } catch {
-      // Best-effort — never crash the TUI over a persistence failure.
+      // Best-effort, never crash the TUI over a persistence failure.
     }
   }
 

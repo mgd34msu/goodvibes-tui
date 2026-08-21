@@ -1,12 +1,12 @@
 /**
- * Provider key intake — capture a provider's API key at the moment the user
+ * Provider key intake, capture a provider's API key at the moment the user
  * selects an unconfigured provider or model, store it through the secrets
  * manager (never env-only, never cleartext into config or provider JSON), let
  * the provider re-register live, then complete the user's original selection.
  *
  * The decision of whether a key is needed is read from the provider's own
- * registration-time auth state (describeAuthState / isConfigured) — never a
- * hardcoded vendor list — so this works for any provider the registry knows
+ * registration-time auth state (describeAuthState / isConfigured), never a
+ * hardcoded vendor list, so this works for any provider the registry knows
  * accepts a key. The secrets-store key name is the provider's declared auth env
  * var; it is used only as the storage key and is never shown to the user.
  */
@@ -48,7 +48,7 @@ export function decideProviderKeyIntake(provider: LLMProvider | undefined): Prov
   return { needsKey: false, alreadyConfigured: configured };
 }
 
-/** Human-facing name for a provider — plain, vendor-neutral, never an env var. */
+/** Human-facing name for a provider, plain, vendor-neutral, never an env var. */
 export function providerIntakeLabel(providerId: string): string {
   return `the ${providerId} provider`;
 }
@@ -57,7 +57,7 @@ export function providerIntakeLabel(providerId: string): string {
 export interface ProviderKeyIntakeDeps {
   /** The provider instance whose registration-time auth state drives the decision. */
   readonly provider: LLMProvider | undefined;
-  /** Canonical secret store — the same path /secrets set writes through. */
+  /** Canonical secret store, the same path /secrets set writes through. */
   readonly secretsManager?: {
     set(key: string, value: string, options?: { scope?: SecretScope; medium?: 'secure' | 'plaintext' }): Promise<void>;
   } | undefined;
@@ -72,8 +72,8 @@ export interface ProviderKeyIntakeDeps {
 /**
  * If the selected provider needs a key, open the concealed prompt, store the
  * pasted value through the secrets manager, re-register the provider live, then
- * run `proceed` (the user's original selection). If no key is needed — or the
- * concealed surface is unavailable — `proceed` runs immediately. `proceed`
+ * run `proceed` (the user's original selection). If no key is needed, or the
+ * concealed surface is unavailable, `proceed` runs immediately. `proceed`
  * always runs exactly once, including when the user skips (empty/Escape), so a
  * selection is never stranded.
  */
@@ -89,7 +89,7 @@ export function runProviderKeyIntake(
   }
   const { secretsManager, beginConcealedInput } = deps;
   if (!secretsManager || !beginConcealedInput) {
-    // No canonical store or no concealed surface here — keep the selection
+    // No canonical store or no concealed surface here, keep the selection
     // rather than blocking it; the user can add the key via /secrets set later.
     proceed();
     return;
@@ -114,7 +114,7 @@ export function runProviderKeyIntake(
       void (async () => {
         try {
           // Daemon scope, not user scope. The DAEMON is the process that runs
-          // the model — it answers Telegram, ntfy, mail and every scheduled
+          // the model, it answers Telegram, ntfy, mail and every scheduled
           // run with this TUI closed. A model key filed in this surface's own
           // tier is readable only while the TUI is open, so the daemon has no
           // provider to call and cannot answer at all. Daemon tier is the one

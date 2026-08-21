@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * check-workflows.ts — structural validation gate for the GitHub Actions
+ * check-workflows.ts, structural validation gate for the GitHub Actions
  * workflow YAML under .github/workflows/.
  *
  * The repo has no actionlint/yaml-lint gate, so a broken workflow edit would
@@ -68,7 +68,7 @@ for (const file of files) {
   if (typeof doc.name !== 'string' || doc.name.trim().length === 0) {
     fail(file, 'missing a non-empty `name`');
   }
-  // Bun.YAML.parse keeps `on:` as the string key "on" — verified, not assumed.
+  // Bun.YAML.parse keeps `on:` as the string key "on", verified, not assumed.
   // Some YAML 1.1 parsers fold it to the boolean true, which lands as the string
   // key "true" on a JS object, so accept that spelling too rather than silently
   // passing a workflow whose trigger block went missing.
@@ -119,4 +119,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`check-workflows: OK — ${files.length} workflow file(s) validated, 0 problems.`);
+console.log(`check-workflows: OK; ${files.length} workflow file(s) validated, 0 problems.`);

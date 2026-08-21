@@ -4,21 +4,21 @@ import type { SecretScope, SecretStorageMedium } from './secrets.ts';
 
 export const SECRET_CONFIG_KEYS = new Set<ConfigKey>([
   // Mailbox and CalDAV credentials. Their own CONFIG_SCHEMA descriptions read
-  // "Stored in the daemon secret tier, never in config" — and until they were
+  // "Stored in the daemon secret tier, never in config", and until they were
   // listed here that sentence was aspirational: the settings modal wrote them
   // as plain strings into a config JSON file, because membership in this set is
   // the thing that routes an edit through the secret manager instead.
   //
   // The daemon reads each of these back with
   // resolveConfigSecret('<key>') → GOODVIBES_<KEY>, which is exactly the store
-  // key buildGoodVibesSecretKey() writes — see
+  // key buildGoodVibesSecretKey() writes, see
   // daemon/handlers/inbox/providers/email.ts.
   'surfaces.email.password',
   'surfaces.email.imapPassword',
   'surfaces.email.imap.password',
   'surfaces.email.smtp.password',
   'surfaces.calendar.caldavPassword',
-  // Telephony delivery credentials — same shape, same file, same gap.
+  // Telephony delivery credentials, same shape, same file, same gap.
   'surfaces.telephony.authToken',
   'surfaces.telephony.token',
   'surfaces.telephony.webhookSecret',
@@ -43,7 +43,7 @@ export const SECRET_CONFIG_KEYS = new Set<ConfigKey>([
   'surfaces.mattermost.botToken',
   'surfaces.matrix.accessToken',
   // TUI-local synthetic sub-keys, one level under the SDK's real `payments`
-  // section (not a scalar CONFIG_SCHEMA entry — same situation as
+  // section (not a scalar CONFIG_SCHEMA entry, same situation as
   // behavior.notifyAfterSeconds and the other synthetics in
   // settings-modal-data.ts), hence the cast. See input/payments-config.ts for why these are named flat
   // (payments.cardNumber, not payments.card.number): a flat one-level leaf is
@@ -131,14 +131,14 @@ export function buildSecretBackedConfigUpdate(configKey: ConfigKey, rawValue: st
  * A daemon-owned config key (`surfaces.*`, `payments.*`, `controlPlane.*`, ...)
  * names a credential the DAEMON executes with, not this interactive client, so
  * its secret material belongs in the daemon-scoped tier the daemon actually
- * reads — the same rule the SDK's config-ownership.ts already applies to the
+ * reads, the same rule the SDK's config-ownership.ts already applies to the
  * `goodvibes://` reference that points at it.
  *
  * Defaulting these to 'user' (the historical behavior here) split the pair: the
  * reference landed in the daemon's own settings file, because ConfigManager
  * routes daemon-owned keys there, while the value it pointed at sat in a tier
  * the daemon never resolves. The surface reported success and the daemon found
- * nothing. For the mailbox password that is the whole feature failing silently —
+ * nothing. For the mailbox password that is the whole feature failing silently,
  * the daemon is the process that polls IMAP and answers over Telegram, and it
  * does so with every surface closed. A payment card entered through
  * /payments card is the same shape of failure at purchase time.
@@ -153,7 +153,7 @@ export function defaultSecretBackedScope(configKey: ConfigKey): SecretScope {
  * One call, not two: `credentials.set` derives the store key, writes the value,
  * reads it back to verify, and only then points the config key at it. Doing
  * those halves separately from here would leave a window where the config
- * names a reference that resolves to nothing — which every reader treats as a
+ * names a reference that resolves to nothing, which every reader treats as a
  * configured-but-broken credential.
  */
 export interface DaemonCredentialWriter {
@@ -173,7 +173,7 @@ export async function persistSecretBackedConfigValue(
 
   // A daemon-scoped credential is the daemon's to store, and the daemon does
   // the whole reference-and-value sequence atomically. This surface neither
-  // writes the config key nor the secret in that case — it would be writing
+  // writes the config key nor the secret in that case, it would be writing
   // both into a tree the daemon never reads.
   if (scope === 'daemon' && options.daemonWriter) {
     const trimmed = rawValue.trim();
@@ -182,7 +182,7 @@ export async function persistSecretBackedConfigValue(
       return '';
     }
     // Already a reference: the caller pasted one rather than a secret, so there
-    // is nothing to store — the config value is the whole write.
+    // is nothing to store, the config value is the whole write.
     if (isSecretReferenceValue(trimmed)) return trimmed;
     await options.daemonWriter.set(configKey, rawValue);
     return update.configValue;
@@ -198,7 +198,7 @@ export async function persistSecretBackedConfigValue(
     await secretsManager.set(update.secretKey, update.secretValue, { scope, medium });
   }
 
-  // 3. Clear old secret — pass the same medium so plaintext-medium secrets are found for deletion.
+  // 3. Clear old secret, pass the same medium so plaintext-medium secrets are found for deletion.
   if (update.clearSecretKey && secretsManager?.delete) {
     await secretsManager.delete(update.clearSecretKey, { scope, medium });
   }

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// interaction-seams.ts — the command-context interaction seams and the memory-
+// interaction-seams.ts, the command-context interaction seams and the memory-
 // provenance UI controller, extracted from main.ts (file-size hygiene).
 //
 // The seams expose the in-process orchestrator's per-tool cancel and mid-turn
@@ -39,7 +39,7 @@ export interface InteractionSeamDeps {
 /** Wire the per-tool cancel, queue edit/delete, power, and memory-provenance seams onto the command context. */
 export function wireInteractionSeams(cc: CommandContext, deps: InteractionSeamDeps): void {
   cc.cancelToolCall = createCancelToolCall(deps.orchestrator, deps.getActiveToolCallId, () => {
-    deps.notify('[Tool] Cancelled the running tool call — the turn continues.');
+    deps.notify('[Tool] Cancelled the running tool call; the turn continues.');
     deps.render();
   });
   cc.listQueuedMessages = () => deps.orchestrator.listQueuedMessages();
@@ -56,7 +56,7 @@ export interface MemoryProvenanceUi {
   toggle(): void;
   /** Capture the memory record ids from a completed turn's payload (metadata.memory.recordIds). */
   onTurnCompleted(evt: unknown): void;
-  /** The chip lines for the current turn — empty when the setting is off or the turn used no memories. */
+  /** The chip lines for the current turn, empty when the setting is off or the turn used no memories. */
   renderChip(width: number, configManager: Pick<ConfigManager, 'get'>): Line[];
 }
 
@@ -67,7 +67,7 @@ type ResolvedRecord = { readonly summary: string; readonly cls: string } | null;
  * Create the memory-provenance chip controller (default OFF; reads nothing when
  * off). When the drill-in is expanded it RESOLVES each memory record id to its
  * summary through the memory spine (the same host-or-daemon access the recall
- * commands use, so an adopted daemon resolves over the wire) — per-id and
+ * commands use, so an adopted daemon resolves over the wire), per-id and
  * lazily, so one forgotten record never blanks the rest and a collapsed chip
  * costs nothing. Mirrors the webui's provenance detail fetch.
  */

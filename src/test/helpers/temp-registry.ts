@@ -8,7 +8,7 @@
  * `process.on('exit')` callback registered from a test file does not run when
  * `bun test` finishes, while the same callback does run under `bun run`. Every
  * cleanup this repo hung off that hook was therefore dead code on ordinary GREEN
- * runs, not only on killed ones — a fully green 314-file run left 1120
+ * runs, not only on killed ones, a fully green 314-file run left 1120
  * directories behind in TMPDIR and 98 under <repo>/.test-tmp.
  *
  * The hook that does fire is a top-level `afterAll` registered in a bun test
@@ -16,7 +16,7 @@
  * drains this registry, and it runs after the test file's own afterAll hooks,
  * so a test that cleans up for itself still goes first.
  *
- * Registration is EXPLICIT — never "delete whatever appeared in the temp root
+ * Registration is EXPLICIT, never "delete whatever appeared in the temp root
  * while I was running". scripts/run-tests.ts runs up to 8 test processes at
  * once against the same <repo>/.test-tmp, so a diff-based sweep would delete a
  * live sibling's directories mid-run.
@@ -31,7 +31,7 @@ export interface TempDirRegistry {
    * Registering the same directory twice is harmless; removal is idempotent.
    */
   register(dir: string): string;
-  /** Stop tracking `dir` — for a caller that has already removed it itself. */
+  /** Stop tracking `dir`, for a caller that has already removed it itself. */
   unregister(dir: string): void;
   /** Directories currently awaiting cleanup, in registration order. */
   entries(): readonly string[];
@@ -73,7 +73,7 @@ export function createTempDirRegistry(): TempDirRegistry {
           rmSync(dir, { recursive: true, force: true });
           removed.push(dir);
         } catch {
-          // A concurrent holder or a permission problem — never fail the test
+          // A concurrent holder or a permission problem, never fail the test
           // run over cleanup. The age-gated sweep in scripts/stale-tmp-sweep.ts
           // is the backstop for anything that survives.
         }
@@ -127,7 +127,7 @@ export interface DrainOptions {
   /**
    * Registry to drain. Defaults to the process-wide one the preload owns.
    * This module's own tests pass their own so they never empty the real
-   * registry mid-run — doing that would delete the per-process temp root while
+   * registry mid-run, doing that would delete the per-process temp root while
    * later tests were still using it.
    */
   readonly registry?: TempDirRegistry;
@@ -136,7 +136,7 @@ export interface DrainOptions {
 export interface DrainResult {
   /** Directories that are gone by the time the drain returns. */
   readonly removed: string[];
-  /** Directories still present — a leak this process could not close. */
+  /** Directories still present, a leak this process could not close. */
   readonly survivors: string[];
   /** Passes actually made, including the first. */
   readonly passes: number;
@@ -146,7 +146,7 @@ export interface DrainResult {
  * Drain the registry, then keep checking that it stayed drained.
  *
  * One pass is not enough. Some suites still have work in flight when the last
- * test ends — a daemon flushing, a poller mid-write — and that work RECREATES
+ * test ends, a daemon flushing, a poller mid-write, and that work RECREATES
  * the directory the first pass just deleted. Measured on this repo: 4 of 314
  * test files did exactly that, and the leftover directory contained a full tree
  * written after teardown, not a stale one that survived it.

@@ -53,11 +53,11 @@ function allowOnlyPolicy(allowed: PluginCapability) {
 }
 
 // ---------------------------------------------------------------------------
-// resolveCapabilityManifest — default permissive policy
+// resolveCapabilityManifest, default permissive policy
 // ---------------------------------------------------------------------------
 
 describe('security: plugin capabilities', () => {
-  describe('resolveCapabilityManifest — default policy (permissive)', () => {
+  describe('resolveCapabilityManifest: default policy (permissive)', () => {
     test('default policy grants all valid requested capabilities when trust is trusted', () => {
       // The default trust tier is 'untrusted', which blocks high-risk capabilities.
       // Pass 'trusted' explicitly to verify the permissive policy path.
@@ -91,7 +91,7 @@ describe('security: plugin capabilities', () => {
     });
   });
 
-  describe('resolveCapabilityManifest — deny-all policy enforcement', () => {
+  describe('resolveCapabilityManifest: deny-all policy enforcement', () => {
     test('deny-all policy denies every requested capability', () => {
       const manifest = makeManifest([...ALL_CAPABILITIES]);
       const resolved = resolveCapabilityManifest('test-plugin', manifest, denyAllPolicy());
@@ -162,7 +162,7 @@ describe('security: plugin capabilities', () => {
     });
   });
 
-  describe('validateManifestV2 — manifest integrity', () => {
+  describe('validateManifestV2: manifest integrity', () => {
     test('null manifest returns error string', () => {
       const result = validateManifestV2(null);
       expect(typeof result).toBe('string');

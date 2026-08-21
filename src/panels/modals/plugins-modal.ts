@@ -107,7 +107,7 @@ class PluginsModalSurface implements ConfigModalSurface {
         trustRecord?.signatureFingerprint ? `sig ${trustRecord.signatureFingerprint}` : 'unsigned',
         caps ? `caps ${caps.requested.length}/${caps.highRisk.length}hr/${caps.blocked.length}blk` : null,
         quarantineRecord ? `quarantine: ${quarantineRecord.reason}` : null,
-        verify ? `verify ${verify.valid ? 'VALID' : 'INVALID'}${verify.fingerprint ? ` fp=${verify.fingerprint}` : (!verify.valid && verify.reason ? ` — ${verify.reason}` : '')}` : null,
+        verify ? `verify ${verify.valid ? 'VALID' : 'INVALID'}${verify.fingerprint ? ` fp=${verify.fingerprint}` : (!verify.valid && verify.reason ? `: ${verify.reason}` : '')}` : null,
       ].filter((s): s is string => s !== null).join(' · ');
       rows.push({
         id: plugin.name,

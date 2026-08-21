@@ -1,5 +1,5 @@
 /**
- * Tests for DeterministicReplayEngine — Section 5.2
+ * Tests for DeterministicReplayEngine, Section 5.2
  *
  * Covers: load (valid/empty), step (forward/boundary), seek,
  * diff (match/mismatch), export path validation, engine state transitions.
@@ -228,7 +228,7 @@ describe('DeterministicReplayEngine', () => {
       loadEngine(engine, [makeEntry(1, 'turn:start', { prompt: 'hello' })]);
       // Replace the recorded entry in _entries with one that has extra keys.
       // The frame was built from { prompt: 'hello' } but the recorded entry now
-      // claims { prompt: 'hello', extra: 'field' } — a genuine payload_mismatch.
+      // claims { prompt: 'hello', extra: 'field' }, a genuine payload_mismatch.
       (engine as unknown as { _entries: LedgerEntry[] })._entries = [
         makeEntry(1, 'turn:start', { prompt: 'hello', extra: 'field' }),
       ];

@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// failover-effort-notice.test.ts — the effort-remap sentence survives the retry
+// failover-effort-notice.test.ts, the effort-remap sentence survives the retry
 // rollback.
 //
 // The defect this pins: on a failover, switchNarrated() ran
 // reconcileEffortWithServingModel(), which ANNOUNCED "Reasoning effort 'xhigh'
-// isn't available on <fallback> — using 'medium'" straight into the transcript.
+// isn't available on <fallback>, using 'medium'" straight into the transcript.
 // The very next thing the wiring did was call retryTurn(), and retryTurn rolls
-// the conversation back to its pre-submission message count — deleting
+// the conversation back to its pre-submission message count, deleting
 // everything the failed turn added, that sentence included. This is the same
 // rollback the failover notice itself is handed IN to survive; the effort
 // sentence was not, so the user failed over onto a model running at a lower

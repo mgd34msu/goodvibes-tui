@@ -1,4 +1,4 @@
-# Channels, Remote Runtime, and API
+# Channels, remote runtime, and API
 
 ## Channels
 
@@ -212,8 +212,8 @@ Set `behavior.notifyAfterSeconds` in `/config behavior` (or `settings.json`):
 
 Notifications are delivered in this order:
 
-1. **Desktop notification** — `notify-send` on Linux, `osascript` on macOS. The SDK handles platform detection; the call is a silent no-op when neither is available.
-2. **Outbound webhook / ntfy topic** — if you have webhook URLs configured (via `/notify add <url>`), the notification is also sent as a plain-text POST to all configured endpoints. This works with ntfy.sh topics and any service accepting a plain POST body.
+1. **Desktop notification.** `notify-send` on Linux, `osascript` on macOS. The SDK handles platform detection; the call is a silent no-op when neither is available.
+2. **Outbound webhook / ntfy topic.** If you have webhook URLs configured (via `/notify add <url>`), the notification is also sent as a plain-text POST to all configured endpoints. This works with ntfy.sh topics and any service accepting a plain POST body.
 
 ### Notification content
 

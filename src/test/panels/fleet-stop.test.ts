@@ -1,5 +1,5 @@
 /**
- * d1/d2 — fleet-stop.ts: the 'stopping…' write-window overlay tracker and
+ * d1/d2, fleet-stop.ts: the 'stopping…' write-window overlay tracker and
  * the state-dependent pause<->resume toggle + tree hints, split out of
  * fleet-panel.ts. Pure/isolated, so unit-tested here directly.
  */
@@ -54,7 +54,7 @@ describe('FleetStopTracker (d1)', () => {
     t.mark('a', 1_000);
     expect(t.isStopping('a', 1_000)).toBe(true);
     expect(t.isStopping('a', 1_000 + STOP_SETTLE_MS - 1)).toBe(true);
-    // At/after the window the TRUE state is shown again — a stuck kill is never masked.
+    // At/after the window the TRUE state is shown again, a stuck kill is never masked.
     expect(t.isStopping('a', 1_000 + STOP_SETTLE_MS)).toBe(false);
     // Pruned: a later query stays false without re-marking.
     expect(t.isStopping('a', 1_000 + 10)).toBe(false);

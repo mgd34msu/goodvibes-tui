@@ -13,13 +13,13 @@ triggers:
 author: goodvibes
 ---
 
-# Add Custom Provider
+# Add custom provider
 
 Interactively collect provider and model details from the user, then write a JSON config to `~/.goodvibes/tui/providers/{name}.json`.
 
 ## Workflow
 
-### Step 1: Check for Existing Provider
+### Step 1: Check for existing provider
 
 Before collecting info, check if `~/.goodvibes/tui/providers/` already has JSON files. If the user names a provider that already exists, ask:
 - **Add models** to the existing provider, or
@@ -27,22 +27,22 @@ Before collecting info, check if `~/.goodvibes/tui/providers/` already has JSON 
 
 If adding models, read the existing JSON, append new models, and write back.
 
-### Step 2: Collect Provider Details
+### Step 2: Collect provider details
 
 Ask the user for each field. Apply smart defaults when the provider name matches a known service.
 
-#### Required Fields
+#### Required fields
 
 | Field | Description | Validation |
 |-------|-------------|------------|
 | `name` | Internal ID | Lowercase alphanumeric + hyphens only, 1-64 chars |
 | `displayName` | Human-readable name | Non-empty string |
-| `type` | API compatibility | `openai-compat` (recommended) or `anthropic-compat` (not yet supported — use `openai-compat`) |
+| `type` | API compatibility | `openai-compat` (recommended) or `anthropic-compat` (not yet supported, use `openai-compat`) |
 | `baseURL` | API endpoint | Must start with `http://` or `https://` |
 
-> **Note:** `anthropic-compat` is accepted in the JSON schema for forward compatibility but is not yet functional at runtime. The loader will skip configs with this type and emit a warning. Use `openai-compat` for now — most Anthropic-compatible proxies (e.g., via LiteLLM) expose an OpenAI-compatible endpoint.
+> **Note:** `anthropic-compat` is accepted in the JSON schema for forward compatibility but is not yet functional at runtime. The loader will skip configs with this type and emit a warning. Use `openai-compat` for now. Most Anthropic-compatible proxies (e.g., via LiteLLM) expose an OpenAI-compatible endpoint.
 
-#### Optional Fields
+#### Optional fields
 
 | Field | Description | Default |
 |-------|-------------|---------|
@@ -50,7 +50,7 @@ Ask the user for each field. Apply smart defaults when the provider name matches
 | `apiKey` | Explicit API key (not recommended) | None |
 | `defaultHeaders` | Custom HTTP headers sent with every API request (e.g., for proxy authentication or routing) | None |
 
-### Smart Defaults
+### Smart defaults
 
 When the user mentions a known provider, pre-fill these values and confirm:
 
@@ -100,7 +100,7 @@ vllm:
 
 If the name does not match a known provider, ask for all fields individually.
 
-### Step 3: Collect Model Details
+### Step 3: Collect model details
 
 Collect at least one model. For each model:
 
@@ -118,7 +118,7 @@ Collect at least one model. For each model:
 
 After each model, ask: "Add another model?" Loop until done.
 
-### Step 4: Preview and Confirm
+### Step 4: Preview and confirm
 
 Show the complete JSON to the user and ask for confirmation before writing.
 
@@ -148,13 +148,13 @@ Example output:
 }
 ```
 
-### Step 5: Write the File
+### Step 5: Write the file
 
 Write to `~/.goodvibes/tui/providers/{name}.json`. Create the directory if it does not exist.
 
 Use `precision_write` with `mode: "fail_if_exists"` for new providers. Use `mode: "overwrite"` when the user chose to overwrite an existing provider or when merging models into an existing file.
 
-If the `apiKeyEnv` field is set, include it in the JSON. If the user provided an explicit `apiKey`, include it but warn that storing keys in plain text is not recommended -- suggest using an environment variable instead.
+If the `apiKeyEnv` field is set, include it in the JSON. If the user provided an explicit `apiKey`, include it but warn that storing keys in plain text is not recommended. Suggest using an environment variable instead.
 
 If `defaultHeaders` were provided, include them.
 
@@ -165,7 +165,7 @@ Tell the user:
 - The provider should be available immediately if goodvibes-tui is currently running (it hot-reloads custom provider configs); if not running, changes take effect on next startup
 - If an API key is needed, remind them to set the environment variable
 
-## Validation Rules
+## Validation rules
 
 Before writing, verify:
 1. `name` matches `/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/` and is 1-64 characters (no trailing hyphens)
@@ -176,24 +176,24 @@ Before writing, verify:
 
 If validation fails, tell the user which field is invalid and ask for correction.
 
-## JSON Schema Reference
+## JSON schema reference
 
 The provider JSON maps to the codebase types:
 
-- Provider registration uses `OpenAICompatProvider` for `openai-compat` type. The `anthropic-compat` type is parsed and accepted in the JSON but is **not yet supported at runtime** — the loader skips it with a warning. Recommend `openai-compat` for all custom providers.
+- Provider registration uses `OpenAICompatProvider` for `openai-compat` type. The `anthropic-compat` type is parsed and accepted in the JSON but is **not yet supported at runtime**. The loader skips it with a warning. Recommend `openai-compat` for all custom providers.
 - `OpenAICompatOptions`: `{ name, baseURL, apiKey, defaultModel, models }`
 - Model entries map to `ModelDefinition`: `{ id, provider, displayName, description, contextWindow, capabilities, reasoningEffort?, selectable }`
-  - `reasoningEffort?: string[]` — optional array of supported effort levels, e.g., `["low", "medium", "high"]`
+  - `reasoningEffort?: string[]` is an optional array of supported effort levels, e.g., `["low", "medium", "high"]`
 - The `selectable` field defaults to `true` for custom models
 - The `provider` field in `ModelDefinition` is auto-set to the provider `name`
 
-## Conversational Style
+## Conversational style
 
 Be natural and helpful. Guide users step-by-step but do not be overly verbose. If the user provides multiple details at once (e.g., "add ollama with llama3.3-70b"), extract what you can and only ask for missing fields.
 
-## Edge Cases
+## Edge cases
 
-- **Unknown context window**: Suggest 4096 as a safe default, note the user can update later
-- **No API key needed**: Omit `apiKeyEnv` and `apiKey` from the JSON entirely
-- **User provides a full JSON blob**: Validate it against the schema and write directly
-- **Multiple providers in one session**: After completing one, ask if they want to add another
+- **Unknown context window.** Suggest 4096 as a safe default, and note the user can update later.
+- **No API key needed.** Omit `apiKeyEnv` and `apiKey` from the JSON entirely.
+- **User provides a full JSON blob.** Validate it against the schema and write directly.
+- **Multiple providers in one session.** After completing one, ask if they want to add another.

@@ -39,14 +39,14 @@ function makeTempPath(prefix: string): string {
 // repo" behavior. .test-tmp lives inside this project's own working tree,
 // which would make it a false negative for that check. Existing call sites
 // already rmSync these in an afterEach/finally, but a process kill would
-// skip that — this is the one directory in this file that lands in the
+// skip that, this is the one directory in this file that lands in the
 // REAL OS temp dir, so its cleanup matters most.
 //
 // Cleanup is a top-level `afterAll` (bun:test), not `process.on('exit')`:
 // confirmed empirically that Bun's test runner never fires
 // `process.on('exit')` handlers under `bun test` (a marker-file exit
 // handler in a .test.ts file never wrote its marker, while the identical
-// handler in a plain `bun run script.ts` did) — so a process.on('exit')
+// handler in a plain `bun run script.ts` did), so a process.on('exit')
 // hook here would be dead code on every run, not just a killed one.
 // `afterAll` must be registered at true module top level (here, not lazily
 // from inside makeExternalDir) for the same reason: bun:test only reliably

@@ -102,7 +102,7 @@ describe('health-cascades contract', () => {
     });
   });
 
-  describe('CascadeEngine — all 8 rules fire for correct domain+state', () => {
+  describe('CascadeEngine: all 8 rules fire for correct domain+state', () => {
     test('turn:failed fires turn-failed-cancels-tools', () => {
       const agg = makeAggregator();
       const engine = makeEngine(agg);
@@ -221,7 +221,7 @@ describe('health-cascades contract', () => {
 
     test('recovery-first rules produce pendingRecovery when recovery not exhausted', () => {
       const agg = makeAggregator();
-      // 0 attempts out of 3 max — recovery not exhausted
+      // 0 attempts out of 3 max, recovery not exhausted
       agg.updateDomainHealth('toolExecution', 'failed', { recoveryAttempts: 0, maxRecoveryAttempts: 3 });
       const engine = makeEngine(agg);
 
@@ -234,7 +234,7 @@ describe('health-cascades contract', () => {
 
     test('recovery-first rules cascade when recovery is exhausted', () => {
       const agg = makeAggregator();
-      // Exhausted — 3 attempts out of 3
+      // Exhausted, 3 attempts out of 3
       agg.updateDomainHealth('toolExecution', 'failed', { recoveryAttempts: 3, maxRecoveryAttempts: 3 });
       const engine = makeEngine(agg);
 

@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { buildFlagEntries } from '../../input/settings-modal-data.ts';
 import { createFeatureFlagManager } from '../../runtime/index.ts';
 
-describe('settings modal — code-injection flag', () => {
+describe('settings modal: code-injection flag', () => {
   test('agent-passive-code-injection appears in the flags section, default off', () => {
     const manager = createFeatureFlagManager();
     const entries = buildFlagEntries(manager);

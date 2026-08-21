@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// power-keepawake-remote.ts — forward the keep-awake toggle to an adopted
+// power-keepawake-remote.ts, forward the keep-awake toggle to an adopted
 // EXTERNAL daemon over the power.keepAwake.set operator verb.
 //
 // In the external/adopted-daemon topology the in-process PowerManager is NOT
@@ -7,12 +7,12 @@
 // closes. The owner ruling is that keep-awake is daemon-held: it must survive
 // the TUI closing. The config file does NOT carry it across (power.keepAwake is
 // not a cross-surface shared key), so the toggle is forwarded to the daemon
-// over the verb instead — best-effort, gated on reachability. Mirrors the
+// over the verb instead, best-effort, gated on reachability. Mirrors the
 // agent's own power-keep-awake-remote seam.
 //
 // A single config subscriber carries ALL THREE toggle paths (/power, Alt+A, the
-// settings modal): each lands on the power.keepAwake config key — the local
-// PowerManager persists it on set, and the settings modal writes it directly —
+// settings modal): each lands on the power.keepAwake config key, the local
+// PowerManager persists it on set, and the settings modal writes it directly,
 // so subscribing to that one key catches every origin. When there is no adopted
 // external daemon (`isExternalDaemon()` false), this is a no-op: there is nothing
 // to forward to.
@@ -34,7 +34,7 @@ export interface KeepAwakeRemoteDeps {
 /**
  * Best-effort forward of the keep-awake toggle to the adopted external daemon so
  * the DAEMON holds the inhibitor (surviving the TUI closing). A no-op in the
- * embedded topology and quiet when the daemon is unreachable — a transient
+ * embedded topology and quiet when the daemon is unreachable, a transient
  * daemon hiccup never breaks the local toggle.
  */
 export async function forwardKeepAwakeToDaemon(enabled: boolean, deps: KeepAwakeRemoteDeps): Promise<void> {
@@ -61,7 +61,7 @@ export function installKeepAwakeRemoteForward(deps: KeepAwakeRemoteDeps): () => 
 
 /**
  * Fetch the adopted DAEMON's power.status.get (null when unreachable or not in
- * the external topology). The chip's external-mode poll source — the adopted
+ * the external topology). The chip's external-mode poll source, the adopted
  * wire is plain HTTP with no event bridge, so the chip syncs by polling.
  */
 export async function fetchDaemonPowerState(deps: KeepAwakeRemoteDeps): Promise<PowerState | null> {

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// memory-governance-services.ts — the daemon-composition tail that constructs
+// memory-governance-services.ts, the daemon-composition tail that constructs
 // and starts the SDK's MemoryGovernor with the TUI fork's REAL cache adapters.
 //
 // Mirrors the SDK's own createRuntimeServices: the CacheRegistry, PauseController
@@ -8,7 +8,7 @@
 // controller before the governor exists); this helper is the TAIL step that
 // hands them to wireDaemonMemoryGovernance with the fork's knowledge stores +
 // shared session broker as the real, reclaiming cache adapters, and starts the
-// governor. It is default ON — the governor is a safety feature the owner
+// governor. It is default ON, the governor is a safety feature the owner
 // confirmed starts by default (wireDaemonMemoryGovernance starts it unless a
 // caller opts out), so every daemon composition defends its own footprint.
 //
@@ -50,7 +50,7 @@ export interface MemoryGovernanceServices {
 /**
  * Construct + start the MemoryGovernor with the standard KNOWN cache adapters
  * (knowledge-store + session-union), reading the memory.* config domain. The
- * governor starts by default — it is a safety feature.
+ * governor starts by default, it is a safety feature.
  */
 export function wireMemoryGovernance(deps: MemoryGovernanceServicesDeps): MemoryGovernanceServices {
   const { configManager } = deps;

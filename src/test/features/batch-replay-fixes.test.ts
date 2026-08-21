@@ -56,7 +56,7 @@ describe('Ctrl+C chord vs live TTS', () => {
     return { armed, exited, recordedTime };
   }
 
-  test('a press that stopped live speech is consumed — no arm, no quit-count', () => {
+  test('a press that stopped live speech is consumed; no arm, no quit-count', () => {
     const r = pressCtrlC(() => true);
     expect(r.armed).toBe(false);
     expect(r.recordedTime).toBe(-1);

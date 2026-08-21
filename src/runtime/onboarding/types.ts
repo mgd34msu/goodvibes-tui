@@ -128,7 +128,7 @@ export interface OnboardingSurfacesSnapshot {
  * systemd unit (see `../legacy-daemon-migration.ts`'s `LegacyUnitInfo`), carried
  * on the snapshot so the Network step can show the guided migration action only
  * when there is actually something to migrate. Never implies anything was
- * touched — detection only.
+ * touched, detection only.
  */
 export interface OnboardingLegacyDaemonSnapshot {
   readonly present: boolean;
@@ -137,7 +137,7 @@ export interface OnboardingLegacyDaemonSnapshot {
   /**
    * Follow-up: the unit name this tool actually manages on this host,
    * resolved from the `service.serviceName` config key at snapshot-collection
-   * time (`resolveConfiguredServiceName`, `../legacy-daemon-migration.ts`) —
+   * time (`resolveConfiguredServiceName`, `../legacy-daemon-migration.ts`),
    * so the wizard's detection banner names the real unit instead of the
    * hardcoded default. Optional so snapshots built without config access
    * (fallbacks, older fixtures) stay valid; readers fall back to
@@ -156,7 +156,7 @@ export interface OnboardingProviderAccountRecord {
   readonly activeRoute: string;
   readonly authFreshness: string;
   /**
-   * The secrets-store key this provider reads its API key from — its declared
+   * The secrets-store key this provider reads its API key from, its declared
    * auth env var, read from the live provider's registration-time auth state.
    * Present only for providers that accept an API key; absent for keyless /
    * subscription-only providers. Used to offer provider-agnostic key entry in
@@ -283,7 +283,7 @@ export type OnboardingApplyOperation =
       readonly value: string;
       /**
        * Which secret tier the value is filed in. 'daemon' is the tier the
-       * daemon reads with every surface closed — see
+       * daemon reads with every surface closed, see
        * config/secret-config.ts#defaultSecretBackedScope.
        */
       readonly scope?: 'project' | 'user' | 'daemon';

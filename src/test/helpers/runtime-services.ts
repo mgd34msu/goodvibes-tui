@@ -89,7 +89,7 @@ function getTestRoots(): IntelligenceTestRoots {
 
   // No cleanup wiring here on purpose, and two things clean this root up
   // instead. A `process.on('exit', ...)` registered from inside this lazily-
-  // called function used to sit here — the same dead-code pattern documented
+  // called function used to sit here, the same dead-code pattern documented
   // on makeProjectTempDir in project-temp.ts: `bun test` never fires exit
   // handlers, and afterAll doesn't reliably attach when called from inside an
   // already-running test/beforeEach rather than at collection time. It was
@@ -97,7 +97,7 @@ function getTestRoots(): IntelligenceTestRoots {
   // graph. What replaces it: (1) disposeTestRuntimeServicesAfterAll's
   // top-level afterAll removes this root per file, and (2) `root` came from
   // makeProjectTempDir, so it is registered with helpers/temp-registry.ts and
-  // the preload's afterAll drains it — with re-checks — when the test process
+  // the preload's afterAll drains it, with re-checks, when the test process
   // finishes. (2) is what closes the residual noted on
   // disposeTestRuntimeServicesAfterAll below, where a late async write inside
   // the SDK recreates a few files microtasks after the per-file rmSync.
@@ -145,10 +145,10 @@ function seedRuntimeProviderTestModels(services: RuntimeServices): void {
  * Drop the shared test runtime graph, STOPPING it first.
  *
  * Dropping the reference alone is not enough. `createRuntimeServices()` starts
- * pollers while it builds — the fleet registry tick, the knowledge scheduler,
+ * pollers while it builds, the fleet registry tick, the knowledge scheduler,
  * the push-subscription sweep, the cross-session orchestration sweep, the
  * orchestration snapshot writer, the config-file watch, the snapshot /
- * retention / consolidation schedulers — and every one of them keeps firing for
+ * retention / consolidation schedulers, and every one of them keeps firing for
  * the rest of the process when the graph is abandoned rather than disposed.
  * This function is called from the `beforeEach`/`afterEach` of most tests that
  * use the shared graph, so it is the single place that decides whether the
@@ -180,7 +180,7 @@ export function resetTestRuntimeServices(): void {
  * Also removes `getTestRoots()`'s temp directory (the `gv-test-runtime-*`
  * scratch shared by getTestRuntimeServices/getTestLspService/
  * getTestCodeIntelligence/getTestTaskScheduler), which used to rely on a
- * `process.on('exit', ...)` hook registered lazily inside getTestRoots — Bun's
+ * `process.on('exit', ...)` hook registered lazily inside getTestRoots, Bun's
  * test runner never fires that under `bun test`, so it leaked the ENTIRE
  * directory tree (never removed at all) for every test file that touched any
  * of those shared services. This function is already the established
@@ -189,7 +189,7 @@ export function resetTestRuntimeServices(): void {
  *
  * Known residual: confirmed by direct instrumentation that this rmSync
  * genuinely succeeds at the moment it runs, but for some files a handful of
- * files reappear under the same path microtasks later — some subsystem
+ * files reappear under the same path microtasks later, some subsystem
  * inside the created RuntimeServices graph (not identified further; it is
  * inside @pellux/goodvibes-sdk, not this repo) performs an async write after
  * `previous?.dispose()` above has synchronously returned, without this

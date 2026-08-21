@@ -1,6 +1,6 @@
 // Deliberately per-repo test, byte-identical to the sibling product's copy by design: the module it exercises is this repo's own and has diverged from the sibling's, so the two copies prove different code and neither can stand in for the other.
 // ---------------------------------------------------------------------------
-// conversation-turn-structure.test.ts — assistant-turn grouping, structural
+// conversation-turn-structure.test.ts, assistant-turn grouping, structural
 // placement, connector geometry and nested-agent splicing.
 //
 // These assert SHAPE (which rows, in what order, with which connectors), not
@@ -80,7 +80,7 @@ describe('assistant turn grouping', () => {
     expect(computeAssistantTurns(messages, 0).get(0)!.sharedToolLabel).toBeUndefined();
   });
 
-  test('prose closes the group — what follows starts a new header', () => {
+  test('prose closes the group: what follows starts a new header', () => {
     const messages: Message[] = [
       assistant({ calls: [{ id: 'a' }] }),
       toolResult('a'),
@@ -191,7 +191,7 @@ describe('connectors', () => {
     const rowBefore = buildRenderPlan(one, 0).find((n) => n.id === 'm:1')!;
     const rowAfter = buildRenderPlan(two, 0).find((n) => n.id === 'm:1')!;
 
-    // The connector — and only the connector — differs.
+    // The connector, and only the connector, differs.
     expect(rowBefore.connector).toBe('└');
     expect(rowAfter.connector).toBe('├');
     expect(rowAfter.depth).toBe(rowBefore.depth);
@@ -242,7 +242,7 @@ describe('nested agents', () => {
     expect(childDepth).toBeGreaterThan(callDepth);
   });
 
-  test('nesting recurses — an agent that spawns an agent nests again', () => {
+  test('nesting recurses: an agent that spawns an agent nests again', () => {
     const grandchild: Message[] = [assistant({ calls: [{ id: 'g' }] })];
     const child: Message[] = [spawnCall('s2'), spawnResult('s2', 'agent-2')];
     const plan = buildRenderPlan(

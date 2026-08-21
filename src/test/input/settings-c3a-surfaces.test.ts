@@ -1,6 +1,6 @@
 /**
  * Task 6: the new C3a config surfaces must be reachable through the settings
- * modal — permissions.backgroundAgents and diagnostics.postEdit. The
+ * modal, permissions.backgroundAgents and diagnostics.postEdit. The
  * diagnostics category was previously unregistered, so its key was silently
  * dropped from buildSettingGroups; this pins that it now surfaces.
  */

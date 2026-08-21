@@ -1,7 +1,7 @@
 /**
  * The footer's context-info line carries a persistent `web:<url>` segment when
  * the web surface is enabled (webSurfaceUrl defined); undefined renders no
- * segment — matching the plain `spine:`/`notify:`/`N tools` context style.
+ * segment, matching the plain `spine:`/`notify:`/`N tools` context style.
  */
 import { describe, test, expect } from 'bun:test';
 import { UIFactory } from '../../renderer/ui-factory.ts';

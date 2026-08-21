@@ -1,5 +1,5 @@
 /**
- * management-utils.ts — shared CLI utility functions.
+ * management-utils.ts, shared CLI utility functions.
  *
  * Extracted from management.ts to break the import cycle:
  *   management.ts ↔ management-commands.ts
@@ -10,7 +10,7 @@
  * for these utilities).
  *
  * No imports from management-commands.ts or surface-command.ts are allowed
- * in this file — that would recreate the cycle.
+ * in this file, that would recreate the cycle.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -326,7 +326,7 @@ export async function runNonInteractiveAgent(runtime: CliCommandRuntime): Promis
 
   try {
     // Async pre-turn refresh of the memory-spine recall snapshot (SDK 1.2.0
-    // full-detach) — see the matching comment in main.ts's submitInput.
+    // full-detach), see the matching comment in main.ts's submitInput.
     await refreshMemoryRecallSnapshot(ctx.services);
     await ctx.orchestrator.handleUserInput(prompt);
     await done;

@@ -1,5 +1,5 @@
 /**
- * fleet-union.ts — the Fleet panel shows everything running, not just what this
+ * fleet-union.ts, the Fleet panel shows everything running, not just what this
  * terminal started.
  *
  * ── What moved to the SDK, and what stays here ────────────────────────────
@@ -15,14 +15,14 @@
  * interface (interrupt/resume/kill/steer/archive, subscribe, snapshots) and
  * `buildFleetSnapshot`, the tree-builder + honest cost/token aggregator this
  * repo's Fleet panel renders from. Rebuilding through the SAME builder the
- * local view uses — rather than summing two halves — is what keeps the
+ * local view uses, rather than summing two halves, is what keeps the
  * rollups, the cost/token totals and the blocked-on-user ordering computed
  * once, over the whole fleet.
  *
  * ── Who wins ──────────────────────────────────────────────────────────────
  *
  * Local rows are AUTHORITATIVE for processes this terminal spawned. They are
- * live — the registry pushes on every state change, with sub-second latency —
+ * live, the registry pushes on every state change, with sub-second latency,
  * and they carry the capabilities that make a row actionable here (interrupt,
  * resume, kill, steer all reach a real child process). The daemon's copy of
  * the same row, arriving over a poll, is necessarily staler; where both
@@ -31,7 +31,7 @@
  * ── Acting on a row you do not own ────────────────────────────────────────
  *
  * `interrupt`/`resume`/`kill`/`steer` reach this process's own children. A
- * daemon row has no child here to signal, so those refuse — and `steer`,
+ * daemon row has no child here to signal, so those refuse, and `steer`,
  * which has a reason channel, says why rather than returning a bare false
  * that reads as "the agent ignored you". The panel's own act surface
  * (fleet-gateway.ts) already drives the daemon's verbs for the acts the
@@ -56,7 +56,7 @@ export { DEFAULT_FLEET_REFRESH_MS, daemonOnlyFleetActRefusal, mergeFleetNodes, r
 export type { DaemonFleetRows, DaemonFleetRowsPoller, DaemonFleetRowsPollerOptions };
 
 export interface FleetUnionOptions {
-  /** This surface's own live registry view — authoritative for what it spawned. */
+  /** This surface's own live registry view, authoritative for what it spawned. */
   readonly local: FleetReadModel;
   readonly verbs: DaemonVerbCaller;
   readonly refreshIntervalMs?: number;
@@ -78,7 +78,7 @@ const SURFACE_LABEL = 'this terminal';
  * daemon's rows, over the SDK's poll/merge/refusal policy.
  *
  * Inert until the first poll lands: before then, and whenever the daemon
- * cannot answer, the snapshot is exactly the local one — which is the honest
+ * cannot answer, the snapshot is exactly the local one, which is the honest
  * answer, not a degraded one. A daemon that stops answering keeps its LAST
  * known rows rather than dropping them (the poller's own retention), so a
  * momentary blip does not make half the fleet blink out and back.
@@ -96,7 +96,7 @@ export function createFleetUnionReadModel(options: FleetUnionOptions): FleetUnio
     for (const listener of listeners) listener();
   });
 
-  /** Ids this surface owns right now — the set the daemon's copy defers to. */
+  /** Ids this surface owns right now, the set the daemon's copy defers to. */
   const localNodeIds = (snapshot: FleetSnapshot): Set<string> =>
     new Set(snapshot.rows.map((row) => row.node.id));
   const isLocalId = (id: string): boolean => localNodeIds(local.getSnapshot()).has(id);

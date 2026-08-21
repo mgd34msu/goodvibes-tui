@@ -9,7 +9,7 @@ export type PendingPermissionState = PermissionRequest & {
   detailsExpanded?: boolean;
   /**
    * Active typed-reply mode: 'deny-reason' (started by typing while the card
-   * is up — Enter denies with the typed reason as feedback) or 'exec-answer'
+   * is up, Enter denies with the typed reason as feedback) or 'exec-answer'
    * (an exec-prompt ask; Enter approves with the typed answer feeding the
    * running command's stdin). Undefined = plain card keys.
    */
@@ -19,8 +19,8 @@ export type PendingPermissionState = PermissionRequest & {
   /**
    * Epoch ms when the prompt first appeared. Keystrokes that arrive within
    * APPROVAL_INPUT_DEBOUNCE_MS of this are swallowed (not interpreted as an
-   * approve/deny response) so text typed ahead — before the user saw the
-   * prompt — cannot accidentally answer it.
+   * approve/deny response) so text typed ahead, before the user saw the
+   * prompt, cannot accidentally answer it.
    */
   openedAt?: number;
   /** Requester attribution ("session abc12345" / a named agent) shown on the prompt; absent when unknown. */
@@ -99,7 +99,7 @@ export function handleBlockingShellInput(
 
     // Typed-reply mode: deny-with-reason (started by typing on any card) or
     // exec-answer (an exec-prompt ask opens in this mode). Every printable
-    // key is text here — nothing is a card command.
+    // key is text here, nothing is a card command.
     if (req.replyMode) {
       const buffer = req.replyBuffer ?? '';
       if (data === '\r' || data === '\n') {
@@ -109,7 +109,7 @@ export function handleBlockingShellInput(
           req.resolve(true, false, { answer: buffer });
         } else {
           // Deny is feedback: the reason rides the structured "user declined"
-          // tool result so the model can adapt — the turn is NOT aborted.
+          // tool result so the model can adapt, the turn is NOT aborted.
           req.resolve(false, false, undefined, { reason: buffer });
         }
         render();
@@ -143,8 +143,8 @@ export function handleBlockingShellInput(
       return { handled: true, pendingPermission };
     }
 
-    // Scroll, mouse, PageUp/Down, arrow, and panel-navigation keys — plus a
-    // bare Esc — are not card answers. Pass them through to the normal input
+    // Scroll, mouse, PageUp/Down, arrow, and panel-navigation keys, plus a
+    // bare Esc, are not card answers. Pass them through to the normal input
     // handler so the transcript stays scrollable and Esc only drops focus. The
     // request stays pending (answer it with y/n or a remember tier when ready);
     // Ctrl+C above is still the hard abort, and 'n' still denies.
@@ -161,7 +161,7 @@ export function handleBlockingShellInput(
     }
 
     if (key === 'a') {
-      // Legacy always-this-session choice — the 'session' remember tier.
+      // Legacy always-this-session choice, the 'session' remember tier.
       req.resolve(true, true, undefined, { rememberTier: 'session' });
       render();
       return { handled: true, pendingPermission: null };
@@ -182,7 +182,7 @@ export function handleBlockingShellInput(
     }
 
     if (key === 'n') {
-      // Plain deny — feedback to the model (the SDK renders an honest "user
+      // Plain deny, feedback to the model (the SDK renders an honest "user
       // declined" result), never a turn abort. Ctrl+C above is the hard stop;
       // Esc drops focus (handled above) rather than denying.
       req.resolve(false, false);

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// reasoning-effort-surface.test.ts — the TUI's per-model reasoning-effort
+// reasoning-effort-surface.test.ts, the TUI's per-model reasoning-effort
 // presentation.
 //
 // The defect these pin: every effort surface carried the same hardcoded four
@@ -29,7 +29,7 @@ import {
  * Model ids that must not match a curated family row, so the spec attached
  * here is the one under test rather than one the SDK's family table supplies.
  * (`resolveReasoningEffortSpec` lets the curated table outrank a non-catalog
- * spec on purpose — see its doc — so these tests use catalog-sourced specs.)
+ * spec on purpose, see its doc, so these tests use catalog-sourced specs.)
  */
 const UNKNOWN_ID = 'test-only-model-with-no-family-row';
 
@@ -191,7 +191,7 @@ describe('switching or failing over re-resolves the level against the serving mo
     expect(remapped.note).toBeUndefined();
   });
 
-  test('resolution only ever snaps DOWN — never up to a costlier level', () => {
+  test('resolution only ever snaps DOWN; never up to a costlier level', () => {
     const highOnly: ReasoningEffortSpec = { kind: 'effort', values: ['high', 'max'], source: 'catalog' };
     const remapped = remapEffortForServingModel('low', model(highOnly));
     // Nothing at or below 'low' exists, so the field is dropped and the

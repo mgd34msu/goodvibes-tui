@@ -1,7 +1,7 @@
 /**
- * voice-input-session.ts — push-to-talk voice input for the terminal.
+ * voice-input-session.ts, push-to-talk voice input for the terminal.
  *
- * PRESS TO START, PRESS AGAIN TO STOP — not press-and-hold. A terminal receives
+ * PRESS TO START, PRESS AGAIN TO STOP, not press-and-hold. A terminal receives
  * discrete key EVENTS, not held-key state: there is no key-release event to
  * observe, so a genuine hold would have to be faked with a timer that guesses
  * when the user let go. The binding's description says "press to start, press
@@ -63,7 +63,7 @@ const PHASE_INDICATOR: Partial<Record<PushToTalkPhase, VoiceCaptureIndicatorStat
 /**
  * Wire push-to-talk. One session object is reused across presses (the SDK session
  * is restartable after both a stop and a failure), so a device is opened per
- * press and released on every path out of it — including the failing ones.
+ * press and released on every path out of it, including the failing ones.
  */
 export function wireVoiceInputRuntime(deps: VoiceInputRuntimeDeps): VoiceInputRuntime {
   let session: PushToTalkSession | null = null;

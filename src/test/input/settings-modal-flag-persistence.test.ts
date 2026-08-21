@@ -3,9 +3,9 @@
  *
  * There is no separate enablement namespace: turning a feature on or off is a
  * plain write on its domain settings key (featureEnablementWrite computes the
- * exact write). This locks the round-trip for every enablement shape —
+ * exact write). This locks the round-trip for every enablement shape,
  * boolean, enum (stock active mode / stock off mode), and constant-on-boolean
- * — and that returning a key to its schema default reads back as the
+ *, and that returning a key to its schema default reads back as the
  * feature's stock state after reload.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -19,7 +19,7 @@ import {
   isFeatureConfigEnabled,
 } from '@pellux/goodvibes-terminal-shell';
 
-describe('feature enablement writes — domain-key persistence', () => {
+describe('feature enablement writes: domain-key persistence', () => {
   let tmpDir: string;
   let cm: ConfigManager;
 
@@ -79,7 +79,7 @@ describe('feature enablement writes — domain-key persistence', () => {
   test('constant capability on a non-boolean key has no off switch and no enablement write', () => {
     expect(featureEnablementWrite('fetch-sanitization', true)).toBeNull();
     expect(featureEnablementWrite('fetch-sanitization', false)).toBeNull();
-    // It always reads as on — its domain keys tune it, nothing disables it.
+    // It always reads as on, its domain keys tune it, nothing disables it.
     expect(isFeatureConfigEnabled(cm, 'fetch-sanitization')).toBe(true);
   });
 
@@ -109,7 +109,7 @@ describe('feature enablement writes — domain-key persistence', () => {
     const inoperable = FEATURE_SETTINGS.filter((feature) => feature.operable === false);
     // This list is EMPTY now: wake-word detection was the last entry and lost its
     // marker in the change that wired capture up on this terminal. The test still
-    // holds — it is what stops the marker being dropped from some future
+    // holds, it is what stops the marker being dropped from some future
     // capability silently, and what forces any new one to state its reason.
     for (const feature of inoperable) {
       expect(feature.inoperableDetail, `${feature.id} must state WHY it is unavailable`).toBeTruthy();

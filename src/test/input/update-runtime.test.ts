@@ -21,7 +21,7 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
 // This suite pins fixture versions ('1.0.0' / '1.1.0' / 'v9.9.9') rather than
 // the live build VERSION, per this repo's rule that tests must never compare
 // against the running package version (which shifts on every release bump).
-// All network access goes through a stubbed fetchImpl — nothing here makes a
+// All network access goes through a stubbed fetchImpl, nothing here makes a
 // live call.
 
 interface FakeResponseSpec {
@@ -87,7 +87,7 @@ function sha256Hex(buffer: Buffer): string {
 }
 
 /**
- * In-memory UpdateFileIo — the SDK-backed swap path runs for real against a
+ * In-memory UpdateFileIo, the SDK-backed swap path runs for real against a
  * virtual filesystem, so the tests observe genuine verify-before-write and
  * kept-.previous behavior without touching the host.
  */
@@ -135,7 +135,7 @@ function baseApplyOptions(overrides: Partial<ApplyUpdateOptions>): ApplyUpdateOp
   };
 }
 
-describe('applyUpdate — non-binary install kinds never attempt a swap', () => {
+describe('applyUpdate: non-binary install kinds never attempt a swap', () => {
   test('running from source prints the curl installer one-liner and makes no download calls', async () => {
     const printed: string[] = [];
     const calls: string[] = [];
@@ -166,7 +166,7 @@ describe('applyUpdate — non-binary install kinds never attempt a swap', () => 
   });
 });
 
-describe('applyUpdate — binary install, version comparison', () => {
+describe('applyUpdate: binary install, version comparison', () => {
   test('reports already current honestly and does not download artifacts', async () => {
     const printed: string[] = [];
     const calls: string[] = [];
@@ -195,7 +195,7 @@ describe('applyUpdate — binary install, version comparison', () => {
   });
 });
 
-describe('applyUpdate — binary install, checksum verification', () => {
+describe('applyUpdate: binary install, checksum verification', () => {
   const APP_PATH = '/home/user/.local/bin/goodvibes';
   const DAEMON_PATH = '/home/user/.local/bin/goodvibes-daemon';
   const ADDON_PATH = '/home/user/.local/bin/lib/sqlite-vec-linux-x64/vec0.so';
@@ -233,7 +233,7 @@ describe('applyUpdate — binary install, checksum verification', () => {
     expect(fs.read(APP_PATH)).toBe('new-app-bytes');
     // Every swap keeps the outgoing file at `<path>.previous`.
     expect(fs.read(`${APP_PATH}${PREVIOUS_FILE_SUFFIX}`)).toBe('old-app-bytes');
-    // The addon lands at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix> — the
+    // The addon lands at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>, the
     // exact path the SDK's loader resolves next to the running binary.
     expect(fs.read(ADDON_PATH)).toBe('new-addon-bytes');
     expect(printed.join('\n')).toContain('Updated to v1.1.0');
@@ -243,7 +243,7 @@ describe('applyUpdate — binary install, checksum verification', () => {
   test('a target release that predates the sqlite-vec addon (no manifest entry) still swaps the binary and simply skips the addon', async () => {
     const appBuffer = Buffer.from('new-app-bytes');
     // The binary has a valid entry; the addon has none. A pre-addon release must
-    // not block an otherwise-valid binary update — the addon is skipped, never
+    // not block an otherwise-valid binary update, the addon is skipped, never
     // placed unverified.
     const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64`;
     const fs = memoryIo({ [APP_PATH]: 'old-app' });
@@ -279,7 +279,7 @@ describe('applyUpdate — binary install, checksum verification', () => {
   test('a daemon binary sitting beside the app binary is neither downloaded nor replaced', async () => {
     // The daemon is its own product on its own release line and updates itself.
     // This app's release publishes no daemon asset at all, so a swap from here
-    // would be looking for a file that does not exist — and would be replacing a
+    // would be looking for a file that does not exist, and would be replacing a
     // build from a different version line if it ever found one.
     const appBuffer = Buffer.from('new-app-bytes');
     const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64`;
@@ -303,7 +303,7 @@ describe('applyUpdate — binary install, checksum verification', () => {
   });
 });
 
-describe('applyUpdate — cancellation, honoured only up to the moment before the swap', () => {
+describe('applyUpdate: cancellation, honoured only up to the moment before the swap', () => {
   const APP_PATH = '/home/user/.local/bin/goodvibes';
 
   test('an already-aborted signal stops the update before the first request and before any file is touched', async () => {
@@ -363,7 +363,7 @@ describe('applyUpdate — cancellation, honoured only up to the moment before th
     expect(fs.mutations).toEqual([]);
     expect(fs.read(APP_PATH)).toBe('old-app');
     // The target is already named, so a caller that gave up can still say
-    // which version was on the way — but nothing was begun or committed.
+    // which version was on the way, but nothing was begun or committed.
     expect(progress.targetTag).toBe('v1.1.0');
     expect(progress.begun).toBe(false);
     expect(progress.committed).toBe(false);
@@ -391,7 +391,7 @@ describe('applyUpdate — cancellation, honoured only up to the moment before th
     );
 
     // Tag lookup, manifest pre-read, manifest again inside the verified apply,
-    // and the app artifact — every one of them carrying the caller's signal.
+    // and the app artifact, every one of them carrying the caller's signal.
     expect(seenSignals.length).toBeGreaterThanOrEqual(4);
     expect(seenSignals.every((signal) => signal === controller.signal)).toBe(true);
   });
@@ -458,7 +458,7 @@ afterAll(() => {
   }
 });
 
-describe('applyUpdate — the real swap keeps the outgoing binary at .previous', () => {
+describe('applyUpdate: the real swap keeps the outgoing binary at .previous', () => {
   test('after an update the target holds the new bytes and .previous holds the old ones', async () => {
     const dir = scratchDir();
     const execPath = join(dir, 'goodvibes');
@@ -495,7 +495,7 @@ describe('applyUpdate — the real swap keeps the outgoing binary at .previous',
     const checksumText = `${sha256Hex(appBuffer)}  goodvibes-linux-x64\n`;
     const controller = new AbortController();
     const progress = createUpdateSwapProgress();
-    // Fires on the first byte the swap writes — the exact boundary past which
+    // Fires on the first byte the swap writes, the exact boundary past which
     // cancellation must have no effect at all. Everything else is the REAL
     // filesystem swap, in a scratch directory.
     const io: UpdateFileIo = {
@@ -527,7 +527,7 @@ describe('applyUpdate — the real swap keeps the outgoing binary at .previous',
   });
 });
 
-describe('rollbackUpdate — one command back to the version that ran before', () => {
+describe('rollbackUpdate: one command back to the version that ran before', () => {
   const inactiveRunner: RunCommand = () => ({ status: 3, stdout: '' });
 
   test('exchanges each file with its kept .previous counterpart, so a second rollback rolls forward', () => {

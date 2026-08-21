@@ -43,7 +43,7 @@ export interface TabStripConfig {
   readonly overflowIndicatorLeft?: string;
   /**
    * Optional callback invoked with the absolute column ranges of each rendered
-   * tab. Used by the compositor to hit-test mouse clicks onto tabs. Additive —
+   * tab. Used by the compositor to hit-test mouse clicks onto tabs. Additive,
    * the function still returns a `Line` so existing callers are unaffected.
    */
   readonly onLayout?: (regions: readonly TabHitRegion[]) => void;
@@ -91,7 +91,7 @@ function makeSegments(
   let used = entryWidths[activeIndex] + closing;
 
   if (totalAll <= maxWidth) {
-    // Everything fits — show all tabs, no windowing.
+    // Everything fits, show all tabs, no windowing.
     start = 0;
     end = n - 1;
   } else {

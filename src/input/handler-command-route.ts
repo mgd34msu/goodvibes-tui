@@ -121,7 +121,7 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
           // Defense in depth for EVERY command, not just the ones that
           // already guard their own internals: a handler that throws or
           // awaits a rejected promise must never become a silent unhandled
-          // rejection — it renders the same way an unknown command does.
+          // rejection, it renders the same way an unknown command does.
           state.conversationManager?.log(`Command /${name} failed: ${summarizeError(err)}`, { fg: '#ef4444' });
           state.requestRender();
         });
@@ -149,7 +149,7 @@ function withPanelFocusSync(context: CommandContext, state: CommandModeRouteStat
     showPanel: context.showPanel
       ? (panelId, pane, target, opts) => {
           context.showPanel?.(panelId, pane, target, opts);
-          // showPanel no longer transfers focus by default — the command
+          // showPanel no longer transfers focus by default, the command
           // path leaves the composer focused (ui-openers.ts's showPanel only
           // calls focusPanels() when opts.focus is set). Only flip the local
           // panelFocused mirror when the caller explicitly asked for focus;

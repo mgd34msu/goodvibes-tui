@@ -40,7 +40,7 @@ describe('buildOsc9', () => {
   });
 });
 
-describe('shouldEmitTerminalNotification — defaults + focus rule', () => {
+describe('shouldEmitTerminalNotification: defaults + focus rule', () => {
   test('approval-wait defaults ON; emits for an unfocused/unknown terminal', () => {
     expect(shouldEmitTerminalNotification('approval-wait', configFrom({}), focus(null))).toBe(true);
     expect(shouldEmitTerminalNotification('approval-wait', configFrom({}), focus(false))).toBe(true);

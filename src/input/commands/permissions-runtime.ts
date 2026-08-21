@@ -78,7 +78,7 @@ async function revokeRememberedRule(ctx: CommandContext, ruleId: string): Promis
 }
 
 /**
- * `/permissions` — the permission settings surface. With no arguments it prints
+ * `/permissions`, the permission settings surface. With no arguments it prints
  * every permission-relevant setting in effect and where each value came from
  * (provenance; read-only). `rules` lists the durable remembered approvals with a
  * press-Enter revoke; `revoke <id>` removes one by id. Revokes hit the same

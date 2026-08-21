@@ -2,7 +2,7 @@
  * session-union-cache.test.ts
  *
  * Unit evidence for the cross-surface read facade. Drives the facade with a
- * fake sync local reader + a fake async wire reader (no real daemon here — the
+ * fake sync local reader + a fake async wire reader (no real daemon here, the
  * daemon-integration test covers the real wire) to prove the honesty contract:
  *  - embedded/local passthrough,
  *  - adopted-online union (deduped, local wins),
@@ -77,7 +77,7 @@ function wireReader(behavior: { rows?: readonly SharedSessionRecord[]; reject?: 
   };
 }
 
-// A no-op scheduler so activate() never starts a real interval — tests drive
+// A no-op scheduler so activate() never starts a real interval, tests drive
 // refresh() deterministically.
 const noopScheduler = {
   setInterval: () => 0 as unknown as ReturnType<typeof setInterval>,
@@ -86,7 +86,7 @@ const noopScheduler = {
 
 const silent = { debug: () => {} };
 
-describe('SessionUnionCache — honest cross-surface read facade', () => {
+describe('SessionUnionCache: honest cross-surface read facade', () => {
   test('local/dormant mode: pure passthrough, no cross-surface claim', () => {
     const cache = new SessionUnionCache({ local: localReader([record('local-1')]), scheduler: noopScheduler, log: silent });
     expect(cache.getMode()).toBe('local');
@@ -240,7 +240,7 @@ describe('SessionUnionCache — honest cross-surface read facade', () => {
       clearTimeout: () => {},
     };
     // Confirmed online first (an already-adopted, healthy daemon), THEN the wire
-    // goes silent — the exact "daemon died mid-idle, socket never errors" case.
+    // goes silent, the exact "daemon died mid-idle, socket never errors" case.
     let hang = false;
     const wire: WireSessionReader = {
       list: () => (hang ? new Promise<readonly SharedSessionRecord[]>(() => {}) : Promise.resolve([record('wire-1')])),
@@ -258,7 +258,7 @@ describe('SessionUnionCache — honest cross-surface read facade', () => {
     const pending = cache.refresh();
     expect(capturedTimeoutFn).not.toBeNull(); // the bounded probe registered its timeout
 
-    // Simulate the probe-timeout elapsing before the wire ever responds — this is
+    // Simulate the probe-timeout elapsing before the wire ever responds, this is
     // the one-to-two-probe-interval bound, not a real multi-minute OS-level wait.
     capturedTimeoutFn!();
     await pending;

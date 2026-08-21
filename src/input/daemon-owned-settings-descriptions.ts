@@ -1,11 +1,11 @@
 /**
- * daemon-owned-settings-descriptions.ts — appends an honest storage-location
+ * daemon-owned-settings-descriptions.ts, appends an honest storage-location
  * note to any settings-modal entry whose config key is daemon-owned (see
  * `@pellux/goodvibes-sdk/platform/config`'s `isDaemonOwnedConfigKey`).
  *
  * Before the daemon-owned-config migration, every product wrote every key
  * into its own per-surface silo, and a value like `surfaces.telegram.token`
- * looked — from the settings modal — exactly like any other TUI-local
+ * looked, from the settings modal, exactly like any other TUI-local
  * setting. It never was: the daemon is the only process that reads it, so a
  * value the TUI wrote to its own surface file could silently do nothing.
  * This enrichment tells the truth in the one place a user checks: the
@@ -25,8 +25,8 @@ import type { SettingEntry, SettingsCategory } from './settings-modal-types.ts';
 /** Build the daemon-owned disclosure note for a given daemon store path. */
 export function daemonOwnedSettingNote(daemonTierPath: string | null): string {
   return daemonTierPath
-    ? `This value is stored in the daemon's own configuration (${daemonTierPath}) and applies to every client — not just this one.`
-    : "This value is stored in the daemon's own configuration and applies to every client — not just this one.";
+    ? `This value is stored in the daemon's own configuration (${daemonTierPath}) and applies to every client; not just this one.`
+    : "This value is stored in the daemon's own configuration and applies to every client; not just this one.";
 }
 
 /**

@@ -11,7 +11,7 @@ function makeCtx(jobs: unknown[]): { ctx: CommandContext; printed: string[] } {
   return { ctx, printed };
 }
 
-describe('/schedule list — automation empty state', () => {
+describe('/schedule list: automation empty state', () => {
   test('with no routines, shows the how-to-create-first-routine empty state pointing at a real command', async () => {
     const registry = new CommandRegistry();
     registerScheduleRuntimeCommands(registry);

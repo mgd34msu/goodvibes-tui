@@ -1,10 +1,10 @@
 /**
- * spine-adoption-wrapper.test.ts — this terminal's half of daemon adoption.
+ * spine-adoption-wrapper.test.ts, this terminal's half of daemon adoption.
  *
  * ── What this covers, and what deliberately lives elsewhere ───────────────
  *
- * The adoption POLICY — idempotent per base URL, tear down before re-wiring,
- * fold the legacy store once, and the two activation timings — is the SDK's now
+ * The adoption POLICY, idempotent per base URL, tear down before re-wiring,
+ * fold the legacy store once, and the two activation timings, is the SDK's now
  * and is pinned there (test/client-seam-spine-adoption.test.ts in the SDK
  * repository). Re-asserting it here would pin the same behaviour twice and let
  * the two copies disagree about which is authoritative.
@@ -15,7 +15,7 @@
  * into the narrower signal the SDK takes, and that the wire it injects actually
  * carries all four members the SDK expects to find in the bundle. A bundle
  * missing one of those is a mirror that comes up and silently does not deliver
- * — the failure this module exists to prevent.
+ *, the failure this module exists to prevent.
  *
  * Nothing here reaches the network: building the transports is construction
  * only, and the legacy-store path points nowhere so the fold is a no-op.

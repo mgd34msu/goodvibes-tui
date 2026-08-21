@@ -79,7 +79,7 @@ describe('KillRing', () => {
   test('oldest entry is evicted when capacity exceeded', () => {
     for (let i = 0; i < KILL_RING_MAX + 1; i++) ring.push(`e${i}`);
     const entries = ring.getEntries();
-    // Most recent is e(MAX), oldest surviving is e1 — e0 was evicted.
+    // Most recent is e(MAX), oldest surviving is e1, e0 was evicted.
     expect(entries[entries.length - 1]).toBe('e1');
   });
 

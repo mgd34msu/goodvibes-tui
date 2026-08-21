@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// local-runtime-expand-collapse.test.ts — /expand tool and /collapse tool
+// local-runtime-expand-collapse.test.ts, /expand tool and /collapse tool
 // against a folded tool-result group (see conversation-turn-structure.ts).
 //
 // Regression: a folded (non-owning) group member pushes no BlockMeta of its
@@ -57,7 +57,7 @@ function buildFoldedGroup(): ConversationManager {
 }
 
 describe('/expand tool on a collapsed assistant turn', () => {
-  test('one pass expands the turn header AND every result — no second /expand needed', async () => {
+  test('one pass expands the turn header AND every result; no second /expand needed', async () => {
     const cm = buildFoldedGroup();
     const registry = new CommandRegistry();
     registerLocalRuntimeCommands(registry);
@@ -75,7 +75,7 @@ describe('/expand tool on a collapsed assistant turn', () => {
     expect(after.filter((b) => b.type === 'assistant_turn').length).toBe(1);
     expect(memberBlocks.length).toBe(2);
     // Each result is rendered in FULL (its own multi-line body), not the
-    // 1-2 line "N hidden" collapsed fragment — proof both results expanded in
+    // 1-2 line "N hidden" collapsed fragment, proof both results expanded in
     // the same pass as the turn header, not just the header itself.
     for (const block of memberBlocks) {
       expect(block.lineCount).toBeGreaterThan(10);

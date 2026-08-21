@@ -1,4 +1,4 @@
-# Session Durability
+# Session durability
 
 GoodVibes TUI uses a two-layer durability strategy to protect conversation history from data loss.
 
@@ -21,7 +21,7 @@ fills this gap with a per-session append-only NDJSON file that records durable c
 ### How it works
 
 1. **User submits a turn** (`TURN_SUBMITTED`) → the current conversation snapshot is appended to
-   the journal as a `user_message` record. This ensures the user’s message survives even if the
+   the journal as a `user_message` record. This ensures the user's message survives even if the
    process is killed during the subsequent stream.
 
 2. **Turn completes** (`TURN_COMPLETED`) → `persistConversation` writes the full snapshot.
@@ -37,7 +37,7 @@ fills this gap with a per-session append-only NDJSON file that records durable c
    startup recovery modal (see "The startup recovery modal" in
    [getting-started.md](getting-started.md)) and for in-TUI panel resume.
    It calls `replayJournal(journalPath, snapshotTimestamp)` to find records that post-date
-   the loaded snapshot, applies the final record’s messages to the live conversation (each
+   the loaded snapshot, applies the final record's messages to the live conversation (each
    record carries the full snapshot, so the last record is authoritative), writes a fresh
    snapshot via the SessionManager, and calls `journal.rotate()`. Only the `session-workflow.ts`
    seam prints the replay notice to the conversation (`[Recovery] Replayed N journal record(s) —
@@ -77,7 +77,7 @@ remainder to `<path>.unrecognized` (the same quarantine convention used by `read
 
 `appendRecord()` performs one `appendFileSync` + one `fsyncSync` per call. This means one fsync
 per durable conversation event (user message submitted, assistant turn finalised, tool results
-batch, compaction). It does **not** fsync per streaming token — the streaming path never calls
+batch, compaction). It does **not** fsync per streaming token. The streaming path never calls
 `appendRecord()`.
 
 At typical usage (2–6 events per minute), the write amplification is negligible on any modern
@@ -97,16 +97,17 @@ The journal header carries `"version": 1`. If a future process writes a higher v
 | Transcript journal | Every durable event | User messages + completed turns |
 
 A SIGKILL at any moment loses **at most the in-flight append** (one partial JSON line), never a
-full conversation turn. Every resume path — `--continue`/`--resume`/`--fork`, `/session resume`,
-the startup recovery modal, and in-TUI panel resume — routes through `resumeSessionCore`, which
-calls `replayJournalForSession`, so the gap is closed on whichever path the user takes.
+full conversation turn. `--continue`/`--resume`/`--fork`, `/session resume`,
+the startup recovery modal, and in-TUI panel resume are every resume path, and each routes
+through `resumeSessionCore`, which calls `replayJournalForSession`, so the gap is closed on
+whichever path the user takes.
 
 ### Known limit: `--continue` with no last-session pointer
 
 If a session was killed before the first snapshot was written (i.e., no last-session pointer
-exists), `--continue` does nothing — it does not fall through to onboarding or start any other
+exists), `--continue` does nothing. It does not fall through to onboarding or start any other
 flow. The journal for that session is still present on disk. **Recovery path:** launch the TUI
 normally; the startup recovery modal (see "The startup recovery modal" in
 [getting-started.md](getting-started.md)) offers to resume from the recovery snapshot if one
 exists, or use `/session resume <id>` once a snapshot exists. This is a known limit with no
-automatic workaround — it only affects sessions that were never snapshotted.
+automatic workaround. It only affects sessions that were never snapshotted.

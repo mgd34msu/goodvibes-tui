@@ -7,7 +7,7 @@ import {
   type InstallSelfCheckInput,
 } from '../../runtime/install-self-check.ts';
 
-// A daemon resolution that points at an existing, absolute binary — the healthy case.
+// A daemon resolution that points at an existing, absolute binary, the healthy case.
 const healthyDaemon: DaemonPathResolution = {
   command: '/opt/goodvibes/vendor/goodvibes-daemon-linux-x64',
   source: 'package',
@@ -98,7 +98,7 @@ describe('evaluateInstallSelfCheck', () => {
     const findings = evaluateInstallSelfCheck(baseInput({
       installKind: 'binary',
       // No vendor binaries on disk at all, but a standalone binary has no
-      // vendor dir — only the daemon-path check applies, and here it resolves.
+      // vendor dir, only the daemon-path check applies, and here it resolves.
       fileExists: () => false,
       daemon: { command: '/home/user/.local/bin/goodvibes-daemon', source: 'sibling', absolute: true },
     }));

@@ -49,7 +49,7 @@ function makeBaseContext(registry: MemoryRegistry, printed: string[]): CommandCo
         memory: createMemoryApi(registry),
       } as never,
       // /recall's browse/link/queue/export/import now route through the
-      // memory spine, not knowledgeApi.memory — see recall-query.ts's
+      // memory spine, not knowledgeApi.memory, see recall-query.ts's
       // getMemorySpine. The real MemoryRegistry satisfies LocalMemoryStore
       // structurally, so local (no transport activated) mode reads/writes the
       // same backing MemoryStore the assertions below read back through it.

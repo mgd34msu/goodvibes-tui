@@ -1,8 +1,8 @@
 /**
- * WO item 3 — the always-visible footer shows the TRUE total (main session +
+ * WO item 3, the always-visible footer shows the TRUE total (main session +
  * fleet), not the main session alone. A cold eval saw the footer read ~$0.046 (main
- * only) while a live WRFC chain cost ~$0.446 (~10x). We render an honest split —
- * "you ~$X · fleet ~$Y" — so it is clear where the cost went.
+ * only) while a live WRFC chain cost ~$0.446 (~10x). We render an honest split,
+ * "you ~$X · fleet ~$Y", so it is clear where the cost went.
  */
 import { describe, test, expect } from 'bun:test';
 import { UIFactory } from '../../renderer/ui-factory.ts';
@@ -46,14 +46,14 @@ function node(o: Partial<ProcessNode> & { id: string }): ProcessNode {
   };
 }
 
-describe('fleetLeafCostTotal — leaf-sum with no double-count', () => {
+describe('fleetLeafCostTotal: leaf-sum with no double-count', () => {
   test('sums priced leaf agents, excludes the owner rollup and the chain aggregate', () => {
     const nodes: ProcessNode[] = [
       node({ id: 'eng', costUsd: 0.3, costState: 'priced' }),
       node({ id: 'rev', costUsd: 0.146, costState: 'priced' }),
-      // Owner: a rollup of its children (raw.wrfcRole==='owner') — must be excluded.
+      // Owner: a rollup of its children (raw.wrfcRole==='owner'), must be excluded.
       node({ id: 'owner', costUsd: 0.446, costState: 'priced', raw: { wrfcRole: 'owner' } }),
-      // Chain aggregate node — must be excluded.
+      // Chain aggregate node, must be excluded.
       { ...node({ id: 'chain:c' }), kind: 'wrfc-chain', costUsd: 0.446, costState: 'priced' },
     ];
     expect(fleetLeafCostTotal(nodes)).toBeCloseTo(0.446, 6);

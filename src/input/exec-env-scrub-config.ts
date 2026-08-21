@@ -1,5 +1,5 @@
 /**
- * exec-env-scrub-config.ts — TUI-local synthetic settings entry for
+ * exec-env-scrub-config.ts, TUI-local synthetic settings entry for
  * permissions.execEnvScrubAllowlist.
  *
  * The SDK's credential-bearing env-var scrub (platform/tools/exec/credential-env.ts)
@@ -8,24 +8,24 @@
  * exec command, and is threaded into `registerAllTools`'s `credentialEnvScrub`
  * option (bootstrap-core.ts) so a consumer can wire an operator-configured
  * allowlist instead of the scrub always resolving to its built-in default. The
- * scrub's master switch stays on: this entry configures ONLY the allowlist —
+ * scrub's master switch stays on: this entry configures ONLY the allowlist,
  * variable NAMES always kept even though their name looks credential-bearing
  * (case-insensitive), for a command that genuinely needs one (e.g. a CI runner
  * re-reading its own signing key). NEVER a value; the scrub only ever inspects
  * and reports NAMES.
  *
- * `permissions.execEnvScrubAllowlist` is not in CONFIG_SCHEMA — there is no SDK
+ * `permissions.execEnvScrubAllowlist` is not in CONFIG_SCHEMA, there is no SDK
  * config domain for the exec env scrub at all (it is consumer-wired, not
  * schema-registered), so this mirrors the other TUI-local synthetic settings
  * (worktree.setup.*, sandbox.egressAllowlist, …). No defensive try/catch is
  * needed: 'permissions' already exists as a DEFAULT_CONFIG section (it backs
  * permissions.mode/tools.*), so a plain get()/set() resolves the path without
- * throwing — only the LEAF field is new, and ConfigManager.resolvePath never
+ * throwing, only the LEAF field is new, and ConfigManager.resolvePath never
  * validates leaf existence.
  *
  * Stored as a JSON array of strings on disk; the settings modal's inline
- * editor is a single-line text field, so — matching worktree.setup.* and
- * sandbox.egressAllowlist/workspaceWritable — it is displayed and edited as a
+ * editor is a single-line text field, so, matching worktree.setup.* and
+ * sandbox.egressAllowlist/workspaceWritable, it is displayed and edited as a
  * comma-separated list and parsed back into an array on commit (see
  * isExecEnvScrubAllowlistConfigKey's use in settings-modal.ts#commitEdit).
  */
@@ -55,7 +55,7 @@ export const EXEC_ENV_SCRUB_ALLOWLIST_SYNTHETIC_SETTING: ConfigSetting = {
   key: EXEC_ENV_SCRUB_ALLOWLIST_CONFIG_KEY,
   type: 'string',
   default: [],
-  description: 'Comma-separated environment variable NAMES always kept in a spawned exec command\'s environment even when the name looks credential-bearing (case-insensitive). Names only — this never inspects or reports values. The scrub itself stays on; this only widens what it lets through. Empty = the built-in credential-name scrub applies with no extra exceptions.',
+  description: 'Comma-separated environment variable NAMES always kept in a spawned exec command\'s environment even when the name looks credential-bearing (case-insensitive). Names only: this never inspects or reports values. The scrub itself stays on; this only widens what it lets through. Empty = the built-in credential-name scrub applies with no extra exceptions.',
 };
 
 /** Build the synthetic SettingEntry for permissions.execEnvScrubAllowlist. */

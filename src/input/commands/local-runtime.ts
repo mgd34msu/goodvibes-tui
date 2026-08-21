@@ -37,7 +37,7 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
     // A merged assistant turn (type 'assistant_turn', see
     // conversation-turn-structure.ts) owns the whole tool subtree beneath its
     // header, so '/expand tool'/'collapse tool' treats it the same as a plain
-    // 'tool' block — toggling the header's collapse key shows or hides every
+    // 'tool' block, toggling the header's collapse key shows or hides every
     // tool row underneath it.
     const matchesType = typeFilter === 'all'
       || (typeFilter === 'tool' && (block.type === 'tool' || block.type === 'assistant_turn'))
@@ -50,7 +50,7 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
       // Expanding a turn also expands each result's own collapse key in the
       // same pass. A result hidden by a collapsed turn pushes no BlockMeta of
       // its own, so it never surfaces from this loop to be toggled
-      // individually — without this, '/expand tool' would only open the turn
+      // individually, without this, '/expand tool' would only open the turn
       // header and each result would still render at its own default collapse
       // state, needing a second pass. '/collapse tool' needs no matching step:
       // collapsing the turn hides every result regardless of its own key.
@@ -59,7 +59,7 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
           const memberKey = `msg_${memberIdx}`;
           ctx.session.conversationManager.setCollapsed(memberKey, false);
           // An explicit /expand is a deliberate user action on this key, same
-          // as Tab/Ctrl+Y/Ctrl+B — exempts it from search's close-time
+          // as Tab/Ctrl+Y/Ctrl+B, exempts it from search's close-time
           // auto-re-collapse (see ConversationManager.noteUserTouch).
           ctx.session.conversationManager.searchExpansion.noteUserTouch(memberKey);
         }
@@ -88,17 +88,17 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'tools',
     aliases: ['t'],
-    description: 'List available tools and review compact native tool capability surfaces',
+    description: 'List available tools and review compact native tool capabilities',
     usage: '[review|panel]',
     handler(args, ctx) {
       const sub = (args[0] ?? '').toLowerCase();
       if (sub === 'panel' || sub === 'review') {
         // (the purge): 'tools'/ToolInspectorPanel was DELETE-disposition
-        // (no surviving human surface — tool results render inline in the
+        // (no surviving human surface, tool results render inline in the
         // transcript, plus a per-node tool list in Fleet). There is no alias
         // to resolve through, so this prints an honest notice and opens
         // Fleet instead of the retired inspector.
-        ctx.print('Tools panel retired — tool activity now renders inline in the transcript and per-agent in the Fleet panel. Opening Fleet.');
+        ctx.print('Tools panel retired: tool activity now renders inline in the transcript and per-agent in the Fleet panel. Opening Fleet.');
         try {
           openCommandPanel(ctx, 'fleet');
         } catch {
@@ -407,7 +407,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       } catch (e) {
         ctx.print(`Live model discovery failed: ${summarizeError(e)}`);
       }
-      if (!catalogOk || !benchmarksOk || !limitsOk || !discoveryOk) ctx.print('Some refreshes failed — see messages above.');
+      if (!catalogOk || !benchmarksOk || !limitsOk || !discoveryOk) ctx.print('Some refreshes failed: see messages above.');
     },
   });
 

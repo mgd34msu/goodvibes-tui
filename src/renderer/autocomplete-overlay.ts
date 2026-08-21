@@ -33,7 +33,7 @@ function putText(line: Line, startX: number, maxWidth: number, text: string, sty
  *
  * A row's description renders inline only when it genuinely fits beside the
  * command name; otherwise the FULL description wraps onto its own line(s)
- * below the command name, with no line cap — descriptive text is never
+ * below the command name, with no line cap, descriptive text is never
  * clipped (same fix as selection-modal-overlay.ts's modal rule). Item
  * visibility is row-budget aware (a wrapped description can cost more than
  * one physical row), always showing the selected item in full and falling
@@ -55,7 +55,7 @@ export function renderAutocompleteOverlay(
     chromeRows,
     minContentRows: 6,
     // Rows grow with wrapped descriptions (never clipped) rather than
-    // staying pinned at a small constant — still bounded by the viewport.
+    // staying pinned at a small constant, still bounded by the viewport.
     maxContentRows: Math.max(10, viewportHeight - chromeRows - 4),
   });
   const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
@@ -90,7 +90,7 @@ export function renderAutocompleteOverlay(
 
   // palette curation (item 4): on a bare '/' (query === ''), the results
   // list is "common tier" (score 2) followed by "alphabetical rest" (score
-  // 1) — see CommandRegistry.fuzzyMatch. commonCount marks that boundary;
+  // 1), see CommandRegistry.fuzzyMatch. commonCount marks that boundary;
   // a one-row separator draws there when it falls inside the visible window.
   const hasCommonSeparator = state.query === '' && state.commonCount > 0 && state.commonCount < total;
 
@@ -187,7 +187,7 @@ export function renderAutocompleteOverlay(
       });
       lines.push(line);
     } else {
-      // Doesn't fit beside the command name — wrap the FULL description onto
+      // Doesn't fit beside the command name, wrap the FULL description onto
       // its own line(s) below at the full row width, rather than clipping it.
       lines.push(line);
       for (const wrapped of wrapWithHangingIndent(command.description, wrapWidth, '')) {
@@ -216,7 +216,7 @@ export function renderAutocompleteOverlay(
 
   const footerLine = createOverlayContentLine(width, layout);
   // vocab unification: "Run"/"Close" match the /help selection modal's
-  // hint bar (selection-modal-overlay.ts) — both surfaces execute a command
+  // hint bar (selection-modal-overlay.ts), both surfaces execute a command
   // on Enter, so they now say so the same way.
   const hints = '[Tab] Complete  [Up/Down] Navigate  [Enter] Run  [Esc] Close';
   putText(

@@ -7,7 +7,7 @@
  * anywhere in the input pipeline. handlePromptKeyToken's F2 branch and
  * handleIndicatorFocusToken's Enter branch both call openFleetPanel()
  * unconditionally (e: F2 was repointed off the retired process modal onto
- * the Fleet panel, joining the footer indicator's repoint) — neither
+ * the Fleet panel, joining the footer indicator's repoint), neither
  * KeyRouteState nor IndicatorFocusRouteState carries an orchestrator/isThinking
  * field, so there is nothing here that *could* gate on turn state. These tests
  * lock in that reachability so a future change can't accidentally introduce a

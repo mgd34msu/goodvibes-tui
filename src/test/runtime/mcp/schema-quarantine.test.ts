@@ -1,5 +1,5 @@
 /**
- * MCP schema drift quarantine — execution block tests.
+ * MCP schema drift quarantine, execution block tests.
  *
  * Verifies that:
  *   - stale/incompatible schemas are quarantined correctly
@@ -17,7 +17,7 @@ import type { McpEvent } from '@/runtime/index.ts';
 import type { QuarantineReason } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
-// McpSchemaFreshnessTracker — quarantine unit tests
+// McpSchemaFreshnessTracker, quarantine unit tests
 // ---------------------------------------------------------------------------
 
 describe('McpSchemaFreshnessTracker: quarantine', () => {
@@ -47,7 +47,7 @@ describe('McpSchemaFreshnessTracker: quarantine', () => {
       expect(record?.quarantine?.quarantinedAt).toBeGreaterThanOrEqual(before);
     });
 
-    test('quarantine is sticky — markStale does not override quarantine', () => {
+    test('quarantine is sticky: markStale does not override quarantine', () => {
       const tracker = new McpSchemaFreshnessTracker();
       tracker.registerServer('srv');
       tracker.markFresh('srv');
@@ -93,7 +93,7 @@ describe('McpSchemaFreshnessTracker: quarantine', () => {
     });
   });
 
-  describe('approveQuarantine — operator override', () => {
+  describe('approveQuarantine: operator override', () => {
     test('transitions quarantined to stale after operator approval', () => {
       const tracker = new McpSchemaFreshnessTracker();
       tracker.registerServer('srv');
@@ -146,7 +146,7 @@ describe('McpSchemaFreshnessTracker: quarantine', () => {
       tracker.markFailed('srv', 'err1');
       tracker.markFailed('srv', 'err2');
       expect(tracker.getFreshness('srv')).toBe('quarantined');
-      // Operator approves — resets consecutiveFailures to 0
+      // Operator approves, resets consecutiveFailures to 0
       tracker.approveQuarantine('srv', 'operator-alice');
       expect(tracker.getFreshness('srv')).toBe('stale');
       // One transient failure below threshold: should NOT re-quarantine
@@ -193,7 +193,7 @@ describe('McpSchemaFreshnessTracker: quarantine', () => {
 });
 
 // ---------------------------------------------------------------------------
-// McpLifecycleManager — quarantine execution block
+// McpLifecycleManager, quarantine execution block
 // ---------------------------------------------------------------------------
 
 describe('McpLifecycleManager: quarantine execution block', () => {

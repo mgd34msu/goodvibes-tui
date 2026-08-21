@@ -1,4 +1,4 @@
-# Getting Started
+# Getting started
 
 ## Prerequisites
 
@@ -18,7 +18,7 @@ bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
 goodvibes
 ```
 
-Bun blocks lifecycle scripts for untrusted global packages. `@pellux/goodvibes-tui` needs trusting so its postinstall can place the matching TUI binary, and `goodvibes-daemon` — which this package depends on, so one install brings both commands — needs trusting so its postinstall can place the daemon binary. Nothing else needs trusting: the TUI binary comes from the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package with registry integrity, and the tree-sitter grammar packages ship their `.wasm` files as plain files (the app never loads the native bindings their `install` scripts would build). Verify the install with:
+Bun blocks lifecycle scripts for untrusted global packages. `@pellux/goodvibes-tui` needs trusting so its postinstall can place the matching TUI binary, and `goodvibes-daemon` needs trusting so its postinstall can place the daemon binary. `goodvibes-daemon` is a dependency of this package, so one install brings both commands. Nothing else needs trusting: the TUI binary comes from the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package with registry integrity, and the tree-sitter grammar packages ship their `.wasm` files as plain files (the app never loads the native bindings their `install` scripts would build). Verify the install with:
 
 ```sh
 bun pm -g untrusted
@@ -37,14 +37,14 @@ goodvibes
 
 The package downloads the matching prebuilt TUI and daemon binaries for the current Linux or macOS platform during `postinstall`. If `bun` is missing, the preinstall check fails with a clear message instead of installing a broken launcher.
 
-On Windows, use WSL2: inside a WSL2 distribution GoodVibes is an ordinary Linux install and the Linux binaries apply unchanged (`wsl --install`, then run the install command in your WSL2 shell). Native Windows is beta and not yet a supported path — see [windows.md](windows.md).
+On Windows, use WSL2: inside a WSL2 distribution GoodVibes is an ordinary Linux install and the Linux binaries apply unchanged (`wsl --install`, then run the install command in your WSL2 shell). Native Windows is beta and not yet a supported path. See [windows.md](windows.md).
 
 ### Pure-binary installer (`goodvibes.sh/install.sh`)
 
 The one-line installer downloads the checksum-verified TUI, daemon, and agent
 binaries plus the browser operator surface's bundle without a package manager,
 and doubles as the upgrade path. It lives in the daemon's repository
-(`goodvibes-daemon` `scripts/install.sh`) — one copy for the whole suite —
+(`goodvibes-daemon` `scripts/install.sh`), one copy for the whole suite,
 and resolves a release tag per repository, verifying every file against that
 repository's own `SHA256SUMS.txt`:
 
@@ -52,13 +52,13 @@ repository's own `SHA256SUMS.txt`:
 curl -fsSL https://goodvibes.sh/install.sh | sh
 ```
 
-On a **fresh install** — when no daemon is running and no service unit exists yet — it also registers the daemon as a user service so it comes up immediately and on every login:
+On a **fresh install**, when no daemon is running and no service unit exists yet, it also registers the daemon as a user service so it comes up immediately and on every login:
 
 - **Linux (systemd):** writes `~/.config/systemd/user/goodvibes.service` (marked as installer-managed), then `systemctl --user daemon-reload` and `enable --now`, and reports whether it went active.
 - **macOS (launchd):** writes `~/Library/LaunchAgents/sh.goodvibes.daemon.plist` (installer-managed) and loads it with `launchctl bootstrap`.
 - **Neither available (or opted out):** prints the plain `goodvibes-daemon` command to run it yourself.
 
-It never overwrites an existing unit — an already-running daemon is restarted in place by the upgrade path instead.
+It never overwrites an existing unit. An already-running daemon is restarted in place by the upgrade path instead.
 
 **Installer options** (environment variables):
 
@@ -78,7 +78,7 @@ It never overwrites an existing unit — an already-running daemon is restarted 
 
 The browser surface is not a fourth binary and not a fourth service: its bundle
 unpacks to `<install dir>/webui/<version>` and the daemon serves it on its own
-listener. Installing it exposes nothing new to your network — the daemon's
+listener. Installing it exposes nothing new to your network. The daemon's
 shipped binding is loopback and the installer does not change it, so the URL in
 the install receipt works on that machine only. Reaching it from another device
 is a deliberate separate act: `goodvibes-daemon webui enable --lan`.
@@ -89,7 +89,7 @@ is a deliberate separate act: `goodvibes-daemon webui enable --lan`.
 curl -fsSL https://goodvibes.sh/install.sh | GOODVIBES_UNINSTALL=1 sh
 ```
 
-Uninstall mode takes precedence over everything else (no downloads happen). It stops the running daemon/agent, then removes only what the installer manages — the three binaries in the install dir, the sqlite-vec addon directories, the unpacked web UI bundles, and the service unit/plist **only when it carries the installer-managed marker**. A hand-written unit is never deleted; it is reported with the manual removal command instead. Your `~/.goodvibes` data (settings, sessions, memory) is deliberately preserved, and the summary prints the `rm -rf ~/.goodvibes` command if you want to erase it too.
+Uninstall mode takes precedence over everything else (no downloads happen). It stops the running daemon/agent, then removes only what the installer manages: the three binaries in the install dir, the sqlite-vec addon directories, the unpacked web UI bundles, and the service unit/plist **only when it carries the installer-managed marker**. A hand-written unit is never deleted; it is reported with the manual removal command instead. Your `~/.goodvibes` data (settings, sessions, memory) is deliberately preserved, and the summary prints the `rm -rf ~/.goodvibes` command if you want to erase it too.
 
 Or install from source:
 
@@ -160,8 +160,8 @@ bun run dev
 ```
 
 That starts the full TUI runtime from `src/main.ts`. It connects to the daemon the same way the
-compiled binary does — adopting one already running, or starting an installed-but-stopped daemon
-service — never running the daemon itself. To run the daemon/API host from source instead, clone
+compiled binary does: adopting one already running, or starting an installed-but-stopped daemon
+service, and never running the daemon itself. To run the daemon/API host from source instead, clone
 and run `goodvibes-daemon` from its own repository.
 
 ## Build and run the compiled binary
@@ -179,7 +179,7 @@ can also host the HTTP listener in-process when `danger.httpListener` is enabled
 Opening the TUI in a workspace starts a fresh session. Previous work is reached
 deliberately: `--continue` reopens the most recently active session for the
 working directory, `--resume [id]` reopens a named one, and `--fork [id]`
-branches from one — see [CLI session lifecycle flags](tools-and-commands.md#cli-session-lifecycle-flags).
+branches from one. See [CLI session lifecycle flags](tools-and-commands.md#cli-session-lifecycle-flags).
 After the splash, a short notice summarizes the resumable state that actually
 exists on disk (saved sessions, workspace checkpoints, chain history) and names
 the command that reaches each one.
@@ -193,18 +193,18 @@ Resume.
 
 The ask is two steps:
 
-1. **Recovery snapshot found** — `Resume it` loads the snapshot into the current
-   session and retires the recovery point once the load succeeds; `Not now`
+1. **Recovery snapshot found.** `Resume it` loads the snapshot into the current
+   session and retires the recovery point once the load succeeds. `Not now`
    starts fresh. The row detail names the facts actually known about the
    snapshot: session id, age, the title when it carries one, and the file size
    when it can be read.
-2. **Remove recovery point?** — asked only after you decline. `Keep it` is first
+2. **Remove recovery point?** Asked only after you decline. `Keep it` is first
    and preselected: the snapshot stays on disk and is offered again the next
    time the workspace opens. `Remove it` deletes it, and the conversation it
    holds cannot be recovered afterwards.
 
 Escape is not an answer. Dismissing either modal leaves the snapshot exactly
-where it is — only `Remove it` deletes anything, and a failed load leaves the
+where it is. Only `Remove it` deletes anything, and a failed load leaves the
 file in place to be offered again next launch. A snapshot whose session still
 has a live process marker is never offered at all: another terminal is
 refreshing it, so it is that instance's live state rather than an orphaned
@@ -212,8 +212,7 @@ crash. Keeping (or dismissing) stays quiet for the rest of the run.
 
 ## Common paths
 
-Project runtime data — sessions, hooks, MCP config, artifacts, and local state
-— lives under `.goodvibes/` in the working directory.
+Project runtime data lives under `.goodvibes/` in the working directory: sessions, hooks, MCP config, artifacts, and local state.
 
 - global settings: `~/.goodvibes/tui/settings.json`
 - project settings: `.goodvibes/tui/settings.json`

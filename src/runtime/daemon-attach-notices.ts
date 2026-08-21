@@ -1,12 +1,12 @@
 /**
- * daemon-attach-notices — the attach-time consuming read.
+ * daemon-attach-notices, the attach-time consuming read.
  *
  * On daemon attach a surface reads the daemon's undelivered receipts
  * (update/crash/migration) AND the pending feature-announcement queue
  * (web-surface URL, the sandbox first-contained-run line, …) exactly once,
- * rendering each as a one-line notice. Both sources clear on read — the
+ * rendering each as a one-line notice. Both sources clear on read, the
  * facade's receipt queue marks its entries delivered, and drainPending() clears
- * the announcement queue — so a second attach with nothing new shows nothing.
+ * the announcement queue, so a second attach with nothing new shows nothing.
  * This mirrors the daemon's own /status?receipts=consume fold, done in-process
  * for the embedded daemon.
  */
@@ -35,7 +35,7 @@ export interface DaemonAttachNoticesDeps {
 }
 
 /**
- * Consume — exactly once — the daemon's receipts and the pending announcement
+ * Consume, exactly once, the daemon's receipts and the pending announcement
  * queue, returning the one-line notices to render. Receipts first (crash /
  * update / migration), then announcements (web-surface URL, sandbox line, …).
  */
@@ -62,7 +62,7 @@ export interface ExternalDaemonAttachReadDeps {
   readonly authToken: string;
   /**
    * Ask for the daemon's undelivered receipts on this read. Delivery at the
-   * daemon is destructive — served once, to the consuming reader — so only the
+   * daemon is destructive, served once, to the consuming reader, so only the
    * read that RENDERS them asks. A reconnect read that just refreshes the two
    * build floors leaves this off, and no receipt is eaten before a surface can
    * show it.
@@ -97,7 +97,7 @@ export interface ExternalDaemonAttachRead {
  *
  * The default deployment adopts such a daemon with no in-process handle
  * (daemonServer is null), so the embedded in-process fold sees nothing; this
- * hits the daemon's own endpoint instead — GET <baseUrl>/status with the shared
+ * hits the daemon's own endpoint instead, GET <baseUrl>/status with the shared
  * bearer, plus `?receipts=consume` when the caller is going to render them. The
  * daemon marks the served receipts delivered as it responds (its own
  * exactly-once store), so a second attach with nothing new returns no notices.

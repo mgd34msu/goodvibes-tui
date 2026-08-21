@@ -59,7 +59,7 @@ describe('estimateConversationTokens', () => {
     expect(estimateConversationTokens(msgs)).toBe(2);
   });
 
-  it('handles ContentPart[] messages — counts text + image tokens (SDK 0.35.0+)', () => {
+  it('handles ContentPart[] messages: counts text + image tokens (SDK 0.35.0+)', () => {
     const parts: ContentPart[] = [
       { type: 'text', text: 'abcd' },       // 4 chars → 1 token
       { type: 'image', url: 'http://x' } as unknown as ContentPart, // 1 image → IMAGE_TOKEN_ESTIMATE (1600)
@@ -179,7 +179,7 @@ describe('partitionMessages (edge cases via token estimation)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// extractText behavior — tested via estimateConversationTokens
+// extractText behavior, tested via estimateConversationTokens
 // (extractText is private, but its effects are visible through token estimation)
 // ---------------------------------------------------------------------------
 
@@ -212,7 +212,7 @@ describe('extractText (via estimateConversationTokens)', () => {
 
 // ---------------------------------------------------------------------------
 // getCompactionEvents / getLastCompactionEvent
-// (module-level state — these tests verify the public accessor API)
+// (module-level state, these tests verify the public accessor API)
 // ---------------------------------------------------------------------------
 
 describe('compaction event accessors', () => {

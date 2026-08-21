@@ -51,7 +51,7 @@ describe('keybindings modal surface', () => {
     expect(fleet.calls).toEqual([['panel', ['open', 'fleet', '--target', 'read_file:tool']]]);
 
     // A row with no parseable tool name (id doesn't start with 'tool:') falls
-    // back to the plain generic jump — never crashes, never sends a garbage target.
+    // back to the plain generic jump, never crashes, never sends a garbage target.
     const noRow = captureCommands();
     surface.onAction?.('activate', actionCtx(null, { ...noRow.extra, tabId: 'tools' }));
     expect(noRow.calls).toEqual([['panel', ['open', 'fleet']]]);

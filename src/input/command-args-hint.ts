@@ -4,8 +4,8 @@ import { CLUSTER_SUBCOMMAND_ARG_HINTS } from './commands/cluster-runtime.ts';
 
 /**
  * Per-command subcommand → argument-hint maps. `session`'s entries come
- * straight from session.ts (SESSION_SUBCOMMAND_ARG_HINTS) — the same table
- * the `/session` switch itself is built from — so the two can never drift
+ * straight from session.ts (SESSION_SUBCOMMAND_ARG_HINTS), the same table
+ * the `/session` switch itself is built from, so the two can never drift
  * apart; the others are hand-maintained here since they're small and their
  * owning modules don't export an equivalent table. A drift test
  * (src/test/input/command-args-hint.test.ts) checks every top-level key

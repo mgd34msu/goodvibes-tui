@@ -9,14 +9,14 @@
  *
  * These tests import and exercise the real buildSyntheticChainEntries function
  * exported from management.ts, ensuring regressions in the actual formatting
- * logic are caught — not a local copy.
+ * logic are caught, not a local copy.
  */
 
 import { describe, expect, test } from 'bun:test';
 import type { CanonicalModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { buildSyntheticChainEntries } from '../../cli/management.ts';
 
-// Alias for test readability — same function, real implementation.
+// Alias for test readability, same function, real implementation.
 const buildChainOutputValue = buildSyntheticChainEntries;
 
 function buildChainTextLines(
@@ -63,7 +63,7 @@ const CHAIN_BEST_FREE: CanonicalModel = {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('synthetic chain CLI output — data shape', () => {
+describe('synthetic chain CLI output: data shape', () => {
   test('each canonical model maps to an object with id, tier, backendCount, backends', () => {
     const value = buildChainOutputValue([CHAIN_BEST_BALANCED]);
 
@@ -105,7 +105,7 @@ describe('synthetic chain CLI output — data shape', () => {
   });
 });
 
-describe('synthetic chain CLI output — filter behavior', () => {
+describe('synthetic chain CLI output: filter behavior', () => {
   const catalog = [CHAIN_BEST_BALANCED, CHAIN_BEST_FREE];
 
   test('no filter key returns all entries', () => {
@@ -133,7 +133,7 @@ describe('synthetic chain CLI output — filter behavior', () => {
   });
 });
 
-describe('synthetic chain CLI output — text format', () => {
+describe('synthetic chain CLI output: text format', () => {
   test('text output has header line with chain count', () => {
     const value = buildChainOutputValue([CHAIN_BEST_BALANCED]);
     const text = buildChainTextLines(value);

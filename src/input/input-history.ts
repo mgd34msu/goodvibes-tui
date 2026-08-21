@@ -5,7 +5,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 /**
- * InputHistory — Persisted command history with arrow-key navigation.
+ * InputHistory, Persisted command history with arrow-key navigation.
  *
  * Navigation model:
  *   position = -1   : not browsing (at the live draft)

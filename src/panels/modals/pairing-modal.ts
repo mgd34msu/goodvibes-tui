@@ -12,7 +12,7 @@ import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } 
 // ---------------------------------------------------------------------------
 // Device Pairing config-modal surface. Shows the web-app origin, the per-device
 // token's name, a masked token/deep-link pair, the offer set with plain-language
-// consequences, and a scannable QR of the `#pair=<token>` deep link — a camera
+// consequences, and a scannable QR of the `#pair=<token>` deep link, a camera
 // scan opens the web app already signed in. No raw JSON connection blob is ever
 // encoded.
 //
@@ -20,7 +20,7 @@ import { formatPairingOffers, formatPostureCapabilities, pairingPostureNotice } 
 // each modal open mints its OWN named per-device token, so a missing pairing
 // service degrades honestly to an "unavailable" state instead of throwing at
 // registration time. "new device token" clears the cache and re-pulls to mint a
-// fresh token + QR in place — non-destructive now, because a freshly minted
+// fresh token + QR in place, non-destructive now, because a freshly minted
 // token no longer rotates a shared secret out from under a live device; old
 // tokens stay valid until explicitly revoked in the settings device surface.
 // ---------------------------------------------------------------------------
@@ -32,14 +32,14 @@ export interface PairingModalConnectionInfo {
   readonly token: string;
   /** The per-device token's editable name. */
   readonly tokenName: string;
-  /** The `#pair=<token>` deep link the QR encodes — opens the web app signed in. */
+  /** The `#pair=<token>` deep link the QR encodes, opens the web app signed in. */
   readonly deepLink: string;
   /** The offer set this pairing carries (each declinable in the web app). */
   readonly offers: readonly PairingHandoffOfferKind[];
   /**
    * The honest TLS/capability posture of the web origin the deep link opens
    * (the SDK's describeOriginPosture / the handoff's `posture` field). The one
-   * honest LAN line and the labeled capability list both render from here — never
+   * honest LAN line and the labeled capability list both render from here, never
    * from a locally-authored string. Absent when no web origin is known.
    */
   readonly posture?: OriginPosture | undefined;
@@ -47,7 +47,7 @@ export interface PairingModalConnectionInfo {
 export interface PairingModalControlPlaneSnapshot { readonly activeClientIds: readonly string[]; }
 export interface PairingModalReadModel<T> { getSnapshot(): T; }
 
-/** tailscale.get shape — the daemon's honest tailscale detection (quiet when absent). */
+/** tailscale.get shape, the daemon's honest tailscale detection (quiet when absent). */
 export interface PairingTailscaleStatus {
   readonly available: boolean;
   readonly loggedIn: boolean;
@@ -56,7 +56,7 @@ export interface PairingTailscaleStatus {
   readonly detail: string;
   readonly lastServe?: PairingTailscaleServeReceipt | undefined;
 }
-/** tailscale.serve.run receipt — the one-action serve result rendered verbatim. */
+/** tailscale.serve.run receipt, the one-action serve result rendered verbatim. */
 export interface PairingTailscaleServeReceipt {
   readonly at: number;
   readonly command: string;
@@ -66,14 +66,14 @@ export interface PairingTailscaleServeReceipt {
 }
 
 export interface PairingModalDeps {
-  /** Lazy connection-info provider — returns null when the daemon/companion
+  /** Lazy connection-info provider, returns null when the daemon/companion
    *  token cannot be resolved (honest degraded state instead of a throw). */
   readonly getConnectionInfo: () => PairingModalConnectionInfo | null;
   readonly controlPlaneReadModel?: PairingModalReadModel<PairingModalControlPlaneSnapshot>;
   readonly copyToClipboard?: (text: string) => void;
   /**
    * Probe tailscale (tailscale.get) once on open. Absent dep, a null result, or
-   * `available:false` all keep the tailscale affordance QUIET — never a nag.
+   * `available:false` all keep the tailscale affordance QUIET, never a nag.
    * Present + available ⇒ the surface offers the one-action serve.
    */
   readonly probeTailscale?: () => Promise<PairingTailscaleStatus | null>;
@@ -85,7 +85,7 @@ export interface PairingModalDeps {
   readonly runTailscaleServe?: () => Promise<PairingTailscaleServeReceipt | null>;
 }
 
-// Fixed-width placeholder — deliberately NOT derived from the real secret's
+// Fixed-width placeholder, deliberately NOT derived from the real secret's
 // length (mirrors QrPanel.SECRET_MASK), so masking doesn't leak length.
 const SECRET_MASK = '••••••••••••';
 
@@ -108,7 +108,7 @@ class PairingModalSurface implements ConfigModalSurface {
     { key: 'v', id: 'toggleReveal', label: 'reveal token' },
     { key: 'c', id: 'copyLink', label: 'copy link', enabledFor: () => Boolean(this.deps.copyToClipboard) },
     { key: 'r', id: 'newToken', label: 'new device token' },
-    // The one-action serve affordance — offered ONLY when tailscale is detected
+    // The one-action serve affordance, offered ONLY when tailscale is detected
     // and not already serving https; a second 't' press (the standard confirm)
     // runs tailscale.serve.run. Absence keeps this key unadvertised and inert.
     {
@@ -141,7 +141,7 @@ class PairingModalSurface implements ConfigModalSurface {
   buildView(): ConfigModalView {
     const info = this.ensureInfo();
     if (!info) {
-      return { title: 'Device Pairing', degraded: 'Device pairing is unavailable — the pairing token service could not be resolved for this session.', tabs: [{ id: 'pairing', label: 'Pairing', rows: [] }] };
+      return { title: 'Device Pairing', degraded: 'Device pairing is unavailable: the pairing token service could not be resolved for this session.', tabs: [{ id: 'pairing', label: 'Pairing', rows: [] }] };
     }
     const { url, token, tokenName, deepLink, offers, posture } = info;
     const displayToken = this.revealed ? token : SECRET_MASK;
@@ -149,7 +149,7 @@ class PairingModalSurface implements ConfigModalSurface {
     const displayLink = this.revealed ? deepLink : SECRET_MASK;
 
     const rows: ConfigModalRow[] = [];
-    rows.push(infoRow('intro', 'Scan with the GoodVibes web app to pair this device — it opens already signed in.', { dim: true }));
+    rows.push(infoRow('intro', 'Scan with the GoodVibes web app to pair this device; it opens already signed in.', { dim: true }));
     rows.push(infoRow('url', `Web app   ${url}`));
     rows.push(infoRow('name', `Device    ${tokenName}`));
     rows.push(infoRow('token', `Token     ${displayToken}`, { fg: MODAL_TONES.reasoning }));
@@ -159,13 +159,13 @@ class PairingModalSurface implements ConfigModalSurface {
       rows.push(infoRow('companions', `Devices connected: ${connected}`, connected > 0 ? { fg: MODAL_TONES.good } : { dim: true }));
     }
 
-    // The offer set carried by this pairing — each named with its plain-language
+    // The offer set carried by this pairing, each named with its plain-language
     // consequence, each declinable in the web app.
     if (offers.length > 0) {
       rows.push(infoRow('offers-h', 'Offers (each declinable when you pair):', { dim: true }));
       formatPairingOffers(offers).forEach((line, i) => rows.push(infoRow(`offer:${i}`, line)));
     }
-    // The labeled browser-capability list — what the paired device actually gets
+    // The labeled browser-capability list, what the paired device actually gets
     // over this origin (and, for a gated one, why not). Rendered from the posture,
     // never hidden behind a dead button.
     const capabilities = formatPostureCapabilities(posture);
@@ -173,14 +173,14 @@ class PairingModalSurface implements ConfigModalSurface {
       rows.push(infoRow('caps-h', 'This device will get:', { dim: true }));
       capabilities.forEach((line, i) => rows.push(infoRow(`cap:${i}`, line)));
     }
-    // The ONE honest LAN line — the SDK posture's own notice (LAN_PLAIN_HTTP_NOTICE),
+    // The ONE honest LAN line, the SDK posture's own notice (LAN_PLAIN_HTTP_NOTICE),
     // present only for the plain-http-on-LAN posture, never a nag elsewhere.
     const notice = pairingPostureNotice(posture);
     if (notice) rows.push(infoRow('posture', notice, { fg: MODAL_TONES.reasoning }));
-    // The tailscale serve affordance — quiet unless tailscale is detected.
+    // The tailscale serve affordance, quiet unless tailscale is detected.
     this.appendTailscaleRows(rows);
 
-    // ASCII QR of the deep link — a camera scan opens the web app already
+    // ASCII QR of the deep link, a camera scan opens the web app already
     // carrying the one-time token. No raw JSON blob is ever encoded. The
     // multi-line preformatted string is split into one non-selectable row per row.
     const qr = renderQrToString(generateQrMatrix(deepLink));
@@ -195,7 +195,7 @@ class PairingModalSurface implements ConfigModalSurface {
   }
 
   /**
-   * Append the tailscale section — quiet when tailscale is undetected or
+   * Append the tailscale section, quiet when tailscale is undetected or
    * unavailable. When detected, the surface names the one-action serve; once a
    * serve has produced (or tailscale already reports) an https MagicDNS URL, that
    * URL and the serve receipt render verbatim so the encrypted path is visible.
@@ -208,7 +208,7 @@ class PairingModalSurface implements ConfigModalSurface {
       rows.push(infoRow('ts-h', 'Encrypted access (Tailscale):', { dim: true }));
       rows.push(infoRow('ts-url', `  ${httpsUrl}`, { fg: MODAL_TONES.good }));
     } else {
-      rows.push(infoRow('ts-h', 'Tailscale detected — press t to serve this app over https (MagicDNS).', { fg: MODAL_TONES.reasoning }));
+      rows.push(infoRow('ts-h', 'Tailscale detected: press t to serve this app over https (MagicDNS).', { fg: MODAL_TONES.reasoning }));
     }
     const receipt = this.serveReceipt ?? ts.lastServe;
     if (receipt) {

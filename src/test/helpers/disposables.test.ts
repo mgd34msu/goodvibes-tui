@@ -8,7 +8,7 @@
  *
  * Both are load-bearing and both fail SILENTLY. If `trackDisposables()` stopped
  * draining its registry, or if `resetTestRuntimeServices()` went back to just
- * dropping the reference, no other test in the repo would fail — the damage is
+ * dropping the reference, no other test in the repo would fail, the damage is
  * a graph's worth of pollers still ticking, which only `scripts/leak-scan.ts`
  * can see. So the teardown behaviour itself is asserted here.
  *
@@ -26,7 +26,7 @@ disposeTestRuntimeServicesAfterAll();
 
 const disposables = trackDisposables();
 
-describe('trackDisposables — disposes what a test registers', () => {
+describe('trackDisposables: disposes what a test registers', () => {
   const log: string[] = [];
 
   test('registers values with dispose/stop/close and returns them unchanged', () => {
@@ -62,12 +62,12 @@ describe('trackDisposables — disposes what a test registers', () => {
   test('everything registered by the previous test was disposed after it', () => {
     // The real assertion: the afterEach hook fired and drained the registry.
     expect(disposables.size).toBe(0);
-    // LIFO — later registrations unwind first.
+    // LIFO, later registrations unwind first.
     expect(log).toEqual(['close', 'stop', 'dispose']);
   });
 });
 
-describe('trackDisposables — explicit disposers and bare callbacks', () => {
+describe('trackDisposables: explicit disposers and bare callbacks', () => {
   const seen: string[] = [];
 
   test('an explicit disposer overrides method detection', () => {
@@ -83,7 +83,7 @@ describe('trackDisposables — explicit disposers and bare callbacks', () => {
   });
 });
 
-describe('trackDisposables — refuses to silently leak', () => {
+describe('trackDisposables: refuses to silently leak', () => {
   test('a value with no teardown method is rejected loudly', () => {
     expect(() => disposables.add({ notDisposable: true })).toThrow(
       /no dispose\/stop\/close\/destroy\/shutdown method/,
@@ -152,13 +152,13 @@ function trackTimers() {
   };
 }
 
-describe('resetTestRuntimeServices — stops the graph it drops', () => {
+describe('resetTestRuntimeServices: stops the graph it drops', () => {
   test('every poller the shared test graph started is cleared when it is reset', () => {
     resetTestRuntimeServices();
     const timers = trackTimers();
     try {
       const services = getTestRuntimeServices();
-      // Same graph until it is reset — the sanity check that makes the
+      // Same graph until it is reset, the sanity check that makes the
       // measurement below mean something.
       expect(getTestRuntimeServices()).toBe(services);
 

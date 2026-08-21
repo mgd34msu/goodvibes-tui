@@ -1,5 +1,5 @@
 /**
- * session-resume-core.test.ts — the canonical resume routine both resume
+ * session-resume-core.test.ts, the canonical resume routine both resume
  * seams (session-workflow.ts's /session resume and bootstrap-hook-bridge.ts's
  * panel/session-browser resume) now call.
  *
@@ -10,7 +10,7 @@
  *   3. The selectModel reselection fallback (raw id on failure) is honored
  *      when provided, and skipped cleanly when omitted.
  *   4. Panel reopen always skips MIGRATE-TO-MODAL ids, honestly reporting
- *      them separately from genuinely reopened panels — plus the new
+ *      them separately from genuinely reopened panels, plus the new
  *      reopen-cap overflow report (item 7).
  *
  * Also proves parity: two independent "seam-shaped" calls against the same
@@ -120,7 +120,7 @@ describe('resumeSessionCore', () => {
     // session-workflow.ts implementation: the reselected provider is
     // immediately overwritten by the raw saved meta.provider afterward
     // (`if (meta.provider) runtime.provider = meta.provider`, unconditional).
-    // Not introduced or changed by this unification — out of this item's scope.
+    // Not introduced or changed by this unification, out of this item's scope.
     expect(runtime.provider).toBe('saved-provider');
     expect(outcome.meta.model).toBe('saved-model-id');
   });
@@ -265,7 +265,7 @@ describe('reopenPanelsWithModalSkip', () => {
   });
 });
 
-describe('parity — both resume seams reach an identical outcome for the same saved session', () => {
+describe('parity: both resume seams reach an identical outcome for the same saved session', () => {
   test('a session-workflow-shaped call and a bootstrap-hook-bridge-shaped call produce the same restoredAnchorCount, resumedMessageCount, and panel outcome', async () => {
     const sessionId = 'sess-parity';
     clearTurnAnchors(sessionId);
@@ -297,7 +297,7 @@ describe('parity — both resume seams reach an identical outcome for the same s
     });
 
     // Seam 2 shape: bootstrap-hook-bridge.ts (selectModel now ALSO wired, per
-    // this fix — the very divergence this parity test guards against).
+    // this fix, the very divergence this parity test guards against).
     clearTurnAnchors(sessionId);
     const conversationB = new ConversationManager(() => 80);
     const runtimeB = makeRuntime();

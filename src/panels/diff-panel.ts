@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// DiffPanel — unified diff view of agent file changes
+// DiffPanel, unified diff view of agent file changes
 // ---------------------------------------------------------------------------
 
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
@@ -22,15 +22,15 @@ import {
 } from './polish.ts';
 
 // ---------------------------------------------------------------------------
-// Colour palette — dedicated diff-viewer scheme (like a mini syntax
+// Colour palette, dedicated diff-viewer scheme (like a mini syntax
 // highlighter). Each hex literal is named once and reused for every role
 // that shares it, including the workspace-chrome aliases (info/dim/value/
 // empty) so the raw-hex count never grows. The title band itself is NOT
-// overridden — buildPanelWorkspace always falls back to the canonical
+// overridden, buildPanelWorkspace always falls back to the canonical
 // DEFAULT_PANEL_PALETTE.headerBg (one title band everywhere).
 // ---------------------------------------------------------------------------
 
-// Hunk blue is the shared DIFF_TONES token — diff-view.ts (conversation)
+// Hunk blue is the shared DIFF_TONES token, diff-view.ts (conversation)
 // and git-panel.ts's inline diff converge onto this file's pre-existing value.
 const HUNK_BLUE: string = DIFF_TONES.hunk;
 // Context rows and line-number gutter use the shared theme's muted/dim
@@ -38,7 +38,7 @@ const HUNK_BLUE: string = DIFF_TONES.hunk;
 const CONTEXT_GRAY = UI_TONES.fg.muted;
 const FILENAME_WHITE = '#ffffff';
 // Add/del text colors are the shared DIFF_TONES tokens, whose values ARE this
-// panel's shipped colors — this panel is the reference diff look (diff-view
+// panel's shipped colors, this panel is the reference diff look (diff-view
 // was unwired dead code until, so "majority of surfaces" was a mirage);
 // the conversation surface converges onto these, not the reverse.
 const ADD_GREEN: string = DIFF_TONES.add;
@@ -56,7 +56,7 @@ const TAB_BG = '#222222';
 const STATUS_BAR_BG = '#444444';
 
 const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, {
-  // Workspace-chrome aliases (title band excluded — no headerBg override)
+  // Workspace-chrome aliases (title band excluded, no headerBg override)
   info:  HUNK_BLUE,
   dim:   CONTEXT_GRAY,
   value: FILENAME_WHITE,
@@ -148,7 +148,7 @@ function parseDiff(raw: string): ParsedLine[] {
       result.push({ kind: 'deletion', text: line.slice(1), beforeNum: before, afterNum: null });
       before++;
     } else if (line.startsWith('\\')) {
-      // "No newline at end of file" note — treat as header
+      // "No newline at end of file" note, treat as header
       result.push({ kind: 'header', text: line, beforeNum: null, afterNum: null });
     } else {
       // context line (starts with space, or empty for blank context)
@@ -168,7 +168,7 @@ function parseDiff(raw: string): ParsedLine[] {
 
 /**
  * Synthetic placeholder entries ('(error)', '(no changes)', '(no staged
- * changes)', '(not a git repo)') are not real diffs — parenthesized so they
+ * changes)', '(not a git repo)') are not real diffs, parenthesized so they
  * can be styled distinctly in the tab/status bar instead of reading as a fake
  * diff of a real file.
  */
@@ -181,7 +181,7 @@ function isPlaceholderPath(filePath: string): boolean {
  * order: the standard two-sided header (`diff --git a/x b/y`, bare or
  * quoted), the combined/merge-conflict header (`diff --cc <path>` /
  * `diff --combined <path>`, which carries no a/b prefixes), then falls back
- * to the `+++`/`---` file lines (present across every variant, uniformly) —
+ * to the `+++`/`---` file lines (present across every variant, uniformly),
  * skipping a `/dev/null` side (deleted/new file). 'unknown' is reserved for
  * genuinely unparseable input.
  */
@@ -274,7 +274,7 @@ export class DiffPanel extends BasePanel {
   private selectedFile = 0;
   private scrollOffset = 0;
 
-  /** One-line confirmation for the 'w'/'h'/'s' self-load hotkeys — otherwise a
+  /** One-line confirmation for the 'w'/'h'/'s' self-load hotkeys, otherwise a
    * reload that produces identical content is visually indistinguishable
    * from the keypress doing nothing at all. */
   private hotkeyStatus: string | null = null;
@@ -320,7 +320,7 @@ export class DiffPanel extends BasePanel {
   }
 
   /**
-   * Ingest a StructuredDiff (GitService.diffStructured — the FULL, uncapped
+   * Ingest a StructuredDiff (GitService.diffStructured, the FULL, uncapped
    * working-tree diff). Each file becomes one DiffEntry (unified text
    * reconstructed) so the existing tabs/renderer work unchanged; the old
    * 4,000-char slice is gone and a diff of any length renders complete.
@@ -340,7 +340,7 @@ export class DiffPanel extends BasePanel {
   }
 
   /**
-   * Defensive gate mirroring GitPanel's own notGitRepo messaging — short-
+   * Defensive gate mirroring GitPanel's own notGitRepo messaging, short-
    * circuits before any of this panel's self-load git spawns run, instead of
    * letting git fail per-subcommand with an inconsistent error shape.
    */
@@ -414,7 +414,7 @@ export class DiffPanel extends BasePanel {
 
   /**
    * Run `git diff --cached` and populate the staged changes. Self-load entry
-   * point for the 's' key — its own diff plumbing, independent of the
+   * point for the 's' key, its own diff plumbing, independent of the
    * `/diff staged` command handler.
    */
   async showStagedDiff(): Promise<void> {
@@ -444,7 +444,7 @@ export class DiffPanel extends BasePanel {
   /**
    * Best-effort semantic-diff enrichment for a set of files, run against the
    * before-content at `ref` and the current on-disk after-content. Self-contained
-   * diff plumbing — does not depend on the `/diff` command handler.
+   * diff plumbing, does not depend on the `/diff` command handler.
    */
   private async enrichSemanticDiffs(files: string[], ref: string): Promise<void> {
     if (files.length === 0) return;
@@ -517,7 +517,7 @@ export class DiffPanel extends BasePanel {
 
   /**
    * Wraps a self-load hotkey ('w'/'h'/'s') with visible before/after status
-   * text in the status bar — otherwise a reload whose content is unchanged
+   * text in the status bar, otherwise a reload whose content is unchanged
    * from what's already shown is indistinguishable from the keypress having
    * done nothing at all (contrast with `/diff working`'s ctx.print() calls).
    */
@@ -540,7 +540,7 @@ export class DiffPanel extends BasePanel {
       // Shift+Tab: most terminals send the bare CSI-Z ("backtab") escape
       // sequence rather than a Tab keypress with a shift modifier, and the
       // input tokenizer passes that sequence through unchanged as the
-      // logical key name — so it (and the friendlier aliases some terminals/
+      // logical key name, so it (and the friendlier aliases some terminals/
       // future tokenizer versions may emit) are matched explicitly here.
       case '\x1b[Z':
       case 'shift-tab':
@@ -559,7 +559,7 @@ export class DiffPanel extends BasePanel {
   // handlePanelIntegrationAction cross-panel hook (the same bridge
   // FileExplorerPanel used). 'preview' is DELETE-disposition with no
   // successor surface (no file-picker-overlay preview to repoint to
-  // either — verified), so the key and the hook were removed rather than
+  // either, verified), so the key and the hook were removed rather than
   // repointed; diff no longer has an 'o' action.
 
   private scrollUp(): void {
@@ -630,7 +630,7 @@ export class DiffPanel extends BasePanel {
             width,
             ' No diff to display.',
             'Load a git diff or select a changed file to populate the workspace. w=working h=HEAD s=staged self-load right here.',
-            // corrected — bare /diff loads files changed *this
+            // corrected, bare /diff loads files changed *this
             // session* (falling back to the full HEAD diff when none are
             // tracked yet), not the working-tree diff the w key already
             // loads in-panel; the old summary text described the wrong
@@ -711,7 +711,7 @@ export class DiffPanel extends BasePanel {
       const placeholder = isPlaceholderPath(entry.filePath);
       const stat = diffStat(entry);
       // Placeholder entries ('(error)', '(no changes)', ...) get a distinct
-      // warn color regardless of active/inactive — they are not a real diff
+      // warn color regardless of active/inactive, they are not a real diff
       // of a real file and must not read as one.
       const fg = placeholder ? COLOR.warn : (active ? COLOR.tabActive : COLOR.tabInactive);
       const bg = active ? COLOR.tabActiveBg : COLOR.tabBg;
@@ -745,7 +745,7 @@ export class DiffPanel extends BasePanel {
     const fileInfo = truncateDisplay(entry.filePath, pathBudget);
     const segments: Array<{ text: string; fg: string; bg?: string; bold?: boolean }> = [
       // Placeholder states ('(error)', '(no changes)', ...) are not a real
-      // diff of a real file — a distinct warn color keeps them from being
+      // diff of a real file, a distinct warn color keeps them from being
       // mistaken for one.
       { text: ` ${fileInfo} `, fg: placeholder ? COLOR.warn : COLOR.filename, bg: COLOR.statusBar, bold: true },
       { text: `[${this.selectedFile + 1}/${this.entries.length}]`, fg: COLOR.tabInactive, bg: COLOR.statusBar },

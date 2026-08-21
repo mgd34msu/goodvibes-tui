@@ -70,7 +70,7 @@ export function getPanelUnderMouse(
 /**
  * If the mouse is over the consolidated workspace tab bar (the first panel
  * row), return the index of the tab under the cursor, else null. Recomputes the
- * tab hit regions by rendering the bar with a layout callback — cheap and keeps
+ * tab hit regions by rendering the bar with a layout callback, cheap and keeps
  * the click geometry in lockstep with what was drawn.
  */
 export function workspaceTabAtMouse(

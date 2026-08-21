@@ -1,5 +1,5 @@
 /**
- * RuntimeContext — the composition root object returned by bootstrapRuntime().
+ * RuntimeContext, the composition root object returned by bootstrapRuntime().
  *
  * main.ts receives this and uses it to drive the render loop, input handling,
  * and terminal lifecycle. The bootstrap owns initialization; main.ts owns
@@ -143,7 +143,7 @@ export interface RuntimeContext {
 
   /**
    * Logical shutdown: save session, fire hooks, stop background managers.
-   * Does NOT touch the terminal — main.ts owns terminal teardown.
+   * Does NOT touch the terminal, main.ts owns terminal teardown.
    *
    * @param sessionData - Latest conversation data to persist.
    */

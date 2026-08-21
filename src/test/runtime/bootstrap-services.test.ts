@@ -89,7 +89,7 @@ describe('startExternalServices', () => {
     );
 
     // Daemon side: detached spawn + successful identity-probe adoption. There is
-    // no in-process daemon object any more — `daemonServer` is always null.
+    // no in-process daemon object any more, `daemonServer` is always null.
     expect(daemonSeams.spawnDetachedDaemon).toHaveBeenCalledTimes(1);
     expect(services.daemonServer).toBeNull();
     expect(services.daemonStatus.mode).toBe('external');
@@ -142,7 +142,7 @@ describe('startExternalServices', () => {
         probeHttpListenerPortInUse: async () => false,
         // The occupant on the configured port cannot be verified as a
         // compatible GoodVibes daemon, so it is never spawned into and never
-        // adopted — but the HTTP listener still starts.
+        // adopted, but the HTTP listener still starts.
         probeDaemonIdentity: async () => ({
           kind: 'unknown' as const,
           reason: 'listen EADDRINUSE: Address already in use 127.0.0.1:3421',
@@ -229,7 +229,7 @@ describe('startExternalServices', () => {
         daemonRuntimeDir: makeProjectTempDir('bootstrap-daemon-rt'),
         sleep: async () => {},
         // The detached daemon never becomes reachable within the (zeroed)
-        // probe budget — the analogue of the old "start() never resolves"
+        // probe budget, the analogue of the old "start() never resolves"
         // hang, expressed through the probe-poll seam instead.
         detachedSpawnProbeTimeoutMs: 0,
         detachedSpawnProbeIntervalMs: 1,

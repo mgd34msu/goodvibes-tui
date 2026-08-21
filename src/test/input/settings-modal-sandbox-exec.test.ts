@@ -69,7 +69,7 @@ describe('sandbox.egressAllowlist / sandbox.workspaceWritable synthetic settings
     // once. Re-declaring `get` as its own `<K extends ConfigKey>(key: K) =>
     // ConfigValue<K>` generic makes tsc compare two deferred ConfigValue<K>
     // conditionals against each other and give up with "excessive stack depth"
-    // (TS2321) — and it does so unpredictably, moving between files as the
+    // (TS2321), and it does so unpredictably, moving between files as the
     // config schema grows.
     const stub = {
       get: (_key: ConfigKey): unknown => 'not-an-array',
@@ -80,13 +80,13 @@ describe('sandbox.egressAllowlist / sandbox.workspaceWritable synthetic settings
   test('a real ConfigManager reads the sandbox section without crashing (no defensive guard needed)', () => {
     // 'sandbox' has been a real DEFAULT_CONFIG section since before this repack
     // (it backs the VM/REPL isolation settings), so a plain get() never throws
-    // for these leaf keys — unlike worktree.setup.* pre-registration.
+    // for these leaf keys, unlike worktree.setup.* pre-registration.
     //
     // Read through getCategory('sandbox') rather than cm.get(KEY) directly:
     // egressAllowlist/workspaceWritable are real GoodVibesConfig['sandbox']
     // fields, but the SDK's exported ConfigKey union is missing their dotted
-    // leaf entries (present for every sibling sandbox.* key — qemuBinary,
-    // vmBackend, etc. — but not these two), which is why sandbox-exec-config.ts
+    // leaf entries (present for every sibling sandbox.* key, qemuBinary,
+    // vmBackend, etc., but not these two), which is why sandbox-exec-config.ts
     // has to force these constants through `as ConfigKey` in the first place.
     // A generic cm.get(SANDBOX_EGRESS_ALLOWLIST_CONFIG_KEY) call can't recover
     // a useful ConfigValue<K> from that widened key type; getCategory reads
@@ -123,7 +123,7 @@ describe('sandbox.egressAllowlist / sandbox.workspaceWritable synthetic settings
     expect(readSandboxCategory(cm).workspaceWritable).toEqual(['/tmp/scratch']);
 
     // getCategory('sandbox') is exactly what registerAllTools reads at
-    // tool-registration time — confirm both writes land there too.
+    // tool-registration time, confirm both writes land there too.
     const category = readSandboxCategory(cm);
     expect(category.egressAllowlist).toEqual(['curl', 'git']);
     expect(category.workspaceWritable).toEqual(['/tmp/scratch']);

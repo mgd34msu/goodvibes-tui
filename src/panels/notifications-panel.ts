@@ -1,12 +1,12 @@
 /**
- * NotificationsPanel — the visible home for notifications routed to the
+ * NotificationsPanel, the visible home for notifications routed to the
  * `panel_only` target (see notifications-feed.ts for why this exists).
  *
  * Renders every entry the feed has accumulated: standalone panel-routed
  * notifications, and collapsed burst/batch groups shown honestly with their
  * real running count and the plain-language reason they were held back from
  * the conversation. Descriptive text (titles, bodies, reason descriptions)
- * is always wrapped in full — never clipped to a column width.
+ * is always wrapped in full, never clipped to a column width.
  */
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { RoutingDecision } from '@/runtime/index.ts';
@@ -23,7 +23,7 @@ import { wrapText } from '../utils/terminal-width.ts';
 import { getSharedNotificationFeed, type PanelFeedEntry, type PanelNotificationFeed } from './notifications-feed.ts';
 
 // Reuses the shared, mode-aware (dark/light) panel palette's existing
-// bad/warn/info/dim tokens rather than minting new hex literals — this
+// bad/warn/info/dim tokens rather than minting new hex literals, this
 // panel has no color needs the shared palette doesn't already name.
 const C = DEFAULT_PANEL_PALETTE;
 
@@ -51,17 +51,17 @@ function levelTag(level: PanelFeedEntry['level']): string {
   return `[${level}]`;
 }
 
-/** Build every Line an entry needs — title/meta row, then the full body and reason text wrapped with no line cap (descriptive text is never clipped). */
+/** Build every Line an entry needs, title/meta row, then the full body and reason text wrapped with no line cap (descriptive text is never clipped). */
 function renderEntry(entry: PanelFeedEntry, width: number): Line[] {
   const lines: Line[] = [];
   const fg = levelColor(entry.level);
   const countSuffix = entry.collapsedCount > 1 ? ` ×${entry.collapsedCount}` : '';
-  const headerText = `${levelTag(entry.level)} ${entry.domain} — ${entry.title}${countSuffix}`;
+  const headerText = `${levelTag(entry.level)} ${entry.domain}: ${entry.title}${countSuffix}`;
   for (const wrapped of wrapText(headerText, Math.max(1, width - 1))) {
     lines.push(buildStyledPanelLine(width, [{ text: ` ${wrapped}`, fg, bold: true }]));
   }
   const reasonText = entry.collapsedCount > 1
-    ? `  ${entry.collapsedCount} notifications collapsed — ${REASON_DESCRIPTIONS[entry.reasonCode]}`
+    ? `  ${entry.collapsedCount} notifications collapsed: ${REASON_DESCRIPTIONS[entry.reasonCode]}`
     : `  ${REASON_DESCRIPTIONS[entry.reasonCode]}`;
   for (const wrapped of wrapText(reasonText, Math.max(1, width - 1))) {
     lines.push(buildStyledPanelLine(width, [{ text: ` ${wrapped}`, fg: C.dim }]));

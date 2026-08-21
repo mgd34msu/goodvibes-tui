@@ -197,10 +197,10 @@ describe('submitInput plan-keyword regression (coordinator removed)', () => {
       requestRender: () => {},
     };
 
-    // Simulate pressing Enter — drives through real key routing which calls submitInput
+    // Simulate pressing Enter, drives through real key routing which calls submitInput
     handlePromptKeyToken(keyState, { type: 'key', name: 'enter', logicalName: 'enter', ctrl: false, shift: false, meta: false });
 
-    // Plan-keyword text must reach submitInput unchanged — not swallowed, not intercepted
+    // Plan-keyword text must reach submitInput unchanged, not swallowed, not intercepted
     expect(submitCalls).toHaveLength(1);
     expect(submitCalls[0]).toBe('plan me a new feature');
   });
@@ -222,7 +222,7 @@ describe('/plan project planning runtime command', () => {
     expect(fake.state()?.openQuestions.length).toBeGreaterThan(0);
   });
 
-  // `dismiss` and `answer` are REAL subcommands now — they must NOT be
+  // `dismiss` and `answer` are REAL subcommands now, they must NOT be
   // refused as pseudo-verbs, and they must never seed a goal named after themselves.
   test('/plan dismiss with no active plan and no interview state → honest no-op, never seeded', async () => {
     const registry = new CommandRegistry();

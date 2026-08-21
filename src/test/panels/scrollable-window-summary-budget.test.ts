@@ -58,7 +58,7 @@ class FooteredListPanel extends ScrollableListPanel<string> {
   }
 }
 
-describe('resolveScrollablePanelSection — window-summary row stays inside the budget', () => {
+describe('resolveScrollablePanelSection: window-summary row stays inside the budget', () => {
   const WIDTH = 40;
   const HEIGHT = 12;
 
@@ -89,7 +89,7 @@ describe('resolveScrollablePanelSection — window-summary row stays inside the 
   });
 });
 
-describe('resolveStackedScrollableSections — per-section summaries stay inside the stack budget', () => {
+describe('resolveStackedScrollableSections: per-section summaries stay inside the stack budget', () => {
   const WIDTH = 40;
   const HEIGHT = 14;
   const C = DEFAULT_PANEL_PALETTE;

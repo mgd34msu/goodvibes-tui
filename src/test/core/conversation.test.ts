@@ -175,7 +175,7 @@ describe('ConversationManager', () => {
     test('a user-action receipt (isUserReceipt: true) displaces the splash and is visible', () => {
       const c = new ConversationManager(() => 120);
       c.addTypedSystemMessage(
-        'Recovery point removed (session sess-abc123) — it will not be offered again, even if the file reappears.',
+        'Recovery point removed (session sess-abc123); it will not be offered again, even if the file reappears.',
         'system',
         { isUserReceipt: true },
       );
@@ -184,12 +184,12 @@ describe('ConversationManager', () => {
       expect(frame).toContain('Recovery point removed (session sess-abc123)');
     });
 
-    test('undo removes a receipt outright — a later message recycling its freed index is ordinary ambient content', () => {
+    test('undo removes a receipt outright; a later message recycling its freed index is ordinary ambient content', () => {
       const c = new ConversationManager(() => 120);
       c.addUserMessage('first');
       c.addAssistantMessage('reply');
       c.addUserMessage('second');
-      c.addTypedSystemMessage('Recovery point kept (session sess-xyz) — it will be offered again next launch.', 'system', { isUserReceipt: true });
+      c.addTypedSystemMessage('Recovery point kept (session sess-xyz); it will be offered again next launch.', 'system', { isUserReceipt: true });
       c.undo(); // removes the last turn ('second' + the receipt) as one unit
       c.addTypedSystemMessage('Provider anthropic registered', 'system'); // recycles the freed index, ambient (no isUserReceipt)
       const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
@@ -201,7 +201,7 @@ describe('ConversationManager', () => {
   describe('any submission retires the splash', () => {
     // Owner ruling: the splash yields on EITHER text input OR command input.
     // The user-action-receipt rule above stays for the boot-modal case; this
-    // is the general trigger and supersedes it — a slash command that renders
+    // is the general trigger and supersedes it, a slash command that renders
     // nothing into the transcript must still take the splash down, and it must
     // not come back while the run continues.
 
@@ -338,7 +338,7 @@ describe('ConversationManager', () => {
   });
 
   // after a session resume replays historical messages, a freshly
-  // constructed Orchestrator's `usage` starts at {0,0,0,0} (SDK gap — never
+  // constructed Orchestrator's `usage` starts at {0,0,0,0} (SDK gap, never
   // persisted/reseeded). sumConversationUsage() is the TUI-side helper that
   // recomputes real totals from the replayed history so bootstrap-shell.ts
   // can hydrate orchestrator.usage before the footer's first render.
@@ -370,7 +370,7 @@ describe('ConversationManager', () => {
       const { usage, lastInputTokens } = sumConversationUsage(messages);
       expect(usage).toEqual({ input: 300, output: 60, cacheRead: 5, cacheWrite: 10 });
       // lastInputTokens reflects the LAST assistant message's own figure only
-      // (context-window occupancy), not a running sum — 200 + 0 + 0.
+      // (context-window occupancy), not a running sum, 200 + 0 + 0.
       expect(lastInputTokens).toBe(200);
     });
 

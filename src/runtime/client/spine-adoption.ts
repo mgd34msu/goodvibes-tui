@@ -1,15 +1,15 @@
 /**
- * spine-adoption.ts — wiring this surface's session and memory spines to the
+ * spine-adoption.ts, wiring this surface's session and memory spines to the
  * daemon it adopted, over the SDK's adoption policy.
  *
  * ── What moved to the SDK, and what stays here ────────────────────────────
  *
  * The SDK's `@pellux/goodvibes-sdk/platform/runtime/client` now owns WHEN the
  * wire comes up and goes down: idempotent per base URL, torn down on a
- * change, the one-time legacy-store fold. This module owns WHAT the wire is —
+ * change, the one-time legacy-store fold. This module owns WHAT the wire is,
  * this terminal's own `createHttpTransport` + `createTuiSpineTransport` +
  * `createTuiMemorySpineTransport`, injected as the SDK's `connect(baseUrl,
- * authToken)` callback — because building the actual HTTP client is the same
+ * authToken)` callback, because building the actual HTTP client is the same
  * connection-resolution concern the verb caller already keeps product-side.
  *
  * `activation: 'adopt-on-status'` is passed explicitly: this terminal gates
@@ -20,19 +20,19 @@
  * ── What crosses the wire ──────────────────────────────────────────────────
  *
  * Session IDENTITY, not session execution. The conversation itself runs here;
- * what the daemon holds is the register —
+ * what the daemon holds is the register,
  * which sessions exist, which surface is live on each, and the inputs queued
  * against them. Concretely, on adoption this wires:
  *
- *   - `sessions.register` / `sessions.close` — the identity mirror, deliberately
+ *   - `sessions.register` / `sessions.close`, the identity mirror, deliberately
  *     fire-and-forget so a slow daemon never shows up in a keystroke.
- *   - `sessions.inputs.list` / `sessions.inputs.deliver` — the inbound steer
+ *   - `sessions.inputs.list` / `sessions.inputs.deliver`, the inbound steer
  *     path, so a message another surface queued for THIS session lands in the
  *     turn machinery here and is acknowledged on the wire.
- *   - `sessions.list` — the cross-surface union the panels read, interval-
+ *   - `sessions.list`, the cross-surface union the panels read, interval-
  *     refreshed and served synchronously.
  *   - the memory spine's wire transport, folded into the same handler by the
- *     SDK — this module's own `syncMemorySpineToHostStatus` call is retired;
+ *     SDK, this module's own `syncMemorySpineToHostStatus` call is retired;
  *     supplying `memoryTransport` in the bundle and `memorySpine` in the
  *     options is what activates it now.
  *

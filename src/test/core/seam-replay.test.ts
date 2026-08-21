@@ -1,5 +1,5 @@
 /**
- * Seam-level replay tests — exercises each of the two wired resume paths.
+ * Seam-level replay tests, exercises each of the two wired resume paths.
  *
  * These tests drive the actual seam functions with real journals on disk,
  * asserting that replayed turns appear in the live conversation. They are
@@ -8,15 +8,15 @@
  * replay logic and the specific code paths a user would trigger.
  *
  * Seams covered:
- *   1. CLI / command resume — session-workflow.ts calls replayJournalForSession
+ *   1. CLI / command resume, session-workflow.ts calls replayJournalForSession
  *      after fromJSON + rebuildHistory. Here we call the same function through
  *      the same arguments to verify the path is correctly wired.
- *   2. In-TUI panel resume — createResumeSessionHandler with a real journal.
+ *   2. In-TUI panel resume, createResumeSessionHandler with a real journal.
  *      Asserts replayed messages appear after the panel resume handler runs.
  *
  * A third seam used to live here: the silent startup auto-restore
  * (autoRestoreRecoverySession in shell/recovery-input-helpers.ts). That
- * function and its main.ts call site are gone — state restores happen ONLY
+ * function and its main.ts call site are gone, state restores happen ONLY
  * on explicit user intent now (owner ruling), never automatically at bare
  * launch. A live recovery snapshot is surfaced, never applied, by the
  * boot resume notice (see runtime/resume-notice.ts and
@@ -89,7 +89,7 @@ afterEach(() => {
 
 // ── Seam 1: CLI / command resume (session-workflow.ts path) ───────────────────
 
-describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)', () => {
+describe('seam-replay: seam 1; CLI/command resume (replayJournalForSession)', () => {
   test('replays journal turns that post-date the snapshot into the conversation', () => {
     const sessionId = 'seam1-ses';
     const homeDirectory = tmpDir;
@@ -164,14 +164,14 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
     });
 
     expect(result.replayed).toBeGreaterThan(0);
-    // Title must survive the replay — it is not stored in journal records.
+    // Title must survive the replay, it is not stored in journal records.
     expect(conversation.title).toBe('My Important Session');
   });
 });
 
 // ── Seam 2: In-TUI panel resume (bootstrap-hook-bridge.ts path) ───────────────
 
-describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandler)', () => {
+describe('seam-replay: seam 2; in-TUI panel resume (createResumeSessionHandler)', () => {
   test('replays journal turns newer than session snapshot onto conversation', async () => {
     const sessionId = 'seam3-ses';
     const homeDirectory = tmpDir;
@@ -255,7 +255,7 @@ describe('seam-replay: seam 2 — in-TUI panel resume (createResumeSessionHandle
   // must call the optional hydrateSessionUsage callback (wired from
   // bootstrap-shell.ts) after fromJSON()+journal replay are both applied, so the
   // caller can recompute orchestrator.usage from the now-complete history before
-  // the next render — otherwise the footer shows Input: 0 post-resume.
+  // the next render, otherwise the footer shows Input: 0 post-resume.
   test('calls hydrateSessionUsage after fromJSON + journal replay, before requestRender', async () => {
     const sessionId = 'seam3-hydrate';
     const homeDirectory = tmpDir;
@@ -415,7 +415,7 @@ describe('seam-replay: title/titleSource preservation (T25)', () => {
     const journalPath = journalPathFor(makeTestSurface(homeDirectory), sessionId);
     const snapshotTimestamp = Date.now() - 5000;
 
-    // Journal carries POST-snapshot records (messages only — journal records
+    // Journal carries POST-snapshot records (messages only, journal records
     // never carry the title/titleSource).
     writeJournalWithRecords(journalPath, sessionId, 2, snapshotTimestamp);
 
@@ -463,7 +463,7 @@ describe('seam-replay: seq-collision authoritative-record selection (T30)', () =
     // (seq 0..2, earlier ts, STALE 10-message snapshots) are followed by a
     // fresh process's appends that restart at seq 0 (NEWER ts, CURRENT
     // 3-message snapshot). Sorting by seq alone leaves the stale seq-2 record
-    // last — recovery must instead pick the record with the newest ts.
+    // last, recovery must instead pick the record with the newest ts.
     const dir = join(journalPath, '..');
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const header = JSON.stringify({

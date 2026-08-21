@@ -256,7 +256,7 @@ describe('progress truncation logic', () => {
     const live = am.getStatus(rec.id)!;
     const { onDelta } = makeAccumulator(live);
 
-    // 50 chars each — first delta stays under 100; second pushes over
+    // 50 chars each, first delta stays under 100; second pushes over
     onDelta({ content: 'a'.repeat(50) });
     expect(live.progress!.startsWith('...')).toBe(false);
 

@@ -1,10 +1,10 @@
 /**
- * hosted-runtime.ts — `/hosted`, the front door to a conversation the DAEMON
+ * hosted-runtime.ts, `/hosted`, the front door to a conversation the DAEMON
  * runs.
  *
  * Local sessions are unchanged and remain the default experience: a turn typed
  * into the composer runs in this process, exactly as it always has. `/hosted`
- * is the opt-in — it asks the daemon to compose the same loop on its side, so
+ * is the opt-in, it asks the daemon to compose the same loop on its side, so
  * the conversation does not depend on this window staying open.
  *
  * ── The subcommands, and why they are these ───────────────────────────────
@@ -18,7 +18,7 @@
  *   /hosted say <text…>        steer the attached session (ordinary verb)
  *   /hosted later <text…>      queue a follow-up (ordinary verb)
  *   /hosted cancel [callId]    cancel one in-flight tool call (ordinary verb)
- *   /hosted detach             leave — the policy the record names then applies
+ *   /hosted detach             leave, the policy the record names then applies
  *   /hosted kill [id]          end it regardless of policy
  *
  * There is no `/hosted steer` beside `say` and no hosted-only cancel: those
@@ -54,7 +54,7 @@ let lastListedIds: readonly string[] = [];
 export function renderHostedRecordLine(record: HostedSessionRecord, index: number): string {
   const attached = record.attachedClients.length > 0 ? record.attachedClients.join(', ') : 'nobody';
   const ended = record.status === 'terminated'
-    ? ` — ended: ${record.terminatedReason ?? 'no reason recorded'}`
+    ? `: ended: ${record.terminatedReason ?? 'no reason recorded'}`
     : '';
   return [
     `  ${index + 1}. ${hostedSessionLabel(record)} [${record.status}]${ended}`,
@@ -84,7 +84,7 @@ export function renderHostedStatus(feed: HostedSessionFeed): string {
     `  ${record.turnCount} turn(s), ${record.messageCount} message(s)`,
     state.streaming
       ? '  live event stream open'
-      : `  no live stream — ${state.streamNote ?? 'not subscribed'}`,
+      : `  no live stream: ${state.streamNote ?? 'not subscribed'}`,
     state.runningToolCalls.length > 0
       ? `  running: ${state.runningToolCalls.map((call) => `${call.tool} (${call.callId})`).join(', ')}`
       : '  no tool call is running',
@@ -248,7 +248,7 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
             const records = await seams.client.list({ includeTerminated });
             lastListedIds = records.map((record) => record.id);
             // The session picker reads the same roster, so a list typed here is
-            // the list it shows — one answer, not two that drift.
+            // the list it shows, one answer, not two that drift.
             if (!includeTerminated) getSharedHostedSessionRoster().accept(records);
             if (records.length === 0) {
               ctx.print(includeTerminated
@@ -272,14 +272,14 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
           }
           case 'say':
           case 'later': {
-            if (!attachedId) { ctx.print('[hosted] no hosted session is attached — /hosted attach <id> first.'); return; }
+            if (!attachedId) { ctx.print('[hosted] no hosted session is attached; /hosted attach <id> first.'); return; }
             const body = args.slice(1).join(' ').trim();
             if (!body) { ctx.print(`Usage: /hosted ${sub} <text>`); return; }
             if (sub === 'say') await seams.client.steer(attachedId, body);
             else await seams.client.followUp(attachedId, body);
             ctx.print(sub === 'say'
-              ? '[hosted] sent — its output arrives on the Hosted Session panel.'
-              : '[hosted] queued — it runs after the current turn.');
+              ? '[hosted] sent: its output arrives on the Hosted Session panel.'
+              : '[hosted] queued: it runs after the current turn.');
             return;
           }
           case 'cancel': {
@@ -290,7 +290,7 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
             const cancelled = await seams.client.cancelToolCall(attachedId, callId);
             ctx.print(cancelled
               ? `[hosted] cancelled tool call ${callId}.`
-              : `[hosted] the daemon did not cancel ${callId} — it may have already settled.`);
+              : `[hosted] the daemon did not cancel ${callId}; it may have already settled.`);
             return;
           }
           case 'detach': {
@@ -298,8 +298,8 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
             const record = await seams.client.detach(attachedId);
             feed.clear();
             ctx.print(record.status === 'terminated'
-              ? `[hosted] detached — the session ended (${record.terminatedReason ?? 'no reason recorded'}), which is what its detach policy said would happen.`
-              : '[hosted] detached — the session is still running in the daemon and can be reattached.');
+              ? `[hosted] detached: the session ended (${record.terminatedReason ?? 'no reason recorded'}), which is what its detach policy said would happen.`
+              : '[hosted] detached: the session is still running in the daemon and can be reattached.');
             return;
           }
           case 'kill': {
@@ -307,7 +307,7 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
             if (!target) { ctx.print('Usage: /hosted kill <id> (or attach one first)'); return; }
             const record = await seams.client.kill(target);
             if (target === attachedId) feed.clear();
-            ctx.print(`[hosted] ended ${hostedSessionLabel(record)} — ${record.terminatedReason ?? 'no reason recorded'}.`);
+            ctx.print(`[hosted] ended ${hostedSessionLabel(record)}: ${record.terminatedReason ?? 'no reason recorded'}.`);
             return;
           }
           default:

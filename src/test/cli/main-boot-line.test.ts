@@ -1,9 +1,9 @@
 /**
- * main-boot-line.test.ts — item 8: one honest pre-alt-screen "starting…" line.
+ * main-boot-line.test.ts, item 8: one honest pre-alt-screen "starting…" line.
  *
  * main() is the full application composition root (bootstraps every runtime
  * subsystem, enters raw/alt-screen terminal mode, and only returns when the
- * process exits) — not something reasonably unit-testable end-to-end without
+ * process exits), not something reasonably unit-testable end-to-end without
  * spawning a real interactive terminal loop. This pins the source shape
  * instead, the same convention src/test/cli/ensure-goodvibes-gitignore.test.ts
  * already uses for entrypoint wiring:

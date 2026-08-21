@@ -2,14 +2,14 @@
  * Provider-agnostic key capture for onboarding.
  *
  * The onboarding wizard offers an API-key field for every provider the registry
- * knows accepts a key — derived from each provider's registration-time auth
+ * knows accepts a key, derived from each provider's registration-time auth
  * state (describeAuthState), never a hardcoded vendor list. This module holds
  * the two shared pieces that keep the wizard step and the apply step in lockstep:
  *
- *  1. enrichProviderAccountsSnapshot — stamps each provider-account record with
+ *  1. enrichProviderAccountsSnapshot, stamps each provider-account record with
  *     the secrets-store key it reads its API key from (its declared auth env
  *     var), read live from the provider registry.
- *  2. deriveProviderKeyCaptureTargets / providerKeyFieldId — the single source
+ *  2. deriveProviderKeyCaptureTargets / providerKeyFieldId, the single source
  *     of truth for which providers get a key field and how those fields are
  *     named, used by both the field builder and the apply writer.
  */
@@ -99,7 +99,7 @@ export interface SubscriptionStatusTarget {
 /**
  * The providers onboarding shows a subscription-status row for: every provider
  * that declares a subscription route (registration truth), plus any provider
- * with an active or pending subscription session — so a live session is never
+ * with an active or pending subscription session, so a live session is never
  * hidden just because its account record was absent. Ordered by provider id.
  */
 export function deriveSubscriptionStatusTargets(

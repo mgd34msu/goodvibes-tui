@@ -1,23 +1,23 @@
 /**
- * Launch-time self-update — clients land on the newest release at startup so
+ * Launch-time self-update, clients land on the newest release at startup so
  * an installed binary never drifts behind. At TUI launch (before any runtime
  * bootstrap or terminal mode change) this runs a quick version check and, when
  * a newer release exists, installs it through the SAME checksum-verified
  * download/verify/swap path `/update apply` and the suite installer use
- * (src/input/commands/update-runtime.ts — there is deliberately no second
+ * (src/input/commands/update-runtime.ts, there is deliberately no second
  * updater), then asks the caller to restart onto the new binary.
  *
  * Honesty rules, in both directions:
  *   - the check gets a short timeout; when it cannot complete (offline, slow
  *     network) the CURRENT version starts with exactly one line saying the
- *     check was skipped — launch is never held hostage by the network.
+ *     check was skipped, launch is never held hostage by the network.
  *   - a successful update restarts into the new binary and the restarted
  *     process prints a receipt naming both versions, so the swap is never
  *     silent.
  *   - the install gets a budget too, and running out of it is reported for
  *     what actually happened rather than assumed. The budget cancels the work
  *     through a real AbortSignal, so a download that is still in flight is
- *     genuinely stopped and "deferred — will retry next launch" is true. Once
+ *     genuinely stopped and "deferred, will retry next launch" is true. Once
  *     the swap has begun it is never interrupted, so that outcome says the
  *     binary WAS replaced and asks for a restart instead. The two are told
  *     apart by the swap state the install reports back (UpdateSwapProgress),
@@ -27,12 +27,12 @@
  *
  * The feature is a real configurable setting (`update.autoUpdateAtLaunch` in
  * settings.json, read via readUpdateSettings): default ON, off with an
- * explicit false. Only binary installs self-update — package-manager and
+ * explicit false. Only binary installs self-update, package-manager and
  * from-source runs are skipped silently because a swap there would fight the
  * package manager (see detectInstallKind).
  *
  * Everything effectful is injectable; tests drive the decision logic with a
- * stubbed fetch, a stubbed apply, and pinned fixture versions — never the
+ * stubbed fetch, a stubbed apply, and pinned fixture versions, never the
  * live build VERSION and never the real network.
  */
 import { spawnSync } from 'node:child_process';
@@ -61,7 +61,7 @@ export const LAUNCH_UPDATED_FROM_ENV = 'GOODVIBES_LAUNCH_UPDATED_FROM';
 /** Default budget for the launch-time version check; user-tunable via update.launchCheckTimeoutMs. */
 export const LAUNCH_UPDATE_CHECK_TIMEOUT_MS = 2500;
 
-/** Default budget for the launch-time download+verify+swap; user-tunable via update.applyTimeoutMs. Generous — a binary download over a slow connection genuinely takes a while — but bounded so launch is never held hostage. */
+/** Default budget for the launch-time download+verify+swap; user-tunable via update.applyTimeoutMs. Generous, a binary download over a slow connection genuinely takes a while, but bounded so launch is never held hostage. */
 export const LAUNCH_APPLY_TIMEOUT_MS = 45_000;
 
 export type LaunchAutoUpdateOutcome =
@@ -144,11 +144,11 @@ export async function runLaunchAutoUpdate(options: RunLaunchAutoUpdateOptions): 
     check = 'timeout';
   }
   if (check === 'timeout') {
-    // Honest about WHY the check was skipped — a timeout most commonly means
+    // Honest about WHY the check was skipped, a timeout most commonly means
     // the update server could not be reached in time, not necessarily that
     // the whole machine is offline (a slow/flaky connection is just as
     // common), so this no longer overclaims "offline".
-    options.print("couldn't reach the update server — check skipped");
+    options.print("couldn't reach the update server; check skipped");
     return { action: 'continue', reason: 'check-skipped' };
   }
   if (check.isCurrent) {
@@ -181,23 +181,23 @@ export async function runLaunchAutoUpdate(options: RunLaunchAutoUpdateOptions): 
     if (applyResult === 'timeout') {
       if (!progress.begun) {
         // Nothing has been written yet, so the work can genuinely be called
-        // off — cancel the download in flight, then say it was deferred.
+        // off, cancel the download in flight, then say it was deferred.
         controller.abort();
-        options.print('update deferred — will retry next launch');
+        options.print('update deferred: will retry next launch');
         return { action: 'continue', reason: 'update-deferred' };
       }
       // The swap had already started when the budget ran out. A swap is never
-      // interrupted, so the binary on disk is the new one — cancelling here
+      // interrupted, so the binary on disk is the new one, cancelling here
       // would be a lie in the other direction. Report the replacement and the
       // restart it needs instead of claiming a deferral that did not happen.
       options.print(`updated in background; restart to use v${normalizeVersion(progress.targetTag ?? check.latestTag)}`);
       return { action: 'continue', reason: 'update-in-background' };
     }
-    options.print(`auto-update: ${check.latestTag} installed — restarting onto the new version`);
+    options.print(`auto-update: ${check.latestTag} installed; restarting onto the new version`);
     return { action: 'restart', latestTag: check.latestTag };
   } catch (error) {
     options.print(
-      `auto-update failed: ${error instanceof Error ? error.message : String(error)} — starting the current version v${normalizeVersion(options.currentVersion)}`,
+      `auto-update failed: ${error instanceof Error ? error.message : String(error)}; starting the current version v${normalizeVersion(options.currentVersion)}`,
     );
     return { action: 'continue', reason: 'update-failed' };
   }
@@ -214,7 +214,7 @@ export interface SelfUpdateAtLaunchParams {
  * binary and EXIT THIS PROCESS with the new instance's exit code (this call
  * never returns in that case); otherwise return the honest lines that were
  * printed (receipt / skipped check / failed update) so the caller can
- * re-surface them through the system message router once it exists — the
+ * re-surface them through the system message router once it exists, the
  * stdout copies written here are wiped by the TUI's alternate screen.
  */
 export async function selfUpdateAtLaunch(params: SelfUpdateAtLaunchParams): Promise<readonly string[]> {
@@ -262,7 +262,7 @@ export interface HandDaemonOverAtLaunchParams {
  * The launch wiring for the old→new daemon handover (src/runtime/daemon-handover.ts).
  *
  * A daemon binary from before the split cannot update itself onto its own
- * release line — the releases URL baked into it names this repository, which no
+ * release line, the releases URL baked into it names this repository, which no
  * longer builds daemons, and pointing it at the daemon's repository instead
  * still fails because its shipped updater insists on downloading the terminal
  * binary beside it, which that repository does not publish. So the terminal
@@ -300,7 +300,7 @@ export interface RestartOntoUpdatedBinaryOptions {
   readonly execPath: string;
   readonly argv: readonly string[];
   readonly env: NodeJS.ProcessEnv;
-  /** The version that performed the update — the restarted process prints it in its receipt line. */
+  /** The version that performed the update, the restarted process prints it in its receipt line. */
   readonly fromVersion: string;
   /** Injectable so tests observe the restart instead of spawning a process. */
   readonly spawn?: (execPath: string, argv: readonly string[], env: NodeJS.ProcessEnv) => number | null;

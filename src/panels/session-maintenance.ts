@@ -3,7 +3,7 @@
  *
  * The canonical evaluator is the SDK version exported from @/runtime/index.ts
  * (via operations.evaluateSessionMaintenance), which reads from configManager.
- * Import the evaluator from there — this module provides only the shared
+ * Import the evaluator from there, this module provides only the shared
  * Panel* type surface used across TUI panels and tests; it intentionally does
  * not re-implement the evaluator.
  */

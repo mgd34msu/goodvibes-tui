@@ -2,10 +2,10 @@ import { buildHooksValidation } from './hooks-report.ts';
 import type { CliCommandOutput, CliCommandRuntime } from '@pellux/goodvibes-terminal-shell';
 
 // ---------------------------------------------------------------------------
-// `goodvibes hooks validate` — validate the user's hooks.json against the
+// `goodvibes hooks validate`, validate the user's hooks.json against the
 // hooks loader's REAL schema. The acceptance verdict comes from
 // buildHooksValidation (src/cli/hooks-report.ts), which runs the SDK's own
-// HookDispatcher.loadFromFile and getHookPointContract — the same machinery
+// HookDispatcher.loadFromFile and getHookPointContract, the same machinery
 // `goodvibes doctor hooks` reuses. This command only reads and reports.
 // ---------------------------------------------------------------------------
 
@@ -23,7 +23,7 @@ export async function handleHooksCommand(runtime: CliCommandRuntime): Promise<Cl
     const text = [
       'GoodVibes hooks validation',
       `  file: ${path}`,
-      '  no hooks file present — nothing to validate.',
+      '  no hooks file present: nothing to validate.',
     ].join('\n');
     return { output: json ? JSON.stringify({ path, present: false, hooks: [], valid: true }, null, 2) : text, exitCode: 0 };
   }
@@ -62,7 +62,7 @@ export async function handleHooksCommand(runtime: CliCommandRuntime): Promise<Cl
       const detail = c ? ` (contract: ${c.authority}/${c.executionMode})` : '';
       lines.push(`  PASS  ${label}${detail}`);
     } else {
-      lines.push(`  FAIL  ${label} — ${check.reason}`);
+      lines.push(`  FAIL  ${label}: ${check.reason}`);
     }
   }
   if (chains.declared > 0 || chains.accepted > 0) {

@@ -28,7 +28,7 @@ if (args.includes('--help') || args.includes('-h')) {
   process.exit(0);
 }
 
-// GOODVIBES_HOME names the tree ROOT, and the tree is derived from it — the
+// GOODVIBES_HOME names the tree ROOT, and the tree is derived from it, the
 // one meaning the runtime uses. This script used to read the variable as the
 // .goodvibes directory itself, so a redirected round audited a different place
 // than the one it had just written to. `--home` still names a .goodvibes

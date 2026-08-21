@@ -123,7 +123,7 @@ export function registerPaste(
 
   // Terminals transmit the line breaks inside a bracketed paste as \r (the
   // byte Enter sends), and external clipboards can carry \r\n. Normalize to
-  // \n only here in the text branch — the image sniffing above must see the
+  // \n only here in the text branch, the image sniffing above must see the
   // raw bytes (PNG's magic sequence itself contains \r\n).
   const text = content.replace(/\r\n?/g, '\n');
   const lines = text.split('\n');
@@ -246,7 +246,7 @@ export function findMarkerAtPos(prompt: string, pos: number): { start: number; e
 /**
  * describeBlockForReceipt - Honest, human-readable name for a block, used by
  * every anchor-based action's receipt (Ctrl+Y/B/S/A, Tab, block-actions menu)
- * so the transcript always says exactly what was acted on — never just an
+ * so the transcript always says exactly what was acted on, never just an
  * internal collapseKey or a bare "done".
  */
 export function describeBlockForReceipt(block: BlockMeta): string {
@@ -286,7 +286,7 @@ export function handleCopy(
  * handleBlockCopy - Ctrl+Y: copy the content of the block the user is
  * actually looking at. `getAnchorLine` resolves to the viewport's
  * bottom-most visible line (see getViewportBottomLine in
- * conversation-layout.ts), not the raw scroll position — the top of the
+ * conversation-layout.ts), not the raw scroll position, the top of the
  * viewport is off-screen-above once the transcript is longer than one page.
  */
 export function handleBlockCopy(
@@ -306,7 +306,7 @@ export function handleBlockCopy(
   copyToClipboard(nearest.rawContent);
   onCopied();
   // An explicit action on this block permanently exempts it from the
-  // search-close auto-re-collapse (see ConversationManager.noteUserTouch) —
+  // search-close auto-re-collapse (see ConversationManager.noteUserTouch),
   // copying content the user just had search reveal is a deliberate choice
   // to keep it visible, not an accident of typing a query.
   conversationManager.searchExpansion.noteUserTouch(nearest.collapseKey);
@@ -331,7 +331,7 @@ export function handleBookmark(
   }
   const label = `${nearest.type}: ${nearest.rawContent.slice(0, 40).replace(/\n/g, ' ')}`;
   const added = bookmarkManager.toggle(nearest.collapseKey, label);
-  // See handleBlockCopy's note — bookmarking is an explicit block action too.
+  // See handleBlockCopy's note, bookmarking is an explicit block action too.
   conversationManager.searchExpansion.noteUserTouch(nearest.collapseKey);
   const target = describeBlockForReceipt(nearest);
   const msg = added
@@ -355,7 +355,7 @@ export function handleBlockSave(
     requestRender();
     return;
   }
-  // See handleBlockCopy's note — saving to a file is an explicit block action too.
+  // See handleBlockCopy's note, saving to a file is an explicit block action too.
   conversationManager.searchExpansion.noteUserTouch(nearest.collapseKey);
   const target = describeBlockForReceipt(nearest);
   try {
@@ -483,7 +483,7 @@ export function handleCtrlC(
     // Non-fatal to the exit chord; the quit-window bookkeeping still runs.
   }
   // A press that silenced LIVE speech is consumed by that job (an earlier replay
-  // fix) — symmetric with the prompt-clearing press above. The quit chord
+  // fix), symmetric with the prompt-clearing press above. The quit chord
   // ("Ctrl+C x2") starts from a quiet state; turn-aborts still count toward
   // the double-press.
   if (stoppedSpeech) return;
@@ -492,7 +492,7 @@ export function handleCtrlC(
   // one's outcome, whichever branch below runs. Without this, a hide-timer
   // scheduled by an earlier press could still fire after a newer notice
   // window opened, or after exitApp() was just called (if exitApp isn't
-  // synchronous) — flipping showExitNotice/requestRender during a shutdown
+  // synchronous), flipping showExitNotice/requestRender during a shutdown
   // the user already believes is in progress.
   if (lastCtrlCTimeoutId !== null) {
     clearTimeout(lastCtrlCTimeoutId);

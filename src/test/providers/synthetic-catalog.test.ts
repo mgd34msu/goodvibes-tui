@@ -70,7 +70,7 @@ function mockClientError(name: string, msg = 'bad request', status = 400): LLMPr
   };
 }
 
-/** Create a mock provider that throws a server error (5xx) — should failover. */
+/** Create a mock provider that throws a server error (5xx), should failover. */
 function mockServerError(name: string, msg = 'internal server error', status = 500): LLMProvider {
   return {
     name,
@@ -81,7 +81,7 @@ function mockServerError(name: string, msg = 'internal server error', status = 5
   };
 }
 
-/** Create a mock provider that throws a plain network error — should failover. */
+/** Create a mock provider that throws a plain network error, should failover. */
 function mockNetworkError(name: string, msg = 'ECONNREFUSED'): LLMProvider {
   return {
     name,
@@ -243,7 +243,7 @@ afterEach(() => {
 describe('tier isolation', () => {
   it('free model only uses free-tier backends', async () => {
     catalogModels = CATALOG_TIER_ISOLATION;
-    // Clear env and set only HF_TOKEN — ensures huggingface is keyed, nvidia is not
+    // Clear env and set only HF_TOKEN, ensures huggingface is keyed, nvidia is not
     process.env = { HF_TOKEN: 'hf-test-key' };
     registryMap.set('huggingface', mockOk('huggingface'));
 
@@ -282,7 +282,7 @@ describe('tier isolation', () => {
 describe('key filtering', () => {
   it('skips backends that lack a configured API key', async () => {
     catalogModels = CATALOG_TIER_ISOLATION;
-    // Clear env and set only NVIDIA key — ensures nvidia is keyed, huggingface is not
+    // Clear env and set only NVIDIA key, ensures nvidia is keyed, huggingface is not
     process.env = { NVIDIA_API_KEY: 'nv-test-key' };
     registryMap.set('nvidia', mockOk('nvidia'));
 
@@ -442,7 +442,7 @@ describe('best-free synthetic model', () => {
 
     const provider = makeSyntheticProvider();
     const response = await provider.chat({ ...DUMMY_REQUEST, model: 'best-free' });
-    // provider-b backs high-score-model — should be selected
+    // provider-b backs high-score-model, should be selected
     expect(response.content).toBe('provider-b/ok');
   });
 
@@ -503,7 +503,7 @@ describe('failover within tier', () => {
 
   it('does NOT fall over for 400 Bad Request (malformed request)', async () => {
     catalogModels = CATALOG_FAILOVER;
-    // 400 Bad Request means the request itself is malformed — re-throw immediately, no failover
+    // 400 Bad Request means the request itself is malformed, re-throw immediately, no failover
     registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'bad request', 400));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
@@ -515,7 +515,7 @@ describe('failover within tier', () => {
 
   it('fails over on 401 auth errors (provider-specific, not malformed request)', async () => {
     catalogModels = CATALOG_FAILOVER;
-    // 401 Unauthorized is provider-specific — invalid key for this backend, try next
+    // 401 Unauthorized is provider-specific, invalid key for this backend, try next
     registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'unauthorized', 401));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
@@ -526,7 +526,7 @@ describe('failover within tier', () => {
 
   it('fails over on 403 billing/forbidden errors (provider-specific)', async () => {
     catalogModels = CATALOG_FAILOVER;
-    // 403 Forbidden (e.g. insufficient balance) is provider-specific — failover to next backend
+    // 403 Forbidden (e.g. insufficient balance) is provider-specific, failover to next backend
     registryMap.set('rate-limited-provider', mockClientError('rate-limited-provider', 'insufficient balance', 403));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
@@ -556,7 +556,7 @@ describe('failover within tier', () => {
 
   it('fails over on 500 server errors', async () => {
     catalogModels = CATALOG_FAILOVER;
-    // 500 is a transient server error — should failover to next backend
+    // 500 is a transient server error, should failover to next backend
     registryMap.set('rate-limited-provider', mockServerError('rate-limited-provider', 'server error', 500));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 
@@ -567,7 +567,7 @@ describe('failover within tier', () => {
 
   it('fails over on network errors (plain Error, not ProviderError)', async () => {
     catalogModels = CATALOG_FAILOVER;
-    // Plain Error (e.g. ECONNREFUSED) is a transient error — should failover to next backend
+    // Plain Error (e.g. ECONNREFUSED) is a transient error, should failover to next backend
     registryMap.set('rate-limited-provider', mockNetworkError('rate-limited-provider', 'ECONNREFUSED'));
     registryMap.set('ok-provider', mockOk('ok-provider'));
 

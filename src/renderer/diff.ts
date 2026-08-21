@@ -74,7 +74,7 @@ export class DiffEngine {
           // the SGR state did not change, skip cursor re-addressing.
           // Emit a cursor move only on run breaks (new row, gap, or style change).
           if (sgrOutput === '' && this.lastEmitY === y && this.lastEmitX === x - 1) {
-            // Contiguous run on same row, same SGR — just append the char.
+            // Contiguous run on same row, same SGR, just append the char.
             output += newCell.char;
           } else {
             output += `\x1b[${y + 1};${x + 1}H`;
@@ -107,7 +107,7 @@ export class DiffEngine {
    * Convert a raw color string (hex or r;g;b) to the "r;g;b" form expected
    * by applyStyles.  For non-RGB palette indices the value is returned as-is.
    * This mirrors the original sanitizeColor contract but is now capability-aware
-   * only in the sense of normalizing hex → "r;g;b" — downsampling happens in
+   * only in the sense of normalizing hex → "r;g;b", downsampling happens in
    * applyStyles via downsampleColor.
    */
   private sanitizeColor(color: string): string {
@@ -148,7 +148,7 @@ export class DiffEngine {
         if (cell.strikethrough) style += '\x1b[9m';
       }
 
-      // Foreground color — capability-downsampled
+      // Foreground color, capability-downsampled
       const fgOut = downsampleColor(fg, this.caps, 'fg');
       if (fgOut !== null) {
         if (this.caps.capability === 'basic16') {
@@ -160,7 +160,7 @@ export class DiffEngine {
         }
       }
 
-      // Background color — capability-downsampled
+      // Background color, capability-downsampled
       const bgOut = downsampleColor(bg, this.caps, 'bg');
       if (bgOut !== null) {
         if (this.caps.capability === 'basic16') {

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // fleet-panel.test.ts
-// — FleetPanel interaction: navigate/detail/kill-confirm flow with a
+//, FleetPanel interaction: navigate/detail/kill-confirm flow with a
 // stub read-model + stub action callbacks (no live runtime/registry).
 // ---------------------------------------------------------------------------
 
@@ -103,10 +103,10 @@ function attachSteerableTab(actions = makeActions()) {
 }
 
 // ---------------------------------------------------------------------------
-// Navigation — getSelectedItem(), never a raw index read
+// Navigation, getSelectedItem(), never a raw index read
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — navigation', () => {
+describe('FleetPanel: navigation', () => {
   test('j moves the selection down through the flattened tree (gutter marker follows the cursor)', () => {
     const nodes = [
       makeNode({ id: 'row-a', startedAt: NOW - 3_000 }),
@@ -151,7 +151,7 @@ describe('FleetPanel — navigation', () => {
     expect(text).toContain('No processes tracked yet');
   });
 
-  // (cross-restart honesty) — no daemon bridge exists, so a TUI restart
+  // (cross-restart honesty), no daemon bridge exists, so a TUI restart
   // never resurrects a prior session's processes into this tree; documented
   // in the empty state rather than silently doing nothing (design point 5).
   test('the empty state documents that a previous session\'s processes are not tracked here', () => {
@@ -164,10 +164,10 @@ describe('FleetPanel — navigation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Enter — attach a session tab (Part C)
+// Enter, attach a session tab (Part C)
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — Enter attaches a session tab', () => {
+describe('FleetPanel: Enter attaches a session tab', () => {
   test('Enter on an attachable (agent) node opens a tab, focuses it, and consumes the key', () => {
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'agent-only' })], NOW));
     const panel = new FleetPanel(readModel);
@@ -225,10 +225,10 @@ describe('FleetPanel — Enter attaches a session tab', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tab lifecycle — attach / switch / detach (Part C)
+// Tab lifecycle, attach / switch / detach (Part C)
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — session tab lifecycle', () => {
+describe('FleetPanel: session tab lifecycle', () => {
   test('] and [ switch focus between attached tabs and back to the root tree', () => {
     const nodes = [makeNode({ id: 'a' }), makeNode({ id: 'b' })];
     const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));
@@ -300,11 +300,11 @@ describe('FleetPanel — session tab lifecycle', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Transcript rendering — running (live) vs completed (frozen) vs evicted
+// Transcript rendering, running (live) vs completed (frozen) vs evicted
 // (ledger fallback), per a stub snapshot source
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — tab transcript rendering', () => {
+describe('FleetPanel: tab transcript rendering', () => {
   test('a running agent renders its live snapshot content', () => {
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'a', state: 'streaming' })], NOW));
     const actions = makeActions({
@@ -327,7 +327,7 @@ describe('FleetPanel — tab transcript rendering', () => {
     expect(text).toContain('frozen content');
   });
 
-  // — done/dead process browsability. Every terminal state (not just
+  //, done/dead process browsability. Every terminal state (not just
   // 'done') must attach a READ-ONLY tab: no i/K while a tab is focused
   // (handleInput's activeTabIndex>0 branch returns false for tree-only keys
   // regardless of tab kind), and the content itself is honestly labeled as a
@@ -401,11 +401,11 @@ describe('FleetPanel — tab transcript rendering', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Backpressure — only the FOCUSED tab renders a transcript; per-tab caches
+// Backpressure, only the FOCUSED tab renders a transcript; per-tab caches
 // are isolated from each other and from switching
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — per-tab cache isolation (backpressure)', () => {
+describe('FleetPanel: per-tab cache isolation (backpressure)', () => {
   test('switching tabs does not clear a background tab\'s cache, and each tab has its own MessageLineCache instance', () => {
     const nodes = [makeNode({ id: 'a', state: 'streaming' }), makeNode({ id: 'b', state: 'streaming' })];
     const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));
@@ -427,7 +427,7 @@ describe('FleetPanel — per-tab cache isolation (backpressure)', () => {
     expect(tabB.lineCache.size).toBeGreaterThan(0);
     expect(tabB.lineCache).not.toBe(tabA.lineCache);
 
-    // 'a' is now a background tab (not focused) — its cache is untouched by
+    // 'a' is now a background tab (not focused), its cache is untouched by
     // 'b' having rendered.
     expect(tabA.lineCache.size).toBeGreaterThan(0);
 
@@ -439,10 +439,10 @@ describe('FleetPanel — per-tab cache isolation (backpressure)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// i — interrupt (real, non-terminal node only)
+// i, interrupt (real, non-terminal node only)
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — i interrupts the selected node', () => {
+describe('FleetPanel: i interrupts the selected node', () => {
   test('i calls actions.interrupt with the selected node id', () => {
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'agent-1', state: 'streaming' })], NOW));
     const actions = makeActions();
@@ -470,7 +470,7 @@ describe('FleetPanel — i interrupts the selected node', () => {
   test('i on a non-terminal but non-interruptible node is consumed, shows a status message, and does not call interrupt', () => {
     // Realistic case: every fleet kind except 'agent' reports
     // capabilities.interruptible: false unconditionally (schedule/trigger/
-    // watcher/workflow/wrfc-chain/wrfc-subtask/background-process — see the
+    // watcher/workflow/wrfc-chain/wrfc-subtask/background-process, see the
     // SDK's fleet adapters), even while actively running.
     const node = makeNode({
       id: 'chain-1',
@@ -489,10 +489,10 @@ describe('FleetPanel — i interrupts the selected node', () => {
 });
 
 // ---------------------------------------------------------------------------
-// K — kill confirm flow (PanelConfirmOverlay)
+// K, kill confirm flow (PanelConfirmOverlay)
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — K arms a kill confirm', () => {
+describe('FleetPanel: K arms a kill confirm', () => {
   test('K arms the confirm overlay; kill is not called until confirmed', () => {
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'agent-k', state: 'streaming' })], NOW));
     const actions = makeActions();
@@ -557,7 +557,7 @@ describe('FleetPanel — K arms a kill confirm', () => {
     }
     expect(actions.killCalls).toHaveLength(0);
 
-    // Confirm still pending — y still fires.
+    // Confirm still pending, y still fires.
     panel.handleInput('y');
     expect(actions.killCalls).toEqual([{ id: 'agent-k', opts: { cascade: true } }]);
   });
@@ -598,9 +598,9 @@ describe('FleetPanel — K arms a kill confirm', () => {
 
   // item 6: a cascade kill (actions.kill(id, { cascade: true })) takes
   // down every non-terminal descendant regardless of that node's OWN
-  // `killable` capability — the old count only tallied `capabilities.killable`
+  // `killable` capability, the old count only tallied `capabilities.killable`
   // descendants ("active leaves"), so a 6-node non-terminal subtree with only
-  // 2 individually-killable nodes reported "(+2 children)" — the evaluator's
+  // 2 individually-killable nodes reported "(+2 children)", the evaluator's
   // exact finding. It must now report the FULL count that will actually die,
   // plus how many of those are individually killable.
   test('K arms a confirm phrased "(+N descendants, M active)" counting the FULL non-terminal subtree, not just individually-killable nodes', () => {
@@ -611,7 +611,7 @@ describe('FleetPanel — K arms a kill confirm', () => {
     const childD = makeNode({ id: 'child-d', parentId: 'root-1', state: 'executing-tool', capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false } });
     const grandchild1 = makeNode({ id: 'grandchild-1', parentId: 'child-a', state: 'streaming', capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false } });
     const grandchild2 = makeNode({ id: 'grandchild-2', parentId: 'child-c', state: 'streaming', capabilities: { interruptible: false, killable: false, pausable: false, resumable: false, steerable: false } });
-    // An already-terminal descendant does NOT count — it is already dead, a
+    // An already-terminal descendant does NOT count, it is already dead, a
     // cascade kill has nothing to do to it.
     const terminalChild = makeNode({ id: 'terminal-child', parentId: 'root-1', state: 'failed', capabilities: { interruptible: false, killable: true, pausable: false, resumable: false, steerable: false } });
 
@@ -644,13 +644,13 @@ describe('FleetPanel — K arms a kill confirm', () => {
 });
 
 // ---------------------------------------------------------------------------
-// p — pause (control parity with the other fleet actions). Reuses actions.interrupt
+// p, pause (control parity with the other fleet actions). Reuses actions.interrupt
 // verbatim, gated on capabilities.pausable instead of interruptible (which
-// trigger/schedule always report false) — see fleet-panel.ts's handleInput
+// trigger/schedule always report false), see fleet-panel.ts's handleInput
 // doc comment for why no new action/registry plumbing was needed.
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — p pauses a pausable node', () => {
+describe('FleetPanel: p pauses a pausable node', () => {
   test('p calls actions.interrupt (not a new pause action) with the selected node id', () => {
     const node = makeNode({
       id: 'trigger-1',
@@ -716,10 +716,10 @@ describe('FleetPanel — p pauses a pausable node', () => {
 // non-attachable aggregate nodes (Enter refuses with the same message as any
 // other transcript-less kind); a work-item still delegates to its live agent
 // for capabilities (per adaptWorkItem), but the node itself stays
-// non-attachable (isAttachableFleetKind — see fleet-tabs.test.ts).
+// non-attachable (isAttachableFleetKind, see fleet-tabs.test.ts).
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — Enter on workstream/phase/work-item nodes', () => {
+describe('FleetPanel: Enter on workstream/phase/work-item nodes', () => {
   test('Enter on a workstream, phase, or work-item node refuses with the honest "no transcript" message', () => {
     for (const kind of ['workstream', 'phase', 'work-item'] as const) {
       const node = makeNode({ id: `node-${kind}`, kind, state: 'executing-tool' });
@@ -733,12 +733,12 @@ describe('FleetPanel — Enter on workstream/phase/work-item nodes', () => {
 });
 
 // ---------------------------------------------------------------------------
-// s — steer composer: one-line input on an active attached
+// s, steer composer: one-line input on an active attached
 // tab whose node is steerable. Capability-gated like i/K; submit calls
 // actions.steer with the node id and typed text; refusal renders inline.
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — s opens the steer composer on an active, steerable tab', () => {
+describe('FleetPanel: s opens the steer composer on an active, steerable tab', () => {
   test('s on a steerable tab opens the draft and isCapturingTextBurst() flips true', () => {
     const { panel } = attachSteerableTab();
     expect(panel.isCapturingTextBurst()).toBe(false);
@@ -786,8 +786,8 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(panel.isCapturingTextBurst()).toBe(false);
     const text = linesText(panel.render(100, 24));
     // Closure replay wording fix: a finished node's refusal names the REAL
-    // reason — "does not support" is reserved for capability refusals.
-    expect(text).toContain('already finished — nothing to steer');
+    // reason, "does not support" is reserved for capability refusals.
+    expect(text).toContain('already finished: nothing to steer');
   });
 
   test('the s hint appears in the tab footer only when the live node is steerable', () => {
@@ -804,7 +804,7 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(panel.isCapturingTextBurst()).toBe(false); // draft closed after submit
     expect(panel.getTabsState().tabs[0]!.steerDraft).toBeNull();
     // queuedAt (epoch ms, set at submit time) drives reconcileSteerBadges'
-    // TTL-expiry fallback — see fleet-steer.test.ts for that behavior;
+    // TTL-expiry fallback, see fleet-steer.test.ts for that behavior;
     // asserted loosely here since the exact timestamp is not the point of
     // this test.
     expect(panel.getTabsState().tabs[0]!.steerBadge).toEqual({ messageId: 'msg-1', status: 'queued', queuedAt: expect.any(Number) });
@@ -830,7 +830,7 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
     expect(actions.steerCalls).toEqual([{ id: 'agent-1', text: 'help' }]);
   });
 
-  test('an empty (whitespace-only) submission is a no-op — does not call steer', () => {
+  test('an empty (whitespace-only) submission is a no-op; does not call steer', () => {
     const { panel, actions } = attachSteerableTab();
     panel.handleInput('s');
     panel.handleInput(' ');
@@ -885,12 +885,12 @@ describe('FleetPanel — s opens the steer composer on an active, steerable tab'
 // ---------------------------------------------------------------------------
 // Steer draft paste normalization (CR-separated paste): a pasted multi-line
 // block arrives as literal \r/\n characters through the same per-char burst
-// pipeline as ordinary typing (see Panel.isCapturingTextBurst) — they must
+// pipeline as ordinary typing (see Panel.isCapturingTextBurst), they must
 // normalize to a single collapsed space, never a raw control byte and never
 // silently dropped/jammed together.
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — steer draft paste normalization', () => {
+describe('FleetPanel: steer draft paste normalization', () => {
   test('a CR-separated paste collapses each break to a single space', () => {
     const { panel } = attachSteerableTab();
     panel.handleInput('s');
@@ -920,7 +920,7 @@ describe('FleetPanel — steer draft paste normalization', () => {
     expect(panel.getTabsState().tabs[0]!.steerDraft).toBe('x');
   });
 
-  test('the submitted (post-normalization) text is what actions.steer receives — never a literal \\r', () => {
+  test('the submitted (post-normalization) text is what actions.steer receives: never a literal \\r', () => {
     const { panel, actions } = attachSteerableTab();
     panel.handleInput('s');
     for (const ch of 'line one\rline two') panel.handleInput(ch);
@@ -930,11 +930,11 @@ describe('FleetPanel — steer draft paste normalization', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Focus routing: while composing, every key lands in the draft —
+// Focus routing: while composing, every key lands in the draft,
 // never as tree/tab navigation or hotkeys (i/K/f/[/]/enter).
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — steer draft owns input while composing (focus rule)', () => {
+describe('FleetPanel: steer draft owns input while composing (focus rule)', () => {
   test('j/k/i/K/s/[/] all get typed into the draft rather than acting as navigation/hotkeys', () => {
     const { panel, actions } = attachSteerableTab();
     panel.handleInput('s');
@@ -961,11 +961,11 @@ describe('FleetPanel — steer draft owns input while composing (focus rule)', (
 
 // ---------------------------------------------------------------------------
 // Steer badge lifecycle: queued -> consumed (COMMUNICATION_CONSUMED) and
-// queued -> dropped (target goes terminal before consumption — the SDK
+// queued -> dropped (target goes terminal before consumption, the SDK
 // emits no dropped/expired signal, so FleetPanel infers it itself).
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — steer badge lifecycle', () => {
+describe('FleetPanel: steer badge lifecycle', () => {
   test('a matching COMMUNICATION_CONSUMED event flips queued -> consumed', () => {
     const node = makeNode({
       id: 'agent-1',
@@ -1055,7 +1055,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('dropped');
   });
 
-  test('consumed-wins: a COMMUNICATION_CONSUMED arriving AFTER the badge was already inferred dropped (target went terminal) still upgrades it to consumed — the SDK\'s honest signal beats the TUI\'s own inference', () => {
+  test('consumed-wins: a COMMUNICATION_CONSUMED arriving AFTER the badge was already inferred dropped (target went terminal) still upgrades it to consumed; the SDK\'s honest signal beats the TUI\'s own inference', () => {
     const running = makeNode({
       id: 'agent-1',
       state: 'streaming',
@@ -1071,7 +1071,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     const messageId = panel.getTabsState().tabs[0]!.steerBadge!.messageId;
     expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('queued');
 
-    // Target goes terminal before any consumed event arrives — the TUI
+    // Target goes terminal before any consumed event arrives, the TUI
     // infers 'dropped' (risk #2's honest-but-possibly-wrong guess).
     const doneNode = makeNode({
       id: 'agent-1',
@@ -1083,7 +1083,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
     expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('dropped');
 
     // The real signal arrives late, still within the badge's short linger
-    // window (it has not been cleared to null yet) — the truth wins.
+    // window (it has not been cleared to null yet), the truth wins.
     fireConsumed({ messageId, agentId: 'agent-1', turn: 3 });
     expect(panel.getTabsState().tabs[0]!.steerBadge?.status).toBe('consumed');
   });
@@ -1117,7 +1117,7 @@ describe('FleetPanel — steer badge lifecycle', () => {
 // i/K hints only appear when the selected node's capabilities allow them
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — i/K footer hints are gated on capabilities', () => {
+describe('FleetPanel: i/K footer hints are gated on capabilities', () => {
   test('both hints show for a node that supports interrupt and kill', () => {
     const node = makeNode({ id: 'agent-1', state: 'streaming', capabilities: { interruptible: true, killable: true, pausable: false, resumable: false, steerable: false } });
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([node], NOW));
@@ -1165,10 +1165,10 @@ describe('FleetPanel — i/K footer hints are gated on capabilities', () => {
 });
 
 // ---------------------------------------------------------------------------
-// f — follow toggle + auto-scroll to the newest running node
+// f, follow toggle + auto-scroll to the newest running node
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — f toggles follow', () => {
+describe('FleetPanel: f toggles follow', () => {
   test('f toggles follow state (reflected in the footer hint)', () => {
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeNode({ id: 'a' })], NOW));
     const panel = new FleetPanel(readModel);
@@ -1231,7 +1231,7 @@ describe('FleetPanel — f toggles follow', () => {
 // keypress. Both must self-correct on the very next render.
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — selection is anchored to node.id, not index, across snapshot updates', () => {
+describe('FleetPanel: selection is anchored to node.id, not index, across snapshot updates', () => {
   test('removal of a node above the cursor keeps the selection on the same node, not whatever now sits at the old index', () => {
     const before = buildFleetSnapshot([
       makeNode({ id: 'row-a', startedAt: NOW - 3_000 }),
@@ -1245,7 +1245,7 @@ describe('FleetPanel — selection is anchored to node.id, not index, across sna
     let text = linesText(panel.render(100, 24));
     expect(text.split('\n').find((l) => l.includes('▸'))).toContain('row-b');
 
-    // row-a (above the cursor) leaves the snapshot — row-b is now at index 0.
+    // row-a (above the cursor) leaves the snapshot, row-b is now at index 0.
     setSnapshot(buildFleetSnapshot([
       makeNode({ id: 'row-b', startedAt: NOW - 2_000 }),
       makeNode({ id: 'row-c', startedAt: NOW - 1_000 }),
@@ -1271,7 +1271,7 @@ describe('FleetPanel — selection is anchored to node.id, not index, across sna
     panel.handleInput('j');
     panel.handleInput('j'); // select row-c (index 2)
 
-    // Snapshot shrinks to a single node — the old index (2) is now out of bounds.
+    // Snapshot shrinks to a single node, the old index (2) is now out of bounds.
     setSnapshot(buildFleetSnapshot([
       makeNode({ id: 'row-a', startedAt: NOW - 3_000 }),
     ], NOW));
@@ -1307,7 +1307,7 @@ describe('FleetPanel — selection is anchored to node.id, not index, across sna
 // Read-model subscription drives markDirty
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — read-model subscription', () => {
+describe('FleetPanel: read-model subscription', () => {
   test('a dirty notification from the read-model marks the panel for re-render', () => {
     const { model, fireDirty } = makeMutableReadModel(buildFleetSnapshot([], NOW));
     const panel = new FleetPanel(model);
@@ -1318,10 +1318,10 @@ describe('FleetPanel — read-model subscription', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Registration — icon uniqueness + resolves a FleetPanel instance
+// Registration, icon uniqueness + resolves a FleetPanel instance
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — registration', () => {
+describe('FleetPanel: registration', () => {
   test("registers as 'fleet' so /panel open fleet resolves a real FleetPanel (not a phantom id)", () => {
     const manager = new PanelManager();
     const readModel = createStaticFleetReadModel(buildFleetSnapshot([], NOW));
@@ -1365,12 +1365,12 @@ describe('FleetPanel — registration', () => {
 });
 
 // ---------------------------------------------------------------------------
-// d1/d2 — pause/resume toggle wiring + the 'stopping…' write-window overlay
+// d1/d2, pause/resume toggle wiring + the 'stopping…' write-window overlay
 // through the real FleetPanel.handleInput/render (the logic itself is unit-
 // tested in fleet-stop.test.ts; these prove the panel wires it end-to-end).
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — pause/resume + stopping (d)', () => {
+describe('FleetPanel: pause/resume + stopping (d)', () => {
   function pausableSchedule(state: ProcessNode['state']) {
     return makeNode({
       id: 'sched-1',
@@ -1417,10 +1417,10 @@ describe('FleetPanel — pause/resume + stopping (d)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// receiveDeepLink — item 4 (fleet deep-links)
+// receiveDeepLink, item 4 (fleet deep-links)
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — receiveDeepLink (item 4)', () => {
+describe('FleetPanel: receiveDeepLink (item 4)', () => {
   test('selects and reveals the target node when it exists in the current snapshot', () => {
     const nodes = [makeNode({ id: 'agent-1' }), makeNode({ id: 'agent-2' })];
     const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));
@@ -1431,7 +1431,7 @@ describe('FleetPanel — receiveDeepLink (item 4)', () => {
     expect(selectedLine).toContain('agent-2');
   });
 
-  test('a kind mismatch is treated as not-found — an honest defense against an id collision across node types', () => {
+  test('a kind mismatch is treated as not-found; an honest defense against an id collision across node types', () => {
     const nodes = [makeNode({ id: 'x-1', kind: 'agent' })];
     const readModel = createStaticFleetReadModel(buildFleetSnapshot(nodes, NOW));
     const panel = new FleetPanel(readModel);
@@ -1470,7 +1470,7 @@ describe('FleetPanel — receiveDeepLink (item 4)', () => {
 // a node whose stop is in flight.
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — batch refutation fixes', () => {
+describe('FleetPanel: batch refutation fixes', () => {
   test('receiveDeepLink returns to the tree view when a session tab is active (finding 1)', () => {
     const { panel } = attachSteerableTab();
     expect(panel.getTabsState().activeTabIndex).toBe(1);
@@ -1498,7 +1498,7 @@ describe('FleetPanel — batch refutation fixes', () => {
   });
 });
 
-describe('FleetPanel — steer from the tree', () => {
+describe('FleetPanel: steer from the tree', () => {
   test("'s' on a steerable tree node attaches and opens the steer composer", () => {
     const { panel } = attachSteerableTab();
     // Back to the tree first (attachSteerableTab leaves the tab focused).
@@ -1523,7 +1523,7 @@ describe('FleetPanel — steer from the tree', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Archive — v/a/A keys and the archived view
+// Archive, v/a/A keys and the archived view
 // ---------------------------------------------------------------------------
 
 function makeArchiveHarness(live: readonly ProcessNode[], archived: readonly ProcessNode[] = []) {
@@ -1556,7 +1556,7 @@ function makeArchiveHarness(live: readonly ProcessNode[], archived: readonly Pro
   return { model, calls };
 }
 
-describe('FleetPanel — archive controls', () => {
+describe('FleetPanel: archive controls', () => {
   test("v toggles to the archived view (title + empty-state hint) and back", () => {
     const { model } = makeArchiveHarness([makeNode({ id: 'live-1' })]);
     const panel = new FleetPanel(model);
@@ -1618,10 +1618,10 @@ describe('FleetPanel — archive controls', () => {
 });
 
 // ---------------------------------------------------------------------------
-// blocked-on-me — distinct badge + b jump key
+// blocked-on-me, distinct badge + b jump key
 // ---------------------------------------------------------------------------
 
-describe('FleetPanel — blocked on me', () => {
+describe('FleetPanel: blocked on me', () => {
   function selectedRow(panel: FleetPanel): string | undefined {
     return linesText(panel.render(100, 24)).split('\n').find((l) => l.includes('▸'));
   }

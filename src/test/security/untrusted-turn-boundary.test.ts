@@ -1,11 +1,11 @@
 /**
- * untrusted-turn-boundary.test.ts — the TUI gets the boundary too.
+ * untrusted-turn-boundary.test.ts, the TUI gets the boundary too.
  *
  * ── Why this file exists in a repo that changed nothing ───────────────────
  *
  * The untrusted-content ledger, the outward-effect guard and the turn boundary
  * all live in the SDK, and the TUI reaches them through the shared
- * `Orchestrator` — so the fix for "the turn boundary is never advanced" landed
+ * `Orchestrator`, so the fix for "the turn boundary is never advanced" landed
  * in one place and covered the agent and this surface at once. That is the
  * right shape, and it is also exactly the shape in which a surface quietly
  * stops being covered: nothing in this repo would fail if a later refactor
@@ -20,7 +20,7 @@
  * ── What the TUI does and does not carry ──────────────────────────────────
  *
  * It registers no untrusted-reading or outward-effect tool of its own: the ones
- * it has — `fetch`, `web_search`, `channel` — are the SDK's, registered through
+ * it has, `fetch`, `web_search`, `channel`, are the SDK's, registered through
  * `registerAllTools`. So there is no TUI-side ledger writer to check and no
  * TUI-side send path to gate. What there IS, and what is checked here, is that
  * a turn started from this surface's input is recognised as the owner's, and
@@ -36,7 +36,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/security';
 
 describe('a turn started from this surface is the owner speaking', () => {
-  test('input with no origin is owner-direct — these are keystrokes off our own widget', () => {
+  test('input with no origin is owner-direct; these are keystrokes off our own widget', () => {
     // `main.ts`'s submitInput passes no origin. That absence is the signal, so
     // it is asserted rather than assumed.
     expect(inputOriginIsOwnerDirect(undefined)).toBe(true);
@@ -109,7 +109,7 @@ describe('what the owner can and cannot do after a page is read', () => {
     const decision = evaluateOutwardEffect({
       request: { toolName: 'channel', action: 'channel.send', description: 'posting a note' },
       ledger: ledgerWithPage(),
-      content: { message: `Heads up — ${PAGE}` },
+      content: { message: `Heads up: ${PAGE}` },
       requestedBy: 'owner-direct',
     });
     expect(decision.allowed).toBe(false);
@@ -121,7 +121,7 @@ describe('what the owner can and cannot do after a page is read', () => {
     const decision = evaluateOutwardEffect({
       request: { toolName: 'channel', action: 'channel.send', description: 'posting a note' },
       ledger: ledgerWithPage(),
-      content: { message: `Heads up — ${PAGE}` },
+      content: { message: `Heads up: ${PAGE}` },
       requestedBy: 'owner-direct',
     });
     expect(decision.fix ?? '').not.toContain('Tell the owner');

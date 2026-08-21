@@ -1,18 +1,18 @@
 /**
- * conversation-splash-state.ts — when the splash owns the conversation area,
+ * conversation-splash-state.ts, when the splash owns the conversation area,
  * and what has to happen the moment it stops.
  *
  * Two pieces of state, kept out of ConversationManager (core/conversation.ts,
  * already at its line-count gate) and out of `suppressSplash`, which is a
  * per-frame posture the panel workspace sets both ways on every render:
  *
- *   - `dismissed` — sticky for the run. Owner rule: the splash yields to ANY
+ *   - `dismissed`, sticky for the run. Owner rule: the splash yields to ANY
  *     submission, a chat message or a slash command alike. A slash command
  *     whose whole output is a modal (or nothing) still means the session has
  *     started, so the splash must not reappear underneath it, and must not
  *     come back in the gap before the first reply arrives.
  *
- *   - the splash→transcript EDGE — latched when a rebuild that would have
+ *   - the splash→transcript EDGE, latched when a rebuild that would have
  *     drawn the splash draws transcript content instead. The shell consumes
  *     it to repaint the whole viewport for that one frame. Without that, the
  *     differential renderer only rewrites rows it knows changed, so every row

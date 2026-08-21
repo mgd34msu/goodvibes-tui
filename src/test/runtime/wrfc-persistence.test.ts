@@ -299,7 +299,7 @@ describe('wrfc-persistence', () => {
     // No "interrupted by a restart" messages for terminal chains.
     expect(routerMessages).toHaveLength(0);
     expect(persistence.interruptedChains).toHaveLength(0);
-    // But they are not erased — both survive as retained history.
+    // But they are not erased, both survive as retained history.
     const knownIds = persistence.knownChains.map((c) => c.id);
     expect(knownIds).toContain(failed.id);
     expect(knownIds).toContain(passed.id);
@@ -316,7 +316,7 @@ describe('wrfc-persistence', () => {
     });
     const unsubs = persistence.attach(runtimeBus);
 
-    // The chain is "killed" — WrfcController transitions it to a terminal
+    // The chain is "killed", WrfcController transitions it to a terminal
     // state and emits WORKFLOW_CHAIN_FAILED (cancelChain's actual signal).
     chain.state = 'failed';
     chain.completedAt = Date.now();
@@ -327,7 +327,7 @@ describe('wrfc-persistence', () => {
     expect(snap.chains.map((c) => c.id)).toContain(chain.id);
 
     // Simulate WrfcController's own 60s in-memory cleanup (scheduleChainCleanup)
-    // dropping the now-terminal chain from listChains() entirely — this is the
+    // dropping the now-terminal chain from listChains() entirely, this is the
     // exact mechanism that used to make the on-disk file forget a killed chain.
     chains = [];
     emitWorkflowEvent(runtimeBus, 'WORKFLOW_STATE_CHANGED', 'unrelated-chain-id');
@@ -382,7 +382,7 @@ describe('wrfc-persistence', () => {
     });
     persistence2.rehydrate();
 
-    // The reaped chain is already terminal on disk — it must never be handed
+    // The reaped chain is already terminal on disk, it must never be handed
     // to importChain again (it is history, not a resurrection candidate).
     expect(importCalls).toBe(importCallsAfterFirstRestart);
     expect(persistence2.interruptedChains).toHaveLength(0);

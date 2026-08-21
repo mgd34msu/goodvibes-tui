@@ -1,25 +1,25 @@
 /**
- * hosted-session-feed.ts — what this terminal knows about the daemon-hosted
+ * hosted-session-feed.ts, what this terminal knows about the daemon-hosted
  * session it is attached to.
  *
  * One place holds it because two surfaces read it: the `/hosted` command family
  * (which prints status and drives the verbs) and the Hosted Session panel
  * (which renders the conversation). The same shared-feed shape
- * notifications-feed.ts already uses in this repo — a module-level instance a
- * command writes and a panel subscribes to — rather than threading a service
+ * notifications-feed.ts already uses in this repo, a module-level instance a
+ * command writes and a panel subscribes to, rather than threading a service
  * through the command context and the panel deps for one feature.
  *
  * ── What is a fact here, and what is a rendering ──────────────────────────
  *
  * The RECORD is the daemon's, verbatim: status, attached clients, turn count,
- * and `effectiveDetachPolicy` — what leaving would do right now. This feed
+ * and `effectiveDetachPolicy`, what leaving would do right now. This feed
  * never recomputes those; it stores the last record a verb or a lifecycle event
  * handed it.
  *
  * The ROWS are this terminal's rendering of the transcript: the history
  * `attach` backfilled, plus what the live `turn` and `tools` frames have said
  * since. A row that is still being streamed is marked `streaming` so the panel
- * can show it growing rather than waiting for the turn to end — the same thing
+ * can show it growing rather than waiting for the turn to end, the same thing
  * a local turn does.
  *
  * ── Bounded, because it is a live buffer ──────────────────────────────────
@@ -142,7 +142,7 @@ export class HostedSessionFeed {
     this.emit();
   }
 
-  /** Replace the record — every verb answer and every lifecycle notice lands here. */
+  /** Replace the record, every verb answer and every lifecycle notice lands here. */
   setRecord(record: HostedSessionRecord): void {
     if (this.state.record && this.state.record.id !== record.id) return;
     this.state = { ...this.state, record };
@@ -167,7 +167,7 @@ export class HostedSessionFeed {
     close?.();
   }
 
-  /** Append a note of this terminal's own — a detach, a refusal, a stream drop. */
+  /** Append a note of this terminal's own, a detach, a refusal, a stream drop. */
   note(text: string, kind: HostedRowKind = 'system'): void {
     this.appendRow({ kind, text, at: Date.now(), streaming: false });
   }
@@ -231,7 +231,7 @@ export class HostedSessionFeed {
         const reason = readString(event.payload, 'reason');
         this.appendRow({
           kind: 'system',
-          text: reason ? `turn cancelled — ${reason}` : 'turn cancelled',
+          text: reason ? `turn cancelled: ${reason}` : 'turn cancelled',
           at: event.at,
           streaming: false,
         });
@@ -256,7 +256,7 @@ export class HostedSessionFeed {
             { callId, tool, startedAt: event.at },
           ],
         };
-        this.appendRow({ kind: 'tool', text: `${tool} — running`, at: event.at, streaming: true, callId });
+        this.appendRow({ kind: 'tool', text: `${tool}: running`, at: event.at, streaming: true, callId });
         return;
       }
       case 'TOOL_SUCCEEDED':
@@ -265,14 +265,14 @@ export class HostedSessionFeed {
         const outcome = event.type === 'TOOL_SUCCEEDED'
           ? 'done'
           : event.type === 'TOOL_FAILED'
-            ? `failed — ${readString(event.payload, 'error') || 'no reason reported'}`
-            : `cancelled${readString(event.payload, 'reason') ? ` — ${readString(event.payload, 'reason')}` : ''}`;
+            ? `failed: ${readString(event.payload, 'error') || 'no reason reported'}`
+            : `cancelled${readString(event.payload, 'reason') ? `: ${readString(event.payload, 'reason')}` : ''}`;
         this.state = {
           ...this.state,
           runningToolCalls: this.state.runningToolCalls.filter((call) => call.callId !== callId),
           rows: this.state.rows.map((row) => (
             row.callId === callId && row.streaming
-              ? { ...row, text: `${tool} — ${outcome}`, streaming: false }
+              ? { ...row, text: `${tool}: ${outcome}`, streaming: false }
               : row
           )),
         };
@@ -290,7 +290,7 @@ export class HostedSessionFeed {
     if (update.event === 'hosted-session-terminated') {
       this.settleStreamingRow();
       const reason = update.session.terminatedReason ?? 'no reason recorded';
-      this.note(`this hosted session ended — ${reason}${update.detail ? ` (${update.detail})` : ''}`);
+      this.note(`this hosted session ended: ${reason}${update.detail ? ` (${update.detail})` : ''}`);
     }
   }
 

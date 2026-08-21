@@ -366,7 +366,7 @@ describe('onboarding apply and verify helpers', () => {
     expect(snapshot.users.map((user) => user.username)).toEqual(['admin']);
     expect(snapshot.sessionCount).toBe(1);
     // As of goodvibes-sdk 0.33.38, authenticate() returns a discriminated
-    // AuthenticateResult ({ ok }) instead of a nullable user — a failed login is
+    // AuthenticateResult ({ ok }) instead of a nullable user, a failed login is
     // now { ok: false }, not null.
     expect(auth.authenticate('admin', 'wizard-pass').ok).toBe(true);
     expect(auth.authenticate('admin', originalPassword).ok).toBe(false);

@@ -100,7 +100,7 @@ describe('negotiateProtocolVersion', () => {
     });
   });
 
-  describe('compatible — same minor', () => {
+  describe('compatible: same minor', () => {
     test('local v1.2 vs peer v1.2 → proceeds at v1.2, no downgrade', () => {
       const result = negotiateProtocolVersion(V1_2, V1_2);
       expect(result.proceed).toBe(true);
@@ -122,7 +122,7 @@ describe('negotiateProtocolVersion', () => {
     });
   });
 
-  describe('compatible — downgrade (peer older minor)', () => {
+  describe('compatible: downgrade (peer older minor)', () => {
     test('local v1.2 vs peer v1.0 → proceeds at v1.0 with downgrade', () => {
       const result = negotiateProtocolVersion(V1_2, V1_0);
       expect(result.proceed).toBe(true);
@@ -145,12 +145,12 @@ describe('negotiateProtocolVersion', () => {
     });
   });
 
-  describe('compatible — peer minor ahead (peer newer)', () => {
+  describe('compatible: peer minor ahead (peer newer)', () => {
     test('local v1.1 vs peer v1.2 → proceeds at v1.1 (local is older)', () => {
       const result = negotiateProtocolVersion(V1_1, V1_2);
       expect(result.proceed).toBe(true);
       if (result.proceed) {
-        // min(1, 2) = 1 — local is the constraint
+        // min(1, 2) = 1, local is the constraint
         expect(result.protocol.version.minor).toBe(1);
         // Not considered a downgrade from local perspective
         expect(result.protocol.downgraded).toBe(false);
@@ -363,7 +363,7 @@ describe('TransportPanel', () => {
       expect(failures.every((f) => f.incompatibilityCode !== undefined)).toBe(true);
     });
 
-    test('incompatible peer cannot proceed — verify the entry blocks session', () => {
+    test('incompatible peer cannot proceed: verify the entry blocks session', () => {
       // The acceptance criterion: incompatible peer must not proceed silently.
       // Verify that the recorded failure is surface-able and has the code.
       panel.recordIncompatibility(

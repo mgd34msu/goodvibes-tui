@@ -4,7 +4,7 @@
 // Integration tests that go through the REAL CommandContext wiring built by
 // createBootstrapCommandActions (bootstrap-command-parts.ts) and assert:
 //
-//   1. openLocalAuthMaskedEntry is present on the context (not undefined) —
+//   1. openLocalAuthMaskedEntry is present on the context (not undefined),
 //      i.e., it was properly assigned by the bootstrap action builder.
 //   2. The real CommandRegistry + handleLocalAuthCommand route:
 //      /local-auth rotate-password <user>   (no password arg)
@@ -39,7 +39,7 @@ function linesText(lines: Line[]): string {
     .join('\n');
 }
 
-/** Stub LocalAuthInspectionQuery (display-only) — same shape as the panel tests. */
+/** Stub LocalAuthInspectionQuery (display-only), same shape as the panel tests. */
 const EMPTY_INSPECTION: import('@/runtime/index.ts').LocalAuthInspectionQuery = {
   inspect: () => ({
     userStorePath: '/tmp/gv-test-users',
@@ -124,7 +124,7 @@ function makeContext(
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('local-auth masked-entry command routing — bootstrap wiring', () => {
+describe('local-auth masked-entry command routing: bootstrap wiring', () => {
   let dir: string;
   let auth: UserAuthManager;
   let panelManager: PanelManager;
@@ -189,7 +189,7 @@ describe('local-auth masked-entry command routing — bootstrap wiring', () => {
     const panel = panelManager.getPanel('local-auth') as LocalAuthPanel;
     expect(panel.isMaskedEntryActive).toBe(true);
 
-    // Verify panelManager.getActive() returns the same LocalAuthPanel instance —
+    // Verify panelManager.getActive() returns the same LocalAuthPanel instance,
     // this is the exact codepath handler-feed-routes.ts:106 and :118 call.
     expect(panelManager.getActive()).toBe(panel);
 

@@ -1,10 +1,10 @@
 /**
- * typecheck-coverage-rule.ts — gate rule: every TypeScript file the repo tracks
+ * typecheck-coverage-rule.ts, gate rule: every TypeScript file the repo tracks
  * must belong to a project that `tsc --noEmit` actually compiles.
  *
  * Why this exists: tsconfig.json used to include only `src` and `examples`, so
- * every file under `scripts/` — including the test runner (scripts/run-tests.ts)
- * and the gate scripts — was never typechecked by either project. Nothing said
+ * every file under `scripts/`, including the test runner (scripts/run-tests.ts)
+ * and the gate scripts, was never typechecked by either project. Nothing said
  * so; the two typecheck commands both reported 0 errors while 28 files sat
  * outside both programs. Reading the `include` globs is not enough to tell:
  * a file outside every glob is still compiled if something inside a glob imports
@@ -35,7 +35,7 @@ const TS_SUFFIXES = ['.ts', '.tsx', '.mts', '.cts'];
 /**
  * Repo-relative paths that are deliberately outside every project. Each entry
  * needs a reason; an empty list is the healthy state. This is an explicit
- * escape hatch, not a silent one — an unlisted uncovered file fails the gate.
+ * escape hatch, not a silent one, an unlisted uncovered file fails the gate.
  */
 export const UNCOVERED_ALLOWLIST: ReadonlySet<string> = new Set<string>([]);
 
@@ -43,7 +43,7 @@ export const UNCOVERED_ALLOWLIST: ReadonlySet<string> = new Set<string>([]);
  * Set difference: which tracked files are in none of the checked programs.
  *
  * Pure, so the gate's own test can feed it a path it knows is absent and watch
- * it come back as a violation — a coverage check that can only ever answer
+ * it come back as a violation, a coverage check that can only ever answer
  * "all covered" is worth nothing.
  */
 export function findUncoveredFiles(
@@ -66,7 +66,7 @@ export function isTypeScriptPath(path: string): boolean {
  *
  * `--others --exclude-standard` includes files that are present but not yet
  * committed, minus anything .gitignore covers. Tracked-only would let a brand
- * new uncovered file pass the gate right up until the commit that adds it — the
+ * new uncovered file pass the gate right up until the commit that adds it, the
  * moment when noticing is worth the most.
  */
 export function listTrackedTypeScriptFiles(repoRoot: string = REPO_ROOT): string[] {
@@ -141,6 +141,6 @@ if (import.meta.main) {
     process.exit(1);
   }
   console.log(
-    `typecheck-coverage: OK — all ${tracked.length} tracked TypeScript file(s) are compiled by ${CHECKED_PROJECTS.join(' + ')}.`,
+    `typecheck-coverage: OK; all ${tracked.length} tracked TypeScript file(s) are compiled by ${CHECKED_PROJECTS.join(' + ')}.`,
   );
 }

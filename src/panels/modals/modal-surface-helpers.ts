@@ -5,7 +5,7 @@ import type { ConfigModalRow } from '../../input/config-modal-types.ts';
 /**
  * Shared formatting helpers for config-modal surfaces. Row styling reuses
  * DEFAULT_PANEL_PALETTE (the retired panels' palette) so a migrated modal reads
- * as the same surface it replaced — the goldens stay panel-consistent.
+ * as the same surface it replaced, the goldens stay panel-consistent.
  */
 export const PALETTE = DEFAULT_PANEL_PALETTE;
 

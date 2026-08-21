@@ -53,10 +53,10 @@ function verifyCursor(ih: InputHandler, cw: number, label: string) {
     return;
   }
 
-  // At end of segment (col === length), cursor is past visible text — that's valid
+  // At end of segment (col === length), cursor is past visible text, that's valid
   if (info.cursorCol === seg?.length) return;
 
-  // When cursor is on a \n or consumed space, visual shows the next line's char — that's correct
+  // When cursor is on a \n or consumed space, visual shows the next line's char, that's correct
   if (actualChar === '\n' || actualChar === undefined) return;
 
   // Otherwise visual and actual must match
@@ -210,7 +210,7 @@ describe('Paste + Navigate + Delete/Backspace', () => {
     // Position cursor exactly at the START of the marker (simulates left-arrow jump)
     ih.cursorPos = markerStart;
 
-    // Feed backspace — handler should detect marker.start === cursorPos and delete entire marker
+    // Feed backspace, handler should detect marker.start === cursorPos and delete entire marker
     ih.feed('\x7f');
 
     // The entire marker should be gone, not just one character
@@ -261,7 +261,7 @@ describe('Bracketed paste line-ending normalization', () => {
   const CW = 40;
 
   // Terminals (xterm, tmux, kitty, iTerm2, alacritty) transmit the line
-  // breaks inside a bracketed paste as \r — the same byte Enter sends — and
+  // breaks inside a bracketed paste as \r, the same byte Enter sends, and
   // external clipboards can carry \r\n. Without normalization those bytes
   // land in the prompt string verbatim: split('\n') sees a single line (the
   // composer never grows, registerPaste never counts lines) and the \r cells

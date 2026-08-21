@@ -1,10 +1,10 @@
 /**
- * daemon-attach-handshake.test.ts — what one `/status` read decides.
+ * daemon-attach-handshake.test.ts, what one `/status` read decides.
  *
  * build-floors.test.ts pins the two verdicts and client-build-floor-gate.test.ts
  * pins what the forward one costs a stale terminal. This is the seam between
  * them: the attach that reads the daemon once and then adopts it, refuses it, or
- * leaves it alone — plus the receipts, whose delivery is destructive, so a read
+ * leaves it alone, plus the receipts, whose delivery is destructive, so a read
  * that consumed them and then failed to render them would lose them.
  */
 import { describe, expect, test } from 'bun:test';
@@ -162,7 +162,7 @@ describe('a daemon that says nothing usable', () => {
     expect(h.adopted).toEqual([{ mode: 'external', reason: undefined, token: 'shared-bearer' }]);
   });
 
-  test('no adopted daemon at all is not read from — there is nothing to ask', async () => {
+  test('no adopted daemon at all is not read from; there is nothing to ask', async () => {
     const h = makeHarness({
       status: { mode: 'unavailable', host: '127.0.0.1', port: 3421, baseUrl: '', reason: 'no daemon' },
       answer: answered({}),

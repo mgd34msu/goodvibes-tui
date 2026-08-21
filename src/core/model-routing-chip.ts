@@ -1,9 +1,9 @@
 /**
- * model-routing-chip — turns a mid-session model change into a visible one-line
+ * model-routing-chip, turns a mid-session model change into a visible one-line
  * conversation notice so a route/fallback/downgrade is NEVER silent.
  *
  * Driven by the provider registry's `MODEL_CHANGED` runtime event (fired on
- * every setCurrentModel — user command, automatic capability route, or
+ * every setCurrentModel, user command, automatic capability route, or
  * SDK-internal downgrade). The chip's job is the OTHERWISE-SILENT changes: the
  * SDK-internal auto-route/downgrade paths call setCurrentModel with no TUI-side
  * narration of their own.
@@ -83,7 +83,7 @@ export function findRecentFallbackReason(
 
 /**
  * The routing-chip line to emit for a MODEL_CHANGED event, or null to stay
- * silent. Null only when there is no real change (no/same previous model) —
+ * silent. Null only when there is no real change (no/same previous model),
  * changes the failover path narrates itself never reach this function.
  *
  * A change that correlates to a logged fallback transition is reported WITH

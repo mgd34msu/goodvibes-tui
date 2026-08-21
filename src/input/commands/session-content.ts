@@ -169,7 +169,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
   registry.register({
     name: 'undo',
     aliases: [],
-    description: 'Undo last action. /undo rewind — reverse the last /rewind. /undo file — revert last file write/edit. /undo — remove last conversation turn',
+    description: 'Undo last action. /undo rewind reverses the last /rewind. /undo file reverts the last file write/edit. /undo alone removes the last conversation turn',
     usage: '[rewind|file]',
     argsHint: '[rewind|file]',
     async handler(args, ctx) {
@@ -203,7 +203,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
 
   registry.register({
     name: 'redo',
-    description: 'Redo last undone action. /redo rewind — re-apply the last undone /rewind. /redo file — re-apply last reverted file. /redo — restore conversation turn',
+    description: 'Redo last undone action. /redo rewind re-applies the last undone /rewind. /redo file re-applies the last reverted file. /redo alone restores a conversation turn',
     usage: '[rewind|file]',
     argsHint: '[rewind|file]',
     async handler(args, ctx) {
@@ -259,7 +259,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
     argsHint: '[resume <id|name>]',
     async handler(_args, ctx) {
       // Splash's "resume last session" hint and users' muscle memory both say
-      // `/sessions resume <id>` (plural, matching this command's own name) —
+      // `/sessions resume <id>` (plural, matching this command's own name),
       // but subcommands like `resume` are only implemented on the singular
       // `/session` command. Forward instead of silently listing and dropping
       // the subcommand+id on the floor.
@@ -268,7 +268,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         return;
       }
       const sessionManager = requireSessionManager(ctx);
-      // Excludes subagent-shaped transcripts (see session-picker-filter.ts) —
+      // Excludes subagent-shaped transcripts (see session-picker-filter.ts),
       // an unfiltered list here drowns real user sessions in spawned-agent
       // noise. A direct `/sessions resume agent-xxxxxxxx` still reaches them.
       const sessions = filterUserFacingSessions(sessionManager.list());
@@ -403,12 +403,12 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
     },
   });
 
-  // From the core-verb naming pass (MEMORY fragmentation — worst-class
+  // From the core-verb naming pass (MEMORY fragmentation, worst-class
   // collision #2): this command used to be named /memory, colliding with
   // the agent's /memory (an alias that forwards to /recall, the durable
-  // cross-session MemoryStore) — same command name, two unrelated features.
+  // cross-session MemoryStore), same command name, two unrelated features.
   // Renamed to /note (this feature manages EPHEMERAL, session-scoped sticky
-  // notes pinned across context compaction — an entirely different resource
+  // notes pinned across context compaction, an entirely different resource
   // from /recall's durable records). /memory is now registered as an alias
   // of /recall below (memory.ts), matching the agent, so the word means the
   // same thing on both surfaces. See

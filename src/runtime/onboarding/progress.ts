@@ -90,7 +90,7 @@ export interface WriteWizardProgressOptions {
  * project switches and is shared with the resume-prompt check at startup.
  *
  * Masked (password) fields are deliberately excluded from the serialised
- * textState by the caller — this function accepts whatever is passed in and
+ * textState by the caller, this function accepts whatever is passed in and
  * does NOT filter. Callers must strip sensitive fields before calling.
  */
 export function writeWizardProgress(
@@ -143,6 +143,6 @@ export function hasResumableWizardProgress(
   const state = options.state ?? readWizardProgress(shellPaths);
   if (!state.payload) return false;
   const age = (options.now ?? Date.now()) - state.payload.savedAt;
-  // age < 0 means savedAt is in the future (clock skew / tampered file) — treat as non-resumable.
+  // age < 0 means savedAt is in the future (clock skew / tampered file), treat as non-resumable.
   return age >= 0 && age < PROGRESS_MAX_AGE_MS;
 }

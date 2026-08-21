@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// knowledge-services.ts — the knowledge/wiki + home-graph stack (TUI wiring)
+// knowledge-services.ts, the knowledge/wiki + home-graph stack (TUI wiring)
 //
 // Constructs the three KnowledgeStores (regular wiki, agent, home-graph), their
 // semantic services, the ingest services, the home-graph service, and the
 // project-planning + work-plan stores. Extracted into its own module rather
 // than built inline in services.ts, which sits at the architecture check's
-// 800-line cap (scripts/check-architecture.ts) — new/large construction blocks
+// 800-line cap (scripts/check-architecture.ts), new/large construction blocks
 // get their own module and a single wiring call there (mirrors
 // createWorkstreamServices / createDurabilityServices / createCodeIndexServices).
 //

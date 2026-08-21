@@ -1,4 +1,4 @@
-# Local Verification
+# Local verification
 
 GoodVibes has three verification layers:
 
@@ -6,7 +6,7 @@ GoodVibes has three verification layers:
 - `local behavior`: behavior that completes locally through in-process tests, the compiled CLI, a daemon smoke, or controlled persisted state.
 - `external outcome`: real delivery/provisioning checks such as Slack delivery, Cloudflare provisioning, Home Assistant device behavior, or a remote runner.
 
-## Verification Ledger
+## Verification ledger
 
 Run the inventory ledger:
 
@@ -22,7 +22,7 @@ bun run verification:ledger -- --json --out /tmp/goodvibes-verification-ledger
 
 The ledger counts settings, feature flags, slash commands, panels, CLI commands, external surfaces, and onboarding capability bundles. It intentionally separates local proof from external proof so the project can show where verification is strong without claiming that a third-party service was exercised.
 
-## GoodVibes Home Audit
+## GoodVibes home audit
 
 Run a read-only audit against the active GoodVibes home:
 
@@ -47,7 +47,7 @@ The audit checks:
 
 The audit treats root-level `~/.goodvibes` files as owned by other GoodVibes products unless they are in `tui/` or `daemon/`.
 
-## Live Verification
+## Live verification
 
 Run the compiled CLI, authenticated daemon probes, inventory ledger, and home audit together:
 
@@ -69,7 +69,7 @@ By default, warnings do not fail the command because they are useful runtime fin
 bun run verification:live -- --strict --out /tmp/goodvibes-live-verification-strict
 ```
 
-## Release-Oriented Local Gate
+## Release-oriented local gate
 
 For a practical local gate before a release or large config migration:
 

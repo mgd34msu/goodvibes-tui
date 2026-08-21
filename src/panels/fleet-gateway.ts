@@ -2,10 +2,10 @@
 // fleet-gateway.ts
 //
 // The async, daemon-backed verb surface the Fleet panel's waiting-on-human acts
-// drive — a best-of-N winner pick (fleet.attempts.list / fleet.attempts.pick),
+// drive, a best-of-N winner pick (fleet.attempts.list / fleet.attempts.pick),
 // a merge-conflict resolution (fleet.conflicts.resolve), and a worktree discard
 // (worktrees.discard). These are gateway verbs with no named facade on the
-// in-process OperatorClient, so — exactly like /ci and /worktree setup — they
+// in-process OperatorClient, so, exactly like /ci and /worktree setup, they
 // go over the generic operator invoke path (operator-rpc.ts's resolveOperatorRpc
 // -> sdk.operator.invoke), reaching the SAME daemon the command layer does.
 //
@@ -20,27 +20,27 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
 import { resolveOperatorRpc } from '../input/commands/operator-rpc.ts';
 
-/** fleet.attempts.list output — the held-merge groups awaiting a winner pick. */
+/** fleet.attempts.list output, the held-merge groups awaiting a winner pick. */
 export type FleetAttemptsList = OperatorMethodOutput<'fleet.attempts.list'>;
 /** One held-merge group (candidates + their diffs + optional model judgment). */
 export type FleetHeldMergeGroup = FleetAttemptsList['groups'][number];
 /** One candidate attempt within a group. */
 export type FleetAttemptCandidate = FleetHeldMergeGroup['candidates'][number];
-/** fleet.attempts.pick output — the confirm preview (applied:false) OR the applied receipt (applied:true). */
+/** fleet.attempts.pick output, the confirm preview (applied:false) OR the applied receipt (applied:true). */
 export type FleetPickResult = OperatorMethodOutput<'fleet.attempts.pick'>;
-/** fleet.conflicts.resolve output — the seeded resolution session stamped on the kept tree. */
+/** fleet.conflicts.resolve output, the seeded resolution session stamped on the kept tree. */
 export type FleetConflictResolution = OperatorMethodOutput<'fleet.conflicts.resolve'>;
-/** worktrees.discard output — the honest receipt: dir removed, branch KEPT, dirty state preserved as a commit. */
+/** worktrees.discard output, the honest receipt: dir removed, branch KEPT, dirty state preserved as a commit. */
 export type FleetWorktreeDiscardReceipt = OperatorMethodOutput<'worktrees.discard'>;
-/** fleet.graph.get output — the surface-facing task graph of one workstream (nodes/edges/pool). */
+/** fleet.graph.get output, the surface-facing task graph of one workstream (nodes/edges/pool). */
 export type FleetGraphSnapshot = OperatorMethodOutput<'fleet.graph.get'>;
-/** fleet.observed.steer output — queued:true with a messageId, or queued:false with an honest reason. */
+/** fleet.observed.steer output, queued:true with a messageId, or queued:false with an honest reason. */
 export type FleetObservedSteerResult = OperatorMethodOutput<'fleet.observed.steer'>;
 
 /**
  * The narrow async verb surface the Fleet panel's acts drive. Every method is a
  * real daemon round-trip in production (createFleetGateway) and a mocked shape
- * in tests. `armFixSessionAttach` is the ONLY sync member — it hands a spawned
+ * in tests. `armFixSessionAttach` is the ONLY sync member, it hands a spawned
  * session id to the shared one-key jump affordance (the CI fix-session
  * machinery), never a separate attach path.
  */
@@ -57,7 +57,7 @@ export interface FleetGateway {
   resolveConflict(itemId: string): Promise<FleetConflictResolution>;
   /** Discard a worktree directory (branch kept, dirty state preserved as a commit). */
   discardWorktree(path: string): Promise<FleetWorktreeDiscardReceipt>;
-  /** Fetch the task graph (nodes/edges/pool) for one workstream — the observability graph view. */
+  /** Fetch the task graph (nodes/edges/pool) for one workstream, the observability graph view. */
   getGraph(workstreamId: string): Promise<FleetGraphSnapshot>;
   /** Steer an observed foreign agent over its own channel (tmux send-keys); the daemon honestly refuses a channel-less row. */
   steerObserved(input: { readonly id: string; readonly text: string }): Promise<FleetObservedSteerResult>;
@@ -81,7 +81,7 @@ export function workItemIdFromNodeId(nodeId: string): string | null {
 /**
  * Why the gateway could not be built (daemon disabled / no control-plane URL),
  * surfaced verbatim so an act can print an honest "not available" line rather
- * than guessing — mirrors OperatorRpcUnavailable.reason.
+ * than guessing, mirrors OperatorRpcUnavailable.reason.
  */
 export type FleetGatewayResolution =
   | { readonly available: true; readonly gateway: FleetGateway }
@@ -95,7 +95,7 @@ export interface FleetGatewayDeps {
 }
 
 /**
- * Build the live Fleet gateway over the generic operator invoke path — the same
+ * Build the live Fleet gateway over the generic operator invoke path, the same
  * daemon resolution the command layer uses (resolveOperatorRpc). Returns an
  * honest unavailable reason when no daemon is reachable, so the panel acts can
  * refuse cleanly instead of throwing into the render loop.

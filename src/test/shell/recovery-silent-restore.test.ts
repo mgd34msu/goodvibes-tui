@@ -1,18 +1,18 @@
 /**
- * recovery-silent-restore.test.ts — the bare-launch no-auto-restore contract.
+ * recovery-silent-restore.test.ts, the bare-launch no-auto-restore contract.
  *
- * Owner ruling: state restores happen ONLY when the user explicitly asks —
+ * Owner ruling: state restores happen ONLY when the user explicitly asks,
  * via a CLI argument, a slash command, or a prompt. Never automatically. The
  * old silent-restore-at-startup path (autoRestoreRecoverySession, formerly
  * called unconditionally from main.ts on every bare launch) is gone entirely.
  *
  * What changed since: a live recovery snapshot used to get a passive clause
  * in the boot resume notice, which meant the only route back to a crashed
- * session was reading a sentence and retyping a command — and for a session
+ * session was reading a sentence and retyping a command, and for a session
  * that crashed before its first clean save there was no command that reached
  * it at all. The snapshot is now an explicit ask-then-retire modal
  * (runtime/recovery-prompt.ts, covered in recovery-prompt.test.ts), and the
- * resume notice no longer mentions recovery snapshots at all — announcing the
+ * resume notice no longer mentions recovery snapshots at all, announcing the
  * same snapshot twice would be worse, not better.
  *
  * What this file still pins:
@@ -50,7 +50,7 @@ function writeCrash(sessionId: string, messages: Array<{ role: string; content: 
     { surface },
   );
   // Aged out of the live-refresh window so the boot path sees an offerable
-  // crash — the thing this file proves a bare launch does NOT restore.
+  // crash, the thing this file proves a bare launch does NOT restore.
   ageRecoverySnapshot(surface.recoveryFile(sessionId));
 }
 
@@ -71,7 +71,7 @@ describe('bare launch never restores state', () => {
     const conversation = new ConversationManager(() => 80);
 
     // The boot resume notice takes no `conversation` dependency at all (see
-    // ResumeNoticeDeps) — there is nothing in the bare-launch path that could
+    // ResumeNoticeDeps), there is nothing in the bare-launch path that could
     // apply this snapshot to a live conversation on its own.
     await announceResumeState({
       surface,
@@ -85,12 +85,12 @@ describe('bare launch never restores state', () => {
     expect(conversation.getMessageCount()).toBe(0);
     // Journal not replayed/rotated.
     expect(existsSync(journalPath)).toBe(true);
-    // Recovery file not consumed/deleted — still the newest live snapshot.
+    // Recovery file not consumed/deleted, still the newest live snapshot.
     expect(existsSync(surface.recoveryFile('sess-A'))).toBe(true);
     expect(checkRecoveryFile({ surface })?.sessionId).toBe('sess-A');
   });
 
-  test('the boot notice says nothing about a recovery snapshot — the ask-then-retire modal owns that offer', async () => {
+  test('the boot notice says nothing about a recovery snapshot; the ask-then-retire modal owns that offer', async () => {
     writeCrash('sess-A', [{ role: 'user', content: 'hi' }], 'Interrupted work');
     const receipts: string[] = [];
 
@@ -103,12 +103,12 @@ describe('bare launch never restores state', () => {
       router: { high: (m) => receipts.push(m) },
     });
 
-    // No prior session, no checkpoints, no chain history — and a recovery
+    // No prior session, no checkpoints, no chain history, and a recovery
     // snapshot is no longer a reason for this notice to speak at all.
     expect(receipts).toHaveLength(0);
   });
 
-  test('a resumable recovery snapshot does not add a clause either — no double announcement', async () => {
+  test('a resumable recovery snapshot does not add a clause either; no double announcement', async () => {
     writeCrash('sess-B', [{ role: 'user', content: 'hi' }], 'Interrupted work');
     const receipts: string[] = [];
 
@@ -142,7 +142,7 @@ describe('concurrent-session delete isolation', () => {
     deleteRecoveryFile({ surface }, 'sess-A');
 
     expect(existsSync(surface.recoveryFile('sess-A'))).toBe(false);
-    // The concurrent session's snapshot must survive — the bug this fixes.
+    // The concurrent session's snapshot must survive, the bug this fixes.
     expect(existsSync(surface.recoveryFile('sess-B'))).toBe(true);
   });
 });

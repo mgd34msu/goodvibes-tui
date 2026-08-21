@@ -1,17 +1,17 @@
 /**
- * hosted-session-stream.ts — watching a conversation that is running somewhere
+ * hosted-session-stream.ts, watching a conversation that is running somewhere
  * else.
  *
  * A hosted session's loop is the ORDINARY Orchestrator, composed inside the
- * daemon. So it emits exactly what a local turn emits — STREAM_DELTA, tool
- * starts, tool results, turn transitions — on the `turn` and `tools` runtime
+ * daemon. So it emits exactly what a local turn emits, STREAM_DELTA, tool
+ * starts, tool results, turn transitions, on the `turn` and `tools` runtime
  * domains, and the control-plane forwards those domains to any subscriber with
  * the session id stamped on every envelope. There is no hosted-only token
  * stream to consume and this file does not invent one: it opens the same event
  * stream a client already uses and keeps the frames whose id matches the
  * session it was told to watch.
  *
- * The third domain is `session`, which carries `hosted-session-update` — the
+ * The third domain is `session`, which carries `hosted-session-update`, the
  * lifecycle channel: created, attached, detached, turn started, turn ended,
  * terminated, restored. That is how an attached terminal learns its session was
  * killed from another surface, or that a turn started that it did not begin.
@@ -114,7 +114,7 @@ export function readHostedLifecycleNotice(payload: unknown): HostedSessionUpdate
  *
  * Resolves to null when the stream could not be opened; the reason is logged
  * once rather than thrown into a keystroke path, and the caller keeps whatever
- * it had (the verbs still work — the conversation is simply not being watched).
+ * it had (the verbs still work, the conversation is simply not being watched).
  */
 export async function watchHostedSession(
   options: WatchHostedSessionOptions,

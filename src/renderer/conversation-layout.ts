@@ -42,11 +42,11 @@ export function buildConversationViewport(
  * Absolute history-line index of the bottom-most visible row of the
  * conversation viewport. The buffer bottom-aligns content shorter than the
  * viewport (InfiniteBuffer.getSnapshot pads with blank lines at the TOP, not
- * the bottom — see history.ts), so the naive `scrollTop + viewportHeight - 1`
+ * the bottom, see history.ts), so the naive `scrollTop + viewportHeight - 1`
  * overshoots past the real last line whenever the whole transcript already
  * fits on screen. Clamping to `lineCount - 1` handles both cases with one
  * formula: when scrollLocked at the true bottom (the common case), this is
- * exactly the last rendered content line — the block the user is actually
+ * exactly the last rendered content line, the block the user is actually
  * looking at, not whatever sits at the TOP of the viewport (scrollTop alone).
  */
 export function getViewportBottomLine(scrollTop: number, viewportHeight: number, lineCount: number): number {

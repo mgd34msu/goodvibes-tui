@@ -1,5 +1,5 @@
 /**
- * Determinism Gate — Release Gate 2
+ * Determinism Gate, Release Gate 2
  *
  * Verifies that:
  * - Idempotency store prevents duplicate execution (in-flight deduplication)

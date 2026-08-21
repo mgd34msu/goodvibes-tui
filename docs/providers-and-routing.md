@@ -1,4 +1,4 @@
-# Providers and Routing
+# Providers and routing
 
 ## Provider model
 
@@ -110,24 +110,24 @@ Then pick any model from the `synthetic` provider. Keys can equally be stored wi
 
 ### What synthetic models are
 
-Synthetic models are models available from multiple providers, automatically grouped by the system under a single selectable entry. When you pick a synthetic model, the system routes your request to the best available backend — you never need to think about which provider is serving it.
+Synthetic models are models available from multiple providers, automatically grouped by the system under a single selectable entry. When you pick a synthetic model, the system routes your request to the best available backend. You never need to think about which provider is serving it.
 
 Models with different naming across providers (for example `GPT-4o` vs `gpt 4o`) are automatically merged into one entry. Each synthetic model shows how many providers are available for failover in the model picker.
 
 ### Transparent failover rules
 
-- **Rate limit (429)** — retries the next provider in the pool immediately.
-- **Server error (500) or network error** — retries the next provider after a five-second cooldown.
-- **Client error (400)** — does not trigger failover. A 400 means the request itself is at fault, not the provider, so switching providers would not help.
-- **All providers cooling down with short cooldowns (120 seconds or less)** — the system waits for the shortest cooldown to expire and retries.
+- **Rate limit (429).** Retries the next provider in the pool immediately.
+- **Server error (500) or network error.** Retries the next provider after a five-second cooldown.
+- **Client error (400).** Does not trigger failover. A 400 means the request itself is at fault, not the provider, so switching providers would not help.
+- **All providers cooling down with short cooldowns (120 seconds or less).** The system waits for the shortest cooldown to expire and retries.
 
 Failover is silent by default: the model name in the status bar does not change when the runtime switches backends for the same synthetic model.
 
 ### Cross-model failover (free tier only)
 
-When every backend for a free synthetic model is exhausted and cooldowns are too long to wait out, the system falls back to the next-best free model ranked by benchmark score, notifies inline without blocking the turn, and cascades until it finds a working free model. Free, paid, and subscription tiers never mix — this cascade only happens within the free tier.
+When every backend for a free synthetic model is exhausted and cooldowns are too long to wait out, the system falls back to the next-best free model ranked by benchmark score, notifies inline without blocking the turn, and cascades until it finds a working free model. Free, paid, and subscription tiers never mix. This cascade only happens within the free tier.
 
-> **Cost-accrual caveat:** this system is not perfect, and charges can accrue in ways it cannot always catch — notably when a provider moves a model from free to paid while a session has been running longer than 24 hours without a model refresh, since the system has no way to know the model is now paid. Refreshes happen automatically when a session is started or resumed after the 24-hour catalog TTL expires; for long-running sessions, refresh the model list daily.
+> **Cost-accrual caveat:** this system is not perfect, and charges can accrue in ways it cannot always catch. This happens notably when a provider moves a model from free to paid while a session has been running longer than 24 hours without a model refresh, since the system has no way to know the model is now paid. Refreshes happen automatically when a session is started or resumed after the 24-hour catalog TTL expires; for long-running sessions, refresh the model list daily.
 
 ### Paid and subscription exhaustion
 
@@ -157,7 +157,7 @@ When a synthetic model is selected in the model picker, the detail area below th
 
 ### CLI: inspect synthetic chains
 
-Use `goodvibes models chain` to list all synthetic model fallback ladders from the command line — the same data available in the TUI picker:
+Use `goodvibes models chain` to list all synthetic model fallback ladders from the command line. It is the same data available in the TUI picker:
 
 ```sh
 goodvibes models chain               # all synthetic models
@@ -242,7 +242,7 @@ Current voice providers include:
 - `google` for `stt`
 - `microsoft`
 - `vydra`
-- `local` for `tts`, `tts-stream`, and `stt` — free, offline engines (whisper.cpp/faster-whisper for STT, Piper/Kokoro for TTS). Nothing auto-downloads; it reports `unconfigured` until `voice.local.*` keys point at an installed engine and model. See [voice-and-live-tts.md](voice-and-live-tts.md).
+- `local` for `tts`, `tts-stream`, and `stt`: free, offline engines (whisper.cpp/faster-whisper for STT, Piper/Kokoro for TTS). Nothing auto-downloads; it reports `unconfigured` until `voice.local.*` keys point at an installed engine and model. See [voice-and-live-tts.md](voice-and-live-tts.md).
 
 The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults through `/config tts`: `tts.provider` chooses the streaming provider, `tts.voice` chooses a provider voice, and `tts.llmProvider` / `tts.llmModel` optionally override the response model. `/tts` uses the active chat model by default when the TTS LLM override is empty. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
 

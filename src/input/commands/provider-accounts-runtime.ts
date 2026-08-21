@@ -25,7 +25,7 @@ function findProviderAccountRecord(
 /**
  * Present a record's recommended actions as executable rows. A recommended
  * action that carries a structured command becomes a press-Enter row that RUNS
- * that command through the command registry — never a line the user has to
+ * that command through the command registry, never a line the user has to
  * retype. Actions with no command are genuinely out-of-product steps, so they
  * stay as plain (non-executing) rows. When there is no interactive selection
  * surface, each action is printed honestly instead.
@@ -68,7 +68,7 @@ export function presentRecommendedActions(
         if (action.command) {
           const args = [...action.command.args];
           void (ctx.executeCommand?.(action.command.name, args)
-            ?? Promise.resolve(ctx.print(`Cannot run /${action.command.name} — command execution is unavailable here.`)));
+            ?? Promise.resolve(ctx.print(`Cannot run /${action.command.name}: command execution is unavailable here.`)));
           return;
         }
         ctx.print(action.description);
@@ -81,7 +81,7 @@ export function presentRecommendedActions(
     'Recommended actions:',
     ...actions.map((action) => (
       action.command
-        ? `  • ${action.description} — /${action.command.name}${action.command.args.length > 0 ? ` ${action.command.args.join(' ')}` : ''}`
+        ? `  • ${action.description}: /${action.command.name}${action.command.args.length > 0 ? ` ${action.command.args.join(' ')}` : ''}`
         : `  • ${action.description} (manual step)`
     )),
   ].join('\n'));
@@ -155,9 +155,9 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
           ...(record.fallbackRoute ? [`  fallbackRoute: ${record.fallbackRoute}`] : []),
           ...(record.fallbackRisk ? [`  fallbackRisk: ${record.fallbackRisk}`] : []),
           ...(record.expiresAt ? [`  expiresAt: ${new Date(record.expiresAt).toISOString()}`] : []),
-          ...record.routeRecords.map((route) => `  route ${route.route}: usable=${route.usable ? 'yes' : 'no'} freshness=${route.freshness} — ${route.detail}`),
+          ...record.routeRecords.map((route) => `  route ${route.route}: usable=${route.usable ? 'yes' : 'no'} freshness=${route.freshness}; ${route.detail}`),
           ...record.routeRecords.flatMap((route) => route.issues.map((issue) => `    issue: ${issue}`)),
-          ...record.usageWindows.map((entry) => `  window: ${entry.label} — ${entry.detail}`),
+          ...record.usageWindows.map((entry) => `  window: ${entry.label}; ${entry.detail}`),
           ...record.issues.map((issue) => `  issue: ${issue}`),
           ...record.notes.map((note) => `  note: ${note}`),
         ].join('\n'));

@@ -47,7 +47,7 @@ This directory contains the current product documentation for `goodvibes-tui`.
   Global flags reference: session lifecycle (`--continue`, `--resume`, `--fork`), confirmation bypass (`-y`/`--non-interactive`), output format consolidation, `--host` alias, and all other startup and command-specific flags.
 
 - [Commands reference](commands-reference.md)
-  The generated, categorized list of every slash command, its arguments, and its description — the same list `?` renders in the product.
+  The generated, categorized list of every slash command, its arguments, and its description. It is the same list `?` renders in the product.
 
 - [Windows support](windows.md)
   WSL2 as the supported path today, what the native Windows beta binary can and cannot do yet, and the POSIX-assumption blockers ahead of promotion.

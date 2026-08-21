@@ -16,7 +16,7 @@ function makeCtx(pm: PanelManager, out: string[]): CommandContext {
   } as unknown as CommandContext;
 }
 
-describe('/panel open — front-door honesty (W6 review)', () => {
+describe('/panel open: front-door honesty (W6 review)', () => {
   // Finding 3: `/panel open sessions` must open the session-picker modal and
   // say so honestly, rather than claiming a panel opened (or, before the
   // openModal fix, printing "not available yet").
@@ -52,7 +52,7 @@ describe('/panel open — front-door honesty (W6 review)', () => {
   });
 
   // A genuine registered panel still reports "Panel opened: <id>" (the moved-to
-  // line is redirect-only) — guards against the redirect branch swallowing the
+  // line is redirect-only), guards against the redirect branch swallowing the
   // normal success path.
   test('open on a genuine registered panel still reports "Panel opened"', async () => {
     const registry = new CommandRegistry();

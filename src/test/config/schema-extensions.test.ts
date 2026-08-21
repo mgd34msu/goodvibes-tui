@@ -74,7 +74,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       const mgr = createConfigManager(tmpDir);
       // daemon.enabled is the honestly-named key: default true (daemon runs by default).
       // The deprecated danger.daemon alias was removed from the schema
-      // (docs/decisions/2026-07-05-daemon-by-default.md) — see config-migrations.test.ts
+      // (docs/decisions/2026-07-05-daemon-by-default.md), see config-migrations.test.ts
       // in the SDK for the removal migration's contract.
       expect(typeof mgr.get('daemon.enabled')).toBe('boolean');
       expect(mgr.get('daemon.enabled')).toBe(true);

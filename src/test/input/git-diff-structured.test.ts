@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// git-diff-structured.test.ts (STEP 2c) — /git diff routes the FULL, uncapped
+// git-diff-structured.test.ts (STEP 2c), /git diff routes the FULL, uncapped
 // working-tree diff into the real diff panel via GitService.diffStructured.
 // The old path sliced the raw text at 4,000 chars and printed a
 // "(diff truncated)" stub; that branch is gone.

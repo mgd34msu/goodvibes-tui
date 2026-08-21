@@ -1,9 +1,9 @@
 /**
- * Defect 4 (surface 2) — approval-wait mislabel.
+ * Defect 4 (surface 2), approval-wait mislabel.
  *
  * While an approval card waits on the USER, the stream is legitimately silent (we asked the user a
  * question). The stall watchdog must NOT emit its provider-blaming
- * "Still waiting on <provider>… Ctrl+C to cancel" hint in that state — the honest
+ * "Still waiting on <provider>… Ctrl+C to cancel" hint in that state, the honest
  * "Waiting for your approval" thinking-fragment label owns the surface instead. A genuine provider
  * silence with no approval pending still fires the hint unchanged.
  *
@@ -39,7 +39,7 @@ function makeToolBus() {
 }
 
 // wireStreamEventMetrics only ever reads events.turns, events.tools, and
-// (optionally) events.providers — but its options type takes the full,
+// (optionally) events.providers, but its options type takes the full,
 // un-narrowed UiRuntimeEvents, so the other five feeds need a structurally
 // valid (never-called) stand-in to build a real UiRuntimeEvents value.
 function makeUnusedFeed() {

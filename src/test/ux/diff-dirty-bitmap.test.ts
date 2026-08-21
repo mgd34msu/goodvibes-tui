@@ -11,7 +11,7 @@ const W = 200;
 const H = 50;
 
 function countCursorMoves(diff: string): number {
-  // Each cursor move is \x1b[<row>;<col>H — count occurrences
+  // Each cursor move is \x1b[<row>;<col>H, count occurrences
   const matches = diff.match(/\x1b\[\d+;\d+H/g);
   return matches ? matches.length : 0;
 }
@@ -84,7 +84,7 @@ describe('DiffEngine row-level dirty skip (β2 perf)', () => {
 
     // "new" frame: write only row 25 with a visible character
     const newBuf = new TerminalBuffer(W, H);
-    // Only row 25 is dirty — all others start clean
+    // Only row 25 is dirty, all others start clean
     newBuf.blitLine(25, [
       { char: 'X', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false },
       ...new Array(W - 1).fill({ char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }),

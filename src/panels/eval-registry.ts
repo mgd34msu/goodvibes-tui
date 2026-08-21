@@ -1,8 +1,8 @@
 /**
- * EvalRegistry — holds the latest evaluation harness run state.
+ * EvalRegistry, holds the latest evaluation harness run state.
  *
  * (the purge): extracted out of eval-panel.ts. 'eval' was
- * DELETE-disposition (no surviving human surface — the evaluation harness
+ * DELETE-disposition (no surviving human surface, the evaluation harness
  * is driven and reviewed via the `/eval` CLI command, input/commands/eval.ts)
  * but this registry is still a live consumer of `/eval run` output, so it
  * survives as a standalone read-model rather than being deleted with the

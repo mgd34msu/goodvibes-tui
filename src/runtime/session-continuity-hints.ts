@@ -1,5 +1,5 @@
 /**
- * session-continuity-hints — the recovery snapshot's continuity summary.
+ * session-continuity-hints, the recovery snapshot's continuity summary.
  *
  * Extracted from main.ts (which sits at the architecture line cap) so the
  * startup wiring there stays within budget. Builds the small counts/paths

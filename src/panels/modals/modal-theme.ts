@@ -5,7 +5,7 @@ import { activeUiTones, registerThemeRefresh } from '../../renderer/theme.ts';
 //
 // Derived entirely from the chrome token set so the builders carry NO raw hex
 // color literals (architecture: no-raw-hex-literal-growth). Rebuilt IN PLACE
-// on theme flips via registerThemeRefresh — the group-B surfaces read
+// on theme flips via registerThemeRefresh, the group-B surfaces read
 // MODAL_TONES by reference at render time, so a dark-pinned module const here
 // left them rendering dark accents on light chrome (batch refutation
 // finding 2). Mirrors the polish-core/overlay-box/modal-factory pattern.
@@ -30,9 +30,9 @@ function buildModalTones() {
     dim: T.fg.dim,
     /** Primary text. */
     primary: T.fg.primary,
-    /** QR module foreground — high-contrast, mode-appropriate. */
+    /** QR module foreground, high-contrast, mode-appropriate. */
     qrDark: T.fg.inverse,
-    /** QR field background — high-contrast, mode-appropriate. */
+    /** QR field background, high-contrast, mode-appropriate. */
     qrLight: T.fg.primary,
   };
 }

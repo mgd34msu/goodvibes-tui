@@ -1,5 +1,5 @@
 /**
- * formatUserFacingError — classifies provider/network errors into plain-language
+ * formatUserFacingError, classifies provider/network errors into plain-language
  * one-liners with a suggested action.
  *
  * Classification order (most-specific first):
@@ -146,28 +146,28 @@ export function formatUserFacingError(err: unknown): UserFacingError {
     case 'auth':
       return {
         kind,
-        message: 'Authentication failed — the provider rejected your API key.',
+        message: 'Authentication failed: the provider rejected your API key.',
         action: 'Run /login to re-authenticate or check your API key.',
       };
 
     case 'rate-limit':
       return {
         kind,
-        message: 'Rate limit reached — the provider is throttling requests.',
+        message: 'Rate limit reached: the provider is throttling requests.',
         action: 'Wait a moment and retry, or switch models with /model.',
       };
 
     case 'context-overflow':
       return {
         kind,
-        message: 'Context window exceeded — the conversation is too long for this model.',
+        message: 'Context window exceeded: the conversation is too long for this model.',
         action: 'Run /compact to summarise the conversation and free context.',
       };
 
     case 'network':
       return {
         kind,
-        message: 'Network error — could not reach the provider.',
+        message: 'Network error: could not reach the provider.',
         action: 'Check your connection and retry, or switch models with /model.',
       };
 

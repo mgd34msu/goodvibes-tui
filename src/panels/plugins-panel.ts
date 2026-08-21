@@ -20,7 +20,7 @@ import {
   type PanelPalette,
 } from './polish.ts';
 
-// Base chrome only — title band, state colors, and text tokens all come
+// Base chrome only, title band, state colors, and text tokens all come
 // straight from DEFAULT_PANEL_PALETTE.
 const C = DEFAULT_PANEL_PALETTE;
 
@@ -31,7 +31,7 @@ const C = DEFAULT_PANEL_PALETTE;
  * no mutation methods, so the constructor param is widened to also require
  * the handful of `PluginManager` methods this panel actually calls. The real
  * runtime object passed at bootstrap (`services.pluginManager`, a full
- * `PluginManager` instance — see src/runtime/services.ts) already satisfies
+ * `PluginManager` instance, see src/runtime/services.ts) already satisfies
  * this widened shape.
  */
 export type PluginManagerControls = PluginManagerObserver
@@ -87,7 +87,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
       || plugin.version.toLowerCase().includes(q);
   }
 
-  // selection is preserved across onActivate — BasePanel's default
+  // selection is preserved across onActivate, BasePanel's default
   // (mark dirty, no index reset) is exactly what we want, so no override.
 
   public override onDestroy(): void {
@@ -95,7 +95,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
   }
 
   // -------------------------------------------------------------------------
-  // Input — e=enable, d=disable (confirm), v=verify, q=lift quarantine (confirm)
+  // Input, e=enable, d=disable (confirm), v=verify, q=lift quarantine (confirm)
   // -------------------------------------------------------------------------
 
   public handleInput(key: string): boolean {
@@ -149,7 +149,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
   }
 
   /**
-   * optional one-key capture-to-memory for a quarantined plugin — 'm'
+   * optional one-key capture-to-memory for a quarantined plugin, 'm'
    * dispatches `/recall capture plugin <name>` (recall-capture.ts:146 pattern)
    * instead of requiring the operator to type the command by hand.
    */
@@ -273,7 +273,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
       return workspace;
     }
 
-    // Provenance/error posture header — surface trust + quarantine pressure first.
+    // Provenance/error posture header, surface trust + quarantine pressure first.
     const quarantined = plugins.filter((p) => p.quarantined).length;
     const untrusted = plugins.filter((p) => p.trustTier === 'untrusted').length;
     const active = plugins.filter((p) => p.active).length;

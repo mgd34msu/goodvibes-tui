@@ -66,7 +66,7 @@ describe('registerAllTools', () => {
     registerTools(registry);
     // 27: the SDK's context_accounting tool is now always registered on the
     // shared roster (unbound by default here, so it honestly reports no live
-    // session context — see runtime/context-accounting-source.ts for the
+    // session context, see runtime/context-accounting-source.ts for the
     // interactive session's real binding).
     expect(registry.list()).toHaveLength(27);
   });

@@ -60,7 +60,7 @@ function makeState(sm: SearchManager, scrollTop = 0, viewportHeight = 20): Route
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('handleSearchModeToken — n/N navigation', () => {
+describe('handleSearchModeToken: n/N navigation', () => {
   let sm: SearchManager;
   let buf: InfiniteBuffer;
 
@@ -121,7 +121,7 @@ describe('handleSearchModeToken — n/N navigation', () => {
   });
 });
 
-describe('handleSearchModeToken — highlight application and clearing', () => {
+describe('handleSearchModeToken: highlight application and clearing', () => {
   let sm: SearchManager;
   let buf: InfiniteBuffer;
 
@@ -150,7 +150,7 @@ describe('handleSearchModeToken — highlight application and clearing', () => {
     const handled = handleSearchModeToken(state, keyToken('escape'), buf, false);
     expect(handled).toBe(true);
     expect(sm.active).toBe(false);
-    // After close, matches list is not cleared by close() — that is correct;
+    // After close, matches list is not cleared by close(), that is correct;
     // the compositor guards on active before rendering highlights.
     // But query is no longer driving highlights since active=false.
   });
@@ -174,7 +174,7 @@ describe('handleSearchModeToken — highlight application and clearing', () => {
   });
 });
 
-describe('handleSearchModeToken — case behavior', () => {
+describe('handleSearchModeToken: case behavior', () => {
   test('search is case-insensitive by default', () => {
     const sm = new SearchManager();
     const buf = bufferFromLines(['Hello WORLD', 'hello world']);
@@ -197,7 +197,7 @@ describe('handleSearchModeToken — case behavior', () => {
   });
 });
 
-describe('handleSearchModeToken — zero-match state', () => {
+describe('handleSearchModeToken: zero-match state', () => {
   test('navigation tokens do not crash when no matches', () => {
     const sm = new SearchManager();
     const buf = bufferFromLines(['hello']);
@@ -223,7 +223,7 @@ describe('handleSearchModeToken — zero-match state', () => {
   });
 });
 
-describe('handleSearchModeToken — golden-frame non-bleed', () => {
+describe('handleSearchModeToken: golden-frame non-bleed', () => {
   test('inactive manager: all tokens return false (no bleed into normal input)', () => {
     const sm = new SearchManager();
     const buf = bufferFromLines(['hello']);

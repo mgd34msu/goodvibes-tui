@@ -1,11 +1,11 @@
 /**
- * conversation-fold.ts — which transcript rows render FOLDED, and what spacing
+ * conversation-fold.ts, which transcript rows render FOLDED, and what spacing
  * that earns them.
  *
  * A folded tool result is exactly ONE row: its header, with the preview riding
- * on the same line after the `▸ N lines` badge. It used to be four rows — a
+ * on the same line after the `▸ N lines` badge. It used to be four rows, a
  * `▄▄▄` cap, an interior preview line carrying a second `[▸ N hidden]` count, a
- * `▀▀▀` cap, and a blank after all of it — for one line of text the header had
+ * `▀▀▀` cap, and a blank after all of it, for one line of text the header had
  * already sized.
  *
  * These predicates live in their own leaf module because TWO callers must agree
@@ -13,7 +13,7 @@
  * (conversation-rendering.ts) decides how to draw the row, and the line cache
  * (conversation-line-cache.ts) decides the blank separator that follows it. If
  * those two ever disagreed about which rows are folded, a warm cache and a cold
- * rebuild would space the transcript differently — the exact class of bug the
+ * rebuild would space the transcript differently, the exact class of bug the
  * cache's byte-identical contract exists to rule out.
  *
  * Everything here is PURE: collapse state is read, never written, so a row can
@@ -30,8 +30,8 @@ import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform
 type FoldContext = Pick<ConversationRenderContext, 'assistantTurns' | 'collapseState'>;
 
 /**
- * Does a tool-result row render FOLDED — one compact header row with its preview
- * on it — rather than header-plus-expanded-body?
+ * Does a tool-result row render FOLDED, one compact header row with its preview
+ * on it, rather than header-plus-expanded-body?
  *
  * An unset collapse key answers the same as the default the row itself will
  * store (collapsed), so asking before and asking after the row renders give the
@@ -42,7 +42,7 @@ export function isToolResultFolded(
   collapseState: ReadonlyMap<string, boolean>,
   collapseKey: string,
 ): boolean {
-  // Threading only — the decision, the short-content threshold and the
+  // Threading only, the decision, the short-content threshold and the
   // unset-key default all belong to foldedToolResult(). summarizeToolResult is
   // this product's own renderer concern, so resolving it stays here: a
   // summarizable result stays folded even when short, because the one-line
@@ -77,7 +77,7 @@ function rendersFoldedToolRow(node: RenderNode, context: FoldContext): boolean {
  * The blank separator that follows a planned row.
  *
  * Branch rows sit tight under their parent, so the blank lands only after the
- * last row of a top-level unit — that is what keeps a turn's whole subtree
+ * last row of a top-level unit, that is what keeps a turn's whole subtree
  * reading as one block. On top of that, a folded row followed by more tool
  * machinery gets NO blank at all: N consecutive folded results stack as N
  * adjacent single rows. A folded row followed by anything that is not tool
@@ -89,7 +89,7 @@ export function trailingBlankAfter(
   next: RenderNode | undefined,
   context: FoldContext,
 ): boolean {
-  // Adaptation only — RenderNode is this product's shape, so reading depth and
+  // Adaptation only, RenderNode is this product's shape, so reading depth and
   // node kind off it stays here; the rule those facts feed belongs to
   // trailingBlankAfterRow(). No `next` at all means end of transcript: neither
   // a branch row nor tool machinery follows, which is the plain-blank case.

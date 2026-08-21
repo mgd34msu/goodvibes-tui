@@ -14,7 +14,7 @@ import type { ExportMessage, ExportMetadata } from '@pellux/goodvibes-sdk/platfo
 // bun:test's `Mock<T>` wraps a plain function with call-history bookkeeping,
 // so it never structurally overlaps with the overloaded `typeof fetch` type
 // (TS2352). This is the one narrow spot where a cast through `unknown` is
-// the correct, TS-suggested conversion — the mock genuinely stands in for
+// the correct, TS-suggested conversion, the mock genuinely stands in for
 // the global, and factoring it here keeps that cast in a single place
 // instead of repeating it at every call site.
 // ---------------------------------------------------------------------------
@@ -363,7 +363,7 @@ describe('plugin-runtime: registerPluginRuntimeCommands is exported and integrat
 
   test('integration-runtime.ts module does not exist', async () => {
     await expect(
-      // @ts-expect-error — deliberately importing a module path that was removed
+      // @ts-expect-error, deliberately importing a module path that was removed
       // (superseded by plugin-runtime.ts); this test asserts the dynamic import
       // rejects at runtime because the file is genuinely gone.
       import('../../input/commands/integration-runtime.ts'),

@@ -48,39 +48,39 @@ import type { KillRing } from './kill-ring.ts';
 import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 /**
- * InputFeedContext — The single long-lived context object passed to feedInputTokens
+ * InputFeedContext, The single long-lived context object passed to feedInputTokens
  * on every keystroke. Allocated once at InputHandler construction; mutated in place
  * per-feed to avoid per-keystroke GC pressure from ~80-field object allocation.
  *
  * **Mutable per-feed** (synced from handler at the top of every feed() call, and
  * updated inside action closures via syncFeedContextMutableFields):
- *   - `prompt`, `cursorPos` — current text buffer state
- *   - `commandMode`, `panelFocused`, `indicatorFocused` — focus-mode flags
- *   - `helpOverlayActive`, `helpScrollOffset` — help overlay visibility and scroll
- *   - `shortcutsOverlayActive`, `shortcutsScrollOffset` — shortcuts overlay state
- *   - `nextPasteId`, `nextImageId` — monotonically increasing ID counters
- *   - `mouseDownRow`, `mouseDownCol` — drag-tracking coordinates
- *   - `contentWidth` — reflow width (semi-stable; synced at feed() entry only)
- *   - `selectionCallback` — current in-flight selection modal callback (nullable)
- *   - `requestRender` — swapped per-feed to a buffered version, restored after
+ *   - `prompt`, `cursorPos`, current text buffer state
+ *   - `commandMode`, `panelFocused`, `indicatorFocused`, focus-mode flags
+ *   - `helpOverlayActive`, `helpScrollOffset`, help overlay visibility and scroll
+ *   - `shortcutsOverlayActive`, `shortcutsScrollOffset`, shortcuts overlay state
+ *   - `nextPasteId`, `nextImageId`, monotonically increasing ID counters
+ *   - `mouseDownRow`, `mouseDownCol`, drag-tracking coordinates
+ *   - `contentWidth`, reflow width (semi-stable; synced at feed() entry only)
+ *   - `selectionCallback`, current in-flight selection modal callback (nullable)
+ *   - `requestRender`, swapped per-feed to a buffered version, restored after
  *
  * **Stable service handles** (set once at construction, never reallocated):
- *   - `commandRegistry`, `commandContext` — wired via setCommandRegistry() after
+ *   - `commandRegistry`, `commandContext`, wired via setCommandRegistry() after
  *     construction; synced at feed() entry (not per-action) since no action changes them
- *   - `autocomplete` — wired after construction; synced at feed() entry
- *   - `inputHistory`, `conversationManager` — late-wired service handles; synced at
+ *   - `autocomplete`, wired after construction; synced at feed() entry
+ *   - `inputHistory`, `conversationManager`, late-wired service handles; synced at
  *     feed() entry only since no in-feed action rewires them
- *   - `pasteRegistry`, `imageRegistry` — owned Maps, never replaced
+ *   - `pasteRegistry`, `imageRegistry`, owned Maps, never replaced
  *   - `selectionModal`, `bookmarkModal`, `settingsModal`, `sessionPickerModal`,
- *     `profilePickerModal` — modal objects constructed once in InputHandler constructor
+ *     `profilePickerModal`, modal objects constructed once in InputHandler constructor
  *   - `filePicker`, `modelPicker`, `onboardingWizard`,
- *     `contextInspectorModal`, `blockActionsMenu`, `searchManager`, `historySearch` —
+ *     `contextInspectorModal`, `blockActionsMenu`, `searchManager`, `historySearch`,
  *     service objects constructed once
- *   - `panelManager`, `keybindingsManager` — from uiServices, stable for app lifetime
- *   - `modalStack` — reference to the handler's shared array (mutated in place)
- *   - `getHistory`, `getViewportHeight`, `getScrollTop`, `scroll`, `exitApp` — stable
+ *   - `panelManager`, `keybindingsManager`, from uiServices, stable for app lifetime
+ *   - `modalStack`, reference to the handler's shared array (mutated in place)
+ *   - `getHistory`, `getViewportHeight`, `getScrollTop`, `scroll`, `exitApp`, stable
  *     callbacks bound in the InputHandler constructor
- *   - All method closures (`modalOpened`, `handleEscape`, etc.) — bound once at init
+ *   - All method closures (`modalOpened`, `handleEscape`, etc.), bound once at init
  *
  * **Rationale:** per-feed mutation avoids per-keystroke allocation cost; stable
  * references are service handles whose identity never changes after construction.
@@ -130,9 +130,9 @@ export interface InputFeedContext {
   inputHistory: InputHistory | null;
   conversationManager: ConversationManager | null;
   readonly killRing: KillRing;
-  /** Terminal focus tracker — updated here from 'focus' tokens, read by the unfocused-alert notifiers in core/. */
+  /** Terminal focus tracker, updated here from 'focus' tokens, read by the unfocused-alert notifiers in core/. */
   readonly focusTracker: FocusTracker;
-  /** item 5 — the paste-flood guard's persistent state, mutated in place across tokens by handlePanelFocusToken (see panel-paste-flood-guard.ts). Never reallocated. */
+  /** item 5, the paste-flood guard's persistent state, mutated in place across tokens by handlePanelFocusToken (see panel-paste-flood-guard.ts). Never reallocated. */
   readonly panelBurstGuard: PanelBurstGuardState;
   readonly getHistory: () => InfiniteBuffer;
   readonly getViewportHeight: () => number;
@@ -186,7 +186,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   const keybindings = context.keybindingsManager;
 
   // Shared opener for the Fleet panel: makes it visible AND transfers keyboard
-  // focus to it. panelManager.open() only makes the panel active — focus is a
+  // focus to it. panelManager.open() only makes the panel active, focus is a
   // separate axis (see PanelManager.focusPanels()/getFocusTarget()); without the
   // focusPanels() call, j/k/i/K land silently in the composer until Tab. Used by
   // the footer indicator's [Enter] and by F2 (F2 and the footer
@@ -199,20 +199,20 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   };
 
   // Paste-ness is a per-TOKEN property, computed at the handlePanelFocusToken
-  // call below — never a per-feed character sum. The SDK tokenizer emits a
+  // call below, never a per-feed character sum. The SDK tokenizer emits a
   // bracketed paste (\x1b[?2004h, enabled in main.ts terminal init) as ONE
-  // 'text' token holding the whole payload, while discrete keystrokes — even
-  // several batched into one feed() by render-tick latency — arrive as
+  // 'text' token holding the whole payload, while discrete keystrokes, even
+  // several batched into one feed() by render-tick latency, arrive as
   // separate 1-char 'text' tokens. The old per-feed sum misread two quick nav
   // keystrokes (e.g. j then k in one drain) as a "burst" and yanked focus.
   // item 5's flood guard reuses that same per-token model but adds
-  // real timing: one `now` per feed() call (not per token) is intentional —
+  // real timing: one `now` per feed() call (not per token) is intentional,
   // a genuine flood delivers many tokens in one drain, and they should all
   // measure as arriving "at once", not spread across meaningless sub-ms noise.
   const now = Date.now();
   for (const token of tokens) {
     // Focus-reporting tokens (CSI ?1004h) never reach the composer or any
-    // modal route — consumed here, first, unconditionally. No render needed.
+    // modal route, consumed here, first, unconditionally. No render needed.
     if (token.type === 'focus') {
       context.focusTracker.setFocused(token.action === 'in');
       continue;
@@ -289,7 +289,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     if (token.type === 'key') {
       // Focus can never disagree with workspace visibility: PanelManager owns
       // focusTarget and self-heals it, and context.panelFocused was seeded from
-      // it at feed entry — so no manual "unfocus if panels vanished" patch is
+      // it at feed entry, so no manual "unfocus if panels vanished" patch is
       // needed here anymore.
       // Snapshot these four BEFORE dispatch so the write-back below can tell
       // a pipeline-driven change (see comment there) from a stale copy.
@@ -332,7 +332,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       if (handleGlobalShortcutToken(shortcutState, token, viewportHeight)) {
         // Some branches (handleEscape, handleCtrlC, handleUndo, handleRedo,
         // handlePaste) mutate handler state directly and immediately sync it
-        // into this same `context` via syncFeedContextMutableFields — e.g.
+        // into this same `context` via syncFeedContextMutableFields, e.g.
         // Escape closing the slash-command palette clears context.prompt and
         // context.commandMode on the live handler mid-call. `shortcutState`
         // above is a snapshot taken BEFORE that call, so applying it
@@ -383,7 +383,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       // focused panel (Invariant A: focus never silently flips to the composer).
       onPasteDropped: (panelName: string) =>
         context.commandContext?.print(
-          `paste ignored — focus is on ${panelName}; Tab returns to composer`,
+          `paste ignored: focus is on ${panelName}; Tab returns to composer`,
         ),
       isTurnActive: () => context.commandContext?.isGenerating?.() ?? false,
       cancelGeneration: () => context.commandContext?.cancelGeneration?.(),

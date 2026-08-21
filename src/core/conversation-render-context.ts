@@ -1,5 +1,5 @@
 /**
- * conversation-render-context.ts — the inputs a transcript row render reads,
+ * conversation-render-context.ts, the inputs a transcript row render reads,
  * and the small pure derivations over them.
  *
  * Kept apart from conversation-rendering.ts (which draws) so that both the
@@ -25,8 +25,8 @@ type Message = ConversationMessageSnapshot;
  *
  * The transcript stores a failure as content leading with `Error: ` (see the
  * SDK's ConversationManager.addToolResults), and a per-call user cancellation
- * as the more specific `Error: cancelled by user`. Reading the outcome —
- * rather than only "did a result arrive" — is what lets the CALL row show
+ * as the more specific `Error: cancelled by user`. Reading the outcome,
+ * rather than only "did a result arrive", is what lets the CALL row show
  * ✓ / ✕ / ⊘ honestly instead of a ✓ that means nothing more than "it finished".
  */
 export type ToolCallOutcome = 'ok' | 'error' | 'cancelled';
@@ -38,7 +38,7 @@ function outcomeOfToolContent(content: string): ToolCallOutcome {
 }
 
 /**
- * Collect, per tool-call id, how that call settled — for the calls that have a
+ * Collect, per tool-call id, how that call settled, for the calls that have a
  * matching tool-result message in the given slice. A call absent from the map
  * has not run yet (e.g. it is still awaiting an approval decision) and renders
  * with the pending glyph. (item 2c.)
@@ -54,7 +54,7 @@ export function collectToolCallOutcomes(messages: readonly Message[]): Map<strin
 }
 
 /**
- * Ids of tool calls that have a matching tool-result message — i.e. the tools
+ * Ids of tool calls that have a matching tool-result message, i.e. the tools
  * that actually ran, regardless of how they settled. Derived from
  * collectToolCallOutcomes so the two can never disagree about what "ran" means.
  */
@@ -80,7 +80,7 @@ export interface ConversationRenderContext {
    * actually ran). An assistant tool call whose id is NOT in this set is still
    * awaiting a decision (e.g. an approval prompt) and renders with a pending
    * glyph instead of the completed ✓. When undefined (single-message callers
-   * without sibling context), every tool call renders as done — the prior
+   * without sibling context), every tool call renders as done, the prior
    * behaviour. (item 2c.)
    */
   readonly completedToolCallIds?: ReadonlySet<string>;

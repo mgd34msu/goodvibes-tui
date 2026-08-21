@@ -14,16 +14,16 @@ import { GOODVIBES_TUI_SURFACE_ROOT } from '../../config/surface.ts';
 // split into five operator domains, applied per-registration below. Kept in
 // this file's original registration order (rather than physically regrouped
 // by category) because several registrations below close over shared local
-// state — `ui` — defined once near the top of this function.
+// state, `ui`, defined once near the top of this function.
 //
 // (the purge): cockpit, approval, automation, routes, control-plane,
 // worktrees, tasks, orchestration, ops, ops-control, and communication were
 // RETIRE-INTO-FLEET (their live views are subsumed by the Fleet panel below
-// — each id now redirects there via registerAlias); debug and eval were
+//, each id now redirects there via registerAlias); debug and eval were
 // DELETE-disposition (no surviving human surface). See
 // .goodvibes/audit/2026-07-04-wave6-briefs.json for the full
 // disposition map. The rosterReadModel/agent-lifecycle wiring that used to
-// feed CockpitPanel exclusively was removed along with it — Fleet reads the
+// feed CockpitPanel exclusively was removed along with it, Fleet reads the
 // process registry directly via fleetReadModel below, not via the roster
 // read-model.
 //
@@ -34,12 +34,12 @@ import { GOODVIBES_TUI_SURFACE_ROOT } from '../../config/surface.ts';
 // marketplace, policy, knowledge, memory, docs, qr-code, work-plan,
 // project-planning) migrated to config-modal surfaces. All surfaces AND
 // their panel-id redirects are registered centrally in registerBuiltinModals
-// (builtin-modals.ts) now — the interim ecosystem redirect bridge was deleted
-// with the group-B port. local-auth is a DELIBERATE EXCEPTION — see below.
+// (builtin-modals.ts) now, the interim ecosystem redirect bridge was deleted
+// with the group-B port. local-auth is a DELIBERATE EXCEPTION, see below.
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
 
-  // Fleet — everything running, not just what this terminal started. The read
+  // Fleet, everything running, not just what this terminal started. The read
   // model is composed once in runtime/services.ts (so its refresh timer has an
   // owner that stops it) and unions this surface's own live process registry
   // with the adopted daemon's rows; see runtime/client/fleet-union.ts for who
@@ -108,7 +108,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       resume: (id: string) => fleetReadModel.resume(id),
       kill: (id: string, opts: { cascade: boolean }) => fleetReadModel.kill(id, opts),
       // Full-fidelity transcript source for an attached agent
-      // tab — live while the agent runs, frozen briefly after it completes
+      // tab, live while the agent runs, frozen briefly after it completes
       // (AgentManager's bounded retention ring), empty once evicted (the
       // panel degrades to the on-disk ledger fallback in that case).
       getConversationSnapshot: (agentId: string) => ui.agents.agentManager.getConversationSnapshot(agentId),
@@ -119,7 +119,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   });
 
   // Compat: '/panel open <id>' (and any saved layout/muscle memory) for
-  // every retired runtime-ops console still resolves — redirected to fleet,
+  // every retired runtime-ops console still resolves, redirected to fleet,
   // which absorbs orchestration, permissions, communication, task, and
   // process-tree views (see FleetPanel's own description above).
   manager.registerAlias('cockpit', 'fleet');
@@ -135,16 +135,16 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerAlias('communication', 'fleet');
   manager.registerAlias('incident', 'fleet');
   // Re-pointed: forensics used to resolve to the (now-retired) incident
-  // workspace; both ids now land on fleet directly — alias
+  // workspace; both ids now land on fleet directly, alias
   // resolution is a single hop, so this cannot chain through 'incident'.
   manager.registerAlias('forensics', 'fleet');
 
-  // Notifications — the visible home for the panel_only notification
+  // Notifications, the visible home for the panel_only notification
   // target: anything a NotificationRouter (SDK) routes there (including
   // burst/batch-collapsed groups, shown with their real running count)
   // renders here instead of having nowhere to go. See notifications-feed.ts
   // for why this exists. Not preloaded (only 'tokens' preloads, per the
-  // panel-consolidation cleanup below) — the shared feed singleton
+  // panel-consolidation cleanup below), the shared feed singleton
   // accumulates independently of whether this view has been opened yet, so
   // nothing is lost by instantiating it lazily on first open like every
   // other panel here.
@@ -160,7 +160,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   // local-auth is a DELIBERATE EXCEPTION to the purge: it stays a
   // registered panel because it is the host for the masked password-entry
   // sub-mode (LocalAuthPanel.openMaskedEntry, driven by
-  // ctx.openLocalAuthMaskedEntry — the only path that keeps a plaintext
+  // ctx.openLocalAuthMaskedEntry, the only path that keeps a plaintext
   // password out of argv/history/scrollback). Its browse view is mirrored by
   // local-auth-modal (reached via the /local-auth front-door), but the panel
   // itself cannot be retired without regressing that secure input, and no

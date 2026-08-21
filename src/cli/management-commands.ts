@@ -315,7 +315,7 @@ export interface ControlPlaneStatusResult {
   readonly port: number;
   readonly recognized: boolean;
   readonly posture: ReturnType<typeof classifyBindPosture>;
-  /** undefined = NOT PROBED (unrecognized host mode) — a tri-state, never coerced to false. */
+  /** undefined = NOT PROBED (unrecognized host mode), a tri-state, never coerced to false. */
   readonly reachable: boolean | undefined;
   readonly auth: ReturnType<typeof readAuthPaths>;
   readonly service: {
@@ -329,7 +329,7 @@ export interface ControlPlaneStatusResult {
 export async function buildControlPlaneStatusResult(runtime: CliCommandRuntime): Promise<ControlPlaneStatusResult> {
   const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'controlPlane');
   const enabled = runtime.configManager.get('controlPlane.enabled');
-  // Never TCP-probe the fallback endpoint of an unrecognized hostMode — a
+  // Never TCP-probe the fallback endpoint of an unrecognized hostMode, a
   // probe asserts a binding that does not exist. Not-probed is its own state
   // (undefined), NEVER coerced to a definite false: a daemon launched with
   // flag overrides can be serving healthily regardless of the stored mode.
@@ -343,7 +343,7 @@ export async function buildControlPlaneStatusResult(runtime: CliCommandRuntime):
     restartOnFailure: runtime.configManager.get('service.restartOnFailure'),
   };
   const issues: string[] = [];
-  if (!binding.recognized) issues.push(`controlPlane.hostMode '${binding.hostMode}' is not a recognized mode (local|network|custom) — the daemon cannot bind until it is corrected.`);
+  if (!binding.recognized) issues.push(`controlPlane.hostMode '${binding.hostMode}' is not a recognized mode (local|network|custom); the daemon cannot bind until it is corrected.`);
   if (enabled === true && binding.recognized && !reachable) issues.push(`Control plane is enabled but not reachable on ${binding.host}:${binding.port}.`);
   if (enabled === true && service.enabled !== true) issues.push('Control plane is enabled but service mode is off.');
   if (enabled === true && service.autostart !== true) issues.push('Control plane is enabled but service autostart is off.');
@@ -408,7 +408,7 @@ export async function renderPairing(runtime: CliCommandRuntime): Promise<string>
     const link = result.deepLink ?? result.fragment;
     const qr = renderQrToString(generateQrMatrix(link));
     const lines: string[] = [
-      'Scan to pair a device — the QR opens the web app already signed in:',
+      'Scan to pair a device; the QR opens the web app already signed in:',
       '',
       `  ${link}`,
       `  Token name: ${result.token.name}  (rename or revoke later in /settings → security → devices)`,
@@ -417,7 +417,7 @@ export async function renderPairing(runtime: CliCommandRuntime): Promise<string>
       lines.push('', 'Offers carried in this pairing (each declinable in the web app):', ...formatPairingOffers(result.offers.map((o) => o.kind)));
     }
     // The labeled browser-capability list and the one honest LAN line both render
-    // from the SDK posture the verb returned — never a locally-authored string.
+    // from the SDK posture the verb returned, never a locally-authored string.
     const capabilities = formatPostureCapabilities(result.posture);
     if (capabilities.length > 0) lines.push('', 'This device will get:', ...capabilities);
     const notice = pairingPostureNotice(result.posture);
@@ -440,8 +440,8 @@ interface TailscaleGetResult {
 /**
  * Read-only tailscale detection for the `gv pair` block: when tailscale is
  * available with a served https MagicDNS URL, name the encrypted path (the
- * interactive one-action serve lives in the pairing modal). Quiet — an empty
- * array — when tailscale is absent or the probe fails.
+ * interactive one-action serve lives in the pairing modal). Quiet, an empty
+ * array, when tailscale is absent or the probe fails.
  */
 async function renderPairingTailscaleLines(services: RuntimeServices): Promise<string[]> {
   try {
@@ -451,7 +451,7 @@ async function renderPairingTailscaleLines(services: RuntimeServices): Promise<s
     })) as TailscaleGetResult;
     if (!ts.available) return [];
     if (ts.httpsUrl) return ['', `Encrypted access (Tailscale): ${ts.httpsUrl}`];
-    return ['', 'Tailscale detected — run it as a serve target for encrypted https access (see the pairing modal).'];
+    return ['', 'Tailscale detected: run it as a serve target for encrypted https access (see the pairing modal).'];
   } catch {
     return [];
   }

@@ -474,7 +474,7 @@ describe('AutomationManager', () => {
   // is permissive when no manager is wired, so a composition root that omitted
   // featureFlags did not disable createJob/etc. when automation.enabled was
   // turned off. bootstrap.ts's own `if (configManager.get('automation.enabled'))`
-  // check only ever prevented automationManager.start() from being SCHEDULED —
+  // check only ever prevented automationManager.start() from being SCHEDULED,
   // it never reached the manager's create/update/run/list methods, which is
   // the gap this fix closes. services.ts now threads featureFlags, the same
   // shape as the RouteBindingManager fix.
@@ -524,7 +524,7 @@ describe('AutomationManager', () => {
 
       // The default half: with the key never written, effective behaviour
       // matches true. A genuinely fresh root (not `root`, which already has
-      // automation.enabled written under it) — ConfigManager's project tier
+      // automation.enabled written under it), ConfigManager's project tier
       // is keyed by workingDir/surfaceRoot regardless of configDir, so reusing
       // `root` here would read back the write above instead of the real default.
       const unsetRoot = makeProjectTempDir('gv-automation-manager-unset');

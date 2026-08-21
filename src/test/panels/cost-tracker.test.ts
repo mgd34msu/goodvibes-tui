@@ -159,7 +159,7 @@ describe('getCostFromPricingCatalog', () => {
       expect(cost).toBe(0);
     });
 
-    test('unknown model yields no pricing at all — callers must carry unpriced forward', () => {
+    test('unknown model yields no pricing at all; callers must carry unpriced forward', () => {
       const pricing = getCostFromPricingCatalog('unknown-model-xyz', TEST_CATALOG);
       expect(pricing).toBeNull();
     });
@@ -223,7 +223,7 @@ function makeAgentRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
 
 const TEST_ENV_CTX = { sessionId: 'test-session', traceId: 'test-trace', source: 'cost-tracker-test' };
 
-describe('CostTrackerPanel — agent cost attribution on AGENT_COMPLETED', () => {
+describe('CostTrackerPanel: agent cost attribution on AGENT_COMPLETED', () => {
   let runtimeBus: RuntimeEventBus;
   const flushMicrotasks = async (): Promise<void> => {
     await Promise.resolve();
@@ -252,10 +252,10 @@ describe('CostTrackerPanel — agent cost attribution on AGENT_COMPLETED', () =>
     const text = lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
     // Agent entry is present; session model is still 'unknown' (no real data
     // available yet), so the Total line shows the explicit "price unknown"
-    // marker — with the one-key fix — rather than a $0.00 that could be
+    // marker, with the one-key fix, rather than a $0.00 that could be
     // mistaken for a genuinely free model.
     expect(text).toContain('agt-1');
-    expect(text).toContain('Total    : price unknown — press p to set a price');
+    expect(text).toContain('Total    : price unknown: press p to set a price');
   });
 
   test('agent entry populates real tokens and cost when getAgentStatus returns usage', async () => {

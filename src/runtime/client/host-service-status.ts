@@ -1,5 +1,5 @@
 /**
- * host-service-status.ts — reading a background service's posture.
+ * host-service-status.ts, reading a background service's posture.
  *
  * Three questions the composition root asks about the daemon and the webhook
  * listener, none of which need anything from the composition itself: what URL
@@ -61,7 +61,7 @@ export function hostServiceIsActive(status: HostServiceStatus): boolean {
 }
 
 /**
- * The configured port is held and unusable by this terminal — either by an
+ * The configured port is held and unusable by this terminal, either by an
  * unverified process ('blocked') or by a GoodVibes daemon this build refused to
  * adopt ('incompatible': a wire-version mismatch, or a daemon below this
  * build's own floor).

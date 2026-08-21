@@ -1,5 +1,5 @@
 /**
- * semantic-diff.ts — Functional change summary after file edits.
+ * semantic-diff.ts, Functional change summary after file edits.
  *
  * Compares AST before/after an edit and extracts:
  *   - Added / removed / modified functions, methods, classes, etc.
@@ -8,7 +8,7 @@
  *
  * Returns a compact SemanticDiff that can be rendered alongside a regular diff.
  * Gracefully returns null when tree-sitter is unavailable or the language is
- * unsupported — callers should treat null as "no semantic info available".
+ * unsupported, callers should treat null as "no semantic info available".
  */
 
 import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence';
@@ -28,9 +28,9 @@ export interface SymbolChange {
   kind: ChangeKind;
   symbolKind: SymbolInfo['kind'];
   name: string;
-  /** Present for 'modified' — the old signature. */
+  /** Present for 'modified', the old signature. */
   oldSignature?: string;
-  /** Present for 'added' or 'modified' — the new signature. */
+  /** Present for 'added' or 'modified', the new signature. */
   newSignature?: string;
 }
 
@@ -49,7 +49,7 @@ export interface SemanticDiff {
 }
 
 // ---------------------------------------------------------------------------
-// Import extraction (regex-based — fast, no grammar needed)
+// Import extraction (regex-based, fast, no grammar needed)
 // ---------------------------------------------------------------------------
 
 interface ParsedImport {
@@ -179,7 +179,6 @@ function diffImports(
     if (!aImp) {
       changes.push({ kind: 'removed', specifier: spec, names: bImp.names });
     } else {
-      // Check if named imports changed
       const bSet = new Set(bImp.names);
       const aSet = new Set(aImp.names);
       const added = aImp.names.filter(n => !bSet.has(n));
@@ -231,7 +230,7 @@ export async function computeSemanticDiff(
 
   const langId = detectLanguage(filePath);
   if (!langId) {
-    // No language support — return import changes only if any
+    // No language support, return import changes only if any
     if (imports.length === 0) return null;
     return { symbols: [], imports, totalChanges: imports.length };
   }

@@ -1,5 +1,5 @@
 /**
- * hosted-session-panel.test.ts — what a person actually sees while a
+ * hosted-session-panel.test.ts, what a person actually sees while a
  * conversation runs in the daemon.
  *
  * Two things are protected here. The FEED's fold rules: history backfills,
@@ -93,7 +93,7 @@ describe('hosted session feed', () => {
 
     feed.apply(toolEvent('TOOL_FAILED', { callId: 'call-1', tool: 'read', error: 'no such file' }));
     expect(feed.getState().runningToolCalls).toEqual([]);
-    expect(feed.getState().rows[0]!.text).toBe('read — failed — no such file');
+    expect(feed.getState().rows[0]!.text).toBe('read: failed: no such file');
     expect(feed.getState().rows[0]!.streaming).toBe(false);
   });
 
@@ -136,7 +136,7 @@ describe('hosted session feed', () => {
 });
 
 describe('hosted session panel', () => {
-  test('unattached, it explains what a hosted session is and how to start one — and claims nothing', () => {
+  test('unattached, it explains what a hosted session is and how to start one; and claims nothing', () => {
     const panel = new HostedSessionPanel(new HostedSessionFeed());
     const text = frameText(panel.render(80, 20));
     expect(text).toContain('Not attached to a hosted session');
@@ -177,12 +177,12 @@ describe('hosted session panel', () => {
     const feed = new HostedSessionFeed();
     feed.attach(makeRecord({ status: 'terminated', terminatedReason: 'killed' }), []);
     const text = frameText(new HostedSessionPanel(feed).render(90, 24));
-    expect(text).toContain('ended — killed');
+    expect(text).toContain('ended: killed');
   });
 
   // Body lines are built at `width - 2` and laid into a full-width workspace,
   // the same convention every other panel in this repo uses (see
-  // notifications-panel.ts) — so a line is never WIDER than the panel, and the
+  // notifications-panel.ts), so a line is never WIDER than the panel, and the
   // frame is always exactly the requested height.
   test('every frame is exactly the requested height and never overflows the width', () => {
     const feed = new HostedSessionFeed();

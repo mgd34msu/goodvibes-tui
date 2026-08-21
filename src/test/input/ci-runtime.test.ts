@@ -74,7 +74,7 @@ describe('renderReport', () => {
       jobs: [
         { name: 'flaky', status: 'completed', conclusion: 'success', continueOnError: true },
       ] as CiReport['jobs'],
-      violations: ['job "flaky" is continue-on-error, which is banned — it can mask a failure'],
+      violations: ['job "flaky" is continue-on-error, which is banned; it can mask a failure'],
     });
     const text = renderReport(report);
     expect(text).toContain('[continue-on-error]');

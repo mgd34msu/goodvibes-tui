@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // fleet-read-model.ts
 //
-// (Fleet tree panel) — pure, testable read-model over the SDK's live
+// (Fleet tree panel), pure, testable read-model over the SDK's live
 // process registry (@pellux/goodvibes-sdk/platform/runtime/fleet, landed on
 // SDK main as). No BasePanel/rendering dependency: this module owns the
 // flat ProcessNode[] -> tree transformation, the honest cost/token
@@ -12,14 +12,14 @@
 //     FleetRegistryNode/FleetRegistry adapter pair. The real
 //     createProcessRegistry() ProcessNode already carries elapsedMs,
 //     usage, costUsd, costState, and currentActivity directly, so no
-//     adapter layer is needed here — this module consumes ProcessNode
+//     adapter layer is needed here, this module consumes ProcessNode
 //     straight from the registry and only owns the tree-walk + aggregate
 //     + presentation-mapping logic the SDK does not provide.
 //   - Tree-walk shape (connectors, cycle guard, leftover pass) is ported
 //     from renderer/process-modal.ts's appendAgentSubtree/
 //     appendAgentGroupEntries, generalized from AgentRecord to ProcessNode
 //     and from WRFC-role ordering to plain startedAt ordering (ProcessNode
-//     has no role concept — parentId alone expresses the hierarchy, and the
+//     has no role concept, parentId alone expresses the hierarchy, and the
 //     SDK guarantees every parentId either resolves or the node is a root).
 //   - Cost/token honesty mirrors agent-inspector-shared.ts's
 //     hasReportedUsage convention: an all-zero-but-present usage object is
@@ -65,8 +65,8 @@ export interface FleetSnapshot {
   /** Count of nodes in an actively-working state (see isRunningProcessState). */
   readonly runningCount: number;
   /**
-   * Ids of the nodes that are "blocked on me" — waiting on a user approval or
-   * user input right now (see isBlockedOnUserState) — in display (row) order.
+   * Ids of the nodes that are "blocked on me", waiting on a user approval or
+   * user input right now (see isBlockedOnUserState), in display (row) order.
    * This is a DERIVED view over the same node states the rows already carry,
    * never a second source of truth: the panel reads it to badge/jump, it is
    * not a store. Empty when nothing is waiting on the operator.
@@ -76,20 +76,20 @@ export interface FleetSnapshot {
 }
 
 // ---------------------------------------------------------------------------
-// State classification — glyph/tone mapping (pure, unit-testable)
+// State classification, glyph/tone mapping (pure, unit-testable)
 // ---------------------------------------------------------------------------
 
 export type FleetStateTone = 'active' | 'success' | 'failure' | 'warn' | 'muted';
 
 // Design ruling: this is a DIFFERENT table from the SDK presentation
-// contract's STATE_GLYPHS (@pellux/goodvibes-sdk/platform/presentation) — that
+// contract's STATE_GLYPHS (@pellux/goodvibes-sdk/platform/presentation), that
 // one is a 4-state semantic alias (good/warn/bad/info) shared by the TUI and
 // agent renderers; this one is a 12-state ProcessNode taxonomy specific to the
 // Fleet tree panel (thinking/executing-tool/awaiting-approval/streaming/
 // stalled/retrying/done/failed/killed/interrupted/idle/queued/paused), and no
 // other surface (checked: the agent has no fleet-panel renderer) consumes it
 // today. Per the presentation-parity brief, a table only moves to the SDK
-// contract when 2+ surfaces need it — this one stays TUI-renderer-local.
+// contract when 2+ surfaces need it, this one stays TUI-renderer-local.
 const STATE_GLYPHS: Record<ProcessState, string> = {
   thinking: '◔',
   'executing-tool': '●',
@@ -100,7 +100,7 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   done: '✓',
   failed: '✗',
   killed: '⊘',
-  // A distinct TERMINAL outcome from 'killed' —
+  // A distinct TERMINAL outcome from 'killed',
   // both come from AgentManager.cancel(), but a graceful interrupt request
   // ('the operator asked nicely') is display-distinguishable from a hard
   // kill. '◌' verified free against every other glyph in this table.
@@ -108,7 +108,7 @@ const STATE_GLYPHS: Record<ProcessState, string> = {
   idle: '·',
   queued: '…',
   // SDK behavior: schedules/triggers/automation jobs report 'paused' when
-  // disabled (previously mislabeled 'killed'). NOT terminal — resumable via
+  // disabled (previously mislabeled 'killed'). NOT terminal, resumable via
   // ProcessRegistry.resume() (the full pause/resume UI lives in
   // fleet-stop.ts). '❚' verified free against every other glyph in this table.
   paused: '❚',
@@ -124,7 +124,7 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
   done: 'success',
   failed: 'failure',
   killed: 'muted',
-  // 'warn' (amber), not 'muted' like killed — an interrupt is a deliberate
+  // 'warn' (amber), not 'muted' like killed, an interrupt is a deliberate
   // operator action worth noticing, not a passive/neutral outcome.
   interrupted: 'warn',
   idle: 'muted',
@@ -133,13 +133,13 @@ const STATE_TONES: Record<ProcessState, FleetStateTone> = {
   paused: 'muted',
 };
 
-/** Terminal states — interrupt/kill are not offered; not counted as running. */
+/** Terminal states, interrupt/kill are not offered; not counted as running. */
 const TERMINAL_STATES = new Set<ProcessState>(['done', 'failed', 'killed', 'interrupted']);
 
 /**
  * States that mean "this node is waiting on ME right now" via the state field
  * alone. The registry now also publishes the canonical `needsAttention`
- * projection (reason 'approval' | 'input' — see fleetNodeAttention below),
+ * projection (reason 'approval' | 'input', see fleetNodeAttention below),
  * which every surface prefers; this set remains only as the fallback mapping
  * for nodes without the projection, so nothing regresses on older registries.
  */
@@ -164,16 +164,16 @@ const KIND_TAGS: Record<ProcessKind, string> = {
   phase: 'phase',
   'work-item': 'item',
   // The repo source-tree code index (adapters/code-index.ts).
-  // A single leaf node — never a rollup of other flat-list nodes (see
-  // ROLLUP_KINDS below) — so no other list in this module needs updating.
+  // A single leaf node, never a rollup of other flat-list nodes (see
+  // ROLLUP_KINDS below), so no other list in this module needs updating.
   'code-index': 'index',
   // A hosted third-party coding agent (Claude Code / Codex / opencode) spawned
-  // over ACP (adapters/acp-host.ts). A plain leaf row — steer/stop/attention
+  // over ACP (adapters/acp-host.ts). A plain leaf row, steer/stop/attention
   // ride on its node capabilities and the SDK's needsAttention projection, so
   // this glyph/label is the only read-model special-casing it needs.
   'acp-agent': 'acp',
   // An externally-launched foreign coding agent (Claude Code / Codex / opencode)
-  // that goodvibes did NOT spawn — observed read-only from OS signals. The row's
+  // that goodvibes did NOT spawn, observed read-only from OS signals. The row's
   // first job is visibility ("it's in claude or codex"); it is never counted in
   // any our-fleet count, never carries a stop affordance, and steer is drill-in
   // only. See ObservedProcess handling in fleet-panel-format.ts.
@@ -200,14 +200,14 @@ export function isRunningProcessState(state: ProcessState): boolean {
   return RUNNING_STATES.has(state);
 }
 
-/** True when a node is waiting on a user approval or user input right now — "blocked on me". */
+/** True when a node is waiting on a user approval or user input right now, "blocked on me". */
 export function isBlockedOnUserState(state: ProcessState): boolean {
   return BLOCKED_ON_USER_STATES.has(state);
 }
 
 /**
  * The node's waiting-on-human classification, preferring the SDK's canonical
- * `needsAttention` projection (reason 'approval' | 'input' — broader than the
+ * `needsAttention` projection (reason 'approval' | 'input', broader than the
  * awaiting-approval state alone: it also covers a session waiting on user
  * input). Falls back to the state-derived mapping for registries that predate
  * the projection, so nothing regresses. This is THE membership every
@@ -228,11 +228,11 @@ export function isBlockedOnUserNode(node: ProcessNode): boolean {
  * The literal badge text for a waiting-on-human node, by reason. Every reason
  * is a first-class member of the ONE waiting-on-human state class (same ⚑
  * glyph, same jump key, same count) but names WHY in its own words:
- *   - 'approval' — a tool call is held for an approve/deny decision.
- *   - 'input'    — the node is otherwise blocked on operator input.
- *   - 'pick'     — a best-of-N attempt group is ready and only a human's
+ *   - 'approval', a tool call is held for an approve/deny decision.
+ *   - 'input'   , the node is otherwise blocked on operator input.
+ *   - 'pick'    , a best-of-N attempt group is ready and only a human's
  *                  winner pick advances it.
- *   - 'conflict' — a merge conflict needs a human resolution before the work
+ *   - 'conflict', a merge conflict needs a human resolution before the work
  *                  can land.
  * The pick/conflict wording is deliberately DISTINCT from the bare
  * 'blocked on you' so an operator reads the required act, not just the state.
@@ -248,7 +248,7 @@ export function fleetAttentionText(attention: ProcessAttention): string {
 }
 
 /**
- * The stall marker for a row — 'quiet Nm' (or 'quiet NhMm' past an hour),
+ * The stall marker for a row, 'quiet Nm' (or 'quiet NhMm' past an hour),
  * derived from the read-model's stall tell (pure timestamp comparison on the
  * registry side; a live node whose last observable output is older than the
  * threshold). Null when the node is not stalled-quiet.
@@ -290,12 +290,12 @@ export function hasFleetCost(costUsd: number | null | undefined, costState: Proc
 }
 
 // ---------------------------------------------------------------------------
-// Tree builder — pure, testable (ported tree-walk shape from process-modal.ts)
+// Tree builder, pure, testable (ported tree-walk shape from process-modal.ts)
 // ---------------------------------------------------------------------------
 
 /**
  * Sibling comparator. `blockedSubtree` is the set of node ids whose own subtree
- * contains a node blocked on the user (see collectBlockedSubtrees) — those
+ * contains a node blocked on the user (see collectBlockedSubtrees), those
  * siblings sort to the TOP of their level so a blocked node (and the family
  * that leads to it) floats up the tree, at every depth, without breaking the
  * parent/child structure. Ties fall back to startedAt then id, unchanged.
@@ -367,7 +367,7 @@ function appendSubtree(
 
 /**
  * Flatten a ProcessNode[] into a stable depth-first FleetTreeRow[] list.
- * Root-level rows (depth 0) carry an empty treePrefix (multi-root forest —
+ * Root-level rows (depth 0) carry an empty treePrefix (multi-root forest,
  * each top-level process family renders without a connector to its
  * unrelated siblings); connectors appear starting at depth 1. Defensive
  * cycle guard: a self-referencing or looping parentId chain is walked once
@@ -391,7 +391,7 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
   }
 
   // Blocked-on-user nodes (and the families that lead to them) float to the top
-  // at every level — see makeCompareNodes / collectBlockedSubtrees. Derived from
+  // at every level, see makeCompareNodes / collectBlockedSubtrees. Derived from
   // the live node states on this same pass; never a stored flag.
   const blockedSubtree = collectBlockedSubtrees(nodes, childrenByParent);
   const compare = makeCompareNodes(blockedSubtree);
@@ -416,11 +416,11 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
 /**
  * Kinds whose usage/costUsd (and, for 'running', whose derived state) are the
  * SDK's OWN rollup of *other* nodes that ALSO appear individually in the flat
- * list — summing across every flat node would therefore double-count them.
+ * list, summing across every flat node would therefore double-count them.
  * Per registry.ts assemble() + wrfc.ts adaptChain/adaptSubtask:
  *   - 'wrfc-chain': usage/costUsd = sum over the chain's member agents
  *     (chain.allAgentIds minus the owner) via adaptChain's aggregateCost/
- *     sumUsage — those member agents are pushed onto the flat node list as
+ *     sumUsage, those member agents are pushed onto the flat node list as
  *     their own 'agent' nodes too. The chain's derived ProcessState ('running'
  *     while any phase is active) likewise just mirrors its members' states.
  *   - 'wrfc-subtask': never carries usage/cost (adaptSubtask always sets
@@ -431,32 +431,32 @@ export function buildFleetRows(nodes: readonly ProcessNode[]): FleetTreeRow[] {
  *     nonzero cost/token reading (defense in depth against a future adapter
  *     change, not load-bearing).
  *
- * Orchestration-engine additions — verified against adapters/orchestration.ts:
+ * Orchestration-engine additions, verified against adapters/orchestration.ts:
  *   - 'workstream': adaptWorkstream SUMS every work-item's usage/costUsd
  *     exactly once (sumWorkItemUsage/aggregateWorkItemCost), the same
- *     "rollup of nodes that also appear individually" shape as adaptChain —
+ *     "rollup of nodes that also appear individually" shape as adaptChain,
  *     each work item ALSO appears as its own 'work-item' node in the flat
  *     list, so summing over every flat node would double-count. Its derived
  *     state likewise mirrors its items' states, so it is excluded from
  *     runningCount for the same non-double-counting reason as 'wrfc-chain'.
  *   - 'phase': adaptPhase reports NO usage/cost (mirrors adaptSubtask's
- *     "report nothing" choice exactly — usage: undefined, costUsd: null,
+ *     "report nothing" choice exactly, usage: undefined, costUsd: null,
  *     costState: 'unpriced') and its 'running' state mirrors whichever
  *     work-item currently occupies it. Same defense-in-depth inclusion as
  *     'wrfc-subtask': never contributes today, excluded anyway in case a
  *     future adapter change gives it one.
  *   - 'work-item' is deliberately NOT in this set: unlike a phase, a work
  *     item carries its OWN direct usage/cost (item.usage, cumulative across
- *     every phase it has visited) — it is the leaf contributor, the
+ *     every phase it has visited), it is the leaf contributor, the
  *     'wrfc-subtask'-for-capabilities analogue but the 'agent'-for-usage
  *     analogue. Excluding it would silently zero out real cost/token totals.
  *
- * 'code-index' is deliberately NOT in this set either —
+ * 'code-index' is deliberately NOT in this set either,
  * adaptCodeIndex yields exactly one standalone ProcessNode per registry
  * (never a parent whose children ALSO appear individually in the flat
  * list), so it is a leaf like 'agent'/'work-item', not a grouping construct.
  * It reports no usage/cost (an index build has no LLM turn), so it never
- * contributes to totalCost/totalTokens regardless — its running state DOES
+ * contributes to totalCost/totalTokens regardless, its running state DOES
  * count toward runningCount while building, which is correct: it is a real,
  * distinct unit of work, not an arithmetic sum of other rows.
  */
@@ -465,11 +465,11 @@ const ROLLUP_KINDS = new Set<ProcessKind>(['wrfc-chain', 'wrfc-subtask', 'workst
 /**
  * True for the WRFC owner agent's node specifically: an 'agent'-kind node
  * whose source AgentRecord has wrfcRole === 'owner'. The owner runs no LLM
- * turn itself — at chain completion the SDK backfills owner.usage from
+ * turn itself, at chain completion the SDK backfills owner.usage from
  * aggregateChainUsage(chain) (wrfc-controller.ts completeOwnerAgent), which
  * is the SAME phase-children total already carried by the chain node AND by
  * each phase-child agent's own node. Detected via the opaque `raw` field
- * (the AgentRecord) since ProcessNode itself has no wrfcRole — this is the
+ * (the AgentRecord) since ProcessNode itself has no wrfcRole, this is the
  * one place fleet-read-model reaches into `raw` for aggregation honesty
  * rather than drill-down display.
  */
@@ -483,7 +483,7 @@ function isWrfcOwnerAgentNode(node: ProcessNode): boolean {
  * Nodes whose usage/costUsd would double-count against other nodes already
  * in the same flat list (see ROLLUP_KINDS / isWrfcOwnerAgentNode above).
  * Excluded from totalCost/totalTokens. NOT excluded from runningCount by
- * this predicate alone — see isFleetRunningLeaf.
+ * this predicate alone, see isFleetRunningLeaf.
  */
 function isFleetAggregateRollupNode(node: ProcessNode): boolean {
   return ROLLUP_KINDS.has(node.kind) || isWrfcOwnerAgentNode(node);
@@ -492,14 +492,14 @@ function isFleetAggregateRollupNode(node: ProcessNode): boolean {
 /**
  * Nodes that count toward runningCount. Excludes ROLLUP_KINDS (a running
  * wrfc-chain/wrfc-subtask reflects the very same unit of work as its running
- * member agent, which is already counted) but — unlike the cost/token
- * exclusion above — does NOT exclude the WRFC owner agent: the owner is a
+ * member agent, which is already counted) but, unlike the cost/token
+ * exclusion above, does NOT exclude the WRFC owner agent: the owner is a
  * real, distinct supervising process (not an arithmetic sum of other rows),
  * so counting it as "running" alongside its phase children is not a double
  * count in the way summing its rolled-up usage/cost would be.
  */
 function isFleetRunningLeaf(node: ProcessNode): boolean {
-  // Observed foreign agents are NEVER counted in our own fleet counts — they
+  // Observed foreign agents are NEVER counted in our own fleet counts, they
   // are externally-launched sessions goodvibes only watches, not work it runs.
   return node.kind !== 'observed-external' && !ROLLUP_KINDS.has(node.kind) && isRunningProcessState(node.state);
 }
@@ -535,7 +535,7 @@ export function buildFleetSnapshot(nodes: readonly ProcessNode[], capturedAt: nu
 }
 
 /**
- * The fleet's honest leaf cost total — the SAME figure as
+ * The fleet's honest leaf cost total, the SAME figure as
  * FleetSnapshot.totalCost, but computed in one pass WITHOUT building the display
  * rows, for cheap per-frame use (the always-visible footer). Excludes rollup
  * aggregates (chain/subtask/workstream/phase) AND the WRFC owner (its usage is a
@@ -555,7 +555,7 @@ export function fleetLeafCostTotal(nodes: readonly ProcessNode[]): number | null
 
 /**
  * The fleet cost figure for the always-visible footer: fleetLeafCostTotal over a
- * fresh registry query, but ONLY while a fleet is live — the idle single-session
+ * fresh registry query, but ONLY while a fleet is live, the idle single-session
  * path must never pay the aggregate-on-read query() scan. Query failures degrade to
  * null (honest "no fleet cost"), never a throw into the render loop.
  */
@@ -569,7 +569,7 @@ export function footerFleetCost(queryNodes: () => readonly ProcessNode[], hasLiv
 }
 
 // ---------------------------------------------------------------------------
-// Read-model — two-factory shape (live / static), mirrors cockpit-read-model.ts
+// Read-model, two-factory shape (live / static), mirrors cockpit-read-model.ts
 // ---------------------------------------------------------------------------
 
 /** Payload of a `COMMUNICATION_CONSUMED` runtime-bus event, narrowed for FleetReadModel consumers. */
@@ -598,7 +598,7 @@ export interface FleetReadModel {
    * Queue a human message for a live in-process agent (or a
    * wrfc-subtask's current live member), delivered at its next turn
    * boundary. Honest refusal (`{queued:false,reason}`) for anything that
-   * cannot take mid-run input — see ProcessRegistry.steer's doc comment.
+   * cannot take mid-run input, see ProcessRegistry.steer's doc comment.
    */
   steer(id: string, text: string): SteerResult;
   /**
@@ -606,7 +606,7 @@ export interface FleetReadModel {
    * steer at its turn boundary" signal (COMMUNICATION_CONSUMED on the
    * runtime bus's 'communication' domain). Returns an unsubscribe function.
    * A read-model constructed without a runtimeBus (e.g. the static factory,
-   * or a test double) never invokes the listener — graceful no-op, matching
+   * or a test double) never invokes the listener, graceful no-op, matching
    * the steer()/steerable degrade-without-a-dep convention.
    */
   subscribeConsumed(listener: (event: SteerConsumedEvent) => void): () => void;
@@ -630,7 +630,7 @@ export type FleetRegistryLike = Pick<ProcessRegistry, 'query' | 'subscribe' | 'i
 
 /**
  * Create a live FleetReadModel backed by the SDK's ProcessRegistry.
- * `runtimeBus` is optional (narrowed to just `onDomain`) — without it,
+ * `runtimeBus` is optional (narrowed to just `onDomain`), without it,
  * `subscribeConsumed` degrades to a no-op, same shape as the registry's own
  * messageBus-optional degrade for steer()/steerable.
  */
@@ -685,7 +685,7 @@ export function createFleetReadModel(
   };
 }
 
-/** Create a static FleetReadModel for tests/goldens — no live registry, no timers. */
+/** Create a static FleetReadModel for tests/goldens, no live registry, no timers. */
 export function createStaticFleetReadModel(snapshot: FleetSnapshot): FleetReadModel {
   return {
     getSnapshot: () => snapshot,

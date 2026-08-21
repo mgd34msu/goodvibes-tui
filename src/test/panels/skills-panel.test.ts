@@ -15,7 +15,7 @@ import { trackDisposables } from '../helpers/disposables.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
- * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * A composed runtime graph starts a dozen pollers while it builds, the fleet
  * registry tick, the config-file watch, the memory governor, the knowledge
  * scheduler, the cross-session sweep, the orchestration snapshot writer, the
  * push-subscription sweep and the snapshot / retention / consolidation
@@ -95,7 +95,7 @@ describe('SkillsPanel', () => {
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
     });
-    // (the purge) — group B: skills migrated to the 'skills-modal' config-
+    // (the purge), group B: skills migrated to the 'skills-modal' config-
     // modal surface. The panel is no longer a registered type; the id
     // redirects to the surface (registered in registerBuiltinModals).
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(false);
@@ -217,7 +217,7 @@ describe('SkillsPanel', () => {
     panel.handleInput('/');
     panel.handleInput('b');
     let text = linesText(panel.render(120, 16));
-    // converged modal filter — pinned '[Filter] ' + literal '_' cursor contract.
+    // converged modal filter, pinned '[Filter] ' + literal '_' cursor contract.
     expect(text).toContain('[Filter] b');
 
     panel.handleInput('escape');
@@ -245,7 +245,7 @@ describe('SkillsPanel', () => {
     expect(panel.handleInput('enter')).toBe(true);
     // Deletion + rescan are TWO async steps off the confirmed keypress. Poll
     // the observable outcome (the rescanned empty state), not just the file
-    // removal — waiting only on the file loses the rescan race under CI load.
+    // removal, waiting only on the file loses the rescan race under CI load.
     for (let attempt = 0; attempt < 200; attempt += 1) {
       if (!existsSync(filePath) && linesText(panel.render(120, 16)).includes('No skills discovered')) break;
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -259,7 +259,7 @@ describe('SkillsPanel', () => {
   // (the purge): Enter used to open the skill's markdown source in the
   // preview panel via handlePanelIntegrationAction. 'preview' is
   // DELETE-disposition with no successor surface, so that cross-panel jump
-  // was removed rather than repointed — Enter is now a no-op key-consume
+  // was removed rather than repointed, Enter is now a no-op key-consume
   // (browse-only) on this list until migrates Skills to a modal.
   test('Enter on a skill row is consumed but no longer opens a preview panel', async () => {
     writeSkill(
@@ -268,14 +268,14 @@ describe('SkillsPanel', () => {
       ['---', 'name: alpha', 'description: Alpha skill', '---', ''].join('\n'),
     );
     // (the purge): skills is register-retired (redirects to the modal), so
-    // construct the retained panel class directly — the same pattern the other
-    // tests in this file use — to exercise its Enter/no-preview behavior.
+    // construct the retained panel class directly, the same pattern the other
+    // tests in this file use, to exercise its Enter/no-preview behavior.
     const skillsPanel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
     skillsPanel.onActivate();
     await skillsPanel.awaitReady();
     expect(skillsPanel.handleInput('enter')).toBe(true);
     // handlePanelIntegrationAction was removed from SkillsPanel entirely (see
-    // comment above) — probe through a narrow structural type to assert its
+    // comment above), probe through a narrow structural type to assert its
     // genuine absence rather than reading a property the class type no longer
     // declares.
     expect((skillsPanel as unknown as { handlePanelIntegrationAction?: unknown }).handlePanelIntegrationAction).toBeUndefined();

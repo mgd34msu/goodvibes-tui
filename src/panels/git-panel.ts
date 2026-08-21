@@ -57,7 +57,7 @@ type ViewItem =
   | { kind: 'commit'; entry: CommitEntry }
   | { kind: 'empty'; label: string };
 
-/** Subject carried by the panel's single ConfirmState — either a repo init or a commit. */
+/** Subject carried by the panel's single ConfirmState, either a repo init or a commit. */
 type GitConfirmSubject =
   | { kind: 'init' }
   | { kind: 'commit'; message: string };
@@ -119,7 +119,7 @@ export class GitPanel extends BasePanel {
   /** True when the last refresh failed because `workingDirectory` isn't a git repo. */
   private notGitRepo = false;
 
-  /** Single pending confirm — either "init this repo" or "commit with this message". */
+  /** Single pending confirm, either "init this repo" or "commit with this message". */
   private confirm: ConfirmState<GitConfirmSubject> | null = null;
 
   /** Non-null while composing a commit message; null means the compose UI is closed. */
@@ -211,12 +211,12 @@ export class GitPanel extends BasePanel {
       this.error = null;
       this.notGitRepo = false;
       this.rebuildItems();
-      // Do not clear expandedDiff during auto-refresh — only clear on explicit user action
+      // Do not clear expandedDiff during auto-refresh, only clear on explicit user action
       this._markDirtyAndRender();
     } catch (err) {
       const msg = summarizeError(err);
       if (/not a git\b/i.test(msg)) {
-        // I4: no more auto `git init` side effect — surface the state and let
+        // I4: no more auto `git init` side effect, surface the state and let
         // the user explicitly confirm initialisation with 'i'.
         this.notGitRepo = true;
         this.error = 'Not a git repository here. Press i to initialize one (explicit confirm).';
@@ -276,7 +276,7 @@ export class GitPanel extends BasePanel {
 
   // Input handling
 
-  /** Commit-message entry wants every char of a burst delivered one at a time — see Panel.isCapturingTextBurst. */
+  /** Commit-message entry wants every char of a burst delivered one at a time, see Panel.isCapturingTextBurst. */
   isCapturingTextBurst(): boolean {
     return this.commitMessage !== null;
   }
@@ -346,7 +346,7 @@ export class GitPanel extends BasePanel {
         return true;
       }
       case 'i': {
-        // Only meaningful when no repo is loaded — otherwise leave the key
+        // Only meaningful when no repo is loaded, otherwise leave the key
         // unconsumed instead of absorbing it as a silent no-op.
         if (!this.notGitRepo) return false;
         this.confirm = { subject: { kind: 'init' }, label: this.workingDirectory, verb: 'Init' };
@@ -437,7 +437,7 @@ export class GitPanel extends BasePanel {
     }
 
     if (item.kind === 'commit') {
-      // Root commits have no parent (`<hash>^` is invalid) — the catch below
+      // Root commits have no parent (`<hash>^` is invalid), the catch below
       // surfaces that instead of pretending a diff exists.
       const before = `${item.entry.hash}^`;
       const after = item.entry.hash;
@@ -543,7 +543,7 @@ export class GitPanel extends BasePanel {
       buildKeyboardHints(width, [{ keys: 'Enter', label: 'review & confirm' }, { keys: 'Esc', label: 'cancel' }], DEFAULT_PANEL_PALETTE),
     ];
     return buildPanelWorkspace(width, height, {
-      title: ' Git — Commit',
+      title: ' Git: Commit',
       sections: [{ title: 'Message', lines: [inputLine] }],
       footerLines,
       palette: DEFAULT_PANEL_PALETTE,

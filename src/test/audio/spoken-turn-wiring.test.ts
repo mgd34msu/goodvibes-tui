@@ -157,7 +157,7 @@ describe('wireSpokenTurnRuntime integration seam', () => {
       playerFactory: () => player,
     });
 
-    // No manual submitNextTurn call — always-speak mode handles it
+    // No manual submitNextTurn call, always-speak mode handles it
     events.emit('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'turn-auto', prompt: 'auto spoken' });
     events.emit('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-auto', content: 'Auto response.', accumulated: 'Auto response.' });
     events.emit('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 'turn-auto', response: 'Auto response.', stopReason: 'completed' });
@@ -188,7 +188,7 @@ describe('wireSpokenTurnRuntime integration seam', () => {
       playerFactory: () => player,
     });
 
-    // No submitNextTurn — always-speak is off, nothing should synthesize
+    // No submitNextTurn, always-speak is off, nothing should synthesize
     events.emit('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'turn-silent', prompt: 'silent' });
     events.emit('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-silent', content: 'Silent.', accumulated: 'Silent.' });
     events.emit('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 'turn-silent', response: 'Silent.', stopReason: 'completed' });

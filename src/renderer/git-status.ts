@@ -13,11 +13,11 @@ export interface GitHeaderInfo {
 const FALLBACK: GitHeaderInfo = { branch: '?', dirty: false, ahead: 0, behind: 0 };
 
 /**
- * GitStatusProvider — Fetches git state for the header bar.
+ * GitStatusProvider, Fetches git state for the header bar.
  *
  * Results are cached for 2 seconds (TTL). The next call after expiry triggers
  * a fresh fetch and returns the cached value immediately (stale-while-revalidate).
- * Never throws — returns FALLBACK on any error.
+ * Never throws, returns FALLBACK on any error.
  */
 export class GitStatusProvider {
   private cache: GitHeaderInfo = { ...FALLBACK };
@@ -61,7 +61,7 @@ export class GitStatusProvider {
    * GitService.isGitRepo() check) but amortizes the cost for the header: the
    * cheap synchronous isGitRepo() spawn runs every tick; the heavier async
    * status()+branch() fetch (this.refresh()) only runs when that boolean
-   * actually flips — e.g. an external `git init`, or `.git` removed.
+   * actually flips, e.g. an external `git init`, or `.git` removed.
    */
   startPolling(intervalMs: number, onChange: (info: GitHeaderInfo) => void): void {
     if (this.pollTimer !== null) return;
@@ -110,7 +110,7 @@ export class GitStatusProvider {
         statusResult.conflicted.length > 0 ||
         statusResult.not_added.length > 0;
       this.cache = {
-        // Empty `current` means an unborn HEAD — a repo with no commits yet.
+        // Empty `current` means an unborn HEAD, a repo with no commits yet.
         // Show "new" instead of an unfriendly "?" for that first-run case. (5a)
         branch: branchResult.current || 'new',
         dirty,
@@ -119,7 +119,7 @@ export class GitStatusProvider {
       };
       this.lastFetch = Date.now();
     } catch {
-      // Never throw — return fallback
+      // Never throw, return fallback
       if (this.lastFetch === 0) {
         this.cache = { ...FALLBACK };
         this.lastFetch = Date.now();

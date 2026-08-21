@@ -1,21 +1,21 @@
 /**
- * SystemMessageRouter — routes system messages to the appropriate surfaces
+ * SystemMessageRouter, routes system messages to the appropriate surfaces
  * based on their kind and configured routing target.
  *
  * Delivery is resolved from the message KIND ('system' | 'wrfc' |
  * 'operational'), which maps to a configurable routing target
  * (ui.systemMessages / ui.wrfcMessages / ui.operationalMessages, each
  * 'panel' | 'conversation' | 'both'). resolveSystemMessageDelivery() turns
- * that target — plus whether a panel is attached — into a { toPanel,
+ * that target, plus whether a panel is attached, into a { toPanel,
  * toConversation } decision.
  *
  * (the purge): the SystemMessagesPanel this router used to optionally
- * push into was DELETE-disposition (no surviving human surface — a picker
+ * push into was DELETE-disposition (no surviving human surface, a picker
  * over the old panel registry, not something worth a dedicated console) and
  * has been removed entirely, so this router now always resolves with
  * `hasPanel = false`. Per resolveSystemMessageDelivery's own contract that
  * means EVERY kind/target combination (including 'panel'-only) falls back
- * to `toConversation: true` — nothing this router routes can vanish; it all
+ * to `toConversation: true`, nothing this router routes can vanish; it all
  * reaches conversation.addTypedSystemMessage(), which the transcript
  * renders as a navigable system line. This is deliberate, not a regression:
  * operational chatter that used to be tucked away in a rarely-opened panel
@@ -122,7 +122,7 @@ export class SystemMessageRouter {
     _priority: SystemMessagePriority,
     kind: SystemMessageKind,
   ): void {
-    // Noise gate — keep first-run plumbing out of the transcript while the
+    // Noise gate, keep first-run plumbing out of the transcript while the
     // information stays reachable via other live surfaces. (item 1.)
     const verdict = classifyNoise(message, this.noiseDeps);
     if (verdict.action === 'drop') return;
@@ -137,7 +137,7 @@ export class SystemMessageRouter {
   /** Post-noise-gate delivery: resolve target and append to the conversation. */
   private deliver(message: string, kind: SystemMessageKind): void {
     const target = this.getTargetForKind(kind);
-    // hasPanel is always false now that panel delivery was removed — resolveSystemMessageDelivery's own
+    // hasPanel is always false now that panel delivery was removed, resolveSystemMessageDelivery's own
     // contract means every target ('panel' | 'conversation' | 'both')
     // resolves toConversation: true in that case (see file doc).
     const delivery = resolveSystemMessageDelivery(target, false);
@@ -166,17 +166,17 @@ export class SystemMessageRouter {
    * Record the folded provider-replay summary and reset the buffer.
    *
    * Papercut sweep item 2: this used to `deliver()` the folded line into the
-   * transcript — one line instead of a burst, but still boot plumbing the
+   * transcript, one line instead of a burst, but still boot plumbing the
    * user never asked to see there ("the transcript at boot shows product
    * signal only"). The persisted-provider set this summarizes is reachable
    * on demand via `/health provider` (providers-modal lists every registered
    * provider, discovered/local ones included) and `/model` (lists every
-   * selectable model, discovered ones included) — so nothing is lost by
+   * selectable model, discovered ones included), so nothing is lost by
    * keeping it out of the transcript. It still goes to the activity log
    * (.goodvibes/logs/activity.md) for diagnosis. Only this boot-only "— from
    * last session" burst moves; unrelated provider-discovery lines emitted
    * mid-session (e.g. "[Scan] Found …", "[Scan] … no longer reachable") are
-   * untouched — they never match PROVIDER_REPLAY_RE, so they never enter this
+   * untouched, they never match PROVIDER_REPLAY_RE, so they never enter this
    * buffer/fold path and keep reaching the transcript as live product signal.
    */
   flushProviderReplay(): void {
@@ -229,7 +229,7 @@ export class SystemMessageRouter {
    * Route a message that must reach the conversation unconditionally. Skips
    * the noise gate and the configured routing target, and marks the message
    * `isUserReceipt` so the splash check in
-   * ConversationManager.rebuildHistory() treats it as real visible content —
+   * ConversationManager.rebuildHistory() treats it as real visible content,
    * otherwise it would be invisible while the splash still owns the screen.
    *
    * Two callers qualify today:

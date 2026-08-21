@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// DiffReviewPanel — comment-on-hunk review loop.
+// DiffReviewPanel, comment-on-hunk review loop.
 //
 // Shows the current session's file changes per-file and hunk-boundaried, lets
 // the user select a hunk, attach a comment, and submit that comment to the
@@ -9,7 +9,7 @@
 //
 // Data source (labelled honestly in the panel): `git diff <base> -- <files>`,
 // where <files> is the set the SDK SessionChangeTracker recorded this session.
-// That is CURRENT working-tree content vs the base ref — not a turn-start
+// That is CURRENT working-tree content vs the base ref, not a turn-start
 // snapshot. The panel never presents a stale diff as current.
 // ---------------------------------------------------------------------------
 
@@ -88,7 +88,7 @@ export class DiffReviewPanel extends BasePanel {
   }
 
   // -------------------------------------------------------------------------
-  // Public API — driven by the /review command
+  // Public API, driven by the /review command
   // -------------------------------------------------------------------------
 
   /** Wire the steering submit path (the /review command passes ctx.submitInput). */
@@ -108,7 +108,7 @@ export class DiffReviewPanel extends BasePanel {
     this.requestRender();
   }
 
-  /** Re-load the session diff — used after a revert mutates the working tree. */
+  /** Re-load the session diff, used after a revert mutates the working tree. */
   async refresh(): Promise<void> {
     await this.loadSessionReview();
     this.requestRender();
@@ -143,7 +143,7 @@ export class DiffReviewPanel extends BasePanel {
    */
   async loadSessionReview(ref = 'HEAD'): Promise<void> {
     if (!GitService.isGitRepo(this.workingDirectory)) {
-      this.status = 'Not a git repository — no working-tree diff to review.';
+      this.status = 'Not a git repository: no working-tree diff to review.';
       this.loaded = true;
       this.markDirty();
       return;

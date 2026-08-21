@@ -9,7 +9,7 @@ import type { Panel } from '../../panels/types.ts';
 // panel-integration-actions.ts. Every one of those branches targeted a panel
 // class that is now DELETE- or RETIRE-disposition (FileExplorerPanel,
 // FilePreviewPanel, SymbolOutlinePanel, ApprovalPanel, TasksPanel,
-// OrchestrationPanel, AgentInspectorPanel) and was removed along with them —
+// OrchestrationPanel, AgentInspectorPanel) and was removed along with them,
 // see .goodvibes/audit/2026-07-04-wave6-briefs.json. What remains of
 // handlePanelIntegrationAction is a thin passthrough to a panel's own
 // `Panel.handlePanelIntegrationAction` hook, which is what this file now

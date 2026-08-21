@@ -2,7 +2,7 @@
 // local-auth-panel.test.ts
 //
 // Tests for LocalAuthPanel masked-password-entry mode:
-//   1. Masked rendering: bullet chars only — no plaintext in any rendered line
+//   1. Masked rendering: bullet chars only, no plaintext in any rendered line
 //   2. Submit path: Enter calls auth.addUser / auth.rotatePassword with secret
 //   3. Esc aborts cleanly without persisting anything
 //   4. Backspace editing removes last character from buffer
@@ -63,7 +63,7 @@ describe('LocalAuthPanel masked-entry render', () => {
     });
   });
 
-  test('render in masked-entry mode contains only bullet chars — no plaintext password', () => {
+  test('render in masked-entry mode contains only bullet chars; no plaintext password', () => {
     const panel = new LocalAuthPanel(EMPTY_AUTH_MANAGER);
     panel.openMaskedEntry('add-user', 'ops', auth);
 
@@ -380,7 +380,7 @@ describe('LocalAuthPanel masked-entry: secret never in history', () => {
     // Create an InputHistory backed by the temp dir so we can assert on the file.
     const history = new InputHistory({ historyPath });
 
-    // Simulate a command that triggered the masked panel — the command itself
+    // Simulate a command that triggered the masked panel, the command itself
     // has no password argument, so history stores only the safe prefix.
     history.add('/auth local add-user ops');
     history.save();

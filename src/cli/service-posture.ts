@@ -399,7 +399,7 @@ export async function buildCliServicePosture(
       binding,
       bindPosture: classifyBindPosture(binding),
       networkFacing: isNetworkFacing(enabled, binding),
-      // Never TCP-probe the fallback endpoint of an unrecognized hostMode —
+      // Never TCP-probe the fallback endpoint of an unrecognized hostMode,
       // a probe asserts a binding that does not exist.
       ...(options.probe && enabled && binding.recognized ? { reachable: await probeTcp(binding.host, binding.port) } : {}),
     };

@@ -1,4 +1,4 @@
-# Deployment and Services
+# Deployment and services
 
 ## Runtime shapes
 
@@ -31,17 +31,17 @@ In this mode you still get the full TUI, tools, providers, knowledge system, art
 ## Adopting or autostarting the daemon, and the in-process HTTP listener
 
 The daemon (`goodvibes-daemon`) is a separate product with its own binary and its own service
-unit — this app never constructs one in-process. What `daemon.enabled` (default `true`) actually
+unit. This app never constructs one in-process. What `daemon.enabled` (default `true`) actually
 does on this side:
 
 - adopt a compatible daemon already listening at the configured `controlPlane.host`/`controlPlane.port`
 - if none is reachable but a daemon service is installed on this machine and simply stopped, start
   that installed service and wait for it to answer
 - otherwise, run with no daemon: this surface still gives you the full TUI, tools, providers,
-  knowledge system, artifacts, and local runtime surfaces — cross-surface session visibility and
+  knowledge system, artifacts, and local runtime surfaces. Cross-surface session visibility and
   daemon-hosted capabilities are simply unavailable until a daemon appears
 
-The HTTP listener is different: it genuinely runs in-process in this app when enabled —
+The HTTP listener is different: it genuinely runs in-process in this app when enabled:
 
 - `danger.httpListener` (default `false`)
 
@@ -58,7 +58,7 @@ goodvibes-daemon install-service      # install and start the user service unit
 
 This path is useful for service-style deployments, automation entrypoints, and local integrations that do not need the interactive terminal UI. See that repository's own documentation for its full CLI and configuration reference.
 
-The installed package also exposes a `goodvibes-daemon` launcher — the suite installer (`goodvibes.sh/install.sh`) puts both `goodvibes` and `goodvibes-daemon` on `PATH`.
+The installed package also exposes a `goodvibes-daemon` launcher. The suite installer (`goodvibes.sh/install.sh`) puts both `goodvibes` and `goodvibes-daemon` on `PATH`.
 
 ## Connecting the TUI to an already-running daemon
 
@@ -66,9 +66,9 @@ The TUI normally adopts a compatible GoodVibes daemon it finds already listening
 
 Two ways to point a TUI instance at a daemon it did not start itself:
 
-**Interactive** — in the onboarding wizard's Network step, set "GoodVibes daemon source" to "Connect to an existing running daemon," fill in that daemon's host, port, and token, and select "Connect to this daemon now." This installs the token into `operator-tokens.json`, applies the host/port, and restarts the external-services controller immediately so you see whether the connection succeeded before finishing the rest of onboarding.
+**Interactive.** In the onboarding wizard's Network step, set "GoodVibes daemon source" to "Connect to an existing running daemon," fill in that daemon's host, port, and token, and select "Connect to this daemon now." This installs the token into `operator-tokens.json`, applies the host/port, and restarts the external-services controller immediately so you see whether the connection succeeded before finishing the rest of onboarding.
 
-**Non-interactive** — set the `GOODVIBES_DAEMON_TOKEN` environment variable to run the daemon with a fixed, known token, and point the TUI at the same host/port and token:
+**Non-interactive.** Set the `GOODVIBES_DAEMON_TOKEN` environment variable to run the daemon with a fixed, known token, and point the TUI at the same host/port and token:
 
 ```sh
 # Start the daemon once, with a fixed, known token:
@@ -161,14 +161,14 @@ This is the right shape when a future web UI, browser clients, SSE, and WebSocke
 
 ### Direct mode
 
-`direct` makes GoodVibes terminate HTTPS itself through Bun’s native server TLS.
+`direct` makes GoodVibes terminate HTTPS itself through Bun's native server TLS.
 
 If no explicit certificate paths are configured, GoodVibes looks for:
 
 - `~/.goodvibes/tui/certs/fullchain.pem`
 - `~/.goodvibes/tui/certs/privkey.pem`
 
-That convention also works well with self-hosted Let’s Encrypt deployment patterns where the operator copies or syncs certificate material into the GoodVibes home directory.
+That convention also works well with self-hosted Let's Encrypt deployment patterns where the operator copies or syncs certificate material into the GoodVibes home directory.
 
 If `direct` is enabled and the certificate files are missing or invalid, GoodVibes fails that server startup clearly instead of silently downgrading to plain HTTP.
 
@@ -188,9 +188,9 @@ When the onboarding wizard applies with the Zero Trust Tunnel Cloudflare compone
 
 The two `trustProxy` keys let the login rate-limiter key on the client address the tunnel forwards rather than the tunnel's own egress address. On their own, that address is read from `X-Forwarded-For`.
 
-**What `X-Forwarded-For` alone leaves open:** it is a header any client can set. A client that reaches the port directly — bypassing the tunnel — sets its own rate-limit bucket key and can rotate it at will.
+**What `X-Forwarded-For` alone leaves open:** it is a header any client can set. A client that reaches the port directly, bypassing the tunnel, sets its own rate-limit bucket key and can rotate it at will.
 
-`httpListener.trustCloudflare` is what closes it for the HTTP listener: the client address comes from `CF-Connecting-IP`, and only when the connecting peer is itself inside Cloudflare's published ranges (`isCloudflareIp`); otherwise the header is ignored. It requires `httpListener.trustProxy` — with that off, `CF-Connecting-IP` is ignored whatever this says — and the onboarding wizard's Zero Trust Tunnel step writes both, so this route arrives with the narrower read already on.
+`httpListener.trustCloudflare` is what closes it for the HTTP listener: the client address comes from `CF-Connecting-IP`, and only when the connecting peer is itself inside Cloudflare's published ranges (`isCloudflareIp`); otherwise the header is ignored. It requires `httpListener.trustProxy`. With that off, `CF-Connecting-IP` is ignored whatever this says, and the onboarding wizard's Zero Trust Tunnel step writes both, so this route arrives with the narrower read already on.
 
 **What is still open:** the control plane has no `trustCloudflare` equivalent, so its rate-limiter is still keyed on `X-Forwarded-For`. Keep both ports reachable only through the tunnel: restrict inbound traffic to Cloudflare egress IPs, which is what you want regardless, since direct exposure also bypasses tunnel-level access policies.
 
@@ -226,7 +226,7 @@ Relevant config:
 
 Behavior:
 
-- `bundled` uses Bun’s default bundled root certificates
+- `bundled` uses Bun's default bundled root certificates
 - `bundled+custom` adds operator-provided PEM roots on top of the bundled roots
 - `custom` trusts only the configured custom PEM roots
 - `allowInsecureLocalhost` disables certificate verification only for loopback HTTPS targets and is intended for local development
@@ -240,7 +240,7 @@ This is the right place to add enterprise or internal roots for outbound HTTPS a
 - entrypoint: `src/main.ts`
 - output: `dist/goodvibes`
 
-This build does not produce a daemon executable — the daemon binary is built and released from the `goodvibes-daemon` repository.
+This build does not produce a daemon executable. The daemon binary is built and released from the `goodvibes-daemon` repository.
 
 ## Local auth and service tokens
 
@@ -302,7 +302,7 @@ Service entries can use an existing `tokenKey` field, a SecretRef in the key fie
 
 ## Integration helpers
 
-GoodVibes exposes integration-helper and control/state APIs for external clients and helpers — this layer is explicitly control/state APIs, not a UI protocol. It is meant for callers like another GoodVibes instance, a future web frontend or companion app, setup/auth helpers, and operational integrations that need session, approval, account, health, knowledge, search, artifact, or delivery posture.
+GoodVibes exposes integration-helper and control/state APIs for external clients and helpers. This layer is explicitly control/state APIs, not a UI protocol. It is meant for callers like another GoodVibes instance, a future web frontend or companion app, setup/auth helpers, and operational integrations that need session, approval, account, health, knowledge, search, artifact, or delivery posture.
 
 The front doors into this layer:
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 /**
- * sync-platform-optional-deps.ts — release-time version-sync step.
+ * sync-platform-optional-deps.ts, release-time version-sync step.
  *
  * The main package.json declares the four platform binary packages as
  * optionalDependencies pinned to the exact current version, so the package
  * manager only ever resolves the matching just-published payload package. The
  * shared toolchain `release-cut` bumps the root `version` and each platform
  * manifest's `version`, but it does not know about the root
- * optionalDependencies map — that is TUI-specific. This script re-stamps those
+ * optionalDependencies map, that is TUI-specific. This script re-stamps those
  * entries to the (already-bumped) root version and runs as a `release-cut`
  * syncCommand (see toolchain.config.json → releaseCut.syncCommands).
  */
@@ -39,5 +39,5 @@ if (pkg.optionalDependencies) {
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`sync-platform-optional-deps: stamped ${PLATFORM_PACKAGES.length} platform optionalDependencies to ${version} (${changed} changed)`);
 } else {
-  console.log('sync-platform-optional-deps: no optionalDependencies map — nothing to stamp');
+  console.log('sync-platform-optional-deps: no optionalDependencies map; nothing to stamp');
 }

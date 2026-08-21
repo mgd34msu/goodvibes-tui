@@ -1,11 +1,11 @@
 /**
- * Composer capture intents — leading markers in the composer that write to
+ * Composer capture intents, leading markers in the composer that write to
  * memory instead of (or in addition to) sending a turn.
  *
  *   `!# <text>`  pins <text> to session memory AND sends it as a normal prompt
  *                (pre-existing behavior).
  *   `# <text>`   captures <text> as a session-memory note and does NOT send a
- *                turn — a pure "jot this down" gesture. A single leading `#`
+ *                turn, a pure "jot this down" gesture. A single leading `#`
  *                only; `##...` (markdown headings) is left alone so it can be
  *                sent as an ordinary prompt.
  *
@@ -38,7 +38,7 @@ const AT_MODEL_PATTERN = /@model:([^\s]+)/g;
  * The switch is a real, persisted selection (config `provider.model`), not a
  * per-turn override, so the runtime labels are updated alongside it and each
  * one is announced. An unknown id is reported as unknown rather than silently
- * dropped — the user asked for a specific backend and did not get it.
+ * dropped, the user asked for a specific backend and did not get it.
  */
 export function applyAtModelDirective(input: string, deps: AtModelDeps): string {
   let text = input;
@@ -84,7 +84,7 @@ function truncateForChip(text: string): string {
  * the returned `text` is empty, the caller should not send a turn.
  */
 export function applyComposerCapture(input: string, deps: ComposerCaptureDeps): ComposerCaptureResult {
-  // `!#` — pin to session memory and continue to send as a prompt.
+  // `!#`, pin to session memory and continue to send as a prompt.
   if (input.startsWith('!#')) {
     const memoryText = input.slice(2).trim();
     if (!memoryText) {
@@ -96,7 +96,7 @@ export function applyComposerCapture(input: string, deps: ComposerCaptureDeps): 
     return { text: memoryText, captured: true };
   }
 
-  // `#` (single, not `##`) — capture a note to session memory; do not send.
+  // `#` (single, not `##`), capture a note to session memory; do not send.
   const leading = input.replace(/^\s+/, '');
   if (leading.startsWith('#') && !leading.startsWith('##')) {
     const noteText = leading.slice(1).trim();

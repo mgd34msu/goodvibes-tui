@@ -131,7 +131,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
   const readinessIssues: string[] = [];
   for (const [endpointLabel, endpointBinding] of [['controlPlane', controlPlane], ['web', web], ['httpListener', httpListener]] as const) {
     if (!endpointBinding.recognized) {
-      readinessIssues.push(`${endpointLabel}.hostMode '${endpointBinding.hostMode}' is not a recognized mode (local|network|custom) — the daemon cannot bind this endpoint until it is corrected.`);
+      readinessIssues.push(`${endpointLabel}.hostMode '${endpointBinding.hostMode}' is not a recognized mode (local|network|custom); the daemon cannot bind this endpoint until it is corrected.`);
     }
   }
   if (shouldProbeControlPlane && controlPlane.recognized && config.get('controlPlane.enabled') === true && !controlPlaneReachable) {
@@ -218,7 +218,7 @@ export interface ListenerTestResult {
   readonly port: number;
   readonly recognized: boolean;
   readonly posture: ReturnType<typeof classifyBindPosture>;
-  /** undefined = NOT PROBED (unrecognized host mode) — a tri-state, never coerced to false. */
+  /** undefined = NOT PROBED (unrecognized host mode), a tri-state, never coerced to false. */
   readonly reachable: boolean | undefined;
   readonly service: {
     readonly enabled: unknown;
@@ -241,7 +241,7 @@ export async function buildListenerTestResult(runtime: CliCommandRuntime): Promi
   const enabled = runtime.configManager.get('danger.httpListener');
   const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'httpListener');
   const posture = classifyBindPosture(binding);
-  // Not-probed (unrecognized host mode) stays undefined — never a definite false.
+  // Not-probed (unrecognized host mode) stays undefined, never a definite false.
   const reachable = enabled === true
     ? (binding.recognized ? await probeTcp(binding.host, binding.port) : undefined)
     : false;
@@ -265,7 +265,7 @@ export async function buildListenerTestResult(runtime: CliCommandRuntime): Promi
     };
   }).filter((surface) => surface.enabled === true);
   const issues: string[] = [];
-  if (!binding.recognized) issues.push(`httpListener.hostMode '${binding.hostMode}' is not a recognized mode (local|network|custom) — the daemon cannot bind until it is corrected.`);
+  if (!binding.recognized) issues.push(`httpListener.hostMode '${binding.hostMode}' is not a recognized mode (local|network|custom); the daemon cannot bind until it is corrected.`);
   if (enabled !== true) issues.push('HTTP listener is disabled.');
   if (enabled === true && service.enabled !== true) issues.push('HTTP listener is enabled but service mode is off.');
   if (enabled === true && service.autostart !== true) issues.push('HTTP listener is enabled but service autostart is off.');

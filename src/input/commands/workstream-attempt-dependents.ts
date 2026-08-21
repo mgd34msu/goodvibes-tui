@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// workstream-attempt-dependents.ts — held-dependent rendering for non-leaf
+// workstream-attempt-dependents.ts, held-dependent rendering for non-leaf
 // best-of-N groups.
 //
 // A best-of-N item may be NON-LEAF: other items can depend on it. The scheduler
@@ -7,7 +7,7 @@
 // resolves the dependency to that winner (SDK scheduler.ts attemptGroup
 // DependencyStatus). This module mirrors that status computation as a pure
 // function so the /workstream attempts surface can show, honestly, which
-// dependents are held/waiting/released for a group — and reflect the losing
+// dependents are held/waiting/released for a group, and reflect the losing
 // attempts' cleanup that the winner pick performs.
 // ---------------------------------------------------------------------------
 
@@ -65,9 +65,9 @@ export interface DependentHold {
 function holdDescriptor(status: AttemptGroupDependencyStatus): string {
   switch (status) {
     case 'satisfied':
-      return 'released — the winner was picked and merged';
+      return 'released: the winner was picked and merged';
     case 'failed':
-      return 'blocked — every attempt in the group failed';
+      return 'blocked: every attempt in the group failed';
     default:
       return 'held until the winner is picked and merged';
   }

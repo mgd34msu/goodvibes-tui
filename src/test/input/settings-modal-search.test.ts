@@ -16,7 +16,7 @@ import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
 
 // `ConfigSetting` carries no `label` field (labels are looked up separately
 // in production via `getSettingLabel`, keyed off the real, finite `ConfigKey`
-// union — see src/renderer/settings-modal-helpers.ts). These tests exercise
+// union, see src/renderer/settings-modal-helpers.ts). These tests exercise
 // the generic scoring/search algorithms with synthetic keys that are not
 // part of that union, so the fixture's display label is tracked here instead
 // of on the (fake) ConfigSetting object.
@@ -50,7 +50,7 @@ function identity(e: SettingEntry): string {
 // TASK-051: deepEqual
 // ---------------------------------------------------------------------------
 
-describe('deepEqual — scalar types', () => {
+describe('deepEqual: scalar types', () => {
   test('identical strings', () => expect(deepEqual('hello', 'hello')).toBe(true));
   test('different strings', () => expect(deepEqual('hello', 'world')).toBe(false));
   test('identical numbers', () => expect(deepEqual(42, 42)).toBe(true));
@@ -63,7 +63,7 @@ describe('deepEqual — scalar types', () => {
   test('string !== number same value', () => expect(deepEqual('42', 42)).toBe(false));
 });
 
-describe('deepEqual — arrays', () => {
+describe('deepEqual: arrays', () => {
   test('identical empty arrays', () => expect(deepEqual([], [])).toBe(true));
   test('identical arrays', () => expect(deepEqual([1, 2, 3], [1, 2, 3])).toBe(true));
   test('different element', () => expect(deepEqual([1, 2, 3], [1, 2, 4])).toBe(false));
@@ -73,7 +73,7 @@ describe('deepEqual — arrays', () => {
   test('array vs non-array', () => expect(deepEqual([], {})).toBe(false));
 });
 
-describe('deepEqual — plain objects', () => {
+describe('deepEqual: plain objects', () => {
   test('identical empty objects', () => expect(deepEqual({}, {})).toBe(true));
   test('identical objects', () => expect(deepEqual({ a: 1 }, { a: 1 })).toBe(true));
   test('different value', () => expect(deepEqual({ a: 1 }, { a: 2 })).toBe(false));
@@ -87,7 +87,7 @@ describe('deepEqual — plain objects', () => {
     expect(deepEqual({ ids: [1, 2] }, { ids: [1, 3] })).toBe(false));
 });
 
-describe('deepEqual — isDefault correctness for non-scalar defaults', () => {
+describe('deepEqual: isDefault correctness for non-scalar defaults', () => {
   // Simulate the bug: same-shape array default created twice → isDefault was false
   test('array default same shape: was false with ===, is true with deepEqual', () => {
     const defaultVal = ['a', 'b'];
@@ -122,7 +122,7 @@ describe('deepEqual — isDefault correctness for non-scalar defaults', () => {
 // TASK-049: fuzzyScoreSettingEntry
 // ---------------------------------------------------------------------------
 
-describe('fuzzyScoreSettingEntry — tier ordering', () => {
+describe('fuzzyScoreSettingEntry: tier ordering', () => {
   test('empty query returns 0 (match)', () => {
     const entry = makeEntry('display.stream', 'Stream', 'enable streaming');
     expect(fuzzyScoreSettingEntry('', entry, identity)).toBe(0);
@@ -146,7 +146,7 @@ describe('fuzzyScoreSettingEntry — tier ordering', () => {
   });
 
   test('description-only hit scores third tier (1000–1999)', () => {
-    // key: 'ui.wrfcMessages', label: 'WRFC Messages' — neither contains 'routing'
+    // key: 'ui.wrfcMessages', label: 'WRFC Messages', neither contains 'routing'
     // description 'controls message routing for wrfc flow' does
     const entry = makeEntry(
       'ui.wrfcmessages',
@@ -181,7 +181,7 @@ describe('fuzzyScoreSettingEntry — tier ordering', () => {
   });
 });
 
-describe('fuzzyScoreSettingEntry — rank ordering within tier', () => {
+describe('fuzzyScoreSettingEntry: rank ordering within tier', () => {
   test('earlier key position scores higher within key tier', () => {
     // 'stream' at position 0 of key scores higher than at position 4
     const entryA = makeEntry('stream.enabled', 'Enable', 'desc');

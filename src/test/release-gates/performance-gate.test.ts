@@ -1,5 +1,5 @@
 /**
- * Performance Gate — Release Gate 3
+ * Performance Gate, Release Gate 3
  *
  * Verifies that:
  * - SLO budget definitions exist for all key metrics
@@ -260,13 +260,13 @@ describe('performance gate: SLO collector', () => {
 // ---------------------------------------------------------------------------
 //
 // Delegates to the shared scripts/perf-frame-bench.ts helper so the test and
-// the CI gate script always measure identically — changing methodology in the
+// the CI gate script always measure identically, changing methodology in the
 // helper updates both consumers simultaneously.
 //
-// Budgets (ratchets — tighten when measured drops below budget/3):
+// Budgets (ratchets, tighten when measured drops below budget/3):
 //   p95 budget: 16ms (stated product SLO; measured p95 ~4ms on dev linux-x64)
 //   p99 budget: 110ms (ceil(measured p99 ~26.88ms × 4), rounded to 10ms; CI-safe headroom)
-// NEVER launches the interactive TUI binary — all headless.
+// NEVER launches the interactive TUI binary, all headless.
 
 describe('performance gate: frame micro-bench', () => {
   test('compositor p95 ≤ 16ms and p99 ≤ 110ms over 200 full-repaint frames', async () => {

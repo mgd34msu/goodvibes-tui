@@ -99,7 +99,7 @@ function makeOptimizer(options: {
 // Mode transitions
 // ---------------------------------------------------------------------------
 
-describe('ProviderOptimizer — mode transitions', () => {
+describe('ProviderOptimizer: mode transitions', () => {
   test('starts in manual mode', () => {
     const opt = makeOptimizer();
     expect(opt.mode).toBe('manual');
@@ -130,7 +130,7 @@ describe('ProviderOptimizer — mode transitions', () => {
   test('setMode pinned preserves existing pin state', () => {
     const opt = makeOptimizer();
     opt.pin('anthropic', 'claude-opus-4-5');
-    // pin() already sets mode to pinned — setting it again keeps pin
+    // pin() already sets mode to pinned, setting it again keeps pin
     opt.setMode('pinned');
     expect(opt.mode).toBe('pinned');
     expect(opt.pinnedTarget).not.toBeNull();
@@ -141,7 +141,7 @@ describe('ProviderOptimizer — mode transitions', () => {
 // Pin / Unpin
 // ---------------------------------------------------------------------------
 
-describe('ProviderOptimizer — pin / unpin', () => {
+describe('ProviderOptimizer: pin / unpin', () => {
   test('pin sets mode to pinned', () => {
     const opt = makeOptimizer();
     opt.pin('openai', 'gpt-4o');
@@ -171,10 +171,10 @@ describe('ProviderOptimizer — pin / unpin', () => {
 });
 
 // ---------------------------------------------------------------------------
-// selectRoute — disabled (returns null)
+// selectRoute, disabled (returns null)
 // ---------------------------------------------------------------------------
 
-describe('ProviderOptimizer — selectRoute disabled', () => {
+describe('ProviderOptimizer: selectRoute disabled', () => {
   test('returns null when disabled regardless of mode', () => {
     const opt = makeOptimizer({ enabled: false });
     expect(opt.selectRoute({})).toBeNull();
@@ -189,10 +189,10 @@ describe('ProviderOptimizer — selectRoute disabled', () => {
 });
 
 // ---------------------------------------------------------------------------
-// selectRoute — enabled (exercises capability registry)
+// selectRoute, enabled (exercises capability registry)
 // ---------------------------------------------------------------------------
 
-describe('ProviderOptimizer — selectRoute enabled', () => {
+describe('ProviderOptimizer: selectRoute enabled', () => {
   test('returns a RouteDecision when enabled with no candidates', () => {
     const clock = makeClock();
     const opt = makeOptimizer({ enabled: true, clock: clock.now });
@@ -233,7 +233,7 @@ describe('ProviderOptimizer — selectRoute enabled', () => {
 // Bounded fallback log trimming
 // ---------------------------------------------------------------------------
 
-describe('ProviderOptimizer — fallback log bounded at 200 entries', () => {
+describe('ProviderOptimizer: fallback log bounded at 200 entries', () => {
   test('log grows up to 200', () => {
     const opt = makeOptimizer();
     for (let i = 0; i < 200; i++) {
@@ -278,7 +278,7 @@ describe('ProviderOptimizer — fallback log bounded at 200 entries', () => {
 // testFallback
 // ---------------------------------------------------------------------------
 
-describe('ProviderOptimizer — testFallback', () => {
+describe('ProviderOptimizer: testFallback', () => {
   test('returns FallbackTestResult with empty registry', () => {
     const clock = makeClock(3_000_000);
     const opt = makeOptimizer({ clock: clock.now });
@@ -310,7 +310,7 @@ describe('ProviderOptimizer — testFallback', () => {
 // explainCurrentRoute
 // ---------------------------------------------------------------------------
 
-describe('ProviderOptimizer — explainCurrentRoute', () => {
+describe('ProviderOptimizer: explainCurrentRoute', () => {
   test('returns a RouteExplanation for the current model', () => {
     const opt = makeOptimizer({
       models: [makeModelDefinition()],
@@ -329,7 +329,7 @@ describe('ProviderOptimizer — explainCurrentRoute', () => {
 // setEnabled
 // ---------------------------------------------------------------------------
 
-describe('ProviderOptimizer — setEnabled', () => {
+describe('ProviderOptimizer: setEnabled', () => {
   test('starts disabled when constructed with false', () => {
     const opt = makeOptimizer();
     expect(opt.enabled).toBe(false);

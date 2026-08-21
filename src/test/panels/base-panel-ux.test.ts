@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// base-panel-ux.test.ts — BasePanel I2 (error surface) + I3 (loading spinner)
+// base-panel-ux.test.ts, BasePanel I2 (error surface) + I3 (loading spinner)
 //
 // BasePanel is abstract, so we test via a minimal concrete subclass.
 // ---------------------------------------------------------------------------
@@ -9,7 +9,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { BasePanel } from '../../panels/base-panel.ts';
 
 // ---------------------------------------------------------------------------
-// Test subclass — exposes protected methods as public for assertions
+// Test subclass, exposes protected methods as public for assertions
 // ---------------------------------------------------------------------------
 
 class TestPanel extends BasePanel {
@@ -159,7 +159,7 @@ describe('BasePanel loading spinner (I3)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Default mouse-wheel handling — delegates to up/down handleInput
+// Default mouse-wheel handling, delegates to up/down handleInput
 // ---------------------------------------------------------------------------
 
 class NavPanel extends BasePanel {
@@ -206,7 +206,7 @@ describe('BasePanel.handleScroll default', () => {
 
 // ---------------------------------------------------------------------------
 // A replay fix: markDirty requests a compositor frame via the wired
-// requester — without it, live panels (fleet ticks/subscriptions) sat stale
+// requester, without it, live panels (fleet ticks/subscriptions) sat stale
 // while the app was idle until the next keypress produced a frame.
 // ---------------------------------------------------------------------------
 
@@ -229,7 +229,7 @@ describe('markDirty frame requesting', () => {
       panel.exposeMarkDirty();
       expect(panel.needsRender).toBe(true);
       expect(frames).toBe(1);
-      // Already dirty: the pending frame covers it — no second request
+      // Already dirty: the pending frame covers it, no second request
       // (guards against mid-render self-dirtying scheduling frames forever).
       panel.exposeMarkDirty();
       expect(frames).toBe(1);
@@ -241,7 +241,7 @@ describe('markDirty frame requesting', () => {
     }
   });
 
-  test('no requester wired — markDirty still safe and sets the flag', () => {
+  test('no requester wired: markDirty still safe and sets the flag', () => {
     setPanelFrameRequester(null);
     const panel = new DirtyPanel();
     panel.markRendered();

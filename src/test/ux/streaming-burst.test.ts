@@ -4,7 +4,7 @@
  * Verifies that simultaneous streaming, concurrent tool calls, and agent
  * state changes do not corrupt conversation state consistency.
  *
- * All tests use pure state manipulation — no real I/O, no event bus.
+ * All tests use pure state manipulation, no real I/O, no event bus.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
@@ -88,7 +88,7 @@ function makeRunningAgent(id: string, parentId?: string): RuntimeAgent {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('ux:streaming-burst — simultaneous streaming + tool + agent bursts', () => {
+describe('ux:streaming-burst; simultaneous streaming + tool + agent bursts', () => {
   let state: RuntimeState;
 
   beforeEach(() => {
@@ -121,7 +121,7 @@ describe('ux:streaming-burst — simultaneous streaming + tool + agent bursts', 
         },
       };
 
-      // Contract: turnState remains 'streaming' — tool dispatch does not preempt it
+      // Contract: turnState remains 'streaming', tool dispatch does not preempt it
       expect(selectConversation(withTools).turnState).toBe('streaming');
       expect(selectConversation(withTools).activeToolCalls.size).toBe(3);
       expect(selectConversation(withTools).toolCallsThisTurn).toBe(3);

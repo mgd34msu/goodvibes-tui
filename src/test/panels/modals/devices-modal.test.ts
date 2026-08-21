@@ -30,7 +30,7 @@ describe('devices modal render (full text, no clipping)', () => {
       expect(flowed).toContain('last seen 5h ago');
       expect(flowed).toContain('last seen never');
       // The legacy-shared guidance renders in full.
-      expect(flowed).toContain('Legacy shared token: active — migrate a device off it (m), then revoke it (s).');
+      expect(flowed).toContain('Legacy shared token: active; migrate a device off it (m), then revoke it (s).');
       // No rendered line exceeds the terminal width (full text wraps, never clips).
       for (const row of rows) expect(row.length).toBeLessThanOrEqual(width);
     });

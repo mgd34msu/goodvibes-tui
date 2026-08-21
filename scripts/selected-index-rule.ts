@@ -1,5 +1,5 @@
 /**
- * selected-index-rule.ts — panel selection-safety architecture-gate rule.
+ * selected-index-rule.ts, panel selection-safety architecture-gate rule.
  *
  * Bans the raw token `[this.selectedIndex]` in src/panels/**\/*.ts.
  *
@@ -10,8 +10,8 @@
  * points at the wrong row. To make that class of bug structurally impossible,
  * panel code must read the selected row through `getSelectedItem()` (the
  * ScrollableListPanel accessor that indexes `getVisibleItems()`), through a
- * function-scope `const visible = this.getVisibleItems()` local, or — for
- * bespoke panels with their own selection state — through a single private
+ * function-scope `const visible = this.getVisibleItems()` local, or, for
+ * bespoke panels with their own selection state, through a single private
  * selected-item accessor.
  *
  * The base classes that OWN list navigation (scrollable-list-panel.ts,
@@ -28,7 +28,7 @@ export const SELECTED_INDEX_TOKEN = '[this.selectedIndex]';
 
 /**
  * Base-class files that own list-cursor navigation and legitimately index the
- * visible list by `this.selectedIndex`. Keep this list minimal — prefer
+ * visible list by `this.selectedIndex`. Keep this list minimal, prefer
  * converting bespoke panels (step 2 of the panel-selection hardening) over
  * adding entries here. Each entry must carry a justifying comment.
  */

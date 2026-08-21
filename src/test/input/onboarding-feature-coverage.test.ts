@@ -5,7 +5,7 @@
  *  - every SDK capability is REACHABLE in onboarding (as a surface
  *    side-effect, the HITL experience step, or a guided feature unit);
  *  - enabling a guided feature writes its real enablement settings key
- *    together with its config — there is no separate flag namespace;
+ *    together with its config, there is no separate flag namespace;
  *  - a default-on feature turned off persists its domain key at the off
  *    value, and a run that accepts the defaults never moves an enablement
  *    key away from its schema default;
@@ -115,7 +115,7 @@ describe('onboarding feature coverage', () => {
         const feature = getFeatureSetting(unit.flagId)!;
         if (config.has(feature.enablement.key)) {
           // Shared enablement keys may carry a sibling's mode (e.g. distiller
-          // over structured) — what matters is the feature reads as ON.
+          // over structured), what matters is the feature reads as ON.
           expect(isFeatureValueEnabled(feature, config.get(feature.enablement.key))).toBe(true);
         } else {
           expect(isFeatureDefaultOn(unit.flagId)).toBe(true);

@@ -112,9 +112,9 @@ export async function prepareShellCliRuntime(
   } = resolveShellEntrypointOwnership(roots, cli.flags.workingDir ?? (cli.command === 'tui' ? cli.commandArgs[0] : undefined));
   configureActivityLogger(join(bootstrapWorkingDir, '.goodvibes', 'logs'));
   // Only prints the first time the rule is actually appended (not on every
-  // launch) — see ensureGoodvibesGitignore's return-value doc.
+  // launch), see ensureGoodvibesGitignore's return-value doc.
   if (ensureGoodvibesGitignore(bootstrapWorkingDir)) {
-    console.log("[goodvibes] added '.goodvibes/' to .gitignore — this directory holds transient TUI state (logs, session cache, exec output), not project source.");
+    console.log("[goodvibes] added '.goodvibes/' to .gitignore: this directory holds transient TUI state (logs, session cache, exec output), not project source.");
   }
   const daemonConfigMigration = runDaemonConfigMigration(bootstrapHomeDirectory);
   if (daemonConfigMigration?.migrated && (daemonConfigMigration.marker.moved.length + daemonConfigMigration.marker.discarded.length) > 0) {
@@ -250,7 +250,7 @@ export async function prepareShellCliRuntime(
       ? renderOnboardingCliStatus(statusOptions)
       : renderCliStatus(statusOptions));
     // Advisory findings are notes on an otherwise-usable install and must
-    // never make a healthy install report failure — only a must-fix finding
+    // never make a healthy install report failure, only a must-fix finding
     // exits non-zero; --strict (for CI) flips advisories to failures too.
     process.exit(cli.command === 'doctor' ? resolveDoctorExitCode(snapshot.findings, cli.flags.strict) : 0);
   }

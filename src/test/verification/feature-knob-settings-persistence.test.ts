@@ -8,8 +8,8 @@
  *
  * These tests supply that missing coverage: for every key in
  * FEATURE_KNOB_LOCAL_SETTINGS they exercise the real persistence behavior end to
- * end — schema default, `set()` write to disk, reload into a fresh
- * ConfigManager, read-back equality, and reset-to-default — through the actual
+ * end, schema default, `set()` write to disk, reload into a fresh
+ * ConfigManager, read-back equality, and reset-to-default, through the actual
  * ConfigManager, not a mock. Passing here is what makes counting these keys as
  * behavior-verified in the ledger honest.
  */
@@ -66,7 +66,7 @@ function freshManager(): { manager: ConfigManager; root: string; configDir: stri
   return { manager, root, configDir };
 }
 
-describe('feature-knob settings — inventory integrity', () => {
+describe('feature-knob settings: inventory integrity', () => {
   test('every ledger-counted feature-knob key exists in CONFIG_SCHEMA with a defined default', () => {
     for (const key of FEATURE_KNOB_LOCAL_SETTINGS) {
       const schema = schemaByKey.get(key);
@@ -85,7 +85,7 @@ describe('feature-knob settings — inventory integrity', () => {
   });
 });
 
-describe('feature-knob settings — default exposure', () => {
+describe('feature-knob settings: default exposure', () => {
   let manager: ConfigManager;
 
   beforeEach(() => {
@@ -100,7 +100,7 @@ describe('feature-knob settings — default exposure', () => {
   });
 });
 
-describe('feature-knob settings — write/reload persistence round-trip', () => {
+describe('feature-knob settings: write/reload persistence round-trip', () => {
   test('each key persists to disk and reloads into a fresh ConfigManager', () => {
     const { manager, root, configDir } = freshManager();
 
@@ -114,7 +114,7 @@ describe('feature-knob settings — write/reload persistence round-trip', () => 
     }
 
     // A brand-new manager over the same on-disk config must read every value
-    // back — proving the write actually reached durable storage.
+    // back, proving the write actually reached durable storage.
     const reloaded = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, configDir });
     reloaded.load();
     for (const key of FEATURE_KNOB_LOCAL_SETTINGS) {
@@ -125,7 +125,7 @@ describe('feature-knob settings — write/reload persistence round-trip', () => 
   });
 });
 
-describe('feature-knob settings — reset restores default', () => {
+describe('feature-knob settings: reset restores default', () => {
   test('reset returns each key to its schema default and persists that', () => {
     const { manager, root, configDir } = freshManager();
 

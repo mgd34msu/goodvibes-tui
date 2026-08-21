@@ -1,12 +1,12 @@
 /**
- * PanelNotificationFeed — the read-model behind the `panel_only` notification
+ * PanelNotificationFeed, the read-model behind the `panel_only` notification
  * target.
  *
  * The SDK's NotificationRouter (`@/runtime/index.ts` -> platform runtime `ui`
  * barrel) can route a notification's `RoutingDecision.target` to
  * `'panel_only'`, meaning: don't surface this in the conversation or the
  * status bar, but it must still reach a real, visible place. Before this
- * file, nothing in this repo consumed that target outside of tests — a
+ * file, nothing in this repo consumed that target outside of tests, a
  * panel-routed notification (including every burst- or batch-collapsed one)
  * had nowhere to go. This feed is that place: a caller holding a routed
  * `Notification` + `RoutingDecision` pair calls `record()`, and
@@ -16,8 +16,8 @@
  * are tracked by their `batchKey` and accumulate an honest running count
  * instead of rendering one row per suppressed duplicate.
  *
- * Production wiring — something in the running app actually calling
- * `record()` with live notifications — rides the SDK round that turns on
+ * Production wiring, something in the running app actually calling
+ * `record()` with live notifications, rides the SDK round that turns on
  * adaptive notification suppression by default; this feed and its panel are
  * the render target that work lands on, built ahead of it so the target is
  * never missing when that switch flips.
@@ -33,7 +33,7 @@ export interface PanelFeedEntry {
   /** Unix ms of the most recent notification folded into this entry. */
   readonly timestamp: number;
   readonly reasonCode: RoutingDecision['reasonCode'];
-  /** How many notifications this entry represents. 1 for a standalone item; >1 for a collapsed group. Always the true count — never estimated. */
+  /** How many notifications this entry represents. 1 for a standalone item; >1 for a collapsed group. Always the true count, never estimated. */
   readonly collapsedCount: number;
 }
 
@@ -53,7 +53,7 @@ export class PanelNotificationFeed {
 
   /**
    * Record a routed notification. Only notifications actually targeted at
-   * `panel_only` are kept — a caller passing anything else is a mistake (the
+   * `panel_only` are kept, a caller passing anything else is a mistake (the
    * router sent it elsewhere), so it's dropped rather than shown in the
    * wrong place.
    */

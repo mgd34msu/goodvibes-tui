@@ -208,7 +208,7 @@ describe('CLI service posture', () => {
     // docs/decisions/2026-07-05-daemon-by-default.md). A user's existing
     // explicit off-switch on disk is preserved by the SDK's config migration
     // (ConfigManager.load -> migrateDangerDaemonAlias), which rewrites it onto
-    // daemon.enabled=false BEFORE this posture read — it is no longer
+    // daemon.enabled=false BEFORE this posture read, it is no longer
     // reachable via ConfigManager.setDynamic('danger.daemon', ...) at runtime
     // because the key no longer exists in the schema.
     const projectRoot = join(root, 'project');

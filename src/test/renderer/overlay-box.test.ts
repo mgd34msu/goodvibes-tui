@@ -3,7 +3,7 @@ import { createOverlayBoxLayout, createOverlayBorderLine } from '../../renderer/
 
 describe('createOverlayBoxLayout', () => {
   test('normal terminal widths are unaffected by the hostile-size clamp', () => {
-    // 100-wide terminal, 4-col margin, 72-col requested max — well above the
+    // 100-wide terminal, 4-col margin, 72-col requested max, well above the
     // 20-column floor, so the clamp should never engage here.
     const layout = createOverlayBoxLayout(100, 4, 72);
     expect(layout.width).toBe(72);
@@ -25,7 +25,7 @@ describe('createOverlayBoxLayout', () => {
     const margin = 4;
     const layout = createOverlayBoxLayout(terminalWidth, margin, 72);
     const line = createOverlayBorderLine(terminalWidth, layout, '┌', '─', '┐');
-    // The border line must stay exactly at the declared terminal width — a
+    // The border line must stay exactly at the declared terminal width, a
     // pre-fix box width wider than the terminal walks the right border cell
     // off the end of the array, silently growing the line.
     expect(line.length).toBe(terminalWidth);

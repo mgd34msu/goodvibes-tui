@@ -1,5 +1,5 @@
 /**
- * session-picker-hosted.test.ts — the session picker's third source.
+ * session-picker-hosted.test.ts, the session picker's third source.
  *
  * A person asking "what sessions are there?" opens this modal, and after Phase
  * B the honest answer includes conversations the daemon is running. Two things
@@ -45,7 +45,7 @@ function fixedRoster(snapshot: HostedRosterSnapshot): SessionPickerHostedRoster 
   return { snapshot: () => snapshot, refresh: async () => {} };
 }
 
-describe('session picker — daemon-hosted sessions', () => {
+describe('session picker: daemon-hosted sessions', () => {
   let tmpDir: string;
   let sessionManager: SessionManager;
 
@@ -66,7 +66,7 @@ describe('session picker — daemon-hosted sessions', () => {
     expect(modal.hostedRoster).toEqual({ sessions: [], capturedAt: null, note: null });
   });
 
-  test('a read-but-empty roster says the daemon hosts nothing — not that nothing was read', () => {
+  test('a read-but-empty roster says the daemon hosts nothing; not that nothing was read', () => {
     const modal = new SessionPickerModal(sessionManager, undefined,
       fixedRoster({ sessions: [], capturedAt: 1_700_000_000_000, note: null }));
     modal.open();

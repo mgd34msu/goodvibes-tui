@@ -88,7 +88,7 @@ export class SelectionModal {
   }
 
   moveUp(): void {
-    // Skip category headers (items with no id-based content — filtered items include only selectable ones)
+    // Skip category headers (items with no id-based content, filtered items include only selectable ones)
     if (this.filteredItems.length === 0) return;
     this.selectedIndex = this.selectedIndex > 0
       ? this.selectedIndex - 1
@@ -127,7 +127,7 @@ export class SelectionModal {
     return this.filteredItems[this.selectedIndex] ?? null;
   }
 
-  /** Fuzzy match items against query — resets filteredItems */
+  /** Fuzzy match items against query, resets filteredItems */
   private filterItems(): void {
     if (this.query.length === 0) {
       this.filteredItems = this.items.slice();

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { narrateInboundEvent } from '../../runtime/bootstrap-core.ts';
 
 // ---------------------------------------------------------------------------
-// narrateInboundEvent — operator narration of inbound channel events
+// narrateInboundEvent, operator narration of inbound channel events
 // ---------------------------------------------------------------------------
 
 describe('narrateInboundEvent', () => {

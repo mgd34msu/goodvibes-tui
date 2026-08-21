@@ -20,7 +20,7 @@ describe('InputFeedContext reuse (α1)', () => {
       },
     );
 
-    // Build a minimal InputHandler — only needs enough to construct without crashing.
+    // Build a minimal InputHandler, only needs enough to construct without crashing.
     // We import dynamically so the spy is in place before the module executes feedInputTokens.
     const { InputHandler } = require('../../input/handler.ts') as typeof import('../../input/handler.ts');
 
@@ -102,7 +102,7 @@ describe('InputFeedContext reuse (α1)', () => {
 
   test('mutable fields on the context reflect updated handler state between feeds', () => {
     // This test verifies that per-feed sync correctly propagates prompt/cursorPos
-    // changes between feeds — i.e., the context is not stale after the first feed.
+    // changes between feeds, i.e., the context is not stale after the first feed.
     const capturedContexts: Array<{ prompt: string; cursorPos: number }> = [];
     const spy = spyOn(handlerFeedModule, 'feedInputTokens').mockImplementation(
       (ctx: InputFeedContext) => {
@@ -156,12 +156,12 @@ describe('InputFeedContext reuse (α1)', () => {
       uiServices as unknown as import('../../runtime/ui-services.ts').UiRuntimeServices,
     );
 
-    // Feed keystroke 'a' — mock simulates ctx.prompt becoming 'x', cursorPos=1
+    // Feed keystroke 'a', mock simulates ctx.prompt becoming 'x', cursorPos=1
     handler.feed('a');
     expect(capturedContexts[0]?.prompt).toBe('x');
     expect(capturedContexts[0]?.cursorPos).toBe(1);
 
-    // Feed keystroke 'b' — handler syncs ctx.prompt='x' from handler.prompt (set after 1st feed).
+    // Feed keystroke 'b', handler syncs ctx.prompt='x' from handler.prompt (set after 1st feed).
     // The mock will then append another 'x', making prompt='xx', cursorPos=2.
     handler.feed('b');
     expect(capturedContexts[1]?.prompt).toBe('xx');

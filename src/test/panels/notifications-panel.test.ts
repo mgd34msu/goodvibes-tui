@@ -46,7 +46,7 @@ describe('PanelNotificationFeed', () => {
     const entries = feed.list();
     expect(entries).toHaveLength(1);
     expect(entries[0]?.collapsedCount).toBe(5);
-    // The count is the true accumulated count, not an estimate — the last
+    // The count is the true accumulated count, not an estimate, the last
     // title folded in is retained so the entry still says something concrete.
     expect(entries[0]?.title).toBe('Progress update 4');
   });
@@ -63,7 +63,7 @@ describe('PanelNotificationFeed', () => {
   });
 });
 
-describe('NotificationsPanel — render', () => {
+describe('NotificationsPanel: render', () => {
   test('empty state names the target honestly when nothing has routed here yet', () => {
     const panel = new NotificationsPanel(new PanelNotificationFeed());
     const text = renderText(panel);

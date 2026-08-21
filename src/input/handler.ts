@@ -181,10 +181,10 @@ export class InputHandler implements InputHandlerLike {
   public nextPasteId = 1;
   public lastCtrlCTime = 0;
   /** Pending "hide the exit notice" timer from the last empty-prompt Ctrl+C
-   * press, if any — cleared before every subsequent press decides its own
+   * press, if any, cleared before every subsequent press decides its own
    * outcome (see handleCtrlC in handler-content-actions.ts). */
   public lastCtrlCTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  /** Long-lived feed context — reused across every feed() call to avoid per-keystroke allocation. */
+  /** Long-lived feed context, reused across every feed() call to avoid per-keystroke allocation. */
   public feedContext!: import('./handler-feed.ts').InputFeedContext;
   public commandRegistry: CommandRegistry | null = null;
   public commandContext: CommandContext | undefined = undefined;
@@ -197,7 +197,7 @@ export class InputHandler implements InputHandlerLike {
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
   public configModal = new ConfigModal();
-  /** item 5 — paste-flood guard state, mutated in place across tokens (never reallocated). */
+  /** item 5, paste-flood guard state, mutated in place across tokens (never reallocated). */
   private panelBurstGuard: PanelBurstGuardState = { timestamps: [], suspended: false, hintShown: false };
   public mcpWorkspace = new McpWorkspace();
   public onboardingWizard = new OnboardingWizardController();
@@ -225,7 +225,7 @@ export class InputHandler implements InputHandlerLike {
   public conversationManager: ConversationManager | null = null;
   public selectionCallback: SelectionModalCallback | null = null;
   public syncFeedSelectionCallback: ((callback: SelectionModalCallback | null) => void) | null = null;
-  /** FIFO queue for overlapping openSelection() calls — see selection-modal-queue.ts. */
+  /** FIFO queue for overlapping openSelection() calls, see selection-modal-queue.ts. */
   private selectionQueue!: SelectionModalQueue;
   /** Time of last [COPIED] block feedback, for brief display. */
   public lastBlockCopyTime = 0;
@@ -283,7 +283,7 @@ export class InputHandler implements InputHandlerLike {
       uiServices.providers.providerRegistry,
     );
     // retirement: ProcessModal/LiveTailModal/AgentDetailModal were removed
-    // — F2 now opens the Fleet panel, which subsumes the live process tree.
+    //, F2 now opens the Fleet panel, which subsumes the live process tree.
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager, uiServices.sessions.sessionBroker, getSharedHostedSessionRoster(), () => this.requestRender()); // third source: the daemon-hosted roster
     this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
@@ -292,7 +292,7 @@ export class InputHandler implements InputHandlerLike {
   }
 
   /**
-   * initFeedContext — Build the long-lived InputFeedContext once via factory.
+   * initFeedContext, Build the long-lived InputFeedContext once via factory.
    * See feed-context-factory.ts for full field documentation.
    */
   public initFeedContext(): void {
@@ -411,7 +411,7 @@ export class InputHandler implements InputHandlerLike {
    * openSelection - Open the generic selection modal with a callback.
    * The callback receives SelectionResult on selection, or null on cancel/escape.
    * A second call while one is already showing queues FIFO instead of
-   * overwriting it — see selection-modal-queue.ts.
+   * overwriting it, see selection-modal-queue.ts.
    */
   public openSelection(
     title: string,
@@ -443,7 +443,7 @@ export class InputHandler implements InputHandlerLike {
   public handleBlockSave(): void { handleBlockSaveForHandler(this); }
   public executeBlockAction(actionId: string): void { executeBlockActionForHandler(this, actionId); }
   /** The block the user is actually looking at: the viewport's bottom-most
-   *  visible line (see getViewportBottomLine's doc) — not the raw scrollTop,
+   *  visible line (see getViewportBottomLine's doc), not the raw scrollTop,
    *  which is off-screen-above once the transcript exceeds one page. Every
    *  anchor-based block action (Ctrl+Y/B/S/A, Tab, the block-actions menu)
    *  resolves its target through this, so they all agree on what "nearest
@@ -585,7 +585,7 @@ export class InputHandler implements InputHandlerLike {
    */
   public clipboardSource: ClipboardPasteSource = { pasteImageFromClipboard, pasteFromClipboard };
 
-  /** Content width for wrapping — set by main.ts via setContentWidth(). */
+  /** Content width for wrapping, set by main.ts via setContentWidth(). */
   public contentWidth = 76;
   public panelMouseLayout: PanelMouseLayout | null = null;
 

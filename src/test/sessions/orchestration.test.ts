@@ -107,7 +107,7 @@ describe('SessionTaskGraph', () => {
       expect(result.error).toMatch(/Self-dependency/);
     });
 
-    test('is idempotent — duplicate edge returns ok without adding', () => {
+    test('is idempotent: duplicate edge returns ok without adding', () => {
       graph.upsertRef(makeRef('s1', 't1'));
       graph.upsertRef(makeRef('s1', 't2'));
       graph.addEdge({ sessionId: 's1', taskId: 't1' }, { sessionId: 's1', taskId: 't2' });

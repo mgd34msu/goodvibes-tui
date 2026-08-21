@@ -1,6 +1,6 @@
 // Deliberately per-repo test scaffolding, byte-identical to the sibling product's copy by design: it binds to this repo's own working tree, source layout and Bun test lifecycle, so a shared home would mean inventing a test-only published package rather than hoisting anything.
 /**
- * Tests for the makeProjectTempDir helper — the directory it creates, where it
+ * Tests for the makeProjectTempDir helper, the directory it creates, where it
  * puts it, and that the directory is handed to the shared cleanup registry.
  *
  * That the registry is actually drained when a `bun test` process ends is
@@ -57,7 +57,7 @@ describe('makeProjectTempDir', () => {
 
   // NOTE ON WHAT USED TO BE HERE. This slot held a test called "exit-hook
   // registration: dirs created in same process are cleaned up on exit". It
-  // spawned `bun --eval`, which is `bun run` semantics — a runtime where
+  // spawned `bun --eval`, which is `bun run` semantics, a runtime where
   // `process.on('exit')` DOES fire. `bun test`, the runtime the whole suite
   // actually uses, never fires exit handlers, so the test reported green while
   // the cleanup it described removed nothing on any real run. Cleanup under

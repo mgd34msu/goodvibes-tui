@@ -1,5 +1,5 @@
 /**
- * /ops interventions — live proof of the operator control-plane path.
+ * /ops interventions, live proof of the operator control-plane path.
  *
  * This surface shipped dead for three months: OpsControlPlane construction
  * was gated on 'operator-control-plane', an id never registered in any SDK
@@ -78,7 +78,7 @@ function makeEnv() {
   return { store, bus, dispatch, taskManager, opsControlPlane, opsApi, printed, run };
 }
 
-describe('ops gate — control-plane gateway capability', () => {
+describe('ops gate: control-plane gateway capability', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -110,7 +110,7 @@ describe('ops gate — control-plane gateway capability', () => {
   });
 });
 
-describe('/ops task interventions — real task manager, real control plane', () => {
+describe('/ops task interventions: real task manager, real control plane', () => {
   test('pause blocks a running task, resume returns it to running', async () => {
     const env = makeEnv();
     const task = env.taskManager.createTask({ kind: 'exec', title: 'long run', owner: 'test', cancellable: true });

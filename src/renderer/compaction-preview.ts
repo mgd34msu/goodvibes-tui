@@ -4,7 +4,7 @@
  * Pre-compact: shows an honest estimate of what compaction will do
  * (message count and token estimate before → after). The SDK has no dry-run
  * API; we derive the after-estimate from the DEFAULT_COMPACTION_CONFIG
- * totalCeiling (6500 tokens) — clearly labelled as an ESTIMATE.
+ * totalCeiling (6500 tokens), clearly labelled as an ESTIMATE.
  *
  * Post-compact: shows a before/after notice using the CompactionEvent
  * data returned by compactMessages(), which contains the real
@@ -49,7 +49,7 @@ export interface CompactionAfterOptions {
   /**
    * Out-of-band quality-score grade for this run (). Omitted or null
    * when no score was computed (e.g. the small-window compaction path, which
-   * has no CompactionEvent to key a score by) — no line is rendered then.
+   * has no CompactionEvent to key a score by), no line is rendered then.
    */
   readonly qualityScore?: CompactionQualityScore | null | undefined;
 }
@@ -78,7 +78,7 @@ export function buildCompactionPreview(opts: CompactionPreviewOptions): string {
 
   return (
     `[Context] ${triggerStr} conversation: ~${fmtN(tokensBefore)} tokens across ${msgCount} message${msgCount === 1 ? '' : 's'}${contextStr}.` +
-    ` Estimated result: ~${fmtN(tokensAfterEstimate)} tokens (estimate — actual depends on content).` +
+    ` Estimated result: ~${fmtN(tokensAfterEstimate)} tokens (estimate; actual depends on content).` +
     (pinStr ? ` ${pinStr.trim()}` : '')
   );
 }
@@ -129,7 +129,7 @@ function fmtN(n: number): string {
 /**
  * Build the /keep command usage text (shown when no args are provided).
  *
- * Exported for testability — the shell-core handler renders this string directly.
+ * Exported for testability, the shell-core handler renders this string directly.
  */
 export function buildPinUsageText(): string {
   return (
@@ -147,7 +147,7 @@ export function buildPinUsageText(): string {
  * @param text - The pinned text
  * @param count - Total pinned memory count after adding
  *
- * Exported for testability — the shell-core handler renders this string directly.
+ * Exported for testability, the shell-core handler renders this string directly.
  */
 export function buildPinSuccessText(id: string, text: string, count: number): string {
   return (

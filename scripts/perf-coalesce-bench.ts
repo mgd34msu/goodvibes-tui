@@ -1,24 +1,24 @@
 /**
- * perf-coalesce-bench.ts — render-call coalescing, before/after.
+ * perf-coalesce-bench.ts, render-call coalescing, before/after.
  *
  * Measures the streaming-burst scenario the acceptance calls for: N ticks,
  * each firing K render requests (the direct render() fan-out main.ts drives on the
  * streaming/turn hot path).
  *
- *   BEFORE  — every request runs a synchronous Compositor.composite() the instant
+ *   BEFORE , every request runs a synchronous Compositor.composite() the instant
  *             it is called (the pre-coalescing behavior). K composites per tick.
- *   AFTER   — the same requests route through the same-tick microtask coalescer
+ *   AFTER  , the same requests route through the same-tick microtask coalescer
  *             (createRenderScheduler from @pellux/goodvibes-terminal-shell, the same
  *             one main.ts wires up); each tick composites exactly once.
  *
  * Reports composites-per-burst (an exact count) and wall time for both. The frame
- * content is fixed WITHIN a tick and changes BETWEEN ticks, so — exactly as in
- * production — the first composite of a tick emits a diff and the redundant
+ * content is fixed WITHIN a tick and changes BETWEEN ticks, so, exactly as in
+ * production, the first composite of a tick emits a diff and the redundant
  * within-tick composites hit the compositor's clean-diff cheap path. That makes
  * the wall-time delta the honest, bounded "(k-1) redundant composites per tick"
  * win the baseline report predicts, not an inflated full-repaint figure.
  *
- * Not a gate — a measurement harness. Never launches the interactive TUI.
+ * Not a gate, a measurement harness. Never launches the interactive TUI.
  *
  *   Run: bun run scripts/perf-coalesce-bench.ts
  */
@@ -68,7 +68,7 @@ function buildReq() {
   return { width: WIDTH, height: HEIGHT, header, viewport, footer } as Parameters<Compositor['composite']>[0];
 }
 
-/** BEFORE: synchronous fan-out — K composites per tick. */
+/** BEFORE: synchronous fan-out, K composites per tick. */
 function runSynchronous(): { composites: number; ms: number } {
   const comp = new Compositor(stubStdout);
   const req = buildReq();
@@ -85,7 +85,7 @@ function runSynchronous(): { composites: number; ms: number } {
   return { composites, ms: performance.now() - t0 };
 }
 
-/** AFTER: same-tick coalesced — 1 composite per tick. */
+/** AFTER: same-tick coalesced, 1 composite per tick. */
 function runCoalesced(): { composites: number; ms: number } {
   const comp = new Compositor(stubStdout);
   const req = buildReq();
@@ -116,7 +116,7 @@ function main(): void {
   const msPerTickBefore = before.ms / TICKS;
   const msPerTickAfter = after.ms / TICKS;
 
-  console.log('render-call coalescing — streaming-burst bench');
+  console.log('render-call coalescing: streaming-burst bench');
   console.log(`  config: ${TICKS} ticks x ${RENDERS_PER_TICK} render()/tick, ${WIDTH}x${HEIGHT} frame`);
   console.log('');
   console.log('  BEFORE (synchronous fan-out):');

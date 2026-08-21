@@ -12,7 +12,7 @@ describe('computePromptContentWidth', () => {
   });
 
   test('floors at 1 instead of going zero or negative on a hostile-narrow terminal', () => {
-    // 10 cols: boxWidth = 10 - 4 = 6; raw content = 6 - 4 - 3 = -1 — must floor at 1.
+    // 10 cols: boxWidth = 10 - 4 = 6; raw content = 6 - 4 - 3 = -1, must floor at 1.
     expect(computePromptContentWidth(10)).toBe(1);
     // Even narrower still floors at 1, never goes negative.
     expect(computePromptContentWidth(1)).toBe(1);

@@ -424,7 +424,7 @@ describe('security: PluginQuarantineEngine', () => {
 // exercise the trust/quarantine delegation through the underlying engines in a
 // coordinated integration scenario that mirrors PluginManager's internal logic.
 
-describe('security: PluginManager layer — trust/quarantine integration', () => {
+describe('security: PluginManager layer; trust/quarantine integration', () => {
   let trustStore: PluginTrustStore;
   let quarantineEngine: PluginQuarantineEngine;
 
@@ -479,17 +479,14 @@ describe('security: PluginManager layer — trust/quarantine integration', () =>
     // re-resolves capabilities with the updated trust tier.
     const pluginName = 'restored-plugin';
 
-    // Step 1: quarantine
     const quarantineManifest = makeCapManifest(['shell.exec', 'register.tool']);
     quarantineEngine.quarantine(pluginName, quarantineManifest, 'initial quarantine');
     expect(quarantineEngine.isQuarantined(pluginName)).toBe(true);
 
-    // Step 2: operator upgrades trust and lifts quarantine
     trustStore.setTier(pluginName, 'trusted');
     quarantineEngine.lift(pluginName);
     expect(quarantineEngine.isQuarantined(pluginName)).toBe(false);
 
-    // Step 3: plugin reloads — fresh manifest resolved with trusted tier
     const freshManifest = makeManifest(['shell.exec', 'register.tool']);
     const tier = trustStore.getTier(pluginName);
     const resolved = resolveCapabilityManifest(pluginName, freshManifest, () => true, tier);

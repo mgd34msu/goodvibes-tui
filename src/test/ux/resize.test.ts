@@ -10,7 +10,7 @@
  *   2. InputHandler.setContentWidth() updates the content width used for
  *      prompt wrapping calculations.
  *
- * Neither test asserts "exactly one render call" or timing — those would be
+ * Neither test asserts "exactly one render call" or timing, those would be
  * fragile if a debounce is added. Both assert observable state changes.
  *
  * Test #1 pins the delta contract precisely: the mock stream has no
@@ -18,7 +18,7 @@
  * syncedOutput=false. wrapSynced() therefore returns the empty string for
  * an all-identical diff, and compositor.composite() guards with `if (diff)`
  * before calling stdout.write(). An identical second frame produces exactly
- * 0 writes — not merely "fewer than the first paint".
+ * 0 writes, not merely "fewer than the first paint".
  *
  * No real I/O, no real timers. All synchronous.
  */
@@ -87,15 +87,15 @@ function makeInputHandler(): InputHandler {
 // Tests: Compositor resize chain
 // ---------------------------------------------------------------------------
 
-describe('ux:resize — compositor.resetDiff causes full redraw on next composite', () => {
+describe('ux:resize; compositor.resetDiff causes full redraw on next composite', () => {
   test('second composite without resetDiff emits exactly 0 writes for an identical frame (strict delta contract)', () => {
     const { compositor, stream } = makeCompositor();
-    // First composite: full initial render — writes entire screen
+    // First composite: full initial render, writes entire screen
     compositor.composite(makeRequest(80, 24));
     const firstCount = stream.writes.length;
     expect(firstCount).toBeGreaterThan(0);
 
-    // Second composite with identical content — the diff engine finds no dirty/changed
+    // Second composite with identical content, the diff engine finds no dirty/changed
     // cells, produces an empty diff string, and wrapSynced() returns it unchanged
     // (syncedOutput=false on the mock stream). The `if (diff)` guard in composite()
     // suppresses the write entirely, so exactly 0 writes are emitted.
@@ -169,7 +169,7 @@ describe('ux:resize — compositor.resetDiff causes full redraw on next composit
 // Tests: InputHandler.setContentWidth (prompt reflow on resize)
 // ---------------------------------------------------------------------------
 
-describe('ux:resize — setContentWidth updates prompt wrapping width', () => {
+describe('ux:resize; setContentWidth updates prompt wrapping width', () => {
   let input: InputHandler;
 
   beforeEach(() => {

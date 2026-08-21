@@ -9,7 +9,7 @@ import { renderPanelWorkspaceBar } from './panel-workspace-bar.ts';
 /**
  * Per-panel render cache for dirty-flag skipping.
  *
- * Maintainability hazard — mid-render invalidation race:
+ * Maintainability hazard, mid-render invalidation race:
  *
  * If an event listener (e.g. a runtime-bus subscriber) fires DURING a panel's
  * `render()` call and mutates state such that `needsRender = true`, the
@@ -25,7 +25,7 @@ import { renderPanelWorkspaceBar } from './panel-workspace-bar.ts';
  *
  * The fix (now applied): snapshot `needsRender` before calling `render()` and
  * only call `markRendered()` when no concurrent invalidation occurred during
- * the render pass — preserving any mid-render invalidation.
+ * the render pass, preserving any mid-render invalidation.
  */
 interface PanelRenderCache {
   lines: Line[];
@@ -40,7 +40,7 @@ const panelRenderCache = new WeakMap<Panel, PanelRenderCache>();
  * its invalidate() to bump the counter stored in this map.
  *
  * Race-guard: snapshot the generation before render(), compare after. If it
- * changed, a mid-render invalidation occurred — leave needsRender=true.
+ * changed, a mid-render invalidation occurred, leave needsRender=true.
  */
 const panelRenderGen = new WeakMap<Panel, { gen: number }>();
 
@@ -72,13 +72,13 @@ export function renderPanel(panel: Panel, width: number, height: number): Line[]
   const genBefore = genState.gen;
   const lines = panel.render(width, height);
   // Only call markRendered() when no mid-render invalidation occurred.
-  // If the generation changed during render(), a concurrent invalidate() fired —
+  // If the generation changed during render(), a concurrent invalidate() fired,
   // leave needsRender=true so the next frame re-renders with the new state.
   if (genState.gen === genBefore) {
     panel.markRendered();
   }
   // If gen changed, needsRender is already true (invalidate() set it); do not
-  // call markRendered() — the next frame will pick it up.
+  // call markRendered(), the next frame will pick it up.
   panelRenderCache.set(panel, { lines, width, height });
   return lines;
 }

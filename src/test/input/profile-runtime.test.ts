@@ -31,7 +31,7 @@ import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '@/input/settings-
 import { CATEGORY_INFO, CATEGORY_LABELS } from '@/renderer/settings-modal-helpers.ts';
 
 // ---------------------------------------------------------------------------
-// Fixtures — a realistic populated profile, values chosen so a leak is obvious
+// Fixtures, a realistic populated profile, values chosen so a leak is obvious
 // ---------------------------------------------------------------------------
 
 const SHIPPING = '200 Office Way, Lansing, MI 48933, US';
@@ -242,11 +242,11 @@ describe('/profile forget on a field that is not recorded', () => {
       ok: true,
       reason: null,
       changes: [{ kind: 'forget', fieldId: 'commerce.shippingAddress', section: 'Commerce', label: 'shipping address', superseded: false }],
-      disclosure: 'Noted — removed your shipping address in your profile.',
+      disclosure: 'Noted: removed your shipping address in your profile.',
     });
     expect(result).not.toBe(MALFORMED);
     const text = renderProfileWriteResult(result as Exclude<typeof result, typeof MALFORMED>);
-    expect(text).toContain('Noted — removed your shipping address in your profile.');
+    expect(text).toContain('Noted: removed your shipping address in your profile.');
     expect(text).toContain('commerce.shippingAddress');
   });
 });
@@ -264,7 +264,7 @@ describe('write disclosure', () => {
           ok: true,
           reason: null,
           changes: [{ kind: 'set', fieldId: 'commerce.shippingAddress', section: 'Commerce', label: 'shipping address', superseded: true }],
-          disclosure: 'Noted — saved your shipping address to your profile.',
+          disclosure: 'Noted: saved your shipping address to your profile.',
         };
       }
       throw new Error(`unexpected call: ${methodId}`);
@@ -272,18 +272,18 @@ describe('write disclosure', () => {
     await registry.get('profile')!.handler(['set', 'commerce.shippingAddress', ...SHIPPING.split(' ')], ctx);
 
     const output = ctx.printed.join('\n');
-    expect(output).toContain('Noted — saved your shipping address to your profile.');
+    expect(output).toContain('Noted: saved your shipping address to your profile.');
     expect(output).not.toContain(SHIPPING);
     expect(output).not.toContain('200 Office Way');
 
-    // The write carries this surface and a verbatim quote of what was typed —
+    // The write carries this surface and a verbatim quote of what was typed,
     // layer 3 of the trust gate refuses a write without one (§7).
     const set = calls.find((call) => call.methodId === 'profile.set');
     expect(set?.input.surface).toBe('tui');
     expect(String(set?.input.said ?? '')).toContain('/profile set');
     expect(String(set?.input.said ?? '').length).toBeGreaterThan(0);
     // The write states its authority rather than leaning on the daemon's
-    // default — see the authority block below for why that matters.
+    // default, see the authority block below for why that matters.
     expect(set?.input.authority).toBe('owner-direct');
   });
 
@@ -295,7 +295,7 @@ describe('write disclosure', () => {
         ok: true,
         reason: null,
         changes: [{ kind: 'append', fieldId: null, section: 'Notes', label: 'note', superseded: false }],
-        disclosure: 'Noted — saved a note under Notes to your profile.',
+        disclosure: 'Noted: saved a note under Notes to your profile.',
       };
     };
 
@@ -342,7 +342,7 @@ describe('containment', () => {
     let rendered = '';
     const captured = await captureConsole(() => { rendered = renderProfileDocument(checkedDocument()); });
     expect(captured).toEqual([]);
-    // The rendered answer is the one place a value is allowed to be — the owner
+    // The rendered answer is the one place a value is allowed to be, the owner
     // asked this surface, this turn, what it knows about him.
     expect(rendered).toContain(SHIPPING);
     expect(rendered).toContain(SISTER_LINE);
@@ -363,7 +363,7 @@ describe('containment', () => {
     expect(ctx.printed.join('\n')).toContain(SHIPPING);
   });
 
-  test('profile.status output carries counts, names and reasons — never a value', () => {
+  test('profile.status output carries counts, names and reasons; never a value', () => {
     const text = renderProfileStatus(checkedState(LOADED_STATE));
     for (const value of SECRET_VALUES) expect(text).not.toContain(value);
     expect(text).toContain('/home/owner/.goodvibes/daemon/owner-profile.md');
@@ -403,7 +403,7 @@ describe('containment', () => {
 // gate: layers 2 and 3 do not apply to a removal, since there is no value to
 // check for derivation and no owner utterance to quote. This block is the one
 // place that fails if a future edit drops the field from any of the four write
-// call sites — the compile-time check below catches the same class earlier
+// call sites, the compile-time check below catches the same class earlier
 // still, but only for a shape the contract can see.
 // ---------------------------------------------------------------------------
 
@@ -467,7 +467,7 @@ describe('every profile write verb claims owner-direct authority', () => {
 //
 // These assertions are checked by `tsc -p tsconfig.test.json`, not at runtime.
 // Each `@ts-expect-error` FAILS THE BUILD if the error it expects stops
-// happening — so unlike seeding a mistake by hand, this cannot quietly rot.
+// happening, so unlike seeding a mistake by hand, this cannot quietly rot.
 //
 // The case that matters is a body built as a VARIABLE. TypeScript applies
 // excess-property checking only to fresh object literals, so a correctly typed
@@ -483,7 +483,7 @@ declare function acceptsExactBody<TVerb extends ProfileVerb, TBody extends Profi
 
 /**
  * Never invoked. `acceptsExactBody` is a `declare`d signature with no runtime
- * body, so this exists purely to be typechecked — calling it would throw.
+ * body, so this exists purely to be typechecked, calling it would throw.
  * `bun test` does not enforce any of this; `tsc -p tsconfig.test.json` does.
  */
 function compileTimePayloadExactness(): void {
@@ -492,7 +492,7 @@ function compileTimePayloadExactness(): void {
     // call site, because the literal form is already checked by TypeScript and
     // is not the case that regressed.
     const forgetWithRetiredKey = { fieldId: 'commerce.shippingAddress', lineIndex: 3, authority: 'owner-direct' };
-    // @ts-expect-error profile.forget retired lineIndex — a position cannot address a line the owner may have moved (§9.2).
+    // @ts-expect-error profile.forget retired lineIndex, a position cannot address a line the owner may have moved (§9.2).
     acceptsExactBody('profile.forget', forgetWithRetiredKey);
 
     const undoMissingAuthority = { fieldId: 'commerce.shippingAddress' };
@@ -500,7 +500,7 @@ function compileTimePayloadExactness(): void {
     acceptsExactBody('profile.undo', undoMissingAuthority);
 
     const undoWithSiblingVerbKeys = { fieldId: 'x', section: 'People', text: 'a line', authority: 'owner-direct' };
-    // @ts-expect-error section/text belong to profile.forget, not profile.undo — keys are checked per verb, not across the family.
+    // @ts-expect-error section/text belong to profile.forget, not profile.undo, keys are checked per verb, not across the family.
     acceptsExactBody('profile.undo', undoWithSiblingVerbKeys);
 
     const setWithMisspelledKey = { fieldId: 'x', valu: 'y', surface: 'tui', said: 'q', authority: 'owner-direct' };
@@ -511,7 +511,7 @@ function compileTimePayloadExactness(): void {
     // FRESH literal normally gets excess-property checking, but a spread inside
     // it defeats that check, so correct parameter typing alone accepts a stale
     // key. Both spread shapes are held: a plain spread, and the conditional
-    // spread that assembles a body across branches — the latter infers an
+    // spread that assembles a body across branches, the latter infers an
     // OPTIONAL property, so it fails against `never` on its `undefined` arm
     // rather than on the value.
     const staleFields = { lineIndex: 3 };
@@ -542,7 +542,7 @@ describe('compile-time payload exactness', () => {
     // Deliberately not called: every assertion in it is a type-level one that
     // `tsc -p tsconfig.test.json` checks. Each `@ts-expect-error` in that body
     // FAILS THE BUILD if the error it expects stops happening, so weakening
-    // ExactProfileInput back to plain parameter typing cannot pass silently —
+    // ExactProfileInput back to plain parameter typing cannot pass silently,
     // verified by doing exactly that, which turned two of the four directives
     // into "Unused '@ts-expect-error' directive" errors.
     expect(typeof compileTimePayloadExactness).toBe('function');
@@ -660,7 +660,7 @@ describe('write payloads conform to the declared contract input', () => {
       ctx,
     );
     expect(calls).toHaveLength(1);
-    // Byte-identical to the line as stored — no marker added, none stripped.
+    // Byte-identical to the line as stored, no marker added, none stripped.
     expect(calls[0]!.input.text).toBe(SISTER_LINE);
   });
 
@@ -727,7 +727,7 @@ describe('/profile where', () => {
         text: `shipping address: ${OLD_SHIPPING}`,
         value: OLD_SHIPPING,
         supersededOn: '2026-07-27',
-        previousLine: `shipping address: ${OLD_SHIPPING} — tui, 2026-07-20, "ship to 401 Home St"`,
+        previousLine: `shipping address: ${OLD_SHIPPING}; tui, 2026-07-20, "ship to 401 Home St"`,
         provenance: { surface: 'tui', date: '2026-07-20', said: 'ship to 401 Home St' },
       }],
     });
@@ -769,7 +769,7 @@ describe('/profile where', () => {
     });
     await registry.get('profile')!.handler(['where', 'shipping', 'address'], ctx);
     // The label map is built from the live response, never from a local copy of
-    // the SDK's field registry — so the two can never disagree.
+    // the SDK's field registry, so the two can never disagree.
     expect(collectFieldLabels(checkedDocument()).get('shipping address')).toEqual(['commerce.shippingAddress']);
     expect(calls.map((call) => call.methodId)).toEqual(['profile.read', 'profile.provenance']);
     expect(calls[1]?.input.fieldId).toBe('commerce.shippingAddress');
@@ -815,7 +815,7 @@ describe('response checking', () => {
     expect(toProfileState({ path: 'x' })).toBe(MALFORMED);
   });
 
-  test('one malformed member fails the whole response — no silent filtering', () => {
+  test('one malformed member fails the whole response; no silent filtering', () => {
     expect(toProfileDocument({
       state: LOADED_STATE,
       sections: [DOCUMENT_RESPONSE.sections[0], { heading: 'Broken' }],
@@ -840,7 +840,7 @@ describe('response checking', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Settings registration (§12.1) — the drop that killed push.* and cluster.*
+// Settings registration (§12.1), the drop that killed push.* and cluster.*
 // ---------------------------------------------------------------------------
 
 describe('profile settings category', () => {

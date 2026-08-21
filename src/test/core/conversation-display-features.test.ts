@@ -77,7 +77,7 @@ describe('BlockActionsMenu', () => {
     expect(ids).toContain('copy');
     expect(ids).toContain('bookmark');
     expect(ids).toContain('toggle');
-    // 'rerun' was a dead action — always listed but never actually did
+    // 'rerun' was a dead action, always listed but never actually did
     // anything (handleBlockRerun only called requestRender()). Removed
     // rather than kept as a lie.
     expect(ids).not.toContain('rerun');
@@ -168,7 +168,7 @@ describe('code block collapse', () => {
     const cm2 = new ConversationManager(() => 80);
     const testAccess = cm2 as unknown as ConversationManagerTestAccess;
     // Simulate config that shows thinking
-    // Force thinking display by patching — just check thinking block registers via direct addAssistantMessage with reasoningContent
+    // Force thinking display by patching, just check thinking block registers via direct addAssistantMessage with reasoningContent
     cm2.addUserMessage('think');
     // addAssistantMessage signature supports opts
     testAccess.messages.push({ role: 'assistant', content: 'done', reasoningContent: bigThinking });
@@ -205,7 +205,7 @@ describe('code block collapse', () => {
   });
 });
 
-describe('ConversationManager.getErrorLines — kind-based navigation', () => {
+describe('ConversationManager.getErrorLines: kind-based navigation', () => {
   let cm: ConversationManager;
 
   beforeEach(() => {
@@ -219,7 +219,7 @@ describe('ConversationManager.getErrorLines — kind-based navigation', () => {
     expect(cm.getErrorLines()).toHaveLength(0);
   });
 
-  test('addSystemMessage (bare, no kind) is navigable — defaults to system kind', () => {
+  test('addSystemMessage (bare, no kind) is navigable; defaults to system kind', () => {
     cm.addUserMessage('run tool');
     cm.addSystemMessage('request failed: timeout');
     cm.getDisplayBlocks();
@@ -231,7 +231,7 @@ describe('ConversationManager.getErrorLines — kind-based navigation', () => {
 
   test('failure-kind message without the word "error" IS navigable', () => {
     cm.addUserMessage('run');
-    // Use addTypedSystemMessage with 'system' kind — simulates a failure message
+    // Use addTypedSystemMessage with 'system' kind, simulates a failure message
     // that never contains the word "error" (e.g. "rate limited", "request failed")
     cm.addTypedSystemMessage('rate limited: 429 Too Many Requests', 'system');
     cm.getDisplayBlocks();
@@ -323,7 +323,7 @@ describe('ConversationManager.getErrorLines — kind-based navigation', () => {
     const linesBefore = cm2.getErrorLines();
     expect(linesBefore.length).toBe(1);
 
-    // Simulate width change — triggers rebuildHistory
+    // Simulate width change, triggers rebuildHistory
     getWidth.value = 100;
     cm2.getDisplayBlocks();
 

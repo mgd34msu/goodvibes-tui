@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=fleet-panel-steer-queued-normal width=100 height=30
-| Fleet — agent steer-01                                                                             |
+| Fleet: agent steer-01                                                                              |
 | SESSIONS  │Tree │[agent steer-01] │                                                                |
 | (no messages yet)                                                                                  |
 |                                                                                                    |
@@ -27,7 +27,7 @@
 |                                                                                                    |
 |                                                                                                    |
 |                                                                                                    |
-| ⧗ steer queued for [Agent] Long-running build fix — delivers on its next turn (watch the ⧗ badge)  |
+| ⧗ steer queued for [Agent] Long-running build fix: delivers on its next turn (watch the ⧗ badge)   |
 | [ ] switch tab   Ctrl+X detach   s steer                                                           |
 @STYLES
 0 0 fg=#e2e8f0
@@ -96,9 +96,7 @@
 0 21 fg=#e2e8f0
 0 21 bg=#0f172a
 0 21 bold=1
-0 22 fg=#e2e8f0
 0 22 bg=#0f172a
-0 22 bold=1
 0 23 bg=#0f172a
 0 24 bg=#0f172a
 0 25 bg=#0f172a
@@ -361,7 +359,6 @@
 28 94 fg=#475569
 28 95 fg=#475569
 28 96 fg=#475569
-28 97 fg=#475569
 29 0 fg=#475569
 29 1 fg=#38bdf8
 29 2 fg=#38bdf8

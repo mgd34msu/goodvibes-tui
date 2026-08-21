@@ -77,13 +77,13 @@ export function handleGlobalShortcutToken(
   }
 
   // Bare F2 is also not in the keybinding table (hardcoded, like pageup/
-  // pagedown/escape above) — it must be handled here, GLOBALLY, rather than
+  // pagedown/escape above), it must be handled here, GLOBALLY, rather than
   // in handlePromptKeyToken (handler-feed-routes.ts) where it used to live.
   // That location only ever runs when the panel workspace does NOT already
   // own focus (handlePanelFocusToken, which runs before it, swallows every
   // unclaimed key once panelFocused is true and reports it handled). The
   // practical effect was that F2 could OPEN+focus the Fleet panel exactly
-  // once; every subsequent press while already focused vanished silently —
+  // once; every subsequent press while already focused vanished silently,
   // "F2 pressed 4x never closed the panel" (evaluator finding). Routing
   // it here, before handlePanelFocusToken ever sees the token, gives F2 the
   // same toggle semantics as Ctrl+O below, matching how Ctrl+P/panel-picker
@@ -94,8 +94,8 @@ export function handleGlobalShortcutToken(
   }
 
   // Shift+Tab cycles the session permission mode (normal → accept-edits → plan
-  // → auto → normal), the settled convention. Handled here — hardcoded, like
-  // escape/f2 — because it is not in the keybinding table and bare Tab is
+  // → auto → normal), the settled convention. Handled here, hardcoded, like
+  // escape/f2, because it is not in the keybinding table and bare Tab is
   // already heavily overloaded. Arrives as the legacy xterm backtab literal
   // ('\x1b[Z') OR, under a kitty/CSI-u terminal, as tab-with-shift. Only when
   // the composer owns focus (a focused panel keeps its own Shift+Tab, e.g. the
@@ -121,7 +121,7 @@ export function handleGlobalShortcutToken(
 
     case 'cancel-tool-call':
       // Cancel JUST the currently-running tool call (the live transcript row).
-      // No-op (still consumed) when nothing is running — the composer keeps the
+      // No-op (still consumed) when nothing is running, the composer keeps the
       // keystroke rather than letting it fall through as text.
       state.commandContext?.cancelToolCall?.();
       return true;
@@ -134,7 +134,7 @@ export function handleGlobalShortcutToken(
 
     case 'voice-input':
       // Start recording, or stop the recording already running. Routed globally so
-      // the key works whether focus is on the composer or the panel workspace —
+      // the key works whether focus is on the composer or the panel workspace,
       // dictation is not a composer-only act. Still consumed when voice input is
       // not wired, so a stray Alt+V never lands in the prompt as text.
       state.commandContext?.toggleVoiceInput?.();
@@ -168,11 +168,11 @@ export function handleGlobalShortcutToken(
       const active = pm.getActivePanel();
       // Give the active panel a chance to consume Ctrl+X for an
       // in-panel action (FleetPanel session-tab detach) before it closes the
-      // panel outright — see Panel.interceptPanelClose's doc comment.
+      // panel outright, see Panel.interceptPanelClose's doc comment.
       if (active?.interceptPanelClose?.()) {
         // fix: a consumed Ctrl+X (the Fleet panel's session-tab detach)
         // used to leave panelFocused untouched, so focus stayed on the panel
-        // — the evaluator's "Ctrl+X detach landed focus in the panel and a
+        //, the evaluator's "Ctrl+X detach landed focus in the panel and a
         // typed question became nav keys". Detach is a leave-taking action:
         // like the ordinary close below, it hands control back to the
         // composer rather than leaving the user stranded on the fleet tree.
@@ -203,7 +203,7 @@ export function handleGlobalShortcutToken(
       // Global entry point for the focus-toggle key (Ctrl+G): from the prompt
       // it grabs focus for the panel workspace. Once the workspace already has
       // focus we let it fall through (return false) so handlePanelFocusToken
-      // can do the top/bottom pane swap — keeping that behavior in one place.
+      // can do the top/bottom pane swap, keeping that behavior in one place.
       if (state.panelFocused) return false;
       const pm = state.panelManager;
       if (pm.isVisible() && pm.getAllOpen().length > 0) {
@@ -234,7 +234,7 @@ export function handleGlobalShortcutToken(
       // Alt+1..9: jump directly to the Nth workspace tab. Routed globally (like
       // panel-tab-next/prev) so the jump works whether focus is on the prompt or
       // the workspace; gated on visibility, matching cyclePanelTab semantics.
-      // a chord jump is "I'm going panel-driving" (focus rule 1a) — the
+      // a chord jump is "I'm going panel-driving" (focus rule 1a), the
       // jump now also grabs keyboard focus, matching F2/Ctrl+O/Ctrl+P, so j/k
       // land in the newly-active tab immediately instead of the composer.
       const pm = state.panelManager;
@@ -434,7 +434,7 @@ export function handleGlobalShortcutToken(
 }
 
 /**
- * toggleFleetPanel — the shared F2 / Ctrl+O TOGGLE (item 2): if the
+ * toggleFleetPanel, the shared F2 / Ctrl+O TOGGLE (item 2): if the
  * Fleet panel is open AND the panel workspace currently owns keyboard focus
  * with Fleet as the active tab, the chord CLOSES it and returns focus to the
  * composer; if Fleet is open but not the focused/active tab, the chord brings
@@ -446,7 +446,7 @@ export function handleGlobalShortcutToken(
  */
 /**
  * Cycle the session permission mode (Shift+Tab). The change goes through the
- * SDK config surface — configManager.set('permissions.mode', ...) — which is
+ * SDK config surface, configManager.set('permissions.mode', ...), which is
  * what the SDK PermissionManager reads and what the orchestrator consults for
  * its standing plan-mode instruction, so every attached surface converges on
  * the same mode. The footer pill re-renders off the config-key subscription

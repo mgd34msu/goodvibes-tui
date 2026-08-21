@@ -35,7 +35,7 @@ afterEach(() => {
 
 describe('foldLegacyProjectMemory (boot fold)', () => {
   test('a project with no legacy store imports nothing and records the missing source (idempotent, non-fatal)', async () => {
-    // `root` has no .goodvibes/tui/memory.sqlite — the legacy source is missing, not an error.
+    // `root` has no .goodvibes/tui/memory.sqlite, the legacy source is missing, not an error.
     const workingDir = root;
 
     const report = await foldLegacyProjectMemory(canonical, registry, workingDir);

@@ -81,7 +81,7 @@ describe('BasePanel timer registry', () => {
     const panel = new TestPanel();
     const ticks: number[] = [];
 
-    // Use short real intervals (10ms) — no multi-second waits.
+    // Use short real intervals (10ms), no multi-second waits.
     const id1 = setInterval(() => { ticks.push(1); }, 10);
     const id2 = setInterval(() => { ticks.push(2); }, 10);
 
@@ -111,7 +111,7 @@ describe('BasePanel timer registry', () => {
   test('clearTimer is safe to call with an unregistered id', () => {
     const panel = new TestPanel();
     const id = setInterval(() => {}, 10_000);
-    // Not registered — should not throw.
+    // Not registered, should not throw.
     expect(() => panel.exposeClearTimer(id)).not.toThrow();
     clearInterval(id); // clean up manually since it was never registered
     panel.onDestroy();

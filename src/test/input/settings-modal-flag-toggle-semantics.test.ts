@@ -12,7 +12,7 @@
  *     next launch (never faked live).
  *
  * Uses a real FeatureFlagManager and a real on-disk ConfigManager wired with
- * the SDK's own settings bridge — no mocks — so persistence and bridge
+ * the SDK's own settings bridge, no mocks, so persistence and bridge
  * behavior are exercised for real, including through the modal's
  * toggleSelectedFlag path.
  */
@@ -27,13 +27,13 @@ import type { FeatureFlagManager } from '../../runtime/index.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SettingsModal } from '../../input/settings-modal.ts';
 
-// A feature that flips live, and one gated to startup — both default OFF so
+// A feature that flips live, and one gated to startup, both default OFF so
 // the toggle direction is unambiguous.
 const RUNTIME_FEATURE = 'adaptive-execution-planner'; // planner.adaptive, live, default off
 const STARTUP_FEATURE = 'mcp-lifecycle'; // runtime.mcpLifecycle, startup-gated, default off
 const STARTUP_ENUM_FEATURE = 'permissions-policy-engine'; // permissions.engine, startup-gated enum
 
-describe('feature-toggle semantics — domain settings writes + gate bridge', () => {
+describe('feature-toggle semantics: domain settings writes + gate bridge', () => {
   let tmpDir: string;
   let cm: ConfigManager;
   let manager: FeatureFlagManager;
@@ -82,7 +82,7 @@ describe('feature-toggle semantics — domain settings writes + gate bridge', ()
 
     cm.setDynamic('runtime.mcpLifecycle', true);
 
-    // Effective state is NOT faked live — still disabled until restart.
+    // Effective state is NOT faked live, still disabled until restart.
     expect(manager.getState(STARTUP_FEATURE)).toBe('disabled');
     expect(manager.isEnabled(STARTUP_FEATURE)).toBe(false);
 

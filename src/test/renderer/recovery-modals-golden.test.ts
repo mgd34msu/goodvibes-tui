@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// recovery-modals-golden.test.ts — golden frames for the two startup recovery
+// recovery-modals-golden.test.ts, golden frames for the two startup recovery
 // questions, rendered through the real SelectionModal +
 // renderSelectionModalOverlay path at three terminal sizes.
 //
 // These exist because of a shipped defect: at 60x24 the "Remove recovery
 // point?" question rendered ONLY its destructive row, preselected, with the
 // other answer pushed off the box behind a "(1 below)" hint while ten
-// terminal rows sat empty — a blind Enter deleted a conversation. The facts
+// terminal rows sat empty, a blind Enter deleted a conversation. The facts
 // string below is the worst case that produced it (long title, 8-hex session
 // id, 1.2 MB), built from a FIXED timestamp so the frames never drift with
 // the clock.

@@ -1,5 +1,5 @@
 /**
- * conversation-turn-structure.ts — turns the flat message array into the
+ * conversation-turn-structure.ts, turns the flat message array into the
  * structural render plan the transcript tree draws from.
  *
  * Three jobs, deliberately not conflated:
@@ -8,7 +8,7 @@
  *     header (see computeAssistantTurns).
  *
  *  2. **Structural placement.** Where each row goes. A tool result is a child
- *     of the CALL that produced it, identified by callId — not a row appended
+ *     of the CALL that produced it, identified by callId, not a row appended
  *     wherever it happens to land in the message array. Two calls issued
  *     together run concurrently and settle in whatever order they finish; the
  *     later-finishing call's result must still render inside its own call's
@@ -20,7 +20,7 @@
  *
  * ## Node identity
  *
- * Every planned row carries a stable string id — `m:<absIdx>` for a message,
+ * Every planned row carries a stable string id, `m:<absIdx>` for a message,
  * `c:<absIdx>:<callIndex>` for one tool call, each prefixed by its scope (see
  * nesting below). Ids derive from append-only indices that are never
  * renumbered, so a row inserted in the middle does not change any other row's
@@ -34,7 +34,7 @@
  * `AgentManager.getConversationSnapshot(agentId)` already exposes it live (the
  * same read `fleet-panel.ts` uses to draw an attached agent's transcript). So
  * when a tool call spawned an agent, the plan SPLICES that agent's own plan in
- * beneath the call, recursively — the identical operation to lifting a result
+ * beneath the call, recursively, the identical operation to lifting a result
  * into its call's subtree, applied to a nested snapshot. The parent
  * transcript, the persisted format, and the message schema are untouched; only
  * the render plan nests.
@@ -52,15 +52,15 @@
  *
  * Proper box drawing: `├` for a branch with siblings below it, `└` for the
  * last sibling, `│` carried down the gutter for every ancestor whose subtree
- * is still open. Connectors are a PURE FUNCTION of current structure —
- * recomputed from scratch on every plan build, never cached — so a row that
+ * is still open. Connectors are a PURE FUNCTION of current structure,
+ * recomputed from scratch on every plan build, never cached, so a row that
  * stops being last flips `└`→`├` on the next rebuild.
  *
  * That flip is one cell. Indentation width, content column, and row text are
  * all independent of sibling status by construction: `indentCols` depends only
  * on depth and width, and the connector occupies a column that exists whether
  * it holds `├` or `└`. So a sibling arriving repaints a connector cell and
- * moves no text. (The rejected alternative — a uniform glyph — cannot express
+ * moves no text. (The rejected alternative, a uniform glyph, cannot express
  * "this subtree continues past here", which is what makes a deep tree
  * scannable.)
  */
@@ -80,12 +80,12 @@ export const MAX_NEST_DEPTH = 8;
 export type TreeConnector = '├' | '└';
 
 export interface RenderNode {
-  /** Stable identity — survives insertions above it. Scope-prefixed. */
+  /** Stable identity, survives insertions above it. Scope-prefixed. */
   readonly id: string;
   readonly kind: 'message' | 'toolcall';
   /** Index of the message within ITS OWN snapshot array. */
   readonly absIdx: number;
-  /** Position within the owning assistant message's toolCalls — 'toolcall' only. */
+  /** Position within the owning assistant message's toolCalls, 'toolcall' only. */
   readonly callIndex?: number;
   /** 0 = flush; >=1 = branch depth. */
   readonly depth: number;
@@ -106,7 +106,7 @@ export interface RenderNode {
    * renderer draws `│` in those gutters. Excludes this row's own depth.
    */
   readonly openAncestorDepths: readonly number[];
-  /** Set when recursion stopped here (depth ceiling or cycle) — surfaced honestly. */
+  /** Set when recursion stopped here (depth ceiling or cycle), surfaced honestly. */
   readonly truncated?: 'depth' | 'cycle';
 }
 
@@ -233,7 +233,7 @@ export interface RenderPlanOptions {
  * The agent id a tool call spawned, when it spawned one.
  *
  * Read from the call's own result payload first (the spawn tool reports the id
- * it allocated — see AgentInput.agentId in the SDK's agent schema), falling
+ * it allocated, see AgentInput.agentId in the SDK's agent schema), falling
  * back to an explicit `agentId` argument on the call. Returns undefined for
  * every ordinary tool call, which is the overwhelmingly common case, so this
  * stays a cheap check.
@@ -253,7 +253,7 @@ function spawnedAgentIdOf(
         if (typeof id === 'string' && id.length > 0) return id;
       }
     } catch {
-      // Non-JSON result — fall through to the argument check.
+      // Non-JSON result, fall through to the argument check.
     }
   }
   const argId = call.arguments.agentId;
@@ -301,7 +301,7 @@ function buildScopeNodes(
   const placed = new Set<number>();
   const messageAt = (absIdx: number): Message => messages[absIdx - indexOffset]!;
   // Calls issued by later messages of the SAME run attach to the run's head
-  // node, because the head owns the only visible header — that is what makes
+  // node, because the head owns the only visible header, that is what makes
   // them siblings of each other rather than only children of their own
   // (headerless) message, and therefore what makes ├/└ resolve correctly
   // across a merged turn.

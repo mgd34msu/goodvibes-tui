@@ -1,7 +1,7 @@
 /**
  * Behavior verification for the LAN group settings keys.
  *
- * The group-key layer added four `cluster.*` settings — the automatic group-key
+ * The group-key layer added four `cluster.*` settings, the automatic group-key
  * rotation interval, the dual-generation acceptance window around a rotation,
  * the discovery beacon interval and the roster gossip interval. Like every
  * previous batch of new schema keys, they grew the settings inventory the
@@ -12,9 +12,9 @@
  * already uses for a settings key (see feature-knob-settings-persistence.test.ts
  * and device-and-trigger-settings-persistence.test.ts): for every key in
  * CLUSTER_GROUP_LOCAL_SETTINGS it exercises the real persistence contract end to
- * end — schema default exposure, `set()` write through the key's own validator
+ * end, schema default exposure, `set()` write through the key's own validator
  * to disk, reload into a fresh ConfigManager with read-back equality, and
- * reset-to-default that also survives reload — through the actual
+ * reset-to-default that also survives reload, through the actual
  * ConfigManager, not a mock.
  *
  * All four keys have a LIVE consumer in this build, which is more than
@@ -55,7 +55,7 @@ function freshManager(): { manager: ConfigManager; root: string; configDir: stri
   return { manager: new ConfigManager({ surfaceRoot: 'tui', workingDir: root, configDir }), root, configDir };
 }
 
-describe('cluster group settings — inventory integrity', () => {
+describe('cluster group settings: inventory integrity', () => {
   test('every ledger-counted key exists in CONFIG_SCHEMA with a defined default', () => {
     for (const key of CLUSTER_GROUP_LOCAL_SETTINGS) {
       const schema = schemaByKey.get(key);
@@ -64,7 +64,7 @@ describe('cluster group settings — inventory integrity', () => {
     }
   });
 
-  test('the ledger counts each key exactly once — no overlap with the other counted sets', () => {
+  test('the ledger counts each key exactly once; no overlap with the other counted sets', () => {
     expect(new Set(CLUSTER_GROUP_LOCAL_SETTINGS).size).toBe(CLUSTER_GROUP_LOCAL_SETTINGS.length);
     const knobs = new Set<string>(FEATURE_KNOB_LOCAL_SETTINGS);
     const deviceAndTrigger = new Set<string>(DEVICE_AND_TRIGGER_LOCAL_SETTINGS);
@@ -84,7 +84,7 @@ describe('cluster group settings — inventory integrity', () => {
   });
 });
 
-describe('cluster group settings — default exposure', () => {
+describe('cluster group settings: default exposure', () => {
   let manager: ConfigManager;
 
   beforeEach(() => {
@@ -100,7 +100,7 @@ describe('cluster group settings — default exposure', () => {
   });
 });
 
-describe('cluster group settings — write/reload persistence round-trip', () => {
+describe('cluster group settings: write/reload persistence round-trip', () => {
   test('each key persists to disk and reloads into a fresh ConfigManager', () => {
     const { manager, root, configDir } = freshManager();
     for (const key of CLUSTER_GROUP_LOCAL_SETTINGS) {
@@ -123,7 +123,7 @@ describe('cluster group settings — write/reload persistence round-trip', () =>
     const { manager } = freshManager();
     // Range enforcement is part of the persistence contract being counted: a
     // key that accepted anything would not be verified by a round-trip. The
-    // floors matter here — rotating faster than the acceptance window is wide
+    // floors matter here, rotating faster than the acceptance window is wide
     // would leave every node permanently mid-cutover.
     expect(() => manager.set('cluster.keyRotationHours' as ConfigKey, 0 as never)).toThrow();
     expect(() => manager.set('cluster.keyRotationGraceMinutes' as ConfigKey, 0 as never)).toThrow();
@@ -132,7 +132,7 @@ describe('cluster group settings — write/reload persistence round-trip', () =>
   });
 });
 
-describe('cluster group settings — reset restores default', () => {
+describe('cluster group settings: reset restores default', () => {
   test('reset returns each key to its schema default and persists that', () => {
     const { manager, root, configDir } = freshManager();
     for (const key of CLUSTER_GROUP_LOCAL_SETTINGS) {

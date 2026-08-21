@@ -15,7 +15,7 @@ import type {
 // Security → config-modal surface (group-B port). Two tabs: 'Tokens' (the
 // token scope/rotation audit list under the governance summary) and
 // 'Governance' (policy preflight, MCP/plugin quarantine, latest incident, and
-// the MCP attack-path review). Read-model-backed, so refresh() is a no-op —
+// the MCP attack-path review). Read-model-backed, so refresh() is a no-op,
 // buildView reads getSnapshot() fresh every render. 'f' (preflight) routes to
 // its `/policy preflight` command path; 'i' jumps to the incident surface
 // (fleet) via the command path. Selection-blind port: the panel's
@@ -121,7 +121,7 @@ class SecurityModalSurface implements ConfigModalSurface {
         ...(resultColor(result) ? { style: resultColor(result)! } : {}),
       });
     }
-    rows.push(infoRow('audit:when', `Last audit ${fmtIso(audit.lastAuditAt)} — press r to refresh`, { dim: true }));
+    rows.push(infoRow('audit:when', `Last audit ${fmtIso(audit.lastAuditAt)}: press r to refresh`, { dim: true }));
     return { id: 'tokens', label: 'Tokens', header, rows, hints: ['f preflight'] };
   }
 
@@ -130,7 +130,7 @@ class SecurityModalSurface implements ConfigModalSurface {
     const quarantinedMcp = snapshot.mcpServers.filter((s) => s.schemaFreshness === 'quarantined');
     if (quarantinedMcp.length > 0) {
       const server = quarantinedMcp[0]!;
-      rows.push(infoRow('mcp:q', `MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` — ${server.quarantineDetail}` : ''}`, BAD));
+      rows.push(infoRow('mcp:q', `MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? `; ${server.quarantineDetail}` : ''}`, BAD));
     }
     if (snapshot.quarantinedPlugins.length > 0) {
       const plugin = snapshot.quarantinedPlugins[0]!;
@@ -140,7 +140,7 @@ class SecurityModalSurface implements ConfigModalSurface {
       rows.push(infoRow('plugin:u', `Plugin trust warning: ${plugin.name} remains untrusted.`, WARN));
     }
     if (snapshot.latestIncident) {
-      rows.push(infoRow('incident', `Latest incident: ${snapshot.latestIncident.classification} — ${snapshot.latestIncident.summary} (${fmtIso(snapshot.latestIncident.generatedAt)})`, WARN));
+      rows.push(infoRow('incident', `Latest incident: ${snapshot.latestIncident.classification}; ${snapshot.latestIncident.summary} (${fmtIso(snapshot.latestIncident.generatedAt)})`, WARN));
     }
 
     const review = snapshot.attackPathReview;

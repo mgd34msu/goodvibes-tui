@@ -111,7 +111,7 @@ describe('renderContextInspector', () => {
     // Pass a very small contextWindow so usage exceeds 80%
     const lines = renderContextInspector(conv, W, H, 4); // 4 tokens, content is ~3 tokens
     const text = linesToText(lines).join('\n');
-    // Either warning shows or doesn't depending on exact token count — just verify no crash
+    // Either warning shows or doesn't depending on exact token count, just verify no crash
     expect(lines.length).toBeGreaterThan(0);
   });
 
@@ -144,7 +144,7 @@ describe('renderContextInspector', () => {
   // ── Estimator unification regression (TASK-054) ─────────────────────────────────
 
   test('estimator unification: SDK estimateConversationTokens agrees with per-message SDK estimateTokens sum', () => {
-    // Prove the two SDK functions agree — same formula, consistent output.
+    // Prove the two SDK functions agree, same formula, consistent output.
     const messages = [
       { role: 'user' as const, content: 'Hello world, this is the first message.' },
       { role: 'assistant' as const, content: 'I understand your message completely.' },
@@ -155,7 +155,7 @@ describe('renderContextInspector', () => {
       const text = typeof m.content === 'string' ? m.content : '';
       return sum + estimateTokens(text);
     }, 0);
-    // Both estimators must agree exactly — single formula, no divergence.
+    // Both estimators must agree exactly, single formula, no divergence.
     expect(conversationTotal).toBe(perMessageSum);
     expect(conversationTotal).toBeGreaterThan(0);
   });
@@ -169,7 +169,7 @@ describe('renderContextInspector', () => {
     // Inspector uses SDK estimateTokens per-message; total should match SDK's conversation estimator.
     const msgs = conv.getMessagesForLLM();
     const expectedTotal = estimateConversationTokens(msgs);
-    // The inspector renders the total — verify it shows the expected number.
+    // The inspector renders the total, verify it shows the expected number.
     expect(text).toContain(expectedTotal.toLocaleString());
   });
 

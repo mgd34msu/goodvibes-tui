@@ -1,5 +1,5 @@
 /**
- * SyntaxHighlighter — Tree-sitter-powered syntax highlighting for code blocks.
+ * SyntaxHighlighter, Tree-sitter-powered syntax highlighting for code blocks.
  *
  * Designed for the synchronous TUI render loop:
  * - Initializes tree-sitter WASM and grammar parsers asynchronously in background
@@ -372,7 +372,6 @@ function isLeafLike(node: Node): boolean {
  * Handles multi-line spans (e.g., block comments, template literals).
  */
 function spansToLines(spans: Span[], codeLines: string[]): HighlightedLine[] {
-  // Initialize result: one entry per code line, each starting with no tokens
   const result: HighlightedLine[] = codeLines.map(() => []);
 
   // Track the current position to emit default-colored text for gaps
@@ -491,7 +490,7 @@ export class SyntaxHighlighter {
   }
 
   /**
-   * Schedule an async parse. Fires and forgets — result lands in cache.
+   * Schedule an async parse. Fires and forgets, result lands in cache.
    * Callers will pick it up on the next render cycle.
    */
   private scheduleParse(code: string, langId: string, key: string): void {

@@ -5,7 +5,7 @@
  * contextWindow=0 when building the pre-compact preview, even though the
  * value is directly reachable via ctx.provider.providerRegistry (the exact
  * call compactConversation() in runtime-services.ts already makes). That bug
- * shipped past both suites because no test exercised the HANDLER itself —
+ * shipped past both suites because no test exercised the HANDLER itself,
  * only the pure compactConversation() helper (compact-conversation-command.test.ts)
  * and the pure buildCompactionPreview() builder (compaction-preview.test.ts)
  * were tested separately. This file closes that gap by driving the actual
@@ -31,7 +31,7 @@ function makeContext(printed: string[]): CommandContext {
     provider: {
       providerRegistry: {
         getCurrentModel: () => ({ id: 'test-model' }),
-        // 200,000-token context window — the handler must read this live
+        // 200,000-token context window, the handler must read this live
         // value instead of hardcoding 0.
         getContextWindowForModel: () => 200_000,
       },
@@ -46,7 +46,7 @@ function makeContext(printed: string[]): CommandContext {
   } as unknown as CommandContext;
 }
 
-describe('/compact handler — capacity-% plumbing', () => {
+describe('/compact handler: capacity-% plumbing', () => {
   test('the pre-compact preview includes the context-window capacity clause, not the old hardcoded-0 omission', async () => {
     const registry = new CommandRegistry();
     registerShellCoreCommands(registry);

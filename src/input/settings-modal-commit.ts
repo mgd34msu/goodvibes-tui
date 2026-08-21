@@ -1,5 +1,5 @@
 /**
- * settings-modal-commit.ts — commitEdit(), extracted out of the SettingsModal
+ * settings-modal-commit.ts, commitEdit(), extracted out of the SettingsModal
  * class body so the class file can stay under the repo's architecture
  * line-count gate without trimming arbitrary lines to clear the number.
  *
@@ -31,7 +31,7 @@ export interface CommitEditContext {
   /**
    * The daemon's credential write, when a daemon is adopted. A daemon-scoped
    * credential must land where the daemon reads it, not in this surface's own
-   * tree — see settings-modal-secrets.ts.
+   * tree, see settings-modal-secrets.ts.
    */
   readonly daemonCredentials?: SettingsDaemonCredentialWriter | null;
   /** Renders a refused credential write; without it a failure would be silent. */
@@ -50,7 +50,7 @@ export interface CommitEditContext {
 /**
  * Commit the current editBuffer to the config. Returns true on success,
  * false if validation failed (the caller always clears editingMode/editBuffer
- * regardless — a failed commit never leaves stale edit state behind).
+ * regardless, a failed commit never leaves stale edit state behind).
  */
 export function commitEditValue(ctx: CommitEditContext): boolean {
   if (!ctx.editingMode) return false;
@@ -127,16 +127,16 @@ export function commitEditValue(ctx: CommitEditContext): boolean {
 
   if (isWorktreeSetupListConfigKey(setting.key)) {
     // Comma-separated display/edit convention for the array-backed
-    // worktree.setup.* keys — see worktree-setup-config.ts.
+    // worktree.setup.* keys, see worktree-setup-config.ts.
     ctx.setValue(setting.key, parseWorktreeSetupListInput(ctx.editBuffer));
   } else if (isSandboxExecListConfigKey(setting.key)) {
     // Same comma-separated convention for the array-backed
-    // sandbox.egressAllowlist / sandbox.workspaceWritable keys — see
+    // sandbox.egressAllowlist / sandbox.workspaceWritable keys, see
     // sandbox-exec-config.ts.
     ctx.setValue(setting.key, parseSandboxExecListInput(ctx.editBuffer));
   } else if (isExecEnvScrubAllowlistConfigKey(setting.key)) {
     // Same comma-separated convention for permissions.execEnvScrubAllowlist
-    // — see exec-env-scrub-config.ts.
+    //, see exec-env-scrub-config.ts.
     ctx.setValue(setting.key, parseExecEnvScrubAllowlistInput(ctx.editBuffer));
   } else if (setting.type === 'string' && isSecretConfigKey(setting.key)) {
     setSecretBackedSettingValue({

@@ -68,7 +68,7 @@ describe('classifyVoiceProvisionError', () => {
   });
 });
 
-describe('renderVoiceProvision — mocked daemon (injected resolution)', () => {
+describe('renderVoiceProvision: mocked daemon (injected resolution)', () => {
   test('status: available renders the runtime snapshot', async () => {
     const out = await renderVoiceProvision('status', readyResolution());
     expect(out).toContain('Local Voice Runtime');
@@ -77,7 +77,7 @@ describe('renderVoiceProvision — mocked daemon (injected resolution)', () => {
 
   test('setup: available renders the install receipt', async () => {
     const out = await renderVoiceProvision('setup', readyResolution());
-    expect(out).toContain('Local Voice Setup — receipt');
+    expect(out).toContain('Local Voice Setup: receipt');
     expect(out).toContain('result: local voice provisioned');
     expect(out).toContain('piper-engine: installed (25 MB)');
   });
@@ -99,7 +99,7 @@ describe('renderVoiceProvision — mocked daemon (injected resolution)', () => {
   });
 });
 
-describe('runVoiceSetupWithProgress — live progress polling (no real timers)', () => {
+describe('runVoiceSetupWithProgress: live progress polling (no real timers)', () => {
   function progressStatus(component: string, phase: string, bytesTotal?: number, bytesDone?: number): VoiceRuntimeStatusResult {
     return { ...STATUS, installInProgress: { startedAt: 1, components: [{ component, phase, ...(bytesTotal !== undefined ? { bytesTotal } : {}), ...(bytesDone !== undefined ? { bytesDone } : {}) }] } } as VoiceRuntimeStatusResult;
   }
@@ -130,7 +130,7 @@ describe('runVoiceSetupWithProgress — live progress polling (no real timers)',
     const text = printed.join('\n');
     expect(text).toContain('piper-engine: downloading (50 B/100 B)');
     expect(text).toContain('piper-engine: done');
-    expect(text).toContain('Local Voice Setup — receipt');
+    expect(text).toContain('Local Voice Setup: receipt');
     expect(text).toContain('result: local voice provisioned');
   });
 
@@ -142,7 +142,7 @@ describe('runVoiceSetupWithProgress — live progress polling (no real timers)',
       available: true,
       gateway: {
         runInstall: () => installPromise,
-        // Always the SAME phase — only the first observation prints.
+        // Always the SAME phase, only the first observation prints.
         fetchStatus: async () => progressStatus('piper-engine', 'download', 100, 50),
       },
     };
@@ -173,7 +173,7 @@ describe('runVoiceSetupWithProgress — live progress polling (no real timers)',
   });
 });
 
-describe('createVoiceProvisionGateway — resolution', () => {
+describe('createVoiceProvisionGateway: resolution', () => {
   test('refuses honestly when the daemon is disabled', () => {
     const resolution = createVoiceProvisionGateway({
       configManager: { get: (k: string) => (k === 'daemon.enabled' ? false : undefined) } as never,
@@ -209,7 +209,7 @@ function makeCtx(configGet?: (key: string) => unknown): CommandContext & { print
   } as unknown as CommandContext & { printed: string[] };
 }
 
-describe('/voice status|setup — command wire', () => {
+describe('/voice status|setup: command wire', () => {
   function registry(): CommandRegistry {
     const r = new CommandRegistry();
     registerExperienceRuntimeCommands(r);
@@ -291,7 +291,7 @@ describe('/voice status|setup — command wire', () => {
   });
 });
 
-describe('wake provisioning — status projection and the explicit setup act', () => {
+describe('wake provisioning: status projection and the explicit setup act', () => {
   const SETTINGS = resolveWakeRuntimeSettings(
     (key) => (key === 'voice.wake.enabled' ? true : undefined),
     'tui',
@@ -391,7 +391,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
     expect(block).toContain('Wake-Word Setup');
     expect((block.match(/classifier: download/g) ?? []).length).toBe(1);
     expect(block).toContain('classifier: verify');
-    expect(block).toContain('Wake-Word Setup — receipt');
+    expect(block).toContain('Wake-Word Setup: receipt');
     expect(block).toContain('ready: yes');
     // Each NOTICE's own path, so a deployment carrying the artifacts knows both
     // files it has to carry with them.
@@ -418,7 +418,7 @@ describe('wake provisioning — status projection and the explicit setup act', (
     });
     const block = printed.join('\n');
     expect(block).toContain('ready: no');
-    expect(block).toContain('classifier: failed — sha256 got abc, want def');
+    expect(block).toContain('classifier: failed: sha256 got abc, want def');
   });
 
   test('a provisioning throw is reported honestly, not as a receipt', async () => {
@@ -442,8 +442,8 @@ describe('wake provisioning — status projection and the explicit setup act', (
 /**
  * The boot half of "the model ships with the installation": a daemon retries at
  * every start for whatever the install could not download, and it sweeps the wake
- * tree while it is there. Both are opt-in, because both do work — network I/O and
- * an hourly timer — that a test-composed graph or a one-shot CLI command must not
+ * tree while it is there. Both are opt-in, because both do work, network I/O and
+ * an hourly timer, that a test-composed graph or a one-shot CLI command must not
  * inherit.
  */
 describe('wake-model boot provisioning inside wireVoiceSetup', () => {
@@ -478,7 +478,7 @@ describe('wake-model boot provisioning inside wireVoiceSetup', () => {
         return { sweeper: { sweepNow: () => { throw new Error('unused'); }, stop: () => {} }, stop: () => { stops += 1; } };
       },
     }));
-    // The same directory the setup service and the detector use — resolveUserPath('voice').
+    // The same directory the setup service and the detector use, resolveUserPath('voice').
     expect(roots).toEqual(['/managed/voice']);
     stopWakeHousekeeping();
     expect(stops).toBe(1);
@@ -486,7 +486,7 @@ describe('wake-model boot provisioning inside wireVoiceSetup', () => {
 
   test('the attempt it hands over is the service one, which never throws and names the terminal command', async () => {
     // A user root that is a FILE, not a directory. Deterministic on every host and
-    // every uid — creating the managed tree under it fails with ENOTDIR before any
+    // every uid, creating the managed tree under it fails with ENOTDIR before any
     // network call, so this exercises the degraded path for real without a test
     // that could reach for 6 MB when it happens to run somewhere writable.
     const blocked = join(makeProjectTempDir('wake-boot-degraded'), 'not-a-directory');

@@ -3,7 +3,7 @@ import type { TaskLifecycleState, RuntimeTask, TaskKind } from '@/runtime/index.
 import { createInitialTasksState } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
-// State machine — declarative valid transitions
+// State machine, declarative valid transitions
 // ---------------------------------------------------------------------------
 
 const VALID_TRANSITIONS: ReadonlyMap<TaskLifecycleState, ReadonlySet<TaskLifecycleState>> = new Map([

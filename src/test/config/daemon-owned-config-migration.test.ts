@@ -5,8 +5,8 @@
  * `~/.goodvibes/daemon/settings.json` (SDK, `platform/config`'s
  * `migrateDaemonOwnedConfig`). Before this migration, a value like
  * `surfaces.telegram.botToken` written into `~/.goodvibes/tui/settings.json`
- * looked like any other TUI-local setting but the daemon — the only process
- * that actually reads `surfaces.*` — never saw it. This proves, against a
+ * looked like any other TUI-local setting but the daemon, the only process
+ * that actually reads `surfaces.*`, never saw it. This proves, against a
  * real temp home directory (never a fake): the migration helper this repo
  * wraps around the SDK's function runs and is idempotent, a TUI `ConfigManager`
  * resolves the moved keys from the daemon tier afterward, and a client-owned
@@ -88,7 +88,7 @@ describe('runDaemonConfigMigration', () => {
     expect(second!.marker.moved.map((entry) => entry.key).sort()).toEqual(movedKeys);
 
     // A third call after re-writing the (now-empty) surface file's daemon
-    // keys is still a no-op — the marker, not file contents, is authoritative.
+    // keys is still a no-op, the marker, not file contents, is authoritative.
     const third = runDaemonConfigMigration(h);
     expect(third!.migrated).toBe(false);
   });

@@ -20,7 +20,7 @@ import { readBudgetAlertUsd } from '@pellux/goodvibes-sdk/platform/providers';
 /** Minimal orchestrator surface required by turn-event wiring. */
 interface TurnOrchestrator {
   readonly lastInputTokens: number;
-  /** Cumulative session usage — same object CostTrackerPanel reads, used here for budget-breach checks. */
+  /** Cumulative session usage, same object CostTrackerPanel reads, used here for budget-breach checks. */
   readonly usage: { readonly input: number; readonly output: number; readonly cacheRead: number; readonly cacheWrite: number };
 }
 
@@ -50,7 +50,7 @@ export interface WireTurnEventHandlersOptions {
   readonly events: UiRuntimeEvents;
   /**
    * Raw runtime event bus. Needed for domains NOT surfaced by the grouped
-   * UiRuntimeEvents feed — specifically the 'compaction' domain, whose
+   * UiRuntimeEvents feed, specifically the 'compaction' domain, whose
    * mandatory COMPACTION_RECEIPT the transcript renders as a distinct block.
    * Optional so headless/test callers can omit it.
    */
@@ -65,7 +65,7 @@ export interface WireTurnEventHandlersOptions {
   /**
    * The app's declare-once session-storage handle. The turn snapshot, the
    * last-session pointer it writes, the transcript journal, and the rewind
-   * anchor sidecar all resolve off this one handle — so the boot notice and
+   * anchor sidecar all resolve off this one handle, so the boot notice and
    * `--continue`, which read through the same handle, land on the files this
    * writer actually produced.
    */
@@ -77,13 +77,13 @@ export interface WireTurnEventHandlersOptions {
   /**
    * Outbound webhook notifier. When provided and URLs are configured,
    * long-task push notifications are delivered to configured ntfy/webhook
-   * endpoints after the configured threshold. Optional — silently skipped
+   * endpoints after the configured threshold. Optional, silently skipped
    * when absent.
    */
   readonly webhookNotifier?: WebhookNotifier | null;
   /**
    * Terminal focus tracker. Gates the long-task, budget-breach, and
-   * agent/chain-failure desktop alerts wired in this module — see
+   * agent/chain-failure desktop alerts wired in this module, see
    * alert-gating.ts. Optional; when absent, none of the new alert
    * behavior is gated by focus (long-task keeps its always-fire
    * behavior from before focus gating existed, and budget-breach/failure alerts are
@@ -102,7 +102,7 @@ export interface WireTurnEventHandlersOptions {
   /**
    * Minimal test seam: injectable clock for controlling Date.now() in tests.
    * Defaults to the real Date.now when absent.
-   * @internal — tests only
+   * @internal, tests only
    */
   readonly _clock?: () => number;
 }
@@ -179,7 +179,7 @@ export function wireTurnEventHandlers(
   // /session fork reassign `sessionId` on in place (session-workflow.ts,
   // bootstrap-hook-bridge.ts), so a session switch is visible here just by
   // re-reading `runtime.sessionId`. Wrapped so every write re-checks it and
-  // rebinds to the new session's file first — otherwise the journal opened
+  // rebinds to the new session's file first, otherwise the journal opened
   // for the OLD session keeps appending the NEW session's snapshots into the
   // OLD session's file, and a later resume of the old session replays the
   // wrong conversation.
@@ -192,7 +192,7 @@ export function wireTurnEventHandlers(
   // Track turn start time for long-task notification threshold.
   let turnStartTime: number | null = null;
 
-  // Budget-breach edge-trigger checker — one instance per session,
+  // Budget-breach edge-trigger checker, one instance per session,
   // piggybacking on the same TURN_COMPLETED handler as the long-task
   // notification below rather than adding a second TURN_COMPLETED subscription.
   const budgetBreachNotifier: BudgetBreachNotifier | null = focusTracker
@@ -220,7 +220,7 @@ export function wireTurnEventHandlers(
     const notifyThreshold = readNotifyAfterSeconds((k) => configManager.get(k as Parameters<typeof configManager.get>[0]));
     // stopReason 'empty_response' signals a non-successful completion.
     const taskStatus: LongTaskStatus = evt.stopReason === 'completed' ? 'ok' : 'fail';
-    // In-terminal (OSC 9) turn-end notification — fires on its own per-signal
+    // In-terminal (OSC 9) turn-end notification, fires on its own per-signal
     // config + focus gate, independent of the long-task duration threshold below.
     terminalNotifier?.notify('turn-end', taskStatus === 'ok' ? 'Turn finished' : 'Turn finished with errors');
     maybeNotifyLongTask({
@@ -256,10 +256,10 @@ export function wireTurnEventHandlers(
         'auto',
       );
       hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: summarizeError(err) }));
-      // Snapshot succeeded — rotate the journal (gap-filler no longer needed).
+      // Snapshot succeeded, rotate the journal (gap-filler no longer needed).
       transcriptJournal.rotate();
     } catch (e) {
-      // Snapshot failed — append the turn to the journal so recovery can
+      // Snapshot failed, append the turn to the journal so recovery can
       // reconstruct it. Best-effort; never crash the TUI.
       try {
         const snap = conversation.toJSON() as { messages: Array<import('./conversation.ts').ConversationMessageSnapshot> };
@@ -270,7 +270,7 @@ export function wireTurnEventHandlers(
     // Record this turn's rewind anchor: pair the turnId (shared with the
     // workspace checkpoint the turn engine snapshots for this same turn) with
     // the live conversation message count, so a later message-anchored /rewind
-    // can truncate the conversation to exactly this boundary — the join key
+    // can truncate the conversation to exactly this boundary, the join key
     // between conversation and files rewind (see core/rewind-turn-anchors.ts).
     try {
       recordTurnAnchor(runtime.sessionId, {
@@ -294,7 +294,7 @@ export function wireTurnEventHandlers(
   // In-terminal (OSC 9) agent-blocked notification: a delegated agent parked
   // waiting for a human message (AGENT_AWAITING_MESSAGE) is "blocked on you".
   // Gated by the notifier's own per-signal config + focus rule. PRIVACY: the
-  // short agent id only — never task text.
+  // short agent id only, never task text.
   if (terminalNotifier) {
     unsubs.push(events.agents.on('AGENT_AWAITING_MESSAGE', (payload) => {
       terminalNotifier.notify('agent-blocked', `agent ${payload.agentId.slice(0, 8)} is waiting for your input`);
@@ -311,16 +311,16 @@ export function wireTurnEventHandlers(
   // Agent/chain-failure desktop alerts. The SDK's WebhookNotifier and
   // Notifier already fire webhook/Slack/Discord notifications for these two
   // events unconditionally (attachToRuntimeBus in the SDK's
-  // platform/integrations — pre-existing, not focus-gated: an out-of-band
+  // platform/integrations, pre-existing, not focus-gated: an out-of-band
   // push to another device is useful regardless of terminal focus). What was
   // missing was a desktop notification, gated by focus like the other three
-  // alert classes — that's the only thing added here, to avoid double-firing
+  // alert classes, that's the only thing added here, to avoid double-firing
   // a webhook that's already covered.
   if (focusTracker) {
     unsubs.push(events.agents.on('AGENT_FAILED', (payload) => {
       if (!shouldFireAlert(focusTracker, configGet, 'behavior.notifyOnAgentFailure')) return;
       try {
-        notifyCompletion('GoodVibes — agent failed', `agent ${payload.agentId.slice(0, 8)} failed: ${payload.error}`, FORCE_NOTIFY_DURATION_MS);
+        notifyCompletion('GoodVibes: agent failed', `agent ${payload.agentId.slice(0, 8)} failed: ${payload.error}`, FORCE_NOTIFY_DURATION_MS);
       } catch (err) {
         logger.debug('turn-event-wiring: agent-failure notify error', { error: String(err) });
       }

@@ -178,28 +178,28 @@ describe('ModelPickerModal', () => {
       expect(result.every(m => m.tier === 'premium' || m.tier === 'standard')).toBe(true);
     });
 
-    test('filters by query — matches id', () => {
+    test('filters by query: matches id', () => {
       picker.query = 'free-1';
       const result = picker.getFilteredModels();
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('free-1');
     });
 
-    test('filters by query — matches displayName case-insensitive', () => {
+    test('filters by query: matches displayName case-insensitive', () => {
       picker.query = 'PREMIUM MODEL';
       const result = picker.getFilteredModels();
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('premium-1');
     });
 
-    test('filters by query — matches provider', () => {
+    test('filters by query: matches provider', () => {
       picker.query = 'provB';
       const result = picker.getFilteredModels();
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('free-2');
     });
 
-    test('fuzzy query — all words must match', () => {
+    test('fuzzy query: all words must match', () => {
       picker.query = 'free provA';
       const result = picker.getFilteredModels();
       expect(result).toHaveLength(1);
@@ -235,7 +235,7 @@ describe('ModelPickerModal', () => {
     test('model mode inserts group headers when provider changes', () => {
       const items = picker.getItems();
       const headers = items.filter(i => i.isGroupHeader);
-      // provA, provB, provA (again — not consecutive), provC = 4 headers
+      // provA, provB, provA (again, not consecutive), provC = 4 headers
       expect(headers.length).toBe(4);
     });
 
@@ -253,7 +253,7 @@ describe('ModelPickerModal', () => {
 
     test('provider mode returns grouped list with headers', () => {
       picker.mode = 'provider';
-      // provA and provB are not in POPULAR_PROVIDERS — go to All group
+      // provA and provB are not in POPULAR_PROVIDERS, go to All group
       picker.providers = ['provA', 'provB'];
       picker.configuredProviders = new Set();
       const items = picker.getItems();
@@ -296,7 +296,7 @@ describe('ModelPickerModal', () => {
       expect(items[1].detail).toContain('Balanced');
     });
 
-    test('effort mode — unknown level gets empty detail', () => {
+    test('effort mode: unknown level gets empty detail', () => {
       picker.mode = 'effort';
       picker.effortLevels = ['ultra'];
       const items = picker.getItems();
@@ -429,7 +429,7 @@ describe('ModelPickerModal', () => {
     // Flipped. A live tmux repro showed the prior "list focus by default"
     // behavior meant typing a search term went char-by-char into single-key
     // shortcuts instead (c=capability, a=available-only, ...) with the list
-    // never filtering and no indication anything happened — see the doc
+    // never filtering and no indication anything happened, see the doc
     // comment on ModelPickerModal.openAllModels(). Search now starts focused
     // so "just start typing" filters immediately, matching every other
     // picker; focusPane stays 'items' (Left/Right pane switching, Down to
@@ -946,7 +946,7 @@ describe('ModelPickerModal', () => {
     test('appendChar clamps selectedIndex against filtered providers', () => {
       picker.selectedIndex = 3;
       picker.appendChar('g');
-      // Only 'gemini' matches — index must be 0
+      // Only 'gemini' matches, index must be 0
       expect(picker.selectedIndex).toBe(0);
     });
 

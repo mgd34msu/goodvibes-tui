@@ -1,5 +1,5 @@
 /**
- * hex-literal-rule.ts — architecture-gate rule.
+ * hex-literal-rule.ts, architecture-gate rule.
  *
  * Bans raw `#RGB`, `#RRGGBB`, and `#RRGGBBAA` colour literals in
  * src/panels/**\/*.ts and src/renderer/**\/*.ts. UI_TONES
@@ -15,7 +15,7 @@
  * count past its baseline entry; files absent from the baseline (new files,
  * or files already fully migrated) are held to zero. The baseline itself
  * only shrinks as later cleanup passes (the panel sweep) migrate
- * individual files to tokens — this rule does not block on that sweep.
+ * individual files to tokens, this rule does not block on that sweep.
  */
 
 export const HEX_LITERAL_RE =

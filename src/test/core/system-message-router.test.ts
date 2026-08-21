@@ -7,7 +7,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 // Minimal stubs
 //
 // (the purge): SystemMessagesPanel was DELETE-disposition and has been
-// removed. SystemMessageRouter no longer takes a panel at all — every
+// removed. SystemMessageRouter no longer takes a panel at all, every
 // message now reaches conversation.addTypedSystemMessage() (see the class
 // doc in system-message-router.ts for why that's the correct behavior, not
 // a regression: resolveSystemMessageDelivery always falls back to
@@ -44,7 +44,7 @@ function makeTargetResolver(
 }
 
 // ---------------------------------------------------------------------------
-// classifyPriority — tested indirectly through routeAuto
+// classifyPriority, tested indirectly through routeAuto
 // ---------------------------------------------------------------------------
 
 describe('classifyPriority (via routeAuto)', () => {
@@ -85,7 +85,7 @@ describe('classifyPriority (via routeAuto)', () => {
   });
 
   test('[Agents] periodic "N running" snapshots are suppressed; lifecycle lines still reach conversation (1d)', () => {
-    // The 30s "N running:" snapshot is transcript churn — dropped; the same live
+    // The 30s "N running:" snapshot is transcript churn, dropped; the same live
     // detail is shown in the fleet panel and the footer count.
     router.routeAuto('[Agents] 3 running:\n  abc12345: working');
     expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
@@ -180,7 +180,7 @@ describe('routeSystemMessage', () => {
 });
 
 // ---------------------------------------------------------------------------
-// routeAuto — classification
+// routeAuto, classification
 // ---------------------------------------------------------------------------
 
 describe('routeAuto classification', () => {
@@ -207,7 +207,7 @@ describe('routeAuto classification', () => {
   const lowCases = [
     '[Scan] Found server at localhost',
     '[Local] ollama at localhost:11434',
-    // Not the "N running:" periodic snapshot (that is suppressed — see below);
+    // Not the "N running:" periodic snapshot (that is suppressed, see below);
     // a lifecycle line still reaches the transcript.
     '[Agents] ✓ task a completed',
     '[MCP] Discovered server foo',
@@ -244,16 +244,16 @@ describe('routeAuto classification', () => {
 describe('router noise gate', () => {
   // Papercut sweep item 2: this used to assert the folded line landed in the
   // transcript (conv._messages). The first-run evaluation wanted this boot
-  // plumbing OUT of the transcript entirely — it now goes to the activity
+  // plumbing OUT of the transcript entirely, it now goes to the activity
   // log only, and stays reachable live via /health provider and /model.
-  test('1b — a provider-replay burst folds to one activity-log entry and never reaches the transcript', async () => {
+  test('1b: a provider-replay burst folds to one activity-log entry and never reaches the transcript', async () => {
     const conv = makeConversation();
     const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver());
     const logSpy = spyOn(logger, 'info').mockImplementation(() => {});
     try {
       router.low('[Local] ollama at localhost:11434 (2 models) — from last session');
       router.low('[Local] lmstudio at localhost:1234 (5 models) — from last session');
-      // Nothing emitted synchronously — the burst is buffered.
+      // Nothing emitted synchronously, the burst is buffered.
       expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
       expect(logSpy).not.toHaveBeenCalled();
       await Promise.resolve();
@@ -271,21 +271,21 @@ describe('router noise gate', () => {
     }
   });
 
-  test('1c — replay lines for a terminal chain are dropped, active ones pass', () => {
+  test('1c: replay lines for a terminal chain are dropped, active ones pass', () => {
     const conv = makeConversation();
     const router = createSystemMessageRouter(
       conv as unknown as ConversationManager,
       makeTargetResolver(),
       { isChainTerminal: (id) => id === 'dead' },
     );
-    router.low('[Replay] WRFC chain dead transitioned pending → engineering — waiting for action (first notified 1 turn ago)');
-    router.low('[Replay] WRFC chain live transitioned pending → engineering — waiting for action (first notified 1 turn ago)');
+    router.low('[Replay] WRFC chain dead transitioned pending → engineering; waiting for action (first notified 1 turn ago)');
+    router.low('[Replay] WRFC chain live transitioned pending → engineering; waiting for action (first notified 1 turn ago)');
     expect(conv._messages).toEqual([
-      '[Replay] WRFC chain live transitioned pending → engineering — waiting for action (first notified 1 turn ago)',
+      '[Replay] WRFC chain live transitioned pending → engineering; waiting for action (first notified 1 turn ago)',
     ]);
   });
 
-  test('1d — periodic running-agents snapshots never reach the transcript', () => {
+  test('1d: periodic running-agents snapshots never reach the transcript', () => {
     const conv = makeConversation();
     const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver());
     router.low('[Agents] 2 running:\n  abc: Turn 3 · Thinking…');
@@ -297,25 +297,25 @@ describe('userReceipt', () => {
   // Regression coverage for the boot defect: the recovery modal's
   // Resume/Keep/Remove receipt landed in the transcript while the splash
   // still owned the screen, because it went through the same path as ambient
-  // system chatter. userReceipt() is the fix's entry point — it must reach
+  // system chatter. userReceipt() is the fix's entry point, it must reach
   // the conversation unconditionally (no noise gate, no routing-target
   // detour) and mark the message so ConversationManager treats it as real
   // visible content instead of quiet boot chatter.
   test('reaches the conversation directly, marked isUserReceipt, bypassing the noise gate and routing target', () => {
     const conv = makeConversation();
     const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver({ system: 'panel' }));
-    router.userReceipt('Recovery point removed (session sess-abc123) — it will not be offered again, even if the file reappears.');
+    router.userReceipt('Recovery point removed (session sess-abc123); it will not be offered again, even if the file reappears.');
     expect(conv.addTypedSystemMessage).toHaveBeenCalledTimes(1);
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith(
-      'Recovery point removed (session sess-abc123) — it will not be offered again, even if the file reappears.',
+      'Recovery point removed (session sess-abc123); it will not be offered again, even if the file reappears.',
       'system',
       { isUserReceipt: true },
     );
   });
 
-  test('a provider-replay-shaped line still reaches the conversation as a receipt — the noise gate never runs', () => {
+  test('a provider-replay-shaped line still reaches the conversation as a receipt; the noise gate never runs', () => {
     // Same text shape the noise gate would otherwise fold/drop (see the
-    // 'router noise gate' describe block above) — userReceipt() must not
+    // 'router noise gate' describe block above), userReceipt() must not
     // route through classifyNoise at all, because a receipt for an explicit
     // user action is never noise.
     const conv = makeConversation();

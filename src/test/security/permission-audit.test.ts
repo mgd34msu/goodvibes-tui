@@ -1,5 +1,5 @@
 /**
- * G5 — Permission Audit
+ * G5, Permission Audit
  *
  * Verifies the permission gate behavior for all 12 tools + delegate, danger-gated
  * feature config checks, path traversal protection on file-mutating tools, and
@@ -62,7 +62,7 @@ function makeUserAuth(): UserAuthManager {
 }
 
 // ---------------------------------------------------------------------------
-// Setup / teardown — force autoApprove=false and prompt mode for all tests
+// Setup / teardown, force autoApprove=false and prompt mode for all tests
 // ---------------------------------------------------------------------------
 
 let configManager: ConfigManager;
@@ -82,7 +82,7 @@ function createTestDaemon(): DaemonServer {
     homeDirectory: homeDir,
     // Injected rather than left to the facade's own composition. Every one of
     // these tests exercises the danger gate and never binds a socket, and
-    // DaemonServer.stop() returns immediately when `server === null` — so a
+    // DaemonServer.stop() returns immediately when `server === null`, so a
     // facade-composed graph here would have no reachable teardown, and its
     // dozen pollers would run for the rest of the process. An injected graph is
     // the caller's to stop, and this is the caller.
@@ -126,7 +126,7 @@ afterEach(() => {
 // 1. All 12 tools + delegate: PermissionManager.check() is the gate
 // ---------------------------------------------------------------------------
 
-describe('Tool permission gate — all 12 tools + delegate', () => {
+describe('Tool permission gate: all 12 tools + delegate', () => {
   // Read-category tools: auto-approved in prompt mode (no event fired)
   const READ_TOOLS: Array<[string, Record<string, unknown>]> = [
     ['read',     { path: 'src/index.ts' }],
@@ -258,7 +258,7 @@ describe('Danger-gated features check config before enabling', () => {
     });
   });
 
-  describe('recursive orchestration policy — SpawnTokenManager.canSpawn', () => {
+  describe('recursive orchestration policy: SpawnTokenManager.canSpawn', () => {
     beforeEach(() => resetTestSpawnTokenManagers());
     afterEach(() => resetTestSpawnTokenManagers());
 
@@ -346,7 +346,7 @@ describe('Path traversal protection via resolveAndValidatePath', () => {
   });
 
   test('resolveAndValidatePath is used by write tool (import exists)', async () => {
-    // Verify the guard is imported and used — import the module to confirm no errors
+    // Verify the guard is imported and used, import the module to confirm no errors
     const { createWriteTool } = await import('@pellux/goodvibes-sdk/platform/tools');
     expect(typeof createWriteTool).toBe('function');
   });
@@ -373,10 +373,10 @@ describe('Path traversal protection via resolveAndValidatePath', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. PermissionPromptUI — renders correct category label per category
+// 5. PermissionPromptUI, renders correct category label per category
 // ---------------------------------------------------------------------------
 
-describe('PermissionPromptUI — renders correctly per category', () => {
+describe('PermissionPromptUI: renders correctly per category', () => {
   const WIDTH = 80;
 
   test('write category: label is WRITE, color is yellow (220)', () => {
@@ -426,7 +426,7 @@ describe('PermissionPromptUI — renders correctly per category', () => {
       resolve: (_approved: boolean) => {},
     };
     const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
-    // Line is Cell[] — join chars to get the text content of each line
+    // Line is Cell[], join chars to get the text content of each line
     const hasExecuteLabel = lines.some((line) =>
       line.map((c) => c.char).join('').includes('[EXECUTE]')
     );

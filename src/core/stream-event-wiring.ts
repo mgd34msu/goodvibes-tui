@@ -34,14 +34,14 @@ export interface StreamMetrics {
   /**
    * callId of the currently executing tool call; cleared when execution
    * completes. This is the real orchestrator callId (from TOOL_EXECUTING),
-   * so a per-tool cancel affordance targets exactly the running call — never
+   * so a per-tool cancel affordance targets exactly the running call, never
    * the synthetic 'live' render id.
    */
   activeToolCallId: string | undefined;
   /**
    * Epoch ms of the most recent STREAM_START or STREAM_DELTA; undefined when
-   * idle (no turn in flight). Read every render frame — not just on the
-   * watchdog's one-shot hint — so "ms since last byte" can be computed even
+   * idle (no turn in flight). Read every render frame, not just on the
+   * watchdog's one-shot hint, so "ms since last byte" can be computed even
    * when no new SDK event has arrived at all (a no-delta stall watchdog for
    * the render loop itself, independent of the low-priority system message).
    */
@@ -57,13 +57,13 @@ export interface StreamMetrics {
    * provider call reconnects after a transport error rather than failing the
    * turn. Read structurally off the event feed (see looseTurnsFeed below), so a
    * turn that never retries simply leaves these undefined. Cleared on
-   * STREAM_DELTA — a byte arriving means the reconnect succeeded.
+   * STREAM_DELTA, a byte arriving means the reconnect succeeded.
    */
   reconnectAttempt: number | undefined;
   reconnectMaxAttempts: number | undefined;
 }
 
-/** The idle initial StreamMetrics — mutated in place by wireStreamEventMetrics handlers. */
+/** The idle initial StreamMetrics, mutated in place by wireStreamEventMetrics handlers. */
 export function createStreamMetrics(): StreamMetrics {
   return {
     startTime: 0, deltaCount: 0, tokenSpeed: 0, ttftMs: undefined, ttftRecorded: false,
@@ -113,7 +113,7 @@ interface FailoverOptimizer {
   readonly enabled: boolean;
   testFallback(profile?: Record<string, unknown>): { readonly chain: readonly FailoverChainNode[] };
   recordFallbackTransition(from: string, to: string, reason: string): void;
-  /** Recent fallback transitions — read by the routing chip to skip double-narrating a failover. */
+  /** Recent fallback transitions, read by the routing chip to skip double-narrating a failover. */
   readonly fallbackLog: readonly { readonly from: string; readonly to: string; readonly reason: string; readonly ts: number }[];
 }
 
@@ -123,8 +123,8 @@ interface StreamSystemMessageRouter {
   low(message: string): void;
   /**
    * Unconditional conversation delivery (see system-message-router.ts). Used
-   * for provider-switch notices: which backend serves a turn — and therefore
-   * who bills for it — is never ambient chatter that a routing preference or
+   * for provider-switch notices: which backend serves a turn, and therefore
+   * who bills for it, is never ambient chatter that a routing preference or
    * the noise gate may filter out. Optional so bare test doubles that supply
    * only high/low still type-check; announce() below falls back to high().
    */
@@ -133,7 +133,7 @@ interface StreamSystemMessageRouter {
 
 /**
  * Loosely-typed variant of the turns event feed, used only to subscribe to
- * STREAM_STALL — a proposed event the SDK's TurnEvent union does not carry, so
+ * STREAM_STALL, a proposed event the SDK's TurnEvent union does not carry, so
  * `events.turns.on` rejects the name at compile time. See the subscription site
  * below. `events.turns.on` stays fully typed against the real union everywhere
  * else in this file, STREAM_RETRY included.
@@ -181,14 +181,14 @@ export interface WireStreamEventMetricsOptions {
    * the optimizer is enabled and a viable next provider exists in the chain.
    *
    * The re-submission rolls the conversation back to its pre-submission
-   * message count, which deletes everything the failed turn added — including
+   * message count, which deletes everything the failed turn added, including
    * a failover notice appended before the call. So the notice is passed IN
    * rather than emitted before: the caller re-posts it after its rollback, and
    * it survives to be read. Implementations that do not roll back may ignore
    * the argument, but must then post the notice themselves.
    *
    * Returns whether the turn was actually re-submitted. False means there was
-   * nothing to retry (no pre-submission snapshot — the failed turn did not
+   * nothing to retry (no pre-submission snapshot, the failed turn did not
    * come from the composer) and the notice was NOT posted, so the caller must
    * narrate the switch and surface the error itself rather than let a turn end
    * in silence on a backend the user did not choose.
@@ -211,7 +211,7 @@ export interface WireStreamEventMetricsOptions {
   readonly isApprovalPending?: (() => boolean) | undefined;
   /**
    * Stall watchdog threshold in ms. Defaults to the watchdog's own default (STALL_THRESHOLD_MS,
-   * 30 000). Exposed only so unit tests can drive the stall path without waiting 30s — production
+   * 30 000). Exposed only so unit tests can drive the stall path without waiting 30s, production
    * callers omit it.
    */
   readonly stallThresholdMs?: number | undefined;
@@ -226,7 +226,7 @@ export interface WireStreamEventMetricsOptions {
   /**
    * The user's configured model selection (config `provider.model`) as a
    * registry key. Read at the moment of a failover switch so the turn-end
-   * restore targets what the user actually chose — not whatever the registry
+   * restore targets what the user actually chose, not whatever the registry
    * happened to hold. Without it, failover still works but no restore or
    * divergence marker is possible, so both are skipped rather than guessed at.
    */
@@ -257,7 +257,7 @@ export interface WireStreamEventMetricsResult {
   readonly clearFailoverVisited: () => void;
   /**
    * Register a callback that fires whenever a TURN_ERROR is surfaced to the
-   * user — either immediately (no optimizer) or after chain exhaustion.
+   * user, either immediately (no optimizer) or after chain exhaustion.
    * Does NOT fire when the optimizer performs a successful automatic failover
    * (in that case the user sees a [Failover] notice, not an error).
    * Used by main.ts to activate the one-key retry affordance. The callback
@@ -286,10 +286,10 @@ function buildCostDeltaSuffix(
   toRegistryKey: string,
 ): string {
   if (!lookup) return '';
-  // Registry key format: `provider:modelId` — modelId may itself contain `:`.
+  // Registry key format: `provider:modelId`, modelId may itself contain `:`.
   const fromModelId = fromRegistryKey ? fromRegistryKey.split(':').slice(1).join(':') : '';
   const toModelId = toRegistryKey.split(':').slice(1).join(':');
-  // A null catalog answer means honestly unknown — treated exactly like the
+  // A null catalog answer means honestly unknown, treated exactly like the
   // legacy zero-pricing sentinel below.
   const fromCost = (fromModelId ? lookup.getCostFromCatalog(fromModelId) : null) ?? { input: 0, output: 0 };
   const toCost = lookup.getCostFromCatalog(toModelId) ?? { input: 0, output: 0 };
@@ -308,13 +308,13 @@ function buildCostDeltaSuffix(
 
 /**
  * Build the billing-class segment of a failover notice, e.g.
- * ` [billing: API key → Subscription — billing class changed]`.
+ * ` [billing: API key → Subscription, billing class changed]`.
  *
  * This path is NOT the synthetic provider's tier-isolated failover, which is
  * where the documented "free, paid and subscription tiers never mix" contract
  * lives (docs/providers-and-routing.md:77-128, enforced in the SDK's
  * synthetic.ts by CanonicalModel.tier). The optimizer chain consumed here
- * carries no tier metadata at all — its nodes are
+ * carries no tier metadata at all, its nodes are
  * `{ position, providerId, modelId, capable, explanation }` and `explanation`
  * describes functional capability (streaming, tool calling, context size),
  * never billing. So the switch cannot be constrained by a tier it cannot see;
@@ -329,7 +329,7 @@ function buildCostDeltaSuffix(
 function buildBillingSuffix(fromProviderId: string, toProviderId: string): string {
   const from = classifyProviderSetup({ providerId: fromProviderId }).setupLabel;
   const to = classifyProviderSetup({ providerId: toProviderId }).setupLabel;
-  const changed = from !== to ? ' — billing class changed' : '';
+  const changed = from !== to ? ': billing class changed' : '';
   return ` [billing: ${from} → ${to}${changed}]`;
 }
 
@@ -381,7 +381,7 @@ export function wireStreamEventMetrics(
    * backend while nothing in the session state or the footer had changed to
    * say so. The user's configured selection is authoritative, so the NEXT turn
    * starts from it again. If that backend is still unhealthy, the normal
-   * per-turn failover handles it again — visibly, with a fresh notice — which
+   * per-turn failover handles it again, visibly, with a fresh notice, which
    * is exactly the behaviour a sticky override was hiding.
    *
    * The record is kept (not cleared) when the restore itself fails, so the
@@ -395,12 +395,12 @@ export function wireStreamEventMetrics(
    * narrated twice: the switch out is announced by `[Failover] from -> to
    * (reason)` and the switch back by `[Failover] Restored …`, and a second
    * line reading "(reason unknown)" for the same event would be both a
-   * duplicate and a lie — the reason is known in both cases.
+   * duplicate and a lie, the reason is known in both cases.
    *
    * A timestamped map rather than a flag cleared around the setCurrentModel
    * call, because MODEL_CHANGED does NOT arrive synchronously: the TUI reads
    * it through the runtime event feed, which delivers after the emitting call
-   * has returned (observed live — a flag cleared in a finally block was always
+   * has returned (observed live, a flag cleared in a finally block was always
    * already null by the time the listener ran, and both failover halves got a
    * duplicate chip). Entries expire on the same window the fallback-log
    * correlation uses, so a switch whose event never arrives cannot silence an
@@ -411,7 +411,7 @@ export function wireStreamEventMetrics(
   /**
    * Run a registry switch this module narrates itself, with the chip suppressed
    * for it. Returns the effort-remap sentence when the switch changed the level
-   * that goes on the wire, for the CALLER to place — see
+   * that goes on the wire, for the CALLER to place, see
    * reconcileEffortWithServingModel for why it is not announced here.
    */
   const switchNarrated = (registryKey: string): string | undefined => {
@@ -431,13 +431,13 @@ export function wireStreamEventMetrics(
    *
    * Both halves of a failover come through switchNarrated, so this covers the
    * switch out and the switch back. The requested level is left untouched in
-   * config — the fallback is temporary and the user's choice must survive it —
+   * config, the fallback is temporary and the user's choice must survive it,
    * but the level actually sent is the resolved one, and the SDK's own sentence
    * explaining the remap is surfaced verbatim rather than reworded.
    *
    * The sentence is RETURNED rather than announced. On the failover-out path
    * this function runs before retryTurn, and retryTurn rolls the conversation
-   * back to its pre-submission message count — which deleted this notice every
+   * back to its pre-submission message count, which deleted this notice every
    * time, exactly as it used to delete the failover notice itself. The caller
    * folds it into the notice it hands to retryTurn so it survives the rollback;
    * the restore path, which has no rollback after it, announces it directly.
@@ -452,7 +452,7 @@ export function wireStreamEventMetrics(
       ...(serving.reasoningEffort ? { reasoningEffort: serving.reasoningEffort } : {}),
     };
     publishActiveEffortOptions(model);
-    // getConfiguredReasoningEffort reads config `provider.reasoningEffort` —
+    // getConfiguredReasoningEffort reads config `provider.reasoningEffort`,
     // the REQUESTED level. It must never be re-seeded from a previously snapped
     // effective value, or a single failover onto a capped model would ratchet
     // the level down for the rest of the session.
@@ -539,8 +539,8 @@ export function wireStreamEventMetrics(
   // Both terminal turn outcomes end the failover's authority over the
   // registry: a completed turn got its answer, a cancelled one will not.
   // (TURN_COMPLETED and TURN_ERROR are mutually exclusive per turn in the SDK
-  // — TURN_COMPLETED is emitted only on the success path in
-  // orchestrator-turn-helpers, TURN_ERROR only from the orchestrator's catch —
+  //, TURN_COMPLETED is emitted only on the success path in
+  // orchestrator-turn-helpers, TURN_ERROR only from the orchestrator's catch,
   // so restoring here can never undo a switch whose retry has not run yet.)
   unsubs.push(events.turns.on('TURN_COMPLETED', () => {
     failoverVisited.clear();
@@ -599,7 +599,7 @@ export function wireStreamEventMetrics(
       if (next) {
         const toRegistryKey = `${next.providerId}:${next.modelId}`;
         const errorClass = formatUserFacingErrorLine(errVal);
-        // Capture FROM registry key before switching — needed for cost comparison.
+        // Capture FROM registry key before switching, needed for cost comparison.
         const fromRegistryKey = providerRegistry.getCurrentModel().registryKey;
         // The effort remap that comes with the switch is carried, not announced:
         // retryTurn's rollback below would delete it (see
@@ -608,7 +608,7 @@ export function wireStreamEventMetrics(
         try {
           effortNote = switchNarrated(toRegistryKey);
         } catch (switchErr) {
-          // Switch failed — fall through to honest error display. This ends the
+          // Switch failed, fall through to honest error display. This ends the
           // turn, so an EARLIER hop's switch (if this is a second failover
           // within the same turn) loses its authority here just as it would on
           // any other terminal outcome.
@@ -640,7 +640,7 @@ export function wireStreamEventMetrics(
           // No turn to re-submit (the failed turn did not come from the
           // composer, so there is no pre-submission snapshot to roll back to).
           // The registry has still MOVED, so the switch gets narrated here and
-          // the original error surfaces — silence would leave the user on a
+          // the original error surfaces, silence would leave the user on a
           // different backend with no turn running and nothing said about it.
           announce(failoverNotice);
           systemMessageRouter.high(`[Error] ${errorClass}`);
@@ -651,12 +651,12 @@ export function wireStreamEventMetrics(
         return;
       }
 
-      // Chain exhausted — all capable candidates have been visited or none exist.
+      // Chain exhausted, all capable candidates have been visited or none exist.
       // The turn is over, so any switch made earlier in it loses its authority:
       // restore the configured selection before surfacing the error, or the
       // user's next turn would silently start on the last fallback tried.
       announce(
-        `[Failover] Chain exhausted — no alternative provider available. Original error: ${formatUserFacingErrorLine(errVal)}`,
+        `[Failover] Chain exhausted: no alternative provider available. Original error: ${formatUserFacingErrorLine(errVal)}`,
       );
       restoreConfiguredSelection();
       notifyErrorSurfaced(true);
@@ -664,7 +664,7 @@ export function wireStreamEventMetrics(
       return;
     }
 
-    // Baseline: optimizer disabled or not wired — surface error immediately.
+    // Baseline: optimizer disabled or not wired, surface error immediately.
     const formatted = formatUserFacingErrorLine(errVal);
     systemMessageRouter.high(`[Error] ${formatted}`);
     notifyErrorSurfaced(false);
@@ -675,7 +675,7 @@ export function wireStreamEventMetrics(
   // start of turn OR mid-stream, after a re-arm) crosses 30s. The transient
   // system message below is the initial alert; streamMetrics.stallEpisode
   // (read every render frame) drives the persistent "stalled Ns" indicator
-  // in the thinking fragment, so the two coexist rather than conflict — the
+  // in the thinking fragment, so the two coexist rather than conflict, the
   // message announces the stall, the indicator tracks it ongoing.
   const stallWatchdog = createStreamStallWatchdog({
     events: events.turns,
@@ -723,7 +723,7 @@ export function wireStreamEventMetrics(
   // On every tool-completion path, reset lastDeltaAtMs to "now" so the
   // post-tool silence window starts fresh. Tool execution suppresses stall
   // detection at the render call site (see main.ts), but lastDeltaAtMs itself
-  // keeps its pre-tool value the whole time the tool runs — without this
+  // keeps its pre-tool value the whole time the tool runs, without this
   // reset, the instant a tool completes (potentially long after the last real
   // delta), the very next frame would read msSinceLastDelta as the full
   // tool-execution duration and immediately report a stall, even though the

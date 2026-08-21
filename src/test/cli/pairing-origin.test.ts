@@ -11,7 +11,7 @@ import type { ConfigKey, ConfigManager } from '@pellux/goodvibes-sdk/platform/co
  * ConfigValue mapped type is a very large discriminated union, and asking the
  * compiler to structurally verify a freshly-written `get<K extends
  * ConfigKey>` against it here hits TS's "excessive stack depth" recursion
- * limit (TS2321) — a compiler limitation, not a real type mismatch.
+ * limit (TS2321), a compiler limitation, not a real type mismatch.
  */
 function fakeConfig(initial: Record<string, unknown>) {
   const store = { ...initial };

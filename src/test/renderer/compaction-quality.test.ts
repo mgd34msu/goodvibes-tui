@@ -22,7 +22,7 @@ function makeMsg(role: 'user' | 'assistant', content: string): ProviderMessage {
 }
 
 // No reset hook exists for the module-level score store (matching the SDK's
-// own compaction-event log, which also has none — see
+// own compaction-event log, which also has none, see
 // compaction-history-modal.test.ts's "guard with a conditional" precedent),
 // so every timestamp key below is unique to this file and to its own test,
 // to stay correct regardless of test execution order.

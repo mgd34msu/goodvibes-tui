@@ -14,7 +14,7 @@ import { isTextBackspace, isTextForwardDelete } from '../../input/delete-key-pol
 import { isPanelSearchBackspace } from '../../panels/search-focus.ts';
 import { handleSelectionModalToken } from '../../input/handler-modal-routes.ts';
 import { SelectionModal } from '../../input/selection-modal.ts';
-// (the purge) — group B: the ProjectPlanningPanel delete-key/confirm-gate
+// (the purge), group B: the ProjectPlanningPanel delete-key/confirm-gate
 // tests were removed with the panel (migrated to the 'planning' modal, which
 // uses the host's input model, not the panel's inline draft form). The generic
 // delete-key predicate + selection-modal coverage below is unaffected.
@@ -61,7 +61,7 @@ describe('isPanelSearchBackspace', () => {
     expect(isPanelSearchBackspace('backspace')).toBe(true);
   });
 
-  test('delete returns false (no-op — end-anchored filter, no cursor)', () => {
+  test('delete returns false (no-op: end-anchored filter, no cursor)', () => {
     expect(isPanelSearchBackspace('delete')).toBe(false);
   });
 

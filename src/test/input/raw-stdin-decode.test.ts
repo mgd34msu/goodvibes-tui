@@ -12,9 +12,9 @@
  *   \x1b[3~ (VT escape, sent by the Delete key) → logicalName 'delete'
  *
  * If either mapping regresses, pressing Backspace will delete-forward
- * or vice-versa — a critical text-editing regression.
+ * or vice-versa, a critical text-editing regression.
  *
- * All tests are synchronous — no real I/O.
+ * All tests are synchronous, no real I/O.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core';

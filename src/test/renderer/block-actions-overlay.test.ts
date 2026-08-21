@@ -2,7 +2,7 @@
 // block-actions-overlay.test.ts
 //
 // The BlockActionsMenu (opened via Enter on an empty composer) previously had
-// no draw site at all — it swallowed every key but nothing appeared on
+// no draw site at all, it swallowed every key but nothing appeared on
 // screen. Covers: the overlay renders real content when the menu is active,
 // renders nothing when it isn't, shows the block summary and every action's
 // key, and is composed into the conversation viewport via
@@ -34,7 +34,7 @@ describe('renderBlockActionsMenu', () => {
     expect(text).toContain('[c]');
     expect(text).toContain('[b]');
     expect(text).toContain('[Tab]');
-    // 'apply' is diff-only — not offered for a tool block.
+    // 'apply' is diff-only, not offered for a tool block.
     expect(text).not.toContain('[a] Apply diff');
   });
 

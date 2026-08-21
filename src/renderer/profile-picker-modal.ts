@@ -1,5 +1,5 @@
 /**
- * renderProfilePickerModal — renders the /profiles picker modal as Line[]
+ * renderProfilePickerModal, renders the /profiles picker modal as Line[]
  * using ModalFactory.
  *
  * Shows a list of saved profiles with:
@@ -57,9 +57,9 @@ export function renderProfilePickerModal(
   } else {
     // Proportional column widths that adapt to the modal's content width:
     // timestamp ~22% (clamped 10..16); the name column absorbs the remainder
-    // (ported from session-picker-modal.ts). Reserves 4 cols — 2 for the
+    // (ported from session-picker-modal.ts). Reserves 4 cols, 2 for the
     // name/timestamp separator and 2 for the list row's selection indicator
-    // ("▸ ") that ModalFactory prepends outside the wrapped label — so the
+    // ("▸ ") that ModalFactory prepends outside the wrapped label, so the
     // row never spills the timestamp's embedded space onto a wrapped line.
     const tsW = Math.min(16, Math.max(10, Math.floor(contentW * 0.22)));
     const nameW = Math.max(8, contentW - tsW - 4);

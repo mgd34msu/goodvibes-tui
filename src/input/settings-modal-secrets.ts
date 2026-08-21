@@ -14,8 +14,8 @@ export type SettingsSecretsManager = Pick<SecretsManager, 'delete' | 'set'>;
 /**
  * The daemon's own credential write, when this app has a daemon to write to.
  *
- * A daemon-scoped credential is two writes that only work together — the secret
- * value and the config reference that points at it — and `credentials.set` does
+ * A daemon-scoped credential is two writes that only work together, the secret
+ * value and the config reference that points at it, and `credentials.set` does
  * both, verifying the value reads back before it touches the config. Splitting
  * them across a process boundary leaves a window where the config names a
  * reference resolving to nothing, which every reader treats as a
@@ -61,7 +61,7 @@ export function setSecretBackedSettingValue(args: {
   const update = buildSecretBackedConfigUpdate(key, value);
   // A daemon-owned key (surfaces.*, payments.*, controlPlane.*, ...) names a
   // credential the daemon itself executes with, so its secret material lands in
-  // the daemon tier — the one the daemon reads with every surface closed —
+  // the daemon tier, the one the daemon reads with every surface closed,
   // regardless of which client edited it. Everything else stays at user scope.
   // See secret-config.ts's defaultSecretBackedScope.
   const scope = defaultSecretBackedScope(key);

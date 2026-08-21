@@ -6,7 +6,7 @@
  *
  * ## The shapes come from the contract, not from a copy of it
  *
- * Every type below is derived from `OperatorMethodOutput<'profile.…'>` — the
+ * Every type below is derived from `OperatorMethodOutput<'profile.…'>`, the
  * types generated from the SDK's own output schemas
  * (`platform/control-plane/method-catalog-owner-profile.ts`). Nothing here
  * restates a field name, so this file cannot drift from the contract: if a
@@ -20,11 +20,11 @@
  * matching exported Zod schema and `buildSchemaRegistry` silently skips the
  * rest. Measured against the installed contracts package: 5 of 452 method ids
  * have one, and no `profile.*` verb is among them. So response validation is
- * not a safety net this command can lean on — for these verbs or for most
+ * not a safety net this command can lean on, for these verbs or for most
  * others.
  *
- * So a daemon on a different version — or a 200 from something that is not this
- * daemon at all — would otherwise reach a renderer and throw on a missing array,
+ * So a daemon on a different version, or a 200 from something that is not this
+ * daemon at all, would otherwise reach a renderer and throw on a missing array,
  * which in a slash command means a stack trace instead of an answer. Each `toX`
  * function does the cast to `Record<string, unknown>` in ONE place, checks every
  * property a renderer will read, and returns {@link MALFORMED} when anything is
@@ -66,16 +66,16 @@ type UnionKeys<T> = T extends unknown ? keyof T : never;
  * carries alone. Four ways a stale key can arrive, all compiled against this
  * repo's TypeScript with a `profile.forget`-shaped input:
  *
- *   1. written inline in a fresh literal      — parameter typing already rejects
- *   2. written inline BESIDE a spread         — parameter typing already rejects
- *   3. body built as a variable first         — SLIPS PAST parameter typing
- *   4. carried in by the spread source's type — SLIPS PAST parameter typing
+ *   1. written inline in a fresh literal     , parameter typing already rejects
+ *   2. written inline BESIDE a spread        , parameter typing already rejects
+ *   3. body built as a variable first        , SLIPS PAST parameter typing
+ *   4. carried in by the spread source's type, SLIPS PAST parameter typing
  *
  * A spread literal is not uniformly unchecked, which is the easy thing to get
  * wrong: anything written inline in one is still checked normally, and only what
  * arrives THROUGH the spread escapes, because it belongs to the source's type
  * rather than to the literal. Rows 3 and 4 are the two nothing else catches, and
- * this guard rejects both with TS2345 — measured, not reasoned about.
+ * this guard rejects both with TS2345, measured, not reasoned about.
  *
  * That is not hypothetical: `profile.forget` really did retire `lineIndex`, and
  * a body built one line earlier would have carried it silently past a correctly
@@ -83,7 +83,7 @@ type UnionKeys<T> = T extends unknown ? keyof T : never;
  * to seed; this closes the shape.
  *
  * There is a second reason it earns its place here. The SDK's `invoke` is
- * OVERLOADED — a typed signature plus a loose
+ * OVERLOADED, a typed signature plus a loose
  * `invoke<T = unknown>(methodId: string, input?: Record<string, unknown>)`. At a
  * bare call site a body the typed overload rejects does not raise an
  * excess-property error at all; overload resolution simply falls through to the
@@ -107,7 +107,7 @@ export type ExactProfileInput<TVerb extends ProfileVerb, TBody> =
 export type ProfileDocumentView = OperatorMethodOutput<'profile.read'>;
 
 /**
- * Load state — what `profile.status` answers, and the `state` half of a read.
+ * Load state, what `profile.status` answers, and the `state` half of a read.
  *
  * `kind` is `loaded` | `unavailable` | `disabled`. The counts belong to
  * `loaded` and `reason` to `unavailable`. There is no value property anywhere
@@ -124,7 +124,7 @@ export type ProfileWriteResultView = OperatorMethodOutput<'profile.set'>;
 
 /** One `## ` section, with the tier its content belongs to. */
 export type ProfileSectionView = ProfileDocumentView['sections'][number];
-/** One mechanical field. `valid: false` still carries the value — see §4.3. */
+/** One mechanical field. `valid: false` still carries the value, see §4.3. */
 export type ProfileFieldView = ProfileSectionView['fields'][number];
 /** One prose line, preserved as written. */
 export type ProfileLineView = ProfileSectionView['prose'][number];
@@ -355,7 +355,7 @@ export function toProfileProvenanceReport(value: unknown): Checked<ProfileProven
   const superseded = checkedArray(record.superseded, toSuperseded);
   if (superseded === MALFORMED) return MALFORMED;
   // Platform runtime 2.0.8: the contract declares provenance nullable and
-  // always present — null IS the answer for a hand-edited field.
+  // always present, null IS the answer for a hand-edited field.
   return { fieldId, present, handEdited, provenance: provenance ?? null, superseded };
 }
 

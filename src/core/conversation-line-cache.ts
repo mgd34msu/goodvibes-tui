@@ -1,11 +1,11 @@
 /**
- * conversation-line-cache.ts — per-message Line[] production cache.
+ * conversation-line-cache.ts, per-message Line[] production cache.
  *
  * The measured defect (perf baseline 2026-07-03, transcript.build_1k): appending
  * ONE message to an N-message conversation re-rendered all N messages
  * (45.5 ms p50 / 71.4 MB / 695 k objects per rebuild), because
  * ConversationManager.rebuildHistory() clears the buffer and calls
- * appendConversationMessages() over the entire snapshot on every dirty flag —
+ * appendConversationMessages() over the entire snapshot on every dirty flag,
  * and markDirty() fires on every mutation. The marginal work for one appended
  * message is ~1/1000th of that.
  *
@@ -13,33 +13,33 @@
  * a PURE function of its complete inputs:
  *   - message identity + content (via a content signature; snapshots are fresh
  *     structuredClone copies each call, so string content compares by value and
- *     array-valued fields — user ContentPart[] and assistant toolCalls — are
+ *     array-valued fields, user ContentPart[] and assistant toolCalls, are
  *     serialised; a streaming assistant message mutates its content string in
  *     place, which changes the signature and invalidates the entry)
  *   - render width
  *   - the four display-config values the render reads (line-number mode,
  *     collapse threshold, showThinking, showReasoningSummary)
  *   - the block-registry base at message start (the code-block collapseKey embeds
- *     the GLOBAL block index — `code_${msgIdx}_${blockIdx}` — so a shift in an
+ *     the GLOBAL block index, `code_${msgIdx}_${blockIdx}`, so a shift in an
  *     earlier message's block count changes this message's keys)
  *   - the absolute message index (embedded in every collapseKey and used for the
  *     system-message kind lookup)
  *   - the system-message kind (drives the error-navigation registry side effect)
  *   - this message's tool-group membership (see conversation-tool-groups.ts):
  *     whether it's folded under a group header, which member owns that header,
- *     and the group's honest tool/line counts — a group growing as new tool
+ *     and the group's honest tool/line counts, a group growing as new tool
  *     results stream in changes these for every existing member
  *   - the live values of every collapseState key the render READS (recorded via a
  *     proxy during a miss; a collapse toggle flips a recorded value and
  *     invalidates exactly the owning message)
  *
- * Invalidation is by comparison of those complete inputs — the file-preview
+ * Invalidation is by comparison of those complete inputs, the file-preview
  * contentVersion precedent generalised: instead of a single version counter we
  * compare the full input tuple, which is provably complete (a from-scratch
  * rebuild reads nothing else).
  *
  * Correctness contract: a cache-served rebuild is BYTE-IDENTICAL to a cold
- * appendConversationMessages() rebuild. This is guaranteed by construction — a
+ * appendConversationMessages() rebuild. This is guaranteed by construction, a
  * miss renders through the exact same per-message render functions into an
  * isolated scratch context, and the captured lines / block metas / error lines
  * are replayed at the same buffer offsets a cold render would have produced.
@@ -111,7 +111,7 @@ interface KeyMeta {
   readonly kind: SystemMessageKind | undefined;
   /**
    * Per-call completion signature for an assistant message's tool calls (see
-   * pendingToolKeyOf) — undefined when the message has none. Each call's id
+   * pendingToolKeyOf), undefined when the message has none. Each call's id
    * is paired with whether it has a matching result yet, in call order, so a
    * SINGLE call finishing invalidates and re-renders that call's glyph from
    * ◌ to ✓ immediately. A prior aggregate boolean only flipped once EVERY
@@ -134,7 +134,7 @@ interface KeyMeta {
   readonly turnToolCount: number;
   readonly turnSharedLabel: string | undefined;
   readonly turnHasReasoning: boolean;
-  /** Row depth and connector — both change when structure around a row changes. */
+  /** Row depth and connector, both change when structure around a row changes. */
   readonly depth: number;
   readonly connector: string | undefined;
   /** Ancestor gutter pattern, flattened; a change repaints the row's gutters. */
@@ -145,7 +145,7 @@ interface KeyMeta {
 
 /**
  * Per-call completion signature for an assistant message's tool calls, in
- * call order — `id:0` or `id:1` per call, joined. Undefined for a message
+ * call order, `id:0` or `id:1` per call, joined. Undefined for a message
  * with no tool calls at all (nothing to key). Comparing this instead of an
  * aggregate boolean lets exactly the calls whose completion status changed
  * invalidate the entry, rather than waiting for every call in the message to
@@ -172,7 +172,7 @@ interface CacheEntry {
   /** [collapseKey, value] pairs the render read; a change invalidates the entry. */
   readonly collapseDeps: Array<[string, boolean | undefined]>;
   /** Memoised rebase of blocks/errors at appliedBase (avoids realloc when the
-   *  message's buffer offset is unchanged across rebuilds — the common case). */
+   *  message's buffer offset is unchanged across rebuilds, the common case). */
   appliedBase: number;
   appliedBlocks: BlockMeta[] | null;
   appliedErrors: number[] | null;
@@ -237,7 +237,7 @@ function contentUnchanged(sig: ContentSig, m: Message): boolean {
 
 /**
  * Wrap the real collapseState so reads (.get/.has) are recorded while writes
- * (.set — the auto-collapse default) pass straight through to the real map, so
+ * (.set, the auto-collapse default) pass straight through to the real map, so
  * the persistent collapse defaults are established exactly as a cold render
  * would establish them.
  */
@@ -290,7 +290,7 @@ function renderOne(
 }
 
 /**
- * MessageLineCache — per-message Line[] memoisation for ConversationManager.
+ * MessageLineCache, per-message Line[] memoisation for ConversationManager.
  *
  * Keyed by absolute message index; each entry validates its COMPLETE input tuple
  * before serving. A rebuild that reuses entries is byte-identical to a cold
@@ -538,7 +538,7 @@ export class MessageLineCache {
 
   /**
    * Replay an entry into the live context at buffer offset `base`. Line objects
-   * are shared (never mutated post-production — the compositor reads them into a
+   * are shared (never mutated post-production, the compositor reads them into a
    * separate back-buffer). Block/error rebasing is memoised per base so an
    * unchanged message pays zero allocation across rebuilds.
    */

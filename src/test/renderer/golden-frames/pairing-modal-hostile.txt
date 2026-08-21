@@ -3,7 +3,7 @@
 |    │   Scan with the       |
 |    │   GoodVibes web app   |
 |    │   to pair this        |
-|    │   device — it opens   |
+|    │   device; it opens    |
 |    │   already signed in.  |
 |    │   Web app             |
 |    │   http://workshop.lo  |

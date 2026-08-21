@@ -8,7 +8,7 @@ import { UI_TONES } from './ui-primitives.ts';
 // ─── ContextInspectorModal ────────────────────────────────────────────────────
 
 /**
- * ContextInspectorModal — state for the context inspector overlay.
+ * ContextInspectorModal, state for the context inspector overlay.
  */
 export class ContextInspectorModal {
   public active = false;

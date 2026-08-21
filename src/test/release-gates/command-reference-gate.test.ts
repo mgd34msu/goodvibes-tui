@@ -11,7 +11,7 @@ describe('command reference gate', () => {
   test('docs/commands-reference.md is in sync with the command registry', () => {
     const committed = readFileSync(DOC_PATH, 'utf8');
     const fresh = renderCommandReferenceMarkdown(categorizeBuiltinCommands());
-    // If this fails, the generated command reference is stale — run
+    // If this fails, the generated command reference is stale, run
     // `bun run docs:commands` and commit the result.
     expect(committed).toBe(fresh);
   });
@@ -27,7 +27,7 @@ describe('command reference gate', () => {
   });
 
   test('red test: a seeded description-less command is refused at registration', () => {
-    // The description invariant must fail CLOSED — a command without a
+    // The description invariant must fail CLOSED, a command without a
     // description can never reach /help, the palette, or the generated
     // reference as an unexplained row, whether it comes from a built-in group
     // or a dynamic registration.
@@ -42,7 +42,7 @@ describe('command reference gate', () => {
 
   test('categorization covers exactly the registry-registered command set', () => {
     // The categorized list must be a complete, duplicate-free enumeration of
-    // every command registerBuiltinCommands would register — guards against a
+    // every command registerBuiltinCommands would register, guards against a
     // command group added to registration but missed by categorization.
     const { CommandRegistry } = require('@/input/command-registry.ts');
     const { registerBuiltinCommands } = require('@/input/commands.ts');

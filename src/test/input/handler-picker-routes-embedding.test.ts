@@ -1,6 +1,6 @@
 /**
  * Tests for the embedding-provider Enter-commit branch added to
- * handleModelPickerToken — the model picker's 'embeddingProvider' mode
+ * handleModelPickerToken, the model picker's 'embeddingProvider' mode
  * commits through commandContext.completeEmbeddingProviderSelection, never
  * through completeModelSelection (which is ModelDefinition-shaped and would
  * require fabricating a fake model object for an embedding provider).
@@ -19,7 +19,7 @@ function makePicker(): ModelPickerModal {
 
 const ENTER = { type: 'key' as const, name: 'return', logicalName: 'enter', ctrl: false, shift: false, meta: false };
 
-describe('handleModelPickerToken — embeddingProvider mode', () => {
+describe('handleModelPickerToken: embeddingProvider mode', () => {
   test('Enter commits the selected embedding provider via completeEmbeddingProviderSelection', () => {
     const picker = makePicker();
     picker.openEmbeddingProviders([

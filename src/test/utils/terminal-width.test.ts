@@ -51,7 +51,7 @@ describe('ANSI escape stripping in getDisplayWidth', () => {
   });
 
   test('ANSI sequence immediately adjacent to wide char (no whitespace)', () => {
-    // Bold seq + CJK char + CJK char + reset — should count 4
+    // Bold seq + CJK char + CJK char + reset, should count 4
     const s = '\x1b[1m中文\x1b[0m';
     expect(getDisplayWidth(s)).toBe(4);
   });
@@ -77,7 +77,7 @@ describe('ANSI escape stripping in getDisplayWidth', () => {
 
 describe('bracket-text-without-ESC over-strip guard', () => {
   // '[31mhi' is 6 literal characters: '[', '3', '1', 'm', 'h', 'i'
-  // No ESC prefix — the parser must NOT strip this as an ANSI sequence.
+  // No ESC prefix, the parser must NOT strip this as an ANSI sequence.
   test('literal bracket text without ESC counts every character', () => {
     expect(getDisplayWidth('[31mhi')).toBe(6);
   });
@@ -86,7 +86,7 @@ describe('bracket-text-without-ESC over-strip guard', () => {
     // '[31m' looks like an SGR sequence but lacks ESC, so it must be treated
     // as 4 printable chars. wrapText should wrap based on the full 6-char width.
     const wrapped = wrapText('[31mhi', 4);
-    // Total display width is 6, limit is 4 — must produce at least 2 segments
+    // Total display width is 6, limit is 4, must produce at least 2 segments
     expect(wrapped.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -119,9 +119,9 @@ describe('terminal width helpers', () => {
   });
 });
 
-describe('truncateDisplay — ANSI-safe slice boundaries', () => {
+describe('truncateDisplay: ANSI-safe slice boundaries', () => {
   test('truncation of ANSI-styled string does not cut mid-escape', () => {
-    // Bold red 'hello world' styled, then reset — truncate to 5
+    // Bold red 'hello world' styled, then reset, truncate to 5
     const styled = '\x1b[1;31m' + 'hello world' + '\x1b[0m';
     const truncated = truncateDisplay(styled, 5);
     // Display width must be <= 5
@@ -133,7 +133,7 @@ describe('truncateDisplay — ANSI-safe slice boundaries', () => {
   });
 
   test('truncation at wide char boundary does not overshoot', () => {
-    // 'AB' (2) + CJK (2) + CJK (2) = 6 total; truncate to 3 — cannot fit second CJK
+    // 'AB' (2) + CJK (2) + CJK (2) = 6 total; truncate to 3, cannot fit second CJK
     const text = 'AB中文';
     const truncated = truncateDisplay(text, 3);
     // Ellipsis takes 1, so 'AB' + ellipsis = 3 display width fits
@@ -163,9 +163,9 @@ describe('truncateDisplay — ANSI-safe slice boundaries', () => {
   });
 });
 
-describe('getDisplayWidth — combining marks and variation selectors', () => {
+describe('getDisplayWidth: combining marks and variation selectors', () => {
   test('combining diacritical marks (U+0300-U+036F) add zero width', () => {
-    // 'e' + combining grave accent — single base char
+    // 'e' + combining grave accent, single base char
     const withCombining = 'è';
     expect(getDisplayWidth(withCombining)).toBe(1);
   });
@@ -211,7 +211,7 @@ describe('getDisplayWidth — combining marks and variation selectors', () => {
   });
 });
 
-describe('truncateDisplay — ZWJ sequence handling (code-point-safe, not grapheme-cluster-safe)', () => {
+describe('truncateDisplay: ZWJ sequence handling (code-point-safe, not grapheme-cluster-safe)', () => {
   test('ZWJ family total width is summed correctly (each component double-wide, ZWJ=0)', () => {
     // 👨‍👩‍👧‍👦: man(2)+ZWJ(0)+woman(2)+ZWJ(0)+girl(2)+ZWJ(0)+boy(2) = 8 display width
     const family = '👨‍👩‍👧‍👦';
@@ -236,7 +236,7 @@ describe('truncateDisplay — ZWJ sequence handling (code-point-safe, not graphe
   });
 });
 
-describe('padDisplayEnd — ANSI-aware padding', () => {
+describe('padDisplayEnd: ANSI-aware padding', () => {
   test('padDisplayEnd on ANSI-styled string pads to display width', () => {
     // 'hi' with bold ANSI = 2 display chars, pad to 6 = 4 spaces appended
     const styled = '\x1b[1m' + 'hi' + '\x1b[0m';
@@ -297,7 +297,7 @@ describe('joinPrioritizedSegments: whole-segment drop under width pressure', () 
     // Two priority-0 ("essential") segments that together don't fit: the
     // earlier-declared one must survive, not be silently dropped in favor
     // of the later one. This mirrors the footer's cwd (declared first) and
-    // model (declared second), both priority 0 — a real bug caught during
+    // model (declared second), both priority 0, a real bug caught during
     // live tmux verification: dir got dropped instead of model because the
     // original tie-break picked the FIRST max-priority index, not the LAST.
     const segs = [

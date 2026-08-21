@@ -12,7 +12,7 @@
 // (the purge): 13 contract modules were removed along with their
 // panels (RETIRE-INTO-FLEET: incident-review, routes, ops-control,
 // automation-control, approval, communication, worktree, control-plane,
-// wrfc, plan-dashboard, orchestration, tasks; DELETE: system-messages) —
+// wrfc, plan-dashboard, orchestration, tasks; DELETE: system-messages),
 // see .goodvibes/audit/2026-07-04-wave6-briefs.json. Count dropped
 // from 28 to 15.
 //
@@ -35,7 +35,7 @@ import './contract/git-panel.contract.ts';
 import './contract/diff-panel.contract.ts';
 import './contract/token-budget-panel.contract.ts';
 
-// (the purge) — the two config-modal migrations combined: removed
+// (the purge), the two config-modal migrations combined: removed
 // the services/subscription/settings-sync contract modules (sandbox, remote,
 // provider-health had none of their own), and removed marketplace, hooks,
 // security, knowledge-graph, memory, and project-planning as those panels
@@ -51,7 +51,7 @@ import './contract/token-budget-panel.contract.ts';
 // the parity check below instead of silently losing coverage.
 const CONTRACT_MODULE_COUNT = 6;
 
-describe('migrated panels — contract module registry parity', () => {
+describe('migrated panels: contract module registry parity', () => {
   test('one contract module exists per registered panel', () => {
     const contractDir = join(dirname(fileURLToPath(import.meta.url)), 'contract');
     const filesOnDisk = readdirSync(contractDir).filter((f) => f.endsWith('.contract.ts'));

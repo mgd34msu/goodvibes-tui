@@ -11,7 +11,7 @@ import { buildSettingGroups } from '../../input/settings-modal-data.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 4 — the optional "used N memories" turn chip (default OFF), built against
+// STEP 4, the optional "used N memories" turn chip (default OFF), built against
 // the SDK's metadata.memory.recordIds convention (the same field the webui
 // chip reads). When on, a turn that used memories shows the chip with a
 // drill-in listing them; when off, zero rendering and the metadata is not read.
@@ -29,7 +29,7 @@ function chipLinesFor(turn: unknown, showProvenance: boolean, expanded = false):
   return UIFactory.createMemoryProvenanceChip(80, ids.length, ids.map((id) => ({ id })), expanded);
 }
 
-describe('memoryRecordIdsFromTurn — the metadata.memory.recordIds convention (STEP 4)', () => {
+describe('memoryRecordIdsFromTurn: the metadata.memory.recordIds convention (STEP 4)', () => {
   test('the setting defaults OFF', () => {
     expect(MEMORY_SHOW_PROVENANCE_DEFAULT).toBe(false);
   });
@@ -38,7 +38,7 @@ describe('memoryRecordIdsFromTurn — the metadata.memory.recordIds convention (
     expect(memoryRecordIdsFromTurn(turnWithMemories(['mem-a', 'mem-b']))).toEqual(['mem-a', 'mem-b']);
   });
 
-  test('a turn without the field (absent when none) yields an empty list — never a guess, never a throw', () => {
+  test('a turn without the field (absent when none) yields an empty list; never a guess, never a throw', () => {
     expect(memoryRecordIdsFromTurn({ type: 'TURN_COMPLETED', turnId: 't', response: 'ok', stopReason: 'completed' })).toEqual([]);
     expect(memoryRecordIdsFromTurn({ metadata: {} })).toEqual([]);
     expect(memoryRecordIdsFromTurn(null)).toEqual([]);
@@ -50,7 +50,7 @@ describe('memoryRecordIdsFromTurn — the metadata.memory.recordIds convention (
   });
 });
 
-describe('the render gate — off renders nothing (STEP 4)', () => {
+describe('the render gate: off renders nothing (STEP 4)', () => {
   test('OFF (the default): a turn that used memories renders zero chip lines', () => {
     expect(chipLinesFor(turnWithMemories(['mem-a', 'mem-b', 'mem-c']), false)).toEqual([]);
   });
@@ -144,7 +144,7 @@ describe('memory settings domain (STEP 4)', () => {
     const groups = buildSettingGroups(configManager);
     const memory = groups.get('memory') ?? [];
     // memory.showProvenance is a TUI-local synthetic key, not yet part of the
-    // SDK's ConfigKey union — compare as plain strings (see memory-provenance.ts).
+    // SDK's ConfigKey union, compare as plain strings (see memory-provenance.ts).
     const entry = memory.find((e) => (e.setting.key as string) === 'memory.showProvenance');
     expect(entry).toBeDefined();
     expect(entry!.setting.type).toBe('boolean');

@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // fleet-session-log-resolver.test.ts
 //
-// — proves the REAL `resolveSessionLogPath` wiring (not a test stub):
+//, proves the REAL `resolveSessionLogPath` wiring (not a test stub):
 // src/panels/builtin/operations.ts wires FleetPanel's `resolveSessionLogPath`
 // action to `ui.environment.shellPaths.resolveProjectPath('tui', 'sessions',
 // \`${agentId}.jsonl\`)`, which per the brief's anchors must land on the
@@ -15,7 +15,7 @@
 // (which needs a whole ResolvedBuiltinPanelDeps), this test reproduces the
 // EXACT one-line closure shape from operations.ts against a real
 // ShellPathService and a scratch `.goodvibes` layout on disk, then drives it
-// through FleetPanel's real ledger-fallback load path end to end — proving
+// through FleetPanel's real ledger-fallback load path end to end, proving
 // the resolver finds the right file, not just that the callback is wired.
 // ---------------------------------------------------------------------------
 
@@ -47,7 +47,7 @@ function makeDoneAgentNode(id: string): ProcessNode {
   };
 }
 
-describe('resolveSessionLogPath — real ShellPathService wiring (operations.ts shape)', () => {
+describe('resolveSessionLogPath: real ShellPathService wiring (operations.ts shape)', () => {
   test('resolves to <workingDirectory>/.goodvibes/tui/sessions/<agentId>.jsonl', () => {
     const workingDirectory = makeProjectTempDir('gv-fleet-resolver');
     try {

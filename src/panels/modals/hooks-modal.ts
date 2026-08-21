@@ -18,7 +18,7 @@ import type {
 // ---------------------------------------------------------------------------
 // Hooks → config-modal surface (group-B port). Two tabs: 'Hooks' (active
 // registrations + contract posture) and 'Activity' (recent runtime activity +
-// managed authoring + last simulation — the panel's expand-activity view, now a
+// managed authoring + last simulation, the panel's expand-activity view, now a
 // dedicated tab). All sources are in-memory (dispatcher/workbench/tracker hold
 // live state), so buildView reads live and refresh() is a no-op. Toggle/remove/
 // simulate route to their `/hooks` command path. Selection-blind port: the

@@ -114,7 +114,7 @@ describe('renderCodeBlock', () => {
   test('a wide glyph landing on the last body column does not spill its placeholder into the right margin', () => {
     const width = 20;
     const effectiveWidth = width - LAYOUT.RIGHT_MARGIN; // 18
-    // 13 single-width filler chars push cx from leftMargin(4) to 17 —
+    // 13 single-width filler chars push cx from leftMargin(4) to 17,
     // effectiveWidth - 1, the last column inside the body. The wide glyph
     // ('日', display width 2) then lands exactly on that last column, so its
     // placeholder cell would fall at column effectiveWidth (18) if bounded

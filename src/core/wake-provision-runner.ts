@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// wake-provision-runner.ts — what `/voice wake status` and `/voice wake setup` do.
+// wake-provision-runner.ts, what `/voice wake status` and `/voice wake setup` do.
 //
 // `/voice wake setup` IS NO LONGER HOW THE MODEL ARRIVES. It used to be the only
 // way, and the result was that installing goodvibes produced a wake-word feature
@@ -11,17 +11,17 @@
 // So what this command is FOR, on a normal machine, is recovery and
 // re-provisioning: an install that was offline, an artifact that stopped
 // verifying, or a re-fetch after the pinned model changes. It still works
-// exactly as it did, which is the point — the degraded path an offline install
+// exactly as it did, which is the point, the degraded path an offline install
 // falls back to is this one.
 //
 // What has NOT changed is the runtime rule. Nothing in this path downloads on its
 // own: `/voice wake status` only reads what is on disk (verifying by content,
 // never by existence), and a download happens only because the user typed
-// `setup`. Turning `voice.wake.enabled` on never fetches anything either — see
+// `setup`. Turning `voice.wake.enabled` on never fetches anything either, see
 // audio/wake-runtime.ts, which reports what is missing and names this command.
 //
-// Both SDK calls are injectable so a wire test drives the whole flow — a fresh
-// host, a corrupt artifact, a failed component — with no network and no files.
+// Both SDK calls are injectable so a wire test drives the whole flow, a fresh
+// host, a corrupt artifact, a failed component, with no network and no files.
 // ---------------------------------------------------------------------------
 
 import {
@@ -74,12 +74,12 @@ export async function runWakeProvision(deps: WakeProvisionRunnerDeps): Promise<v
   const onProgress = (progress: WakeProvisionProgress): void => {
     if (lastPhase.get(progress.component) === progress.phase) return;
     lastPhase.set(progress.component, progress.phase);
-    const extra = progress.message !== undefined ? ` — ${progress.message}` : '';
+    const extra = progress.message !== undefined ? `: ${progress.message}` : '';
     deps.print(`  ${progress.component}: ${progress.phase}${extra}`);
   };
   try {
     const result = await provision(deps.managedRoot, onProgress);
-    deps.print(['Wake-Word Setup — receipt', ...wakeProvisionReceiptLines(result)].join('\n'));
+    deps.print(['Wake-Word Setup: receipt', ...wakeProvisionReceiptLines(result)].join('\n'));
   } catch (error) {
     deps.print(`Wake-Word Setup\n  provisioning failed: ${error instanceof Error ? error.message : String(error)}`);
   }

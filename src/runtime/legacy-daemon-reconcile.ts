@@ -1,6 +1,6 @@
 /**
  * The unattended startup reconcile for the redundant install-script
- * `goodvibes-daemon.service` unit — split out of `legacy-daemon-migration.ts`
+ * `goodvibes-daemon.service` unit, split out of `legacy-daemon-migration.ts`
  * (which owns the shared unit definition, detection, and the CONSENTED
  * `migrate-service` engine) so each module stays within the architecture
  * gate's file-size cap. Same layer (`src/runtime/`), same injectable-seam
@@ -24,8 +24,8 @@ type ManagedServiceActionResult = ReturnType<ManagedServiceActionRunner>;
 /**
  * The exact marker string the suite installer writes into every unit it
  * creates (as a `# managed by goodvibes install.sh` comment). The reconcile
- * check below keys on it to tell an installer-created legacy unit — safe to
- * auto-retire — apart from a hand-written one that must only ever be reported.
+ * check below keys on it to tell an installer-created legacy unit, safe to
+ * auto-retire, apart from a hand-written one that must only ever be reported.
  * Kept in lockstep with `INSTALLER_MARKER` in the suite installer
  * (goodvibes-daemon scripts/install.sh).
  */
@@ -36,7 +36,7 @@ export const INSTALLER_UNIT_MARKER = 'managed by goodvibes install.sh';
 /**
  * CUMULATIVE ceiling on the reconcile's whole boot-path pass. Per-call
  * timeouts alone still allow ~5 sequential slow-but-completing calls to stack
- * up (a degraded — not wedged — user bus), blocking the already-listening
+ * up (a degraded, not wedged, user bus), blocking the already-listening
  * daemon's event loop for tens of seconds. One overall deadline covers the
  * pass: once it is exceeded, every remaining call is skipped (reported as
  * `status: null`, which the guards treat as unknown → refusal) and the result
@@ -49,7 +49,7 @@ export const RECONCILE_DEADLINE_MS = 8_000;
 /**
  * Wrap a runner with the reconcile's cumulative deadline: calls after the
  * deadline are skipped outright; calls near it get only the remaining budget
- * as their per-call timeout (default runner only — injected runners are test
+ * as their per-call timeout (default runner only, injected runners are test
  * fakes that answer instantly).
  */
 function makeDeadlineBoundRunner(
@@ -63,7 +63,7 @@ function makeDeadlineBoundRunner(
     const remaining = deadlineMs - (Date.now() - startedAt);
     if (remaining <= 0) {
       hit = true;
-      return { status: null, stdout: '', stderr: 'reconcile time budget exceeded — call skipped' } as ManagedServiceActionResult;
+      return { status: null, stdout: '', stderr: 'reconcile time budget exceeded: call skipped' } as ManagedServiceActionResult;
     }
     if (injected) return injected(command, args);
     return defaultActionRunner(Math.min(perCallTimeoutMs, remaining))(command, args);
@@ -168,7 +168,7 @@ function defaultReadOwnCgroup(): string {
  * This runs on daemon startup (no user invocation needed) and, guard-railed:
  *   - Only acts when the canonical unit is CONFIRMED serving: `is-active`
  *     reports active AND its MainPID resolves to a live process. `is-active`
- *     alone is not proof — a Type=simple unit reports active from fork onward,
+ *     alone is not proof, a Type=simple unit reports active from fork onward,
  *     including the pre-bind window of a daemon that is about to crash-loop.
  *   - NEVER acts from inside the legacy unit itself: if this process IS the
  *     legacy unit's MainPID, or /proc/self/cgroup names the legacy unit,
@@ -176,20 +176,20 @@ function defaultReadOwnCgroup(): string {
  *     code (mid-boot, from inside a blocking spawnSync). Refuses instead.
  *   - NEVER stops a RUNNING legacy daemon: if the legacy unit's MainPID is a
  *     live process, it may be the daemon serving the endpoint clients are
- *     configured to reach (the wrong-port two-daemon state) — the unattended
+ *     configured to reach (the wrong-port two-daemon state), the unattended
  *     path only retires enabled-but-NOT-running legacy units; a running one
  *     gets a notice pointing at the consented migrate-service.
  *   - Requires the CONFIGURED endpoint (the one clients resolve from
- *     settings.json, no runtime overrides) to be answering before retiring —
+ *     settings.json, no runtime overrides) to be answering before retiring,
  *     a canonical daemon alive on some other port proves nothing about the
  *     endpoint clients use.
  *   - AUTO-RETIRES only an installer-MARKER-managed legacy unit, and only
  *     removes its unit file AFTER `disable --now` reports success. A NONZERO
  *     exit leaves everything in place and says so; a TIMED-OUT disable
- *     (status null) has an UNKNOWN outcome — the enablement state is
+ *     (status null) has an UNKNOWN outcome, the enablement state is
  *     re-inspected before anything is printed, and the receipt states what
  *     was actually confirmed, never a blanket claim.
- *   - A hand-written legacy unit (no marker) is never touched — a one-line
+ *   - A hand-written legacy unit (no marker) is never touched, a one-line
  *     actionable notice. An UNREADABLE unit file is reported as unreadable,
  *     never misdiagnosed as hand-written.
  *   - The whole pass shares ONE cumulative time budget (RECONCILE_DEADLINE_MS)
@@ -215,11 +215,11 @@ export async function reconcileRedundantLegacyUnit(
   const legacyUnit = `${LEGACY_SERVICE_UNIT_NAME}.service`;
   const deadlineNote = (): string[] =>
     deadlineHit()
-      ? ['note: the reconcile hit its overall time budget — remaining checks were skipped; it will re-run at the next daemon start.']
+      ? ['note: the reconcile hit its overall time budget; remaining checks were skipped; it will re-run at the next daemon start.']
       : [];
 
   // Guard 1: the canonical unit must report active. (A timed-out, skipped, or
-  // failed probe — e.g. a wedged user bus — lands here too and refuses.)
+  // failed probe, e.g. a wedged user bus, lands here too and refuses.)
   const probe = run(systemctl, ['--user', 'is-active', canonicalUnit]);
   const canonicalActive = (probe.status ?? 1) === 0 && (probe.stdout ?? '').trim() === 'active';
   if (!canonicalActive) {
@@ -227,7 +227,7 @@ export async function reconcileRedundantLegacyUnit(
       action: 'noop',
       reason: 'canonical-not-active',
       lines: [
-        `legacy-unit reconcile: a ${legacyUnit} unit file exists at ${path} but ${canonicalUnit} is not confirmably active — ` +
+        `legacy-unit reconcile: a ${legacyUnit} unit file exists at ${path} but ${canonicalUnit} is not confirmably active; ` +
           'left untouched (it may be the only daemon).',
         ...deadlineNote(),
       ],
@@ -244,7 +244,7 @@ export async function reconcileRedundantLegacyUnit(
       action: 'noop',
       reason: 'canonical-mainpid-not-alive',
       lines: [
-        `legacy-unit reconcile: ${canonicalUnit} reports active but its MainPID could not be confirmed alive — ` +
+        `legacy-unit reconcile: ${canonicalUnit} reports active but its MainPID could not be confirmed alive; ` +
           `left the ${legacyUnit} unit untouched.`,
         ...deadlineNote(),
       ],
@@ -257,7 +257,7 @@ export async function reconcileRedundantLegacyUnit(
   //
   // The legacy MainPID probe is TRI-STATE, exactly like guards 1-2: a reply
   // whose status is non-zero or null (bus flap, timeout, skipped-by-deadline)
-  // does NOT mean "MainPID=0, unit affirmatively stopped" — reading it that
+  // does NOT mean "MainPID=0, unit affirmatively stopped", reading it that
   // way let one transient systemctl failure on exactly this call authorize
   // `disable --now` against a LIVE legacy daemon (and guard 5 cannot catch
   // it: in the wrong-port state the legacy daemon itself answers the
@@ -272,7 +272,7 @@ export async function reconcileRedundantLegacyUnit(
       action: 'noop',
       reason: 'self-supervised-by-legacy',
       lines: [
-        `legacy-unit reconcile: this daemon appears to be running UNDER ${legacyUnit} itself — refusing to disable ` +
+        `legacy-unit reconcile: this daemon appears to be running UNDER ${legacyUnit} itself; refusing to disable ` +
           `the unit supervising the current process. Migrate from the canonical side instead: goodvibes-daemon migrate-service`,
       ],
     };
@@ -283,14 +283,14 @@ export async function reconcileRedundantLegacyUnit(
       reason: 'legacy-state-unknown',
       lines: [
         `legacy-unit reconcile: could not determine whether ${legacyUnit} has a running daemon (the MainPID query ` +
-          'failed or timed out) — refusing to act on a guess; it will be re-checked at the next daemon start.',
+          'failed or timed out): refusing to act on a guess; it will be re-checked at the next daemon start.',
         ...deadlineNote(),
       ],
     };
   }
 
   // Guard 4: never stop a RUNNING legacy daemon from the unattended path. A
-  // live legacy MainPID means a second daemon is actually serving something —
+  // live legacy MainPID means a second daemon is actually serving something,
   // possibly the endpoint clients resolve from settings.json (the wrong-port
   // two-daemon state). Retiring an enabled-but-idle unit needs no --now kill;
   // stopping a serving one needs consent. (A KNOWN reply of MainPID=0 is the
@@ -300,7 +300,7 @@ export async function reconcileRedundantLegacyUnit(
       action: 'noop',
       reason: 'legacy-running',
       lines: [
-        `legacy-unit reconcile: ${legacyUnit} has a live main process (pid ${legacyPid}) — a second daemon is ` +
+        `legacy-unit reconcile: ${legacyUnit} has a live main process (pid ${legacyPid}); a second daemon is ` +
           'actually running, and it may be the one serving the endpoint your clients are configured to reach. ' +
           'Refusing to stop it unattended; migrate deliberately with: goodvibes-daemon migrate-service',
       ],
@@ -309,7 +309,7 @@ export async function reconcileRedundantLegacyUnit(
 
   // Guard 5: the endpoint clients resolve from settings.json must be answered
   // before anything is retired. The canonical daemon being alive proves only
-  // that A daemon runs — not that the configured endpoint is served (its unit
+  // that A daemon runs, not that the configured endpoint is served (its unit
   // may pin different launch args).
   if (input.configuredEndpoint) {
     const endpointProbe = input.endpointProbe ?? defaultPortProbe;
@@ -320,7 +320,7 @@ export async function reconcileRedundantLegacyUnit(
         reason: 'configured-endpoint-unserved',
         lines: [
           `legacy-unit reconcile: nothing is answering on the CONFIGURED endpoint ` +
-            `${input.configuredEndpoint.host}:${input.configuredEndpoint.port} — the canonical daemon is alive but not ` +
+            `${input.configuredEndpoint.host}:${input.configuredEndpoint.port}; the canonical daemon is alive but not ` +
             `provably serving what clients resolve from settings. Left the ${legacyUnit} unit untouched; check the ` +
             "canonical unit's launch arguments against the controlPlane settings.",
         ],
@@ -346,7 +346,7 @@ export async function reconcileRedundantLegacyUnit(
       reason: 'marker-unreadable',
       lines: [
         `note: ${canonicalUnit} is active and a separate ${legacyUnit} exists at ${path}, but its unit file could not ` +
-          `be read (${readError}) — left untouched. Inspect it yourself; if it is redundant, retire it with: ` +
+          `be read (${readError}): left untouched. Inspect it yourself; if it is redundant, retire it with: ` +
           `systemctl --user disable --now ${legacyUnit} && rm ${path} && systemctl --user daemon-reload`,
       ],
     };
@@ -366,14 +366,14 @@ export async function reconcileRedundantLegacyUnit(
   }
 
   // Installer-marker-managed and redundant: disable first, and only remove the
-  // unit file if the disable actually succeeded — otherwise the enablement
+  // unit file if the disable actually succeeded, otherwise the enablement
   // symlink dangles at a deleted file and this tool can never repair it (the
   // next pass no-ops at the file-exists check).
   const disableResult = run(systemctl, ['--user', 'disable', '--now', legacyUnit]);
   const disableStatus = disableResult.status ?? 1;
   if (disableStatus !== 0) {
     if (disableResult.status === null) {
-      // TIMED OUT: the outcome is UNKNOWN, not failed — `disable --now`
+      // TIMED OUT: the outcome is UNKNOWN, not failed, `disable --now`
       // removes the enablement symlinks synchronously BEFORE waiting on the
       // stop job, so the disable may well have taken effect even though the
       // client was killed. Re-inspect instead of printing a blanket denial.
@@ -394,11 +394,11 @@ export async function reconcileRedundantLegacyUnit(
         run(systemctl, ['--user', 'daemon-reload']);
         const lines = [
           `reconciled: the disable command timed out waiting on the stop job, but re-inspection confirms the ` +
-            `installer-managed ${legacyUnit} is no longer enabled${removeErrorAfterTimeout ? '' : ` — its unit file was removed (${path})`}. ` +
+            `installer-managed ${legacyUnit} is no longer enabled${removeErrorAfterTimeout ? '' : `; its unit file was removed (${path})`}. ` +
             'Its stop may still be completing.',
         ];
         if (removeErrorAfterTimeout) {
-          lines.push(`note: could not remove ${path}: ${removeErrorAfterTimeout} — remove it by hand.`);
+          lines.push(`note: could not remove ${path}: ${removeErrorAfterTimeout}; remove it by hand.`);
         }
         lines.push(...deadlineNote());
         return { action: 'removed', reason: 'retired', lines };
@@ -407,7 +407,7 @@ export async function reconcileRedundantLegacyUnit(
         action: 'failed',
         reason: 'disable-timeout',
         lines: [
-          `legacy-unit reconcile: the disable of ${legacyUnit} timed out and its outcome is UNKNOWN — the enablement ` +
+          `legacy-unit reconcile: the disable of ${legacyUnit} timed out and its outcome is UNKNOWN; the enablement ` +
             `state could not be re-confirmed. This tool removed nothing; the unit file at ${path} was left in place ` +
             'and will be re-checked at the next daemon start.',
           `Verify it yourself: systemctl --user is-enabled ${legacyUnit}`,
@@ -421,7 +421,7 @@ export async function reconcileRedundantLegacyUnit(
       reason: 'disable-failed',
       lines: [
         `legacy-unit reconcile: the disable of the redundant installer-managed ${legacyUnit} reported failure ` +
-          `(${detail}) — this tool removed nothing; the unit file at ${path} was left in place.`,
+          `(${detail}): this tool removed nothing; the unit file at ${path} was left in place.`,
         `Verify its state and retire it yourself: systemctl --user is-enabled ${legacyUnit} ; ` +
           `systemctl --user disable --now ${legacyUnit} && rm ${path} && systemctl --user daemon-reload`,
       ],
@@ -442,7 +442,7 @@ export async function reconcileRedundantLegacyUnit(
       `was disabled${removeError ? '' : ` and removed (${path})`}.`,
   ];
   if (removeError) {
-    lines.push(`note: could not remove ${path}: ${removeError} — remove it by hand.`);
+    lines.push(`note: could not remove ${path}: ${removeError}; remove it by hand.`);
   }
   lines.push(...deadlineNote());
   return { action: 'removed', reason: 'retired', lines };

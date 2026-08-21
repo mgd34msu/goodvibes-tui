@@ -1,5 +1,5 @@
 /**
- * settings-modal-data — pure data-assembly helpers for SettingsModal.
+ * settings-modal-data, pure data-assembly helpers for SettingsModal.
  *
  * All functions are stateless: they take dependencies as arguments and return
  * derived data without mutating state. The class in settings-modal.ts delegates
@@ -55,7 +55,7 @@ import {
 } from './payments-config.ts';
 
 // ---------------------------------------------------------------------------
-// deepEqual — structural equality for isDefault comparisons
+// deepEqual, structural equality for isDefault comparisons
 // ---------------------------------------------------------------------------
 
 /**
@@ -89,7 +89,7 @@ export function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// buildSettingGroups — loads CONFIG_SCHEMA into per-category SettingEntry maps
+// buildSettingGroups, loads CONFIG_SCHEMA into per-category SettingEntry maps
 // ---------------------------------------------------------------------------
 
 export function buildSettingGroups(
@@ -127,13 +127,13 @@ export function buildSettingGroups(
     // pushCompletion), so the contact address and the subscription
     // housekeeping bounds belong in that same category rather than in one of
     // their own. Without this they match no category at all and would be
-    // dropped from the workspace entirely — reachable only by editing the
+    // dropped from the workspace entirely, reachable only by editing the
     // config file by hand.
     if (rawCat === 'push' && groups.has('notifications')) groups.get('notifications')!.push(entry);
     // cluster.* decides which node on this network reads the inbox, and it is
     // configured in the same terms the network category already speaks: a
     // group address, a port, a shared phrase, a peer list. Given no category of
-    // its own it would match nothing and drop out of the workspace entirely —
+    // its own it would match nothing and drop out of the workspace entirely,
     // reachable only by hand-editing a settings file.
     if (rawCat === 'cluster' && groups.has('network')) groups.get('network')!.push(entry);
   }
@@ -183,7 +183,7 @@ export function buildSettingGroups(
         behaviorEntries.push(entry);
       }
     }
-    // In-terminal (OSC 9) notification toggles + audible bell — same category,
+    // In-terminal (OSC 9) notification toggles + audible bell, same category,
     // per-key defaults (see terminal-notifier.ts).
     for (const entry of buildTerminalNotifySyntheticEntries(configManager)) {
       if (!behaviorEntries.some((e) => e.setting.key === entry.setting.key)) {
@@ -194,7 +194,7 @@ export function buildSettingGroups(
 
   // Inject the storage.codeIndexEnabled toggle into the
   // storage category. TUI-local synthetic setting (not in the SDK ConfigKey
-  // union — see code-index-services.ts), same rationale as
+  // union, see code-index-services.ts), same rationale as
   // notifyAfterSeconds above: opt-in, default off, states its own bounds.
   const storageEntries = groups.get('storage');
   if (storageEntries && !storageEntries.some((e) => e.setting.key === (CODE_INDEX_ENABLED_CONFIG_KEY as ConfigKey))) {
@@ -202,13 +202,13 @@ export function buildSettingGroups(
   }
 
   // Inject the memory.projection.dir synthetic entry into the storage
-  // category (alongside codeIndexEnabled — both are local-storage posture
+  // category (alongside codeIndexEnabled, both are local-storage posture
   // settings). Not in the SDK ConfigKey union, same rationale as above.
   if (storageEntries && !storageEntries.some((e) => e.setting.key === MEMORY_PROJECTION_DIR_CONFIG_KEY)) {
     storageEntries.push(buildMemoryProjectionDirSyntheticEntry(configManager));
   }
 
-  // Synthetic memory.showProvenance (TUI-local, default OFF — see memory-provenance.ts).
+  // Synthetic memory.showProvenance (TUI-local, default OFF, see memory-provenance.ts).
   const memoryEntries = groups.get('memory');
   if (memoryEntries && !memoryEntries.some((e) => e.setting.key === (MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey))) {
     memoryEntries.push(buildMemoryProvenanceSyntheticEntry(configManager) as unknown as SettingEntry);
@@ -216,7 +216,7 @@ export function buildSettingGroups(
 
   // Inject the worktree.setup.commands / worktree.setup.carryOverGlobs
   // synthetic entries into the orchestration category (worktree isolation is
-  // an orchestration-engine concern — see WorkstreamIsolation 'worktree').
+  // an orchestration-engine concern, see WorkstreamIsolation 'worktree').
   // Neither key is in the SDK ConfigKey union (see worktree-setup-config.ts),
   // same rationale as the other synthetic settings above.
   const orchestrationEntries = groups.get('orchestration');
@@ -230,7 +230,7 @@ export function buildSettingGroups(
   }
 
   // Inject the sandbox.egressAllowlist / sandbox.workspaceWritable and
-  // permissions.execEnvScrubAllowlist synthetic entries — see
+  // permissions.execEnvScrubAllowlist synthetic entries, see
   // sandbox-exec-config.ts / exec-env-scrub-config.ts for why they are not in
   // CONFIG_SCHEMA, same rationale as the other synthetic settings above.
   injectSandboxExecSyntheticEntries(groups, configManager);
@@ -242,7 +242,7 @@ export function buildSettingGroups(
   // windows, notifyChannels). What's injected here are the four secret-tier
   // card-material fields and the two ordinary address fields, which are
   // TUI-local synthetic sub-keys under that real section (not yet SDK
-  // CONFIG_SCHEMA entries — see payments-config.ts's header comment), backed
+  // CONFIG_SCHEMA entries, see payments-config.ts's header comment), backed
   // by the same real configManager as everything else in this group.
   const paymentsEntries = groups.get('payments');
   if (paymentsEntries && !paymentsEntries.some((e) => isPaymentsSyntheticConfigKey(e.setting.key))) {
@@ -254,7 +254,7 @@ export function buildSettingGroups(
   enrichRelaySettingDescriptions(groups);
 
   // Daemon-owned keys (e.g. surfaces.telegram.*) live only in the daemon's
-  // own config store — say so in the detail text (daemon-owned-settings-descriptions.ts).
+  // own config store, say so in the detail text (daemon-owned-settings-descriptions.ts).
   enrichDaemonOwnedSettingDescriptions(groups, configManager);
 
   // Feature-unit presentation: each capability becomes ONE unit (its real
@@ -322,7 +322,7 @@ export function buildNotifyAfterSecondsSyntheticEntry(configManager: Pick<Config
 /**
  * The synthetic ConfigSetting descriptor for behavior.budgetAlertUsd.
  *
- * This key is TUI-local and is not yet in the SDK ConfigKey union — it never
+ * This key is TUI-local and is not yet in the SDK ConfigKey union, it never
  * appeared in CONFIG_SCHEMA, so it was invisible to every schema-driven
  * inspection surface (/config, /settings-sync show <key>) even though the
  * value round-trips correctly through configManager.get/set. The descriptor
@@ -357,7 +357,7 @@ export function buildBudgetAlertUsdSyntheticEntry(configManager: Pick<ConfigMana
 }
 
 // ---------------------------------------------------------------------------
-// alert-class synthetic settings — behavior.notifyOn* + notifyOnlyWhenUnfocused
+// alert-class synthetic settings, behavior.notifyOn* + notifyOnlyWhenUnfocused
 // ---------------------------------------------------------------------------
 
 /**
@@ -365,7 +365,7 @@ export function buildBudgetAlertUsdSyntheticEntry(configManager: Pick<ConfigMana
  * ConfigKey union), all defaulting to on. Read/written generically by
  * core/alert-gating.ts (readBooleanConfig) and the per-alert-class modules
  * (budget-breach-notifier.ts, approval-alert.ts, turn-event-wiring.ts,
- * long-task-notifier.ts) — this is only the settings-modal-visible surface.
+ * long-task-notifier.ts), this is only the settings-modal-visible surface.
  */
 const NOTIFY_ALERT_SYNTHETIC_SETTINGS: ReadonlyArray<{ readonly key: string; readonly description: string }> = [
   {
@@ -411,7 +411,7 @@ export function buildNotifyAlertSyntheticEntries(configManager: Pick<ConfigManag
 }
 
 // ---------------------------------------------------------------------------
-// In-terminal (OSC 9) notification settings — see core/terminal-notifier.ts
+// In-terminal (OSC 9) notification settings, see core/terminal-notifier.ts
 // ---------------------------------------------------------------------------
 
 /**
@@ -421,7 +421,7 @@ export function buildNotifyAlertSyntheticEntries(configManager: Pick<ConfigManag
  * on, turn-end/agent-blocked off, bell off. Read generically by
  * core/terminal-notifier.ts (readBooleanConfig); this is only the
  * settings-modal-visible surface. These are independent of the master
- * `notifyOnlyWhenUnfocused` gate — an in-terminal notification is always
+ * `notifyOnlyWhenUnfocused` gate, an in-terminal notification is always
  * focus-gated on its own (only fires for an unfocused/unknown terminal).
  */
 const TERMINAL_NOTIFY_SYNTHETIC_SETTINGS: ReadonlyArray<{ readonly key: string; readonly description: string; readonly defaultOn: boolean }> = [
@@ -460,7 +460,7 @@ export function buildTerminalNotifySyntheticEntries(configManager: Pick<ConfigMa
  * The repo source-tree code index's auto-build-on-startup toggle
  * (code-index-services.ts). TUI-local, default OFF: /codebase build is the
  * explicit trigger unless a user opts in here. Honest bounds stated inline
- * so enabling this isn't a surprise — see code-index-services.ts's
+ * so enabling this isn't a surprise, see code-index-services.ts's
  * CODE_INDEX_MAX_FILES/CODE_INDEX_MAX_FILE_BYTES for the numbers this
  * description would otherwise duplicate as magic numbers.
  */
@@ -468,13 +468,13 @@ export function buildCodeIndexEnabledSyntheticEntry(configManager: Pick<ConfigMa
   return buildBooleanSyntheticEntry(
     configManager,
     CODE_INDEX_ENABLED_CONFIG_KEY,
-    'Auto-build the repo source-tree code index on startup (bounded file/size scan; see /codebase status for bounds). Off by default — /codebase build indexes on demand.',
+    'Auto-build the repo source-tree code index on startup (bounded file/size scan; see /codebase status for bounds). Off by default: /codebase build indexes on demand.',
     false,
   );
 }
 
 // ---------------------------------------------------------------------------
-// buildFlagEntries — snapshot of current feature flag states
+// buildFlagEntries, snapshot of current feature flag states
 // ---------------------------------------------------------------------------
 
 export function buildFlagEntries(featureFlagManager: FeatureFlagManager | null): FlagEntry[] {
@@ -489,7 +489,7 @@ export function buildFlagEntries(featureFlagManager: FeatureFlagManager | null):
 }
 
 // ---------------------------------------------------------------------------
-// buildMcpEntries — snapshot of current MCP server security entries
+// buildMcpEntries, snapshot of current MCP server security entries
 // ---------------------------------------------------------------------------
 
 export function buildMcpEntries(mcpRegistry: McpRegistry | null): McpEntry[] {
@@ -505,13 +505,13 @@ export function buildMcpEntries(mcpRegistry: McpRegistry | null): McpEntry[] {
 }
 
 // ---------------------------------------------------------------------------
-// buildSubscriptionEntries — re-export for use by SettingsModal
+// buildSubscriptionEntries, re-export for use by SettingsModal
 // ---------------------------------------------------------------------------
 
 export { buildSubscriptionEntries };
 
 // ---------------------------------------------------------------------------
-// buildNetworkFilteredItems — applies host-mode visibility rules for 'network' tab
+// buildNetworkFilteredItems, applies host-mode visibility rules for 'network' tab
 // ---------------------------------------------------------------------------
 
 export function buildNetworkFilteredItems(
@@ -533,7 +533,7 @@ export function buildNetworkFilteredItems(
 }
 
 // ---------------------------------------------------------------------------
-// refreshEntryValues — re-reads currentValue/isDefault for all loaded entries
+// refreshEntryValues, re-reads currentValue/isDefault for all loaded entries
 // ---------------------------------------------------------------------------
 
 export function refreshEntryValues(
@@ -560,19 +560,19 @@ export function refreshEntryValues(
         entry.isDefault = (entry.currentValue as string[]).length === 0;
         continue;
       }
-      // 'memory' has no DEFAULT_CONFIG entry — its synthetic leaves read defensively below.
+      // 'memory' has no DEFAULT_CONFIG entry, its synthetic leaves read defensively below.
       if (entry.setting.key === MEMORY_PROJECTION_DIR_CONFIG_KEY) {
         const refreshed = buildMemoryProjectionDirSyntheticEntry(configManager);
         entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
         continue;
       }
-      // memory.showProvenance: same 'memory'-has-no-DEFAULT_CONFIG trap — read defensively.
+      // memory.showProvenance: same 'memory'-has-no-DEFAULT_CONFIG trap, read defensively.
       if (entry.setting.key === (MEMORY_SHOW_PROVENANCE_CONFIG_KEY as ConfigKey)) {
         const refreshed = buildMemoryProvenanceSyntheticEntry(configManager);
         entry.currentValue = refreshed.currentValue; entry.isDefault = refreshed.isDefault;
         continue;
       }
-      // payments.* synthetic sub-keys (card material + addresses — see
+      // payments.* synthetic sub-keys (card material + addresses, see
       // payments-config.ts): real configManager-backed now, but still
       // defensively normalized (undefined -> '') the same way the initial
       // build does, so isDefault stays consistent between build and refresh.
@@ -591,7 +591,7 @@ export function refreshEntryValues(
 }
 
 // ---------------------------------------------------------------------------
-// updateEntryForKey — updates a single setting entry after a value change
+// updateEntryForKey, updates a single setting entry after a value change
 // ---------------------------------------------------------------------------
 
 export function updateEntryForKey(

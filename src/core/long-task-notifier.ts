@@ -1,26 +1,26 @@
 /**
- * long-task-notifier — fires push notifications when a turn or agent task
+ * long-task-notifier, fires push notifications when a turn or agent task
  * completes after running longer than the configured threshold.
  *
  * PRIVACY GUARANTEE: Notification text must never include conversation content
  * (user messages, assistant replies, tool outputs). Only metadata is included:
  * task kind, elapsed time, ok/fail status, and session id. This module enforces
- * that constraint by construction — it receives no conversation object and
+ * that constraint by construction, it receives no conversation object and
  * builds all message text from structural metadata only.
  *
  * Delivery targets (in preference order):
  *   1. Desktop notification (linux notify-send / mac osascript) via SDK
- *      notifyCompletion — detected and dispatched by the SDK; silently
+ *      notifyCompletion, detected and dispatched by the SDK; silently
  *      no-ops when the platform does not support it.
  *   2. Configured outbound webhook channel (ntfy topic / webhook URL) via
- *      WebhookNotifier.send() — only fires when the user has URLs configured.
+ *      WebhookNotifier.send(), only fires when the user has URLs configured.
  *
  * When neither target is available the function is an honest no-op (debug log
  * only; no user-facing error spam).
  *
  * Focus tracking: when `focusTracker` is supplied, notifications are
  * gated the same way as the other unfocused-user alert classes (see
- * alert-gating.ts) — they fire when the terminal is unfocused or focus state
+ * alert-gating.ts), they fire when the terminal is unfocused or focus state
  * was never observed, and are suppressed when it's known to be focused,
  * unless `behavior.notifyOnlyWhenUnfocused` is turned off. `focusTracker` is
  * optional and defaults to "always fire" (the behavior before focus gating existed) when
@@ -76,7 +76,7 @@ export interface MaybeNotifyLongTaskOptions {
   /**
    * Outbound webhook notifier. When provided and the user has URLs
    * configured, the notification is also sent to all configured endpoints
-   * (e.g. ntfy.sh topics). Optional — absent means outbound delivery is
+   * (e.g. ntfy.sh topics). Optional, absent means outbound delivery is
    * skipped silently.
    */
   readonly webhookNotifier?: WebhookNotifier | null;
@@ -99,7 +99,7 @@ export interface MaybeNotifyLongTaskOptions {
  * exceeds the configured threshold.
  *
  * Returns true when at least one delivery was attempted, false when the
- * call was a no-op (threshold not reached, off-state, or focus-gated off —
+ * call was a no-op (threshold not reached, off-state, or focus-gated off,
  * see `focusTracker`/`configGet` above).
  *
  * PRIVACY: builds message text from structural metadata only (kind, elapsed,
@@ -125,13 +125,13 @@ export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
   // are supplied. Absent either one, behavior is unchanged from before focus
   // gating existed (always fire once the threshold is met).
   if (focusTracker && configGet && readNotifyOnlyWhenUnfocused(configGet) && !focusTracker.shouldAlertWhenUnfocused()) {
-    logger.debug('long-task-notifier: suppressed — terminal focused');
+    logger.debug('long-task-notifier: suppressed; terminal focused');
     return false;
   }
 
   // Build concise, metadata-only message. No conversation text.
   const statusLabel = status === 'ok' ? 'completed' : 'failed';
-  const title = `GoodVibes — ${kind} ${statusLabel}`;
+  const title = `GoodVibes: ${kind} ${statusLabel}`;
   // PRIVACY: message contains only structural metadata, never conversation content.
   const message = `${kind} ${statusLabel} in ${elapsedSeconds}s  ·  session ${sessionId.slice(0, 8)}`;
 

@@ -224,7 +224,7 @@ jobs:
         run: |
           set -eu
           if [ ! -f scripts/install.sh ]; then
-            echo "FATAL: scripts/install.sh is missing — the suite installer is a release asset of this repository" >&2
+            echo "FATAL: scripts/install.sh is missing; the suite installer is a release asset of this repository" >&2
             exit 1
           fi
           cp scripts/install.sh dist/install.sh

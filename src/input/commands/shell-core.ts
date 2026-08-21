@@ -103,13 +103,13 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'find',
     aliases: ['findtext'],
-    description: 'Search THIS conversation transcript (same as Ctrl+F) — searching the web instead? use /search',
+    description: 'Search THIS conversation transcript (same as Ctrl+F). Searching the web instead? Use /search',
     handler(_args, ctx) {
       if (ctx.openTranscriptSearch) {
         ctx.openTranscriptSearch();
         return;
       }
-      ctx.print('Transcript search is not available in this context — try Ctrl+F.');
+      ctx.print('Transcript search is not available in this context; try Ctrl+F.');
     },
   });
 
@@ -121,7 +121,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       const km = requireKeybindingsManager(ctx);
       // The full binding table (~45 rows) is presented via the same
       // generated, scrollable overlay /shortcuts opens (see
-      // renderShortcutsOverlay) rather than a one-shot transcript dump —
+      // renderShortcutsOverlay) rather than a one-shot transcript dump,
       // the file path (dynamic, per-user) still gets a short transcript
       // line since the overlay itself doesn't show it.
       ctx.print(`Keybindings config: ${km.getConfigPath()}  (create it to override any binding: { "action": { "key": "x", "ctrl": true } })`);
@@ -196,8 +196,8 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: ['h', '?'],
     description: 'Browse every command with its description; picking one runs it',
     handler(_args, ctx) {
-      // Generated live from the command registry — never a hand-maintained
-      // list — so /help can never drift from the real command set. Category
+      // Generated live from the command registry, never a hand-maintained
+      // list, so /help can never drift from the real command set. Category
       // labels come from the same single source of truth as the generated
       // reference and the palette (ctx.getCommandCategories; see its doc for
       // why it is threaded through the context rather than imported here).
@@ -217,7 +217,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
             category: categoryByName.get(cmd.name) ?? 'Other',
           };
         });
-        // every item here is a command, and picking one RUNS it — label
+        // every item here is a command, and picking one RUNS it, label
         // the verb "Run" (matching the slash-command palette) instead of the
         // generic "Select" default.
         ctx.openSelection('Help  —  Commands', items, { allowSearch: true, primaryVerbLabel: 'Run' }, (result) => {
@@ -269,7 +269,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     description: 'Summarize conversation to free context window',
     async handler(_args, ctx) {
       const messages = ctx.session.conversationManager.getMessagesForLLM();
-      // contextWindow IS reachable from CommandContext — the same
+      // contextWindow IS reachable from CommandContext, the same
       // call compactConversation() (runtime-services.ts) already makes to scale
       // its own behaviour by window size. Previously hardcoded to 0 here, which
       // silently suppressed buildCompactionPreview()'s capacity-% clause even
@@ -320,7 +320,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       const memStore = requireSessionMemoryStore(ctx);
       const id = memStore.add(text);
       if (!id) {
-        ctx.print('[Pin] Nothing pinned — text was blank.');
+        ctx.print('[Pin] Nothing pinned: text was blank.');
       } else {
         const count = memStore.list().length;
         ctx.print(buildPinSuccessText(id, text, count));
@@ -370,7 +370,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     usage: '[level]',
     // No fixed list here. The accepted levels belong to the serving model, so
     // the old '[instant|low|medium|high]' hint was wrong for every model that
-    // offers 'none', 'minimal', 'xhigh' or 'max' — and for every model that
+    // offers 'none', 'minimal', 'xhigh' or 'max', and for every model that
     // rejects 'instant'. Running `/effort` with no argument prints the real
     // ones for the model currently in use.
     argsHint: '[level]',
@@ -394,7 +394,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       // command is where the preference is read back and re-chosen, so it must
       // show what was asked for even while a capped model is serving.
       const current = requestedEffortLevel(ctx.platform.configManager);
-      // What the list should open on, though, is the level in EFFECT — the
+      // What the list should open on, though, is the level in EFFECT, the
       // requested level snapped to this model. The requested level may not be
       // in the list at all when the model caps lower, and preselecting a
       // missing id lands the cursor on the lowest level instead of on what is
@@ -402,7 +402,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       const inEffect = servingEffortForLevel(current, model).effective ?? current;
 
       const applyLevel = (level: string): void => {
-        // An explicit user choice — the one kind of write that is allowed to
+        // An explicit user choice, the one kind of write that is allowed to
         // change the stored preference.
         ctx.platform.configManager.set('provider.reasoningEffort', level);
         const serving = servingEffortForLevel(level, model);

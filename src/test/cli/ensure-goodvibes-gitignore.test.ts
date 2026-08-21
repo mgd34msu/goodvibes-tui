@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ensure-goodvibes-gitignore.test.ts — a hygiene fix.
+// ensure-goodvibes-gitignore.test.ts, a hygiene fix.
 //
 // The TUI's own `.goodvibes/` scratch directory (logs, overflow buffers,
 // exec output, cache, session state) was never excluded from a *project's*
@@ -83,8 +83,8 @@ describe('ensureGoodvibesGitignore', () => {
   });
 
   // ── Return-value contract (item 9): the caller prints a one-time notice
-  // gated on this, so it must be true exactly once — the call that actually
-  // wrote the rule — and false for every no-op / already-present / non-git case.
+  // gated on this, so it must be true exactly once, the call that actually
+  // wrote the rule, and false for every no-op / already-present / non-git case.
   describe('return value — "did this call just write the rule" (item 9)', () => {
     test('returns true when it creates a fresh .gitignore', () => {
       const dir = makeProjectDir();

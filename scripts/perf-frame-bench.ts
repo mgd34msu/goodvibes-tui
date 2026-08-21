@@ -1,10 +1,10 @@
 /**
- * perf-frame-bench.ts — Shared headless frame micro-benchmark.
+ * perf-frame-bench.ts, Shared headless frame micro-benchmark.
  *
  * Exports `runFrameBench()` which measures Compositor.composite() throughput
  * on a synthetic 80×24 frame. Used by both scripts/perf-check.ts (gate) and
  * src/test/release-gates/performance-gate.test.ts (test) so both always
- * measure identically — changing methodology here updates both consumers.
+ * measure identically, changing methodology here updates both consumers.
  *
  * NEVER launches the interactive TUI binary. Stubs stdout entirely.
  *
@@ -19,7 +19,7 @@ import { Compositor } from '../src/renderer/compositor.ts';
 import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
-/** Frame bench configuration — change here to update both gate and test. */
+/** Frame bench configuration, change here to update both gate and test. */
 export const FRAME_BENCH_CONFIG = {
   width: 80,
   height: 24,
@@ -27,7 +27,7 @@ export const FRAME_BENCH_CONFIG = {
   measureFrames: 200,
 } as const;
 
-/** Ratchet budgets — tighten when measured drops below budget/3. */
+/** Ratchet budgets, tighten when measured drops below budget/3. */
 export const FRAME_BUDGETS = {
   p95_ms: 16, // stated product SLO
   p99_ms: 110, // ceil(measured p99 ~26.88ms × 4), rounded to 10ms — must match scripts/perf-baseline.json

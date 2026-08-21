@@ -64,7 +64,7 @@ describe('decideProviderKeyIntake', () => {
   });
 });
 
-describe('runProviderKeyIntake — selection completes after intake', () => {
+describe('runProviderKeyIntake: selection completes after intake', () => {
   function makeDeps(overrides: Partial<ProviderKeyIntakeDeps> = {}): {
     deps: ProviderKeyIntakeDeps;
     begun: ConcealedInputRequest[];

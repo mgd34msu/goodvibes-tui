@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// power-chip-source.ts — the topology-aware source of truth behind the
+// power-chip-source.ts, the topology-aware source of truth behind the
 // always-visible "sleep disabled" chip.
 //
 // Embedded topology: the in-process PowerManager IS the daemon's, so reading
@@ -11,7 +11,7 @@
 // External/adopted topology: the local manager is NOT the daemon's, and the
 // adopted-daemon wire is plain HTTP (no realtime event bridge), so the chip
 // POLLS power.status.get on an unref'd interval and renders the DAEMON's
-// state — a webui-originated toggle on the daemon lights the TUI chip within
+// state, a webui-originated toggle on the daemon lights the TUI chip within
 // one poll, and a TUI toggle (forwarded over power.keepAwake.set by
 // power-keepawake-remote.ts) lights the webui's the same way. While the
 // daemon's state is unknown (fetch pending/unreachable) the local projection
@@ -38,7 +38,7 @@ export interface PowerChipSourceDeps {
 }
 
 export interface PowerChipSource {
-  /** The current chip projection — daemon-synced in external topology, local otherwise. */
+  /** The current chip projection, daemon-synced in external topology, local otherwise. */
   get(): PowerSurfaceState;
   /** Stop the poll + event subscription. */
   stop(): void;

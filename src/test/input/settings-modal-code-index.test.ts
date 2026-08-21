@@ -35,10 +35,10 @@ describe('storage.codeIndexEnabled synthetic setting', () => {
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('defaults OFF — boolean, default false, currentValue false', () => {
+  test('defaults OFF: boolean, default false, currentValue false', () => {
     const entry = buildCodeIndexEnabledSyntheticEntry(cm);
     // storage.codeIndexEnabled is a TUI-local synthetic key, not yet part of the
-    // SDK's ConfigKey union — compare as plain strings (see settings-modal-data.ts).
+    // SDK's ConfigKey union, compare as plain strings (see settings-modal-data.ts).
     expect(entry.setting.key as string).toBe(CODE_INDEX_ENABLED_CONFIG_KEY as string);
     expect(entry.setting.type).toBe('boolean');
     expect(entry.setting.default).toBe(false);

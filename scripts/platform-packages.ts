@@ -1,5 +1,5 @@
 /**
- * Platform binary package descriptors — the one place that knows the
+ * Platform binary package descriptors, the one place that knows the
  * @pellux/goodvibes-tui-<os>-<arch> package set (the esbuild / biome pattern).
  *
  * Each descriptor names a per-platform npm package that carries the prebuilt
@@ -9,7 +9,7 @@
  * declares as a dependency so an npm install still brings the whole suite.
  * The main package declares all four platform packages as optionalDependencies with
  * os/cpu fields, so the package manager installs exactly the one that matches
- * the host — with registry integrity, and with no lifecycle script (zero
+ * the host, with registry integrity, and with no lifecycle script (zero
  * trust). Shared by:
  *   - scripts/assemble-platform-packages.ts (populates bin/ from a build)
  *   - scripts/publish-platform-packages.ts  (publishes each package)

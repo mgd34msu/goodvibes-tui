@@ -20,7 +20,7 @@ import { isTextBackspace } from '../input/delete-key-policy.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { type ConfirmState, handleConfirmInput } from './confirm-state.ts';
 
-// Base chrome only — state colors and text tokens come straight from
+// Base chrome only, state colors and text tokens come straight from
 // DEFAULT_PANEL_PALETTE.
 const C = DEFAULT_PANEL_PALETTE;
 
@@ -40,7 +40,7 @@ interface MaskedEntryState {
   buffer: string;
 }
 
-/** Mutation surface the panel needs for p/a/d/b — a subset of UserAuthManager. */
+/** Mutation surface the panel needs for p/a/d/b, a subset of UserAuthManager. */
 type LocalAuthMutations = Pick<UserAuthManager, 'addUser' | 'deleteUser' | 'rotatePassword' | 'clearBootstrapCredentialFile'>;
 
 function hasLocalAuthMutations(value: LocalAuthInspectionQuery): value is LocalAuthInspectionQuery & LocalAuthMutations {
@@ -54,12 +54,12 @@ function hasLocalAuthMutations(value: LocalAuthInspectionQuery): value is LocalA
 export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   private readonly authManager: LocalAuthInspectionQuery;
   private maskedState: MaskedEntryState | null = null;
-  /** Pending delete-user confirmation — project-standard ConfirmState contract. */
+  /** Pending delete-user confirmation, project-standard ConfirmState contract. */
   private deleteConfirm: ConfirmState<string> | null = null;
   /** Draft username buffer for the 'a' add-user flow's first step (username,
-   * then openMaskedEntry for the password). Not masked — usernames aren't secret. */
+   * then openMaskedEntry for the password). Not masked, usernames aren't secret. */
   private usernameEntry: string | null = null;
-  /** Cached inspect() snapshot for the current render pass — see render(). */
+  /** Cached inspect() snapshot for the current render pass, see render(). */
   private cachedSnapshot: LocalAuthSnapshot | null = null;
 
   public constructor(authManager: LocalAuthInspectionQuery) {
@@ -99,7 +99,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   /**
    * Masked password/username entry wants every character of a burst (paste,
    * or fast typing landing in one input.feed() call) delivered one at a
-   * time, same as it always has — see the interface doc on
+   * time, same as it always has, see the interface doc on
    * `Panel.isCapturingTextBurst`.
    */
   public override isCapturingTextBurst(): boolean {
@@ -107,7 +107,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   }
 
   public override handleInput(key: KeyName): boolean {
-    // Masked entry takes priority when active — it must capture every
+    // Masked entry takes priority when active, it must capture every
     // keystroke (including letters that would otherwise be p/a/d/b actions)
     // as part of the password being typed.
     if (this.maskedState !== null) {
@@ -200,7 +200,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
       this.invalidate();
       return true;
     }
-    // 'absorbed' (or defensively, 'inactive' — deleteConfirm is non-null here so this never fires)
+    // 'absorbed' (or defensively, 'inactive', deleteConfirm is non-null here so this never fires)
     return true;
   }
 
@@ -242,7 +242,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   }
 
   private handleMaskedEntryInput(key: KeyName): boolean {
-    // Masked entry is active — capture all keystrokes.
+    // Masked entry is active, capture all keystrokes.
     const state = this.maskedState!;
 
     if (key === 'escape') {
@@ -330,7 +330,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     }
 
     const intro = 'Manage local daemon and HTTP-listener auth users, bootstrap state, and active sessions.';
-    // Single inspect() call for this whole render pass — getItems() (called
+    // Single inspect() call for this whole render pass, getItems() (called
     // both directly below and again inside renderList()'s internal
     // getVisibleItems()) reads from this cache instead of re-inspecting.
     this.cachedSnapshot = this.authManager.inspect();
@@ -338,7 +338,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     const users = this.getItems();
 
     const issueMessages: string[] = [];
-    if (snapshot.bootstrapCredentialPresent) issueMessages.push('Bootstrap credential file still exists — press b to clear it after password rotation.');
+    if (snapshot.bootstrapCredentialPresent) issueMessages.push('Bootstrap credential file still exists; press b to clear it after password rotation.');
     if (snapshot.sessionCount === 0) issueMessages.push('No active local auth sessions are currently tracked.');
 
     const headerLines: Line[] = [
@@ -407,7 +407,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     });
   }
 
-  /** Footer keyboard hints, adapted to the current state — confirm-pending
+  /** Footer keyboard hints, adapted to the current state, confirm-pending
    * vs. normal browsing, and whether there's a bootstrap credential to clear. */
   private buildHints(
     selected: LocalAuthUser | null,
@@ -435,14 +435,14 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   private renderUsernameEntryPrompt(width: number, height: number): Line[] {
     const draft = this.usernameEntry ?? '';
     const promptLines: Line[] = [
-      buildPanelLine(width, [[' Add local auth user — enter a username, then set a masked password.', C.value]]),
+      buildPanelLine(width, [[' Add local auth user: enter a username, then set a masked password.', C.value]]),
       buildPanelLine(width, [['', C.label]]),
       buildPanelLine(width, [[' Username  ', C.label], [`${draft}█`, C.info]]),
       buildPanelLine(width, [['', C.label]]),
       buildPanelLine(width, [[' [Enter] Continue to password entry   [Esc] Cancel   [Backspace] Delete char', C.dim]]),
     ];
     const workspace = buildPanelWorkspace(width, height, {
-      title: 'Local Auth — Add User',
+      title: 'Local Auth: Add User',
       intro: 'Type the new username and press Enter to continue to masked password entry.',
       sections: [{ lines: promptLines }],
       palette: C,
@@ -467,7 +467,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     ];
 
     const workspace = buildPanelWorkspace(width, height, {
-      title: 'Local Auth — Password Entry',
+      title: 'Local Auth: Password Entry',
       intro: `Type a password for ${state.username}. The value is never echoed in plaintext or stored in history.`,
       sections: [{ lines: promptLines }],
       palette: C,

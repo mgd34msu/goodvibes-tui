@@ -66,7 +66,7 @@ function collectField(arr: unknown, field: string): string[] {
 }
 
 /**
- * The real display target(s) of a tool invocation — the paths/commands/urls a
+ * The real display target(s) of a tool invocation, the paths/commands/urls a
  * user needs to see, extracted from the actual arg shapes so a nested
  * `{files:[{path}]}` no longer falls through to a raw JSON blob. (2a.)
  * Returns [] when nothing recognisable is present (caller falls back).
@@ -103,17 +103,17 @@ function categoryVerb(category: PermissionCategory): string {
 /**
  * Single source of truth for how many Line rows the hunk-list section
  * occupies: 1 header row + up to MAX_VISIBLE_HUNKS checkbox rows + 1 trailer
- * row (rendered as "+N more" when truncated, blank otherwise — always
+ * row (rendered as "+N more" when truncated, blank otherwise, always
  * present so the row count never depends on which branch fires). Both
  * getPromptHeight and createPromptLines call this SAME function, so they
- * cannot drift apart (Risk 2 — main.ts's render loop reserves viewport
+ * cannot drift apart (Risk 2, main.ts's render loop reserves viewport
  * space from getPromptHeight *before* the real render happens).
  */
 /**
  * The optional sandbox model-judgment tier (see sandbox-judgment.ts in the
- * SDK) annotates an escalation ask by pushing one string — verbatim
+ * SDK) annotates an escalation ask by pushing one string, verbatim
  * "model judgment: looks safe because…" / "model judgment: flags risk
- * because…" — onto `analysis.reasons`, alongside the sandbox-boundary and
+ * because…", onto `analysis.reasons`, alongside the sandbox-boundary and
  * policy reasons. Pulled out here so it gets its own clearly-labeled row
  * instead of blending into the generic Review bullets, where the truncation
  * to 2 reasons could silently cut it (it is typically the LAST reason
@@ -162,7 +162,7 @@ export class PermissionPromptUI {
     return targets.length > 0 ? targets : [getDisplayArg(request.tool, request.args)];
   }
 
-  /** Path-field row texts — one per target when few, a "N files:" summary when many. */
+  /** Path-field row texts, one per target when few, a "N files:" summary when many. */
   private static pathRowTexts(targets: string[], maxLen: number): string[] {
     const clamp = (s: string): string => (s.length > maxLen ? `...${s.slice(-(maxLen - 3))}` : s);
     if (targets.length <= 1) return [clamp(targets[0] ?? '(unknown)')];
@@ -183,11 +183,11 @@ export class PermissionPromptUI {
   ): boolean {
     if (hunkState || detailsExpanded) return false;
     // Shell execution, delegation and network requests always show the full
-    // card — their action semantics (command, side effects, host, checklist)
+    // card, their action semantics (command, side effects, host, checklist)
     // warrant scrutiny even when the risk model rates them low. Only mundane
     // low-risk filesystem reads/writes condense. (2b.)
     if (request.category === 'execute' || request.category === 'delegate') return false;
-    // Remember tiers are one-key choices that must be visible to be usable —
+    // Remember tiers are one-key choices that must be visible to be usable,
     // a request carrying rememberOptions always shows the full card.
     if (request.rememberOptions && request.rememberOptions.length > 0) return false;
     const analysis = this.fallbackAnalysis(request);
@@ -238,13 +238,13 @@ export class PermissionPromptUI {
     const clamp = (s: string): string => (s.length > width ? `${s.slice(0, Math.max(0, width - 3))}...` : s);
     return options.map((option, index) => {
       const labelCol = index === 0 ? 'Remember ' : ' '.repeat(9);
-      return clamp(`   ${labelCol}: [${index + 1}] ${option.label} — ${option.detail}`);
+      return clamp(`   ${labelCol}: [${index + 1}] ${option.label}; ${option.detail}`);
     });
   }
 
   /**
    * The FULL command of an execute ask, wrapped across as many rows as it
-   * needs — never truncated. Empty for non-execute asks and for asks without
+   * needs, never truncated. Empty for non-execute asks and for asks without
    * a string command. Shared by getPromptHeight and createPromptLines.
    */
   private static commandRowTexts(request: PermissionPromptRequest, width: number): string[] {
@@ -340,7 +340,7 @@ export class PermissionPromptUI {
 
   /**
    * Assemble the card's view state from the pending-permission slot and the
-   * broker's live queue (the honest count of OTHER pending asks — coalesced
+   * broker's live queue (the honest count of OTHER pending asks, coalesced
    * asks share one record, so they are never double-counted). One helper so
    * main.ts passes identical state to getPromptHeight and createPromptLines.
    */
@@ -372,7 +372,7 @@ export class PermissionPromptUI {
     const attributionLines = requestedBy ? 1 : 0;
     const rememberLines = this.rememberRowTexts(request, hunkState, width).length;
     // Condensed low-risk card: top separator, title, [attribution], [preview],
-    // summary, choices, bottom separator — see createPromptLines' condensed branch.
+    // summary, choices, bottom separator, see createPromptLines' condensed branch.
     if (this.isCondensed(request, hunkState, detailsExpanded)) return 5 + attributionLines + rememberLines;
     const analysis = this.fallbackAnalysis(request);
     const { annotation: judgmentAnnotation, rest: reasonsMinusJudgment } = extractModelJudgmentAnnotation(analysis.reasons);
@@ -445,7 +445,7 @@ export class PermissionPromptUI {
     // Honest queue: how many OTHER broker asks are waiting behind this one.
     // They surface in turn as each is answered; the count keeps that visible.
     const queueSuffix = view?.queueCount && view.queueCount > 0
-      ? ` — ${view.queueCount} more waiting`
+      ? `: ${view.queueCount} more waiting`
       : '';
 
     // Attribution line (which agent/process is asking) and the remember block
@@ -506,14 +506,14 @@ export class PermissionPromptUI {
       lines.push(UIFactory.stringToLine(`   ${labelCol}: ${rowText}`.padEnd(width), width, { fg: TEXT }));
     });
 
-    // The FULL command of an execute ask, wrapped — never truncated. The Path
+    // The FULL command of an execute ask, wrapped, never truncated. The Path
     // row above stays as the one-line subject; this block is the whole truth.
     for (const rowText of this.commandRowTexts(request, width)) {
       lines.push(UIFactory.stringToLine(rowText.padEnd(width), width, { fg: TEXT }));
     }
 
     // Exec-prompt attribution: the running command and the terminal prompt it
-    // is stuck on, wrapped in full — the typed answer feeds this run's stdin.
+    // is stuck on, wrapped in full, the typed answer feeds this run's stdin.
     for (const rowText of this.execPromptRowTexts(request, width)) {
       lines.push(UIFactory.stringToLine(rowText.padEnd(width), width, { fg: WARN }));
     }
@@ -541,7 +541,7 @@ export class PermissionPromptUI {
     // Sandbox escalation row: when the sandbox-aware exec gate turned an
     // auto-allow into an ask because the boundary-safe command still needs host
     // access, name what it wants ("wants network …"). The escalation text is the
-    // SDK policy's, verbatim — this row only surfaces it.
+    // SDK policy's, verbatim, this row only surfaces it.
     const sandboxAnnotation = readSandboxAskAnnotation(request);
     if (sandboxAnnotation && sandboxAnnotation.sandboxEscalations.length > 0) {
       const escalations = sandboxAnnotation.sandboxEscalations.join('; ');
@@ -572,8 +572,8 @@ export class PermissionPromptUI {
 
     // Model-judgment annotation: gets its own clearly-labeled row (never
     // subject to the Review truncation below) so a `sandbox-model-judgment`
-    // verdict — "model judgment: looks safe because…" / "flags risk because…"
-    // — is never silently cut. See extractModelJudgmentAnnotation.
+    // verdict, "model judgment: looks safe because…" / "flags risk because…"
+    //, is never silently cut. See extractModelJudgmentAnnotation.
     const { annotation: judgmentAnnotation, rest: reasonsMinusJudgment } = extractModelJudgmentAnnotation(analysis.reasons);
     if (judgmentAnnotation) {
       const maxJudgmentLen = Math.max(10, width - 16);
@@ -598,7 +598,7 @@ export class PermissionPromptUI {
     const checklistLine = `   Checklist : ${truncatedChecklist}`;
     lines.push(UIFactory.stringToLine(checklistLine.padEnd(width), width, { fg: DIM }));
 
-    // Raw args row — the full tool arguments live here in the details view so
+    // Raw args row, the full tool arguments live here in the details view so
     // the Path field above can render clean path(s), never a JSON blob. (2a.)
     const rawArgs = JSON.stringify(args);
     const maxRawLen = Math.max(10, width - 16);
@@ -609,14 +609,14 @@ export class PermissionPromptUI {
     lines.push(UIFactory.stringToLine(' '.repeat(width), width));
 
     // Real colored diff for a write/edit ask (adds green, removals red, hunk
-    // headers blue — the same diff-view machinery the transcript uses).
+    // headers blue, the same diff-view machinery the transcript uses).
     const diffTextLines = this.writeDiffLines(request, hunkState);
     if (diffTextLines) {
       lines.push(...renderDiffView(diffTextLines.join('\n'), width));
     }
 
     if (hunkState) {
-      // Hunk list — see hunkListRowCount() for the row-count contract this
+      // Hunk list, see hunkListRowCount() for the row-count contract this
       // block must match exactly (Risk 2: getPromptHeight/createPromptLines
       // parity is what keeps main.ts's render loop from clipping the
       // viewport).
@@ -631,7 +631,7 @@ export class PermissionPromptUI {
         const box = selected.has(i) ? '[x]' : '[ ]';
         const findPreview = hunk.find.replace(/\n/g, '⏎').slice(0, maxPreviewLen);
         const replacePreview = hunk.replace.replace(/\n/g, '⏎').slice(0, maxPreviewLen);
-        const rowText = `   ${box} ${i + 1}. ${hunk.path} — "${findPreview}" -> "${replacePreview}"`;
+        const rowText = `   ${box} ${i + 1}. ${hunk.path}: "${findPreview}" -> "${replacePreview}"`;
         const isCursor = i === cursor;
         lines.push(UIFactory.stringToLine(
           rowText.padEnd(width),

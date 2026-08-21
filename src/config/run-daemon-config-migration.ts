@@ -1,19 +1,19 @@
 /**
- * run-daemon-config-migration.ts — the one call every TUI composition root
+ * run-daemon-config-migration.ts, the one call every TUI composition root
  * makes before constructing its `ConfigManager`.
  *
  * Daemon-owned configuration now has exactly one home:
  * `~/.goodvibes/daemon/settings.json`. Before this migration, every product
  * wrote every key (including daemon-only ones like `surfaces.telegram.*`)
  * into its own per-surface silo, and the daemon only ever read
- * `~/.goodvibes/tui/settings.json` — so a value written by, say, the agent
+ * `~/.goodvibes/tui/settings.json`, so a value written by, say, the agent
  * surface reported a successful save and configured nothing the daemon could
  * see.
  *
  * `migrateDaemonOwnedConfig` (SDK, `platform/config`) is idempotent and cheap
  * on the fast path (one file read + JSON parse), so it is safe and correct to
  * call this at every composition root that is about to construct a
- * `ConfigManager` — not just the first one to run in a given process. It
+ * `ConfigManager`, not just the first one to run in a given process. It
  * must never abort startup: any failure is caught, logged with the marker
  * path so the failure is diagnosable, and startup continues on whatever
  * config state already exists.

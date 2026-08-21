@@ -3,7 +3,7 @@ import type { StructuredDiff, StructuredDiffFile, StructuredDiffHunk, Structured
 import { DiffPanel } from '../../panels/diff-panel.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 2c — /git diff routes to the real diff panel via the structural diff.
+// STEP 2c, /git diff routes to the real diff panel via the structural diff.
 // The old path sliced the raw text at 4,000 chars and printed a
 // "(diff truncated)" stub. loadStructuredDiff ingests the FULL, uncapped
 // StructuredDiff (GitService.diffStructured) so a >4,000-char diff renders
@@ -14,7 +14,7 @@ function textOf(lines: import('@pellux/goodvibes-sdk/platform/types').Line[]): s
   return lines.map((l) => l.map((c) => c.char ?? '').join('')).join('\n');
 }
 
-/** A single file with `count` changed lines — sized well past 4,000 chars. */
+/** A single file with `count` changed lines, sized well past 4,000 chars. */
 function bigStructuredDiff(count: number): { diff: StructuredDiff; lastText: string } {
   const lines: StructuredDiffLine[] = [];
   for (let i = 0; i < count; i++) {
@@ -48,7 +48,7 @@ describe('DiffPanel.loadStructuredDiff (STEP 2c)', () => {
     const panel = new DiffPanel('/tmp', () => {});
     panel.loadStructuredDiff(diff);
     // The reconstructed raw for the single file must exceed the old 4,000 cap
-    // several times over — proving the slice is gone.
+    // several times over, proving the slice is gone.
     const rawLen = (panel as unknown as { entries: Array<{ raw: string }> }).entries[0]!.raw.length;
     expect(rawLen).toBeGreaterThan(4000);
     // Every structured line is retained: 240 changed + 1 hunk header.
@@ -56,13 +56,13 @@ describe('DiffPanel.loadStructuredDiff (STEP 2c)', () => {
     expect(parsedCount).toBe(245);
   });
 
-  test('renders complete at 80x24 — full line count shown, no truncation stub', () => {
+  test('renders complete at 80x24: full line count shown, no truncation stub', () => {
     const { diff } = bigStructuredDiff(120);
     const panel = new DiffPanel('/tmp', () => {});
     panel.loadStructuredDiff(diff);
     const text = textOf(panel.render(80, 24));
     // The status bar shows the FULL retained line count (L1/245), the honest
-    // completeness signal — not a capped subset.
+    // completeness signal, not a capped subset.
     expect(text).toContain('L1/245');
     // First-file content is visible from the top.
     expect(text).toContain('after longish replacement content 0');
@@ -70,7 +70,7 @@ describe('DiffPanel.loadStructuredDiff (STEP 2c)', () => {
     expect(text.toLowerCase()).not.toContain('truncat');
   });
 
-  test('renders complete at 60 columns — same completeness, no truncation stub', () => {
+  test('renders complete at 60 columns; same completeness, no truncation stub', () => {
     const { diff } = bigStructuredDiff(120);
     const panel = new DiffPanel('/tmp', () => {});
     panel.loadStructuredDiff(diff);

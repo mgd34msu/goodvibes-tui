@@ -1,7 +1,7 @@
 /**
  * profile-runtime.ts
  *
- * `/profile` — the owner profile in the TUI: what the platform knows about the
+ * `/profile`, the owner profile in the TUI: what the platform knows about the
  * person who owns it, kept as one hand-editable Markdown file at daemon scope
  * (docs/owner-profile.md).
  *
@@ -14,13 +14,13 @@
  *
  * plus `set`, `note`, `undo` and `status` so a correction, a note, a recovery
  * and a diagnosis do not require leaving the terminal or hand-editing the file
- * (which remains allowed, and authoritative — §4.5).
+ * (which remains allowed, and authoritative, §4.5).
  *
  * ## Why it goes over the operator wire
  *
  * Same reason `/principals`, `/ci` and `/checkin` do (see operator-rpc.ts): the
  * `profile.*` family ships in the operator contract and has not been promoted to
- * the in-process `OperatorClient` facade. Surfaces never open the profile file —
+ * the in-process `OperatorClient` facade. Surfaces never open the profile file,
  * the daemon is the single writer, which is what makes its rename-based atomic
  * writes sufficient with no lock (§3, §5.4). This command therefore has no file
  * path, no parser and no writer of its own, and could not corrupt the document
@@ -30,7 +30,7 @@
  *
  * Values reach exactly one place: the string handed to `ctx.print`. This module
  * imports no logger, builds no diagnostic payload, and never puts a value in an
- * error message — a failed call renders `describeOperatorRpcError`, which
+ * error message, a failed call renders `describeOperatorRpcError`, which
  * describes the transport, not the content. A write prints the daemon's
  * one-line disclosure and the field names that changed, never the value that was
  * just recorded (§8.2). The `People` section is third-party personal data and is
@@ -80,7 +80,7 @@ const USAGE = [
   '  in the file (e.g. "shipping address") once that field is recorded. /profile show',
   '  prints each field id beside its value.',
   '',
-  '  Notes in People, Places, Work and Notes have no field id — forget those with',
+  '  Notes in People, Places, Work and Notes have no field id; forget those with',
   '  --section and the line as /profile show prints it. The leading "-" is optional;',
   '  the rest must match, and if two notes read the same nothing is removed.',
 ].join('\n');
@@ -118,7 +118,7 @@ export interface ProfileCommandDeps {
 const DEFAULT_DEPS: ProfileCommandDeps = { resolveRpc: getOperatorRpc };
 
 function unrecognizedResponse(verb: string): string {
-  return `${PROFILE_TAG} the daemon answered ${verb} with a response this build does not recognise — it is probably running a different platform version. Nothing was read or written.`;
+  return `${PROFILE_TAG} the daemon answered ${verb} with a response this build does not recognise; it is probably running a different platform version. Nothing was read or written.`;
 }
 
 /**
@@ -126,7 +126,7 @@ function unrecognizedResponse(verb: string): string {
  *
  * A dotted token is already an id and is passed through untouched. A bare label
  * ("shipping address") is matched against the labels in the live `profile.read`
- * response — deliberately NOT against a copy of the SDK's field registry, which
+ * response, deliberately NOT against a copy of the SDK's field registry, which
  * would be a second list to keep in step with the first. A label that matches
  * nothing is passed through unchanged so the daemon answers with its own message
  * naming what is wrong, rather than this command guessing.
@@ -205,7 +205,7 @@ async function runWrite<TVerb extends ProfileWriteVerb, TBody extends ProfileInp
 /**
  * `--section <name>` followed by free text, shared by `/profile note` and
  * `/profile forget`. Section defaults to Notes, which is only meaningful for
- * `note` — `forget` calls this solely when `--section` was given.
+ * `note`, `forget` calls this solely when `--section` was given.
  */
 function parseSectionArgs(args: readonly string[]): { section: string; text: string } {
   if (args[1] === '--section' && typeof args[2] === 'string' && args[2].length > 0) {
@@ -235,12 +235,12 @@ export function registerProfileRuntimeCommands(
       //
       // where/forget/undo take the whole remainder as the field, so a label
       // written with a space ("shipping address") works unquoted. `set` cannot
-      // do that — everything after the first token is the value — so a label
+      // do that, everything after the first token is the value, so a label
       // there must be one word, or the field id.
       const fieldToken = sub === 'set' ? args[1] : args.slice(1).join(' ').trim();
 
       // `/profile forget --section <name> <text>` removes a prose bullet, which
-      // is the only way to forget a line in People, Places, Work or Notes —
+      // is the only way to forget a line in People, Places, Work or Notes,
       // those sections have no mechanical fields at all (§4.3), so without this
       // "forget that" would answer for a shipping address but not for a note
       // about a person. The line is named by its exact text, never by position:
@@ -272,7 +272,7 @@ export function registerProfileRuntimeCommands(
         return;
       }
       // `methodId as string` is what picks the generic overload, so the result
-      // stays `unknown` and has to go through a checker — see ProfileInvoke.
+      // stays `unknown` and has to go through a checker, see ProfileInvoke.
       const invoke: ProfileInvoke = (methodId, input) =>
         rpc.sdk.operator.invoke(methodId as string, input as unknown as Record<string, unknown>);
       const print = (text: string): void => { ctx.print(text); };
@@ -309,8 +309,8 @@ export function registerProfileRuntimeCommands(
         // outright. An earlier build defaulted it to owner-direct instead, and
         // stating the claim rather than leaning on that default is precisely
         // why this command kept working when it was tightened. It is the only
-        // gate `forget` and `undo` have — layers 2 and 3 do not apply to a
-        // removal — so it is not a field to leave to anyone else's default.
+        // gate `forget` and `undo` have, layers 2 and 3 do not apply to a
+        // removal, so it is not a field to leave to anyone else's default.
         //
         // This surface can hardcode it; the agent must not. The TUI's only
         // input is the owner at his own keyboard, whereas the agent can be

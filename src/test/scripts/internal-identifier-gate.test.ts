@@ -152,7 +152,7 @@ describe('checkNoInternalIdentifiers', () => {
     expect(violations).toEqual([]);
   });
 
-  // Lettered finding/brief ids (A-E + 1-2 digits) — a follow-up sweep, second
+  // Lettered finding/brief ids (A-E + 1-2 digits), a follow-up sweep, second
   // occurrence of this class. Only three shapes are banned; see the rule
   // file's own doc comment for why the bare-token shape stays legal.
   describe('lettered finding ids (A-E + digits)', () => {

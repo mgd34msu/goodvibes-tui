@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// voice-local-settings.ts — the managed local-voice setup affordance the voice
+// voice-local-settings.ts, the managed local-voice setup affordance the voice
 // settings surfaces render beside ElevenLabs.
 //
 // The local engine registers in the voice provider registry regardless of
 // whether it is provisioned yet (its status is honestly "unconfigured", never
 // an error). When it is NOT provisioned, the settings/provider-picker surface
-// offers the one-act install with its download size declared up front — the
+// offers the one-act install with its download size declared up front, the
 // size is computed synchronously from the pinned piper manifest
 // (piperProvisionBytes) so no daemon round-trip is needed just to label the
 // offer. Platforms with no pinned managed build say so honestly.
@@ -45,7 +45,7 @@ export function localVoiceSetupOffer(configGet: (key: string) => unknown): Local
   let detail: string;
   if (!supported) detail = 'local voice: no managed build for this platform (set voice.local.* by hand to use it)';
   else if (provisioned) detail = 'local voice: configured (managed engine set)';
-  else detail = `local voice: not set up — run /voice setup (${sizeLabel})`;
+  else detail = `local voice: not set up; run /voice setup (${sizeLabel})`;
 
   const actions = supported && !provisioned ? '[Enter] select · /voice setup to provision' : '[Enter] set provider';
   return { supported, provisioned, sizeLabel, detail, actions };

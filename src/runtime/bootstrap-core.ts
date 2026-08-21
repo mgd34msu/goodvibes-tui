@@ -118,14 +118,14 @@ export interface BootstrapCoreState {
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
-  /** Cross-surface identity mirror; dormant for local-only, and for the SDK's 'embedded' HostServiceMode, which no product-facing setting can select — this product only ever adopts an external daemon or runs local-only (see the ADOPT ONLY guard in bootstrap.ts) (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md). Activated by bootstrap.ts only for an adopted 'external' daemon. */
+  /** Cross-surface identity mirror; dormant for local-only, and for the SDK's 'embedded' HostServiceMode, which no product-facing setting can select, this product only ever adopts an external daemon or runs local-only (see the ADOPT ONLY guard in bootstrap.ts) (docs/decisions/2026-07-06-session-spine-mode-branch-is-permanent.md). Activated by bootstrap.ts only for an adopted 'external' daemon. */
   readonly sessionSpine: SessionSpineClient;
   /** Inbound steer/follow-up delivery; dormant until bootstrap.ts activates it. */
   readonly sessionInboundInputs: SessionInboundInputPoller;
-  /** Cache-backed read facade; bootstrap.ts drives its mode (external/local-only in this product — 'embedded' is a HostServiceMode value with no product-facing setting to select it here) from the same HostServiceMode as the spine above. */
+  /** Cache-backed read facade; bootstrap.ts drives its mode (external/local-only in this product, 'embedded' is a HostServiceMode value with no product-facing setting to select it here) from the same HostServiceMode as the spine above. */
   readonly sessionUnionCache: SessionUnionCache;
   /**
-   * WRFC chain persistence — call `rehydrate()` once after the SystemMessageRouter
+   * WRFC chain persistence, call `rehydrate()` once after the SystemMessageRouter
    * is wired so interrupted chains from a previous process are surfaced to the operator.
    */
   readonly wrfcPersistence: WrfcPersistence;
@@ -136,7 +136,7 @@ export type CompanionMessagePayload = Extract<SessionEvent, { type: 'COMPANION_M
 // --- Operator narration of inbound channel events ---
 
 /** Narrate an inbound channel event (GitHub, Slack, ntfy, etc.) that triggered an
- * agent turn, via the SystemMessageRouter — null for internal/companion sources. */
+ * agent turn, via the SystemMessageRouter, null for internal/companion sources. */
 export function narrateInboundEvent(event: {
   source: string;
   metadata: Readonly<Record<string, unknown>> | undefined;
@@ -144,7 +144,7 @@ export function narrateInboundEvent(event: {
   const { source, metadata } = event;
   if (!source) return null;
 
-  // Derive the effective surface — prefer metadata.surface, fall back to source.
+  // Derive the effective surface, prefer metadata.surface, fall back to source.
   const surface = typeof metadata?.surface === 'string' ? metadata.surface : source;
 
   // Internal / companion sources do not need operator narration.
@@ -260,7 +260,7 @@ export async function initializeBootstrapCore(
   services.benchmarkStore.initBenchmarks();
   providerRegistry.initCatalog();
   // Wire cost-utils to the live catalog AND the ONE pricing resolver so every
-  // cost surface distinguishes real pricing from unpriced and names its source ("your price" vs "catalog price, as of <date>") — see cost-utils.
+  // cost surface distinguishes real pricing from unpriced and names its source ("your price" vs "catalog price, as of <date>"), see cost-utils.
   wireCostPricing(providerRegistry);
   services.keybindingsManager.loadFromDisk();
   domainDispatch.syncControlPlaneState({
@@ -296,7 +296,7 @@ export async function initializeBootstrapCore(
     surfaceRegistry,
     watcherRegistry,
   } = services;
-  // Dormant for local-only, and for the SDK's 'embedded' HostServiceMode — no product-facing
+  // Dormant for local-only, and for the SDK's 'embedded' HostServiceMode, no product-facing
   // setting can select it (SDK-internal embedder/test machinery); bootstrap.ts activates this spine only for an adopted 'external' daemon.
   const sessionSpine = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui' });
   // Cache-backed read facade over the local broker (passthrough until bootstrap.ts
@@ -381,7 +381,7 @@ export async function initializeBootstrapCore(
     credentialEnvScrub: { allowlist: readExecEnvScrubAllowlist(configManager) },
     // Register context_accounting against OUR holder (the Orchestrator-backed source bound at bootstrap.ts). See runtime/context-accounting-source.ts.
     contextAccountingHolder: services.contextAccountingHolder,
-    // First contained (sandboxed) command run announces "commands now run contained" once — recorded and surfaced now.
+    // First contained (sandboxed) command run announces "commands now run contained" once, recorded and surfaced now.
     onSandboxedRun: createSandboxContainmentNotice({ configManager, notify: (text) => conversation.log(`[Sandbox] ${text}`, { fg: '135' }) }),
   }); registerClientPhoneTool(toolRegistry, services.devices); // the `phone` tool follows the LOOP, so it is registered here; the posture runtime it used to call is the daemon's now and this tool reaches it over the devices.* verbs (see the SDK's client/phone-tool.ts)
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined (further below) so the onTrace callback routes guard decisions through the pre-router buffer.
@@ -426,7 +426,7 @@ export async function initializeBootstrapCore(
   await runBootMemoryFold(memoryStore, services.memoryEmbeddingRegistry, workingDir, logger);
 
   const renderRequestRef = { value: (): void => {} };
-  // Coalescing render scheduler — collapses N requestRender() calls into 1 and
+  // Coalescing render scheduler, collapses N requestRender() calls into 1 and
   // enforces a 16ms minimum interval to cap repaints at ~60fps. renderScheduled stays
   // set for the ENTIRE window (until run() executes), so requestRender() calls arriving
   // on later event-loop ticks within the same 16ms window coalesce into the one
@@ -435,8 +435,8 @@ export async function initializeBootstrapCore(
   let renderScheduled = false;
   let lastRenderTime = 0;
   const RENDER_INTERVAL_MS = 16;
-  // run() performs the actual render. It clears renderScheduled FIRST — even if the
-  // render callback throws — otherwise a single render exception would wedge the entire
+  // run() performs the actual render. It clears renderScheduled FIRST, even if the
+  // render callback throws, otherwise a single render exception would wedge the entire
   // TUI (no future requestRender() would schedule anything); we log at error so the
   // next requestRender() can still reschedule.
   const run = (): void => {
@@ -449,7 +449,7 @@ export async function initializeBootstrapCore(
     }
     // Debounced spine heartbeat on turn/render activity (no-op while dormant, i.e. local-only, or
     // the SDK's 'embedded' mode, for which no product-facing setting exists): a cheap synchronous
-    // no-op unless its own internal window has elapsed (at most one wire call per heartbeatMinIntervalMs) — safe on the hot path.
+    // no-op unless its own internal window has elapsed (at most one wire call per heartbeatMinIntervalMs), safe on the hot path.
     sessionSpine.heartbeat(runtimeSessionIdRef.value);
   };
   const requestRender = (): void => {
@@ -458,7 +458,7 @@ export async function initializeBootstrapCore(
     setImmediate(() => {
       const elapsed = Date.now() - lastRenderTime;
       if (elapsed < RENDER_INTERVAL_MS) {
-        // Too soon — debounce to the tail of the current 16ms window. The flag
+        // Too soon, debounce to the tail of the current 16ms window. The flag
         // stays set until run() fires, so window-local requests coalesce here.
         setTimeout(run, RENDER_INTERVAL_MS - elapsed);
       } else {
@@ -470,7 +470,7 @@ export async function initializeBootstrapCore(
   // client approval raiser calls, so the UI layer patching this patches that.
   const permissionPromptRef = services.localPromptRef as { requestPermission: PermissionRequestHandler };
   // Trust-at-consequence-time: raised by trustGatedAsk on the first non-read
-  // request in an undecided workspace; overridden once the UI layer exists — same ref-patching pattern as permissionPromptRef above.
+  // request in an undecided workspace; overridden once the UI layer exists, same ref-patching pattern as permissionPromptRef above.
   const trustPromptRef = { requestTrustDecision: (async () => 'restricted') as () => Promise<WorkspaceTrustLevel> };
   approvalBroker.start().catch((err) => logger.warn('approval broker start failed at bootstrap', { err }));
   sharedSessionBroker.start().catch((err) => logger.warn('shared session broker start failed at bootstrap', { err }));
@@ -539,7 +539,7 @@ export async function initializeBootstrapCore(
     }
   };
 
-  // Startup TLS banner — emitted via wrfcBuffer.push() because the
+  // Startup TLS banner, emitted via wrfcBuffer.push() because the
   // SystemMessageRouter is not attached yet at this point in bootstrap. The
   // smart-ref setter on systemMessageRouterRef auto-flushes the buffer when
   // the router attaches, so the message will appear in the WRFC panel on startup.
@@ -616,7 +616,7 @@ export async function initializeBootstrapCore(
     getLastUserMessage: () => conversation.getLastUserMessage(),
     onTrace: ({ kind, reason, task }) => {
       const shortTask = task.length > 80 ? `${task.slice(0, 77)}...` : task;
-      routeOrBuffer(`[WRFC] Guard: ${reason} — task: "${shortTask}" (${kind})`, 'low');
+      routeOrBuffer(`[WRFC] Guard: ${reason}; task: "${shortTask}" (${kind})`, 'low');
     },
   });
 
@@ -629,7 +629,7 @@ export async function initializeBootstrapCore(
   // which (a) adds the user message to the conversation view and (b) fires a real LLM
   // turn whose STREAM_DELTA / TURN_COMPLETED events flow to both TUI and companion SSE.
   //
-  // The fallback (ref not yet set) adds the message to the conversation view only —
+  // The fallback (ref not yet set) adds the message to the conversation view only,
   // this path is unreachable in practice because the event bus is not connected to
   // any live HTTP traffic until after the orchestrator is wired in bootstrap.ts.
   const orchestratorHandleUserInputRef: {
@@ -661,7 +661,7 @@ export async function initializeBootstrapCore(
     },
   ));
 
-  // Inbound steer delivery — see createBootstrapInboundInputPoller's doc comment.
+  // Inbound steer delivery, see createBootstrapInboundInputPoller's doc comment.
   const sessionInboundInputs = createBootstrapInboundInputPoller({
     runtimeSessionIdRef, routeOrBuffer, orchestratorHandleUserInputRef, conversation, requestRender,
   });
@@ -674,7 +674,7 @@ export async function initializeBootstrapCore(
   // webhook URL added mid-session reached long-task notifications (which read
   // ctx.services.webhookNotifier directly) but never reached this instance's
   // AGENT_FAILED/WORKFLOW_CHAIN_FAILED/WORKFLOW_CHAIN_PASSED runtime-bus
-  // listeners until restart — and if the session started with zero URLs
+  // listeners until restart, and if the session started with zero URLs
   // configured, attachToRuntimeBus was never even called, so those listeners
   // never existed at all for the rest of the session. Always attaching
   // (regardless of initial URL count) and seeding the shared instance fixes
@@ -729,7 +729,7 @@ export async function initializeBootstrapCore(
   runtimeSessionIdRef.value = runtime.sessionId;
   services.liveSessionIdRef.value = runtime.sessionId; // the session an ask raised on the daemon belongs to
   // The live conversation, for this process's own /rewind AND for the daemon's
-  // questions about it — only the process holding the messages can count or
+  // questions about it, only the process holding the messages can count or
   // drop them (conversation-rewind-port.ts, the SDK's client/conversation-rewind-host.ts).
   registerSessionConversation(runtime.sessionId, conversation);
   void sharedSessionBroker.createSession({
@@ -743,7 +743,7 @@ export async function initializeBootstrapCore(
       lastSeenAt: Date.now(),
     },
   }).catch((err) => { logger.debug('session broker create session failed at bootstrap', { err }); });
-  // Fire-and-forget spine mirror — a permanent parallel-write posture alongside (never
+  // Fire-and-forget spine mirror, a permanent parallel-write posture alongside (never
   // instead of) the still-authoritative local SharedSessionBroker above. Dormant/queued
   // until bootstrap.ts's deferred task activates it for an adopted 'external' daemon.
   sessionSpine.register({ sessionId: runtime.sessionId, project: services.workingDirectory, title: 'Terminal UI session' });

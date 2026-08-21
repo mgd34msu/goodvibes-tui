@@ -8,7 +8,7 @@ import { consumeDaemonAttachNotices } from '../../runtime/daemon-attach-notices.
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 7 — memory-consolidation receipts arriving through the attach-time queue
+// STEP 7, memory-consolidation receipts arriving through the attach-time queue
 // render as one-line notices like every other receipt.
 // ---------------------------------------------------------------------------
 
@@ -39,7 +39,7 @@ describe('formatConsolidationReceipt (STEP 7)', () => {
     expect(text).toBe('Memory consolidation: 2 merged, 1 archived, 3 decayed (scanned 42).');
   });
 
-  test('a quiet run (nothing merged/archived/decayed/proposed) yields null — no notice', () => {
+  test('a quiet run (nothing merged/archived/decayed/proposed) yields null; no notice', () => {
     expect(formatConsolidationReceipt(receipt({}))).toBeNull();
   });
 
@@ -66,7 +66,7 @@ describe('consolidation receipt through the attach-time queue (STEP 7)', () => {
       writer.record('run-xyz', text);
 
       // On attach, a surface drains the SAME queue (a fresh store at the same
-      // path) — the consolidation line comes out as a one-line notice, exactly
+      // path), the consolidation line comes out as a one-line notice, exactly
       // like a crash/update/migration receipt does.
       const reader = new FeatureAnnouncementStore(storePath);
       const notices = consumeDaemonAttachNotices({

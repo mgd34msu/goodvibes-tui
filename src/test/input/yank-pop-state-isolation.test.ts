@@ -136,7 +136,7 @@ describe('yank-pop state isolation', () => {
     const ring = makeKillRing();
     ring.push('killed');
     ring.yank();
-    // lastActionWasYank is now true — yank-pop would normally be valid
+    // lastActionWasYank is now true, yank-pop would normally be valid
     expect(ring.lastActionWasYank).toBe(true);
 
     // Simulate typing a character through the text route
@@ -160,7 +160,7 @@ describe('yank-pop state isolation', () => {
     const handled = handleGlobalShortcutToken(shortcutState, ALT_Y, 24);
     // yank-pop guard: returns false when lastActionWasYank is false
     expect(handled).toBe(false);
-    // prompt must be unchanged — no text was inserted by a spurious yank-pop
+    // prompt must be unchanged, no text was inserted by a spurious yank-pop
     expect(shortcutState.prompt).toBe(initialPrompt);
   });
 
@@ -244,7 +244,7 @@ describe('yank-pop state isolation', () => {
     // Simulate yank via handler-shortcuts state (sets lastActionWasYank)
     ring.yank(); // lastActionWasYank = true
 
-    // yank-pop should still be valid — no intervening edit cleared state
+    // yank-pop should still be valid, no intervening edit cleared state
     expect(ring.lastActionWasYank).toBe(true);
     const rotated = ring.yankPop();
     expect(rotated).toBe('old');

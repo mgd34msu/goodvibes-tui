@@ -16,17 +16,17 @@ export const DEFAULT_STALE_MS = 60 * 60 * 1000;
  *
  * This is the BACKSTOP for a signal-killed process, not the primary cleanup.
  * Two leak vectors reach it:
- *   1. `run-<pid>` runner subtrees — run-tests.ts removes its own in a
+ *   1. `run-<pid>` runner subtrees, run-tests.ts removes its own in a
  *      `finally`, but a hard-killed runner (timeout/OOM) can leave one behind.
  *   2. `makeProjectTempDir` leftovers (`<prefix>-<random>`, see
- *      src/test/helpers/project-temp.ts) — normally removed by the `afterAll`
+ *      src/test/helpers/project-temp.ts), normally removed by the `afterAll`
  *      in src/test/preload/temp-cleanup.ts when the test process finishes, so
  *      only a process that never reached its afterAll (SIGKILL, OOM) leaves one.
  *      Under these worktrees the project lives on /tmp, so each leaked subtree
  *      is a leaked /tmp inode subtree.
  *
  * That primary cleanup used to be a `process.on('exit')` hook, which `bun test`
- * never fires at all — so until it was replaced this sweep was reaping the
+ * never fires at all, so until it was replaced this sweep was reaping the
  * output of every ordinary green run, an hour late.
  *
  * Age-gated (default 1 h) so it is safe under concurrency: a live sibling
@@ -55,7 +55,7 @@ export function sweepStaleTestTmp(root: string, options: SweepOptions = {}): str
         removed.push(name);
       }
     } catch {
-      // ignore — another concurrent runner may have already removed it
+      // ignore, another concurrent runner may have already removed it
     }
   }
   return removed;
@@ -67,9 +67,9 @@ export function sweepStaleTestTmp(root: string, options: SweepOptions = {}): str
 //
 // `sweepStaleTestTmp` above only ever runs against this repo's own
 // `.test-tmp` root. It was never pointed at `os.tmpdir()` (the real host
-// /tmp), so the actual leak class this project produced there — mkdtemp
+// /tmp), so the actual leak class this project produced there, mkdtemp
 // dirs from tests and a handful of scripts that were signal-killed before
-// their afterEach/afterAll or `finally` cleanup ran — was never reclaimed.
+// their afterEach/afterAll or `finally` cleanup ran, was never reclaimed.
 // That accumulated without bound (observed: 1,048,436 of 1,048,576 inodes
 // in use on one host).
 //
@@ -92,7 +92,7 @@ export function sweepStaleTestTmp(root: string, options: SweepOptions = {}): str
 //     normal exit path, but not a signal kill mid-run.
 //
 // Matched ONLY by the exact literal prefixes this project is known to pass
-// to mkdtemp — never a blanket "gv-" or "goodvibes-" wildcard. A wildcard
+// to mkdtemp, never a blanket "gv-" or "goodvibes-" wildcard. A wildcard
 // would also catch sibling repos in the same family (goodvibes-sdk,
 // goodvibes-agent, …) running their own test suites in their own worktrees
 // on the same shared host; those are unrelated processes with unrelated
@@ -174,7 +174,7 @@ export const PROJECT_OS_TMP_PREFIXES: readonly string[] = [
  * Longer than `DEFAULT_STALE_MS` (1 h) deliberately: `.test-tmp` is only
  * ever touched by this project's own test runs, all of which finish in
  * minutes, so 1 h of slack is generous. The real OS temp dir is a shared
- * system directory — a slow CI runner under contention, or a developer who
+ * system directory, a slow CI runner under contention, or a developer who
  * leaves an external-editor session open on `goodvibes-composer-*` for a
  * long writing session, can legitimately hold an entry open far longer
  * than a test takes. 4 h comfortably outlasts any of those while still
@@ -187,11 +187,11 @@ export const DEFAULT_OS_TMP_STALE_MS = 4 * 60 * 60 * 1000;
  * Remove stale entries under `osTmpRoot` (intended to be `os.tmpdir()`)
  * whose name starts with one of `PROJECT_OS_TMP_PREFIXES` followed by `-`
  * (the exact shape `mkdtemp`/`makeProjectTempDir` produce: `<prefix>-<random>`).
- * Never touches anything else — no wildcard, no blanket sweep of the shared
+ * Never touches anything else, no wildcard, no blanket sweep of the shared
  * temp directory. Age-gated the same way as `sweepStaleTestTmp`: only
  * entries older than `staleMs` (default `DEFAULT_OS_TMP_STALE_MS`) are
- * removed, so anything currently in use — this project's or a sibling
- * repo's — is left alone. Returns the names actually removed.
+ * removed, so anything currently in use, this project's or a sibling
+ * repo's, is left alone. Returns the names actually removed.
  */
 export function sweepStaleOsTmpEntries(osTmpRoot: string, options: SweepOptions = {}): string[] {
   const now = options.now ?? Date.now();
@@ -215,7 +215,7 @@ export function sweepStaleOsTmpEntries(osTmpRoot: string, options: SweepOptions 
         removed.push(name);
       }
     } catch {
-      // ignore — removed concurrently, or a permissions edge case
+      // ignore, removed concurrently, or a permissions edge case
     }
   }
   return removed;

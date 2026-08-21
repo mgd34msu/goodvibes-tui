@@ -6,7 +6,7 @@ export interface SearchMatch {
   col: number;
   length: number;
   /**
-   * Present when this match lives inside content that is still collapsed —
+   * Present when this match lives inside content that is still collapsed,
    * `line`/`col` are placeholders (the containing block's own header line,
    * col 0) rather than a real navigable position. `collapseKeys` names every
    * collapse key that must be expanded to make the hit a real rendered
@@ -18,7 +18,7 @@ export interface SearchMatch {
   primaryKey?: string;
 }
 
-/** Count non-overlapping occurrences of `needle` in `haystack` — used for
+/** Count non-overlapping occurrences of `needle` in `haystack`, used for
  *  the collapsed-content scan below, mirroring the per-line indexOf loop
  *  search() already runs over the rendered buffer, so a hidden hit counts
  *  the same way a visible one would once revealed. */
@@ -63,19 +63,19 @@ export class SearchManager {
     this.wrapAround = false;
   }
 
-  /** Lock the query — switches from typing mode to navigation mode. */
+  /** Lock the query, switches from typing mode to navigation mode. */
   lock(): void {
     this.locked = true;
   }
 
-  /** Unlock — return to typing mode. */
+  /** Unlock, return to typing mode. */
   unlock(): void {
     this.locked = false;
   }
 
   /**
    * Close search mode. Re-collapses every block/group search auto-expanded
-   * while it was open — except ones the user explicitly acted on (toggled,
+   * while it was open, except ones the user explicitly acted on (toggled,
    * copied, bookmarked, saved) while they were expanded, which stay exactly
    * as the user left them (see SearchExpansionTracker.restoreOnto).
    * `conversationManager` is optional so existing call sites that never had
@@ -88,19 +88,19 @@ export class SearchManager {
   }
 
   /**
-   * Update query and find matches — honestly counting hits inside collapsed
+   * Update query and find matches, honestly counting hits inside collapsed
    * blocks and folded tool-result groups WITHOUT expanding them. Expansion
    * only happens on navigation (see revealCurrentMatch): typing a query must
    * never collapse-destroy the transcript the user folded on purpose, but a
    * "no matches" while text the user watched stream by sits collapsed
-   * somewhere would be a lie too — so the count includes it, tagged as
+   * somewhere would be a lie too, so the count includes it, tagged as
    * hidden until the user actually navigates there.
    *
-   * That collapsed corpus is the block's own RAW content, plus — for a
-   * folded tool-result group — the raw content of every one of its member
+   * That collapsed corpus is the block's own RAW content, plus, for a
+   * folded tool-result group, the raw content of every one of its member
    * messages (a group's own rawContent is only its summary header line, and
-   * its members push no BlockMeta of their own while folded — see
-   * conversation-tool-groups.ts — so without the member corpus a needle
+   * its members push no BlockMeta of their own while folded, see
+   * conversation-tool-groups.ts, so without the member corpus a needle
    * living inside a member would count as zero hits for text the user
    * watched stream by).
    *
@@ -124,7 +124,7 @@ export class SearchManager {
   }
 
   /**
-   * Shared match builder for search() and revealCurrentMatch() — scans the
+   * Shared match builder for search() and revealCurrentMatch(), scans the
    * currently-rendered buffer for visible matches and every collapsed
    * block/folded group for hidden ones, without mutating any collapse
    * state. Kept separate from search() so revealCurrentMatch can rebuild the
@@ -142,7 +142,7 @@ export class SearchManager {
 
         if (block.type === 'assistant_turn' && block.groupMemberIndexes) {
           // The header's own synthetic summary rarely matches, but count it
-          // honestly too — expanding the whole group is the only way to even
+          // honestly too, expanding the whole group is the only way to even
           // attempt to reveal a header-corpus hit, since there is no single
           // member to isolate it to.
           const headerHits = countOccurrences(block.rawContent.toLowerCase(), lowerQuery);
@@ -169,7 +169,7 @@ export class SearchManager {
                   line: block.startLine, col: 0, length: query.length,
                   // Revealing a member-specific hit only needs the group
                   // header (to unfold the group at all) and that member's own
-                  // key — not its siblings, which stay exactly as they were.
+                  // key, not its siblings, which stay exactly as they were.
                   collapseKeys: [block.collapseKey, memberKey], primaryKey: memberKey,
                 });
               }
@@ -203,7 +203,7 @@ export class SearchManager {
 
     // Stable sort (V8/JSC have guaranteed stable Array#sort) puts each
     // block's hidden hits in the same relative order they were generated
-    // in — self-corpus first, then members in order — right where that
+    // in, self-corpus first, then members in order, right where that
     // block's header line falls among the visible matches.
     return [...visibleMatches, ...hiddenMatches].sort((a, b) => a.line - b.line || a.col - b.col);
   }
@@ -216,7 +216,7 @@ export class SearchManager {
    * the match list against the now-expanded buffer.
    *
    * `currentMatch` is repointed at the first now-visible match inside the
-   * revealed block's new line range, rather than reset to 0 — expansion
+   * revealed block's new line range, rather than reset to 0, expansion
    * only changes how many lines that ONE block renders as, so every match
    * belonging to earlier blocks keeps its relative position.
    *
@@ -273,7 +273,7 @@ export class SearchManager {
   }
 
   /** Get the line number of the current match (for scroll). Returns -1 for a
-   *  match that's still hidden inside collapsed content — revealCurrentMatch
+   *  match that's still hidden inside collapsed content, revealCurrentMatch
    *  must run first to give it a real line. */
   getCurrentMatchLine(): number {
     if (this.matches.length === 0) return -1;
@@ -284,7 +284,7 @@ export class SearchManager {
   }
 
   /** Get matches on a given line. Hidden (still-collapsed) matches are
-   *  excluded — they have no real line to render a highlight on yet. */
+   *  excluded, they have no real line to render a highlight on yet. */
   getMatchesOnLine(lineIdx: number): SearchMatch[] {
     return this.matches.filter(m => m.line === lineIdx && !m.collapseKeys);
   }

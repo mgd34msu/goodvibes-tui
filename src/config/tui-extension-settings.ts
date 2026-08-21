@@ -1,10 +1,10 @@
 /**
- * TUI-extension settings — config namespaces the TUI reads that are NOT part
+ * TUI-extension settings, config namespaces the TUI reads that are NOT part
  * of the SDK's ConfigManager schema.
  *
  * The SDK owns settings.json's typed schema (its `ConfigKey` union), but its
  * loader deep-merges user JSON over the defaults and only strips unknown
- * `permissions.tools` keys — every other unknown top-level key survives load
+ * `permissions.tools` keys, every other unknown top-level key survives load
  * and round-trips through `save()`. That lets the TUI keep its own namespaces
  * (e.g. `checkpoints.*`) in the same settings.json file and read them back
  * here via `getRaw()`.
@@ -45,7 +45,7 @@ function readNonEmptyString(src: RawRecord, key: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-// ─── statusline.* — scriptable status line ───────────────────────────────────
+// ─── statusline.*, scriptable status line ───────────────────────────────────
 
 /**
  * User-settable scriptable status line. When `command` is present it is run as
@@ -63,7 +63,7 @@ export const STATUSLINE_DEFAULT_TIMEOUT_MS = 2000;
 const STATUSLINE_MIN_TIMEOUT_MS = 100;
 const STATUSLINE_MAX_TIMEOUT_MS = 15_000;
 
-// ─── session.* — session behavior ────────────────────────────────────────────
+// ─── session.*, session behavior ────────────────────────────────────────────
 
 /** User-settable session behavior. */
 export interface SessionSettings {
@@ -99,7 +99,7 @@ export function readStatuslineSettings(configManager: Pick<ConfigManager, 'getRa
   return out;
 }
 
-// ─── update.* — launch-time self-update behavior ─────────────────────────────
+// ─── update.*, launch-time self-update behavior ─────────────────────────────
 
 /**
  * User-settable launch-time self-update behavior. The feature itself (check at
@@ -140,7 +140,7 @@ export function readUpdateSettings(configManager: Pick<ConfigManager, 'getRaw'>)
   return out;
 }
 
-// ─── checkpoints.* — workspace checkpoint root-guard options ─────────────────
+// ─── checkpoints.*, workspace checkpoint root-guard options ─────────────────
 
 /**
  * User-settable root-guard options for the SDK's WorkspaceCheckpointManager.
@@ -165,12 +165,12 @@ export interface CheckpointGuardSettings {
  * WorkspaceCheckpointManager options object.
  *
  * NOTE: the pinned platform SDK's WorkspaceCheckpointManager may predate these
- * root-guard options — an older constructor reads only
+ * root-guard options, an older constructor reads only
  * workspaceRoot/checkpointDir/runtimeBus/retention/now and silently ignores the
  * rest, making the guard keys INERT. They become effective the moment the SDK
  * is upgraded to a build whose options type declares them (preferGitRoot,
  * allowBroadRoot, allowLargeFirstSnapshot, maxFirstSnapshotFiles,
- * autoRetention) — no code change needed here. The return type intersects the
+ * autoRetention), no code change needed here. The return type intersects the
  * base with CheckpointGuardSettings so the extra keys flow through structurally
  * without an unsafe cast.
  */

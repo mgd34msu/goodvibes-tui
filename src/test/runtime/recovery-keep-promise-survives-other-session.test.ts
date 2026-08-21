@@ -1,5 +1,5 @@
 /**
- * recovery-keep-promise-survives-other-session.test.ts — pins the SDK's
+ * recovery-keep-promise-survives-other-session.test.ts, pins the SDK's
  * per-session supersession rule from the TUI consumer side.
  *
  * The recovery modal's "Keep" row promises: "Leave the recovery point on
@@ -7,14 +7,14 @@
  * (buildRecoveryRetireItems, runtime/recovery-prompt.ts). That promise used
  * to be false whenever a DIFFERENT session persisted a turn in between: the
  * old rule judged a snapshot against the global last-session pointer, which
- * advances on every turn-completion persist of ANY session — so one message
+ * advances on every turn-completion persist of ANY session, so one message
  * typed in an unrelated session silently buried a kept snapshot with no UI
  * path left to reach it.
  *
  * The SDK's fix (session-recovery.ts) judges a snapshot only against its OWN
- * session's durable store file. This test runs the TUI's real writer paths —
+ * session's durable store file. This test runs the TUI's real writer paths,
  * writeRecoveryFile / writeLastSessionPointer via @/runtime/index.ts, the
- * same functions runtime/recovery-prompt.ts and turn-event-wiring.ts call —
+ * same functions runtime/recovery-prompt.ts and turn-event-wiring.ts call,
  * through the full Keep -> unrelated-session-activity -> next-launch
  * sequence, so a future SDK regression back to pointer-based supersession
  * would fail this test even though nothing in the TUI's own code changed.
@@ -56,7 +56,7 @@ function makeDeps(open: SelectionOpener, forSurface: SessionSurface): RecoveryPr
     openSelection: open,
     receipt: () => {},
     render: () => {},
-    // This test never reaches Resume — it is about Keep and Remove — so the
+    // This test never reaches Resume, it is about Keep and Remove, so the
     // restore seam only has to be present, not to do anything.
     applySnapshot: () => ({
       applied: false,
@@ -86,7 +86,7 @@ describe('the Keep promise survives unrelated session activity', () => {
     expect(existsSync(surface.recoveryFile('kept-session'))).toBe(true);
 
     // 2. Simulate ANOTHER session's turn-persist: the global last-session
-    // pointer advances to a totally unrelated session id — exactly what
+    // pointer advances to a totally unrelated session id, exactly what
     // turn-event-wiring.ts's per-turn persist does for whichever session
     // just completed a turn, via this same writeLastSessionPointer call.
     // Under the OLD (pointer-based) supersession rule this alone buried the
@@ -94,7 +94,7 @@ describe('the Keep promise survives unrelated session activity', () => {
     writeLastSessionPointer('unrelated-other-session', { surface });
 
     // 3. Next-launch check: a FRESHLY BUILT surface over the same
-    // directories — what a relaunched process actually does — using the
+    // directories, what a relaunched process actually does, using the
     // real `checkRecoveryFile` path (no targetSessionId), the same one the
     // general boot offer (scheduleRecoveryOffer) uses. A relaunch is a new
     // process, so the in-process answered-offer memory starts empty.
@@ -103,7 +103,7 @@ describe('the Keep promise survives unrelated session activity', () => {
     const second = scriptedOperator(['not-now', 'keep']);
     const nextLaunchOutcome = await offerRecoverySnapshot(makeDeps(second.open, relaunchSurface));
 
-    // Still offered — naming the same session — and still on disk.
+    // Still offered, naming the same session, and still on disk.
     expect(nextLaunchOutcome).toBe('kept');
     expect(second.details[0]).toContain('kept-session');
     expect(existsSync(relaunchSurface.recoveryFile('kept-session'))).toBe(true);

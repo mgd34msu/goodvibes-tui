@@ -1,10 +1,10 @@
 /**
- * recovery-offer-startup-wiring.test.ts — proof that the recovery offer is
+ * recovery-offer-startup-wiring.test.ts, proof that the recovery offer is
  * actually reached at startup.
  *
  * The flow (recovery-prompt.ts) and its bindings (recovery-offer-wiring.ts)
  * are covered by their own behavioural tests. What those cannot cover is the
- * one line in main() that invokes them — and a fix that is never invoked is
+ * one line in main() that invokes them, and a fix that is never invoked is
  * indistinguishable from no fix at all. A sibling repo shipped a pointer
  * arity fix that was inert for exactly this reason: correct code, no caller.
  *
@@ -42,7 +42,7 @@ describe('the startup recovery offer is wired into main()', () => {
 
   test('it is handed the surface-bound pointer writer, so an accepted recovery updates --continue', () => {
     // `writeLastSessionPointer` in main() is the destructured
-    // `_writeLastSessionPointer` from the bootstrap context — the closure
+    // `_writeLastSessionPointer` from the bootstrap context, the closure
     // bindWriteLastSessionPointerToSurface produced. Passing anything else
     // (notably the SDK's raw two-argument export) is the inert-fix shape.
     const call = mainSrc.slice(mainSrc.indexOf('scheduleRecoveryOffer('), mainSrc.indexOf('scheduleRecoveryOffer(') + 400);

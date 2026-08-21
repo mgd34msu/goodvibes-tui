@@ -1,4 +1,4 @@
-# Release and Publishing
+# Release and publishing
 
 `goodvibes-tui` has two release distributions:
 
@@ -12,7 +12,7 @@ It also mirrors the npm package to GitHub Packages:
 
 The binary release is the primary distribution channel.
 
-## Breaking Changes
+## Breaking changes
 
 A breaking change gets a bold-prefixed entry under `### Changes` in the
 `[Unreleased]` section of `CHANGELOG.md`, stating in plain language what
@@ -22,13 +22,13 @@ exists (see GitHub CD below), so a breaking-change entry written there is also
 what a reader sees on the release page.
 
 - **1.28.0 daemon build floor.** This client refuses to attach to a daemon
-  older than `1.28.0` — the release where the daemon became its own product —
+  older than `1.28.0`, the release where the daemon became its own product,
   and reports it as an unadopted, incompatible service rather than adopting
   it. The floor is declared as `TUI_DAEMON_BUILD_FLOOR` in
   `src/runtime/client/build-floors.ts`; see `CHANGELOG.md`'s `[Unreleased]`
   entry for the full account of what a user sees and the remedy.
 
-## Local Release Checks
+## Local release checks
 
 Before cutting a release tag, run:
 
@@ -74,7 +74,7 @@ Release workflow behavior:
 - the GitHub Release is created before the registry publish jobs so the package install script can fetch version-matched release assets immediately
 - npm publishing runs when repository variable `PUBLISH_NPM=true` is set; the GitHub Release is still created for release tags so compiled assets are available before registry install smoke runs
 
-## npm Distribution
+## npm distribution
 
 The npm package is intended to be directly installable:
 
@@ -91,13 +91,13 @@ Install behavior:
   bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
   ```
 
-  No other dependency needs trusting: the TUI binary arrives through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files. `@pellux/goodvibes-daemon` is a regular dependency — installing this package always brings the daemon along — and its own postinstall places the `goodvibes-daemon` binary the same way this package's postinstall places `goodvibes`.
+  No other dependency needs trusting: the TUI binary arrives through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files. `@pellux/goodvibes-daemon` is a regular dependency, so installing this package always brings the daemon along, and its own postinstall places the `goodvibes-daemon` binary the same way this package's postinstall places `goodvibes`.
 
 - `bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
 - the main package declares four `@pellux/goodvibes-tui-<os>-<arch>` payload packages as `optionalDependencies` with `os`/`cpu` fields (the esbuild pattern), so the package manager installs exactly the one that matches the host, verified against the registry integrity hash. This is why plain `npm`/`pnpm` installs work, not just Bun.
 - `postinstall` prefers the platform package's binary (a plain copy into `vendor/`, no download) and falls back to the version-matched GitHub Release download (checksum-verified against `SHA256SUMS.txt`) only when no platform package is present. The `bin/goodvibes` launcher also resolves the platform package directly, so the binary runs even if the postinstall was skipped. This package ships one bin entry, `goodvibes`; the `goodvibes-daemon` binary and its launcher belong to the separate `@pellux/goodvibes-daemon` package.
 - npm and pnpm installs still require `bun` to be on `PATH` for the from-source fallback; the preinstall check fails clearly if it is missing.
-- on Windows, use WSL2 (the Linux binary path applies unchanged); native Windows is beta and non-gating — see [windows.md](windows.md)
+- on Windows, use WSL2 (the Linux binary path applies unchanged); native Windows is beta and non-gating. See [windows.md](windows.md)
 - if Bun is available and no prebuilt binary is present, the launchers can still fall back to Bun + source
 
 Platform packages are assembled and published by the Release workflow after the per-target build job:

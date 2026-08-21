@@ -115,7 +115,7 @@ describe('registerToken', () => {
 // Scope minimization tests
 // ---------------------------------------------------------------------------
 
-describe('auditScope — minimum scope principle', () => {
+describe('auditScope: minimum scope principle', () => {
   test('returns ok when token scopes exactly match policy allowedScopes', () => {
     const auditor = makeAuditor();
     auditor.registerToken(makeToken({ grantedScopes: ['completions:write', 'models:read'] }));
@@ -178,7 +178,7 @@ describe('auditScope — minimum scope principle', () => {
 // Rotation expiry warning tests
 // ---------------------------------------------------------------------------
 
-describe('auditRotation — rotation cadence', () => {
+describe('auditRotation: rotation cadence', () => {
   test('returns ok for a recently issued token', () => {
     const auditor = makeAuditor();
     const now = Date.now();
@@ -340,7 +340,7 @@ describe('auditAll', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Managed mode — out-of-policy tokens blocked
+// Managed mode, out-of-policy tokens blocked
 // ---------------------------------------------------------------------------
 
 describe('managed mode blocking', () => {
@@ -438,8 +438,8 @@ describe('managed mode blocking', () => {
 //
 // This setting used to configure nothing in the TUI: services.ts built its
 // ApiTokenAuditor without a featureFlags manager, and isFeatureGateEnabled is
-// permissive when no manager is wired — a narrow embed with no flag manager
-// gets the capability rather than a silent off — so a composition root that
+// permissive when no manager is wired, a narrow embed with no flag manager
+// gets the capability rather than a silent off, so a composition root that
 // omitted featureFlags did not disable managed blocking when the key was
 // turned off. It made the switch inert. services.ts now threads featureFlags
 // into ApiTokenAuditor, the same shape as the RouteBindingManager fix.

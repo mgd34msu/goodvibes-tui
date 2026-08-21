@@ -90,7 +90,7 @@ async function main() {
   const stdin = process.stdin;
   // Both roots come from the one resolver the daemon CLI also uses. This line
   // called homedir() unconditionally, so a harness that redirected the tree got
-  // a client that wrote the real one — secret store included.
+  // a client that wrote the real one, secret store included.
   const { cli, configManager, bootstrapWorkingDir, bootstrapHomeDirectory } = await prepareShellCliRuntime(process.argv.slice(2), {
     defaultWorkingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
     homeDirectory: resolveGoodVibesHome(),
@@ -140,7 +140,7 @@ async function main() {
   const { approvalBroker, agentManager, modeManager, processManager, providerRegistry, secretsManager, subscriptionManager } = ctx.services;
   conversation.setSessionMemoryStore(ctx.services.sessionMemoryStore);
   conversation.setSessionLineageTracker(ctx.services.sessionLineageTracker);
-  // Shared payload (single source of truth, includes the memoryRegistry —
+  // Shared payload (single source of truth, includes the memoryRegistry,
   // see orchestrator-core-services.ts) plus this site's favoritesStore.
   orchestrator.setCoreServices({
     ...buildSharedOrchestratorCoreServices({ services: ctx.services, configManager, providerRegistry }),
@@ -154,7 +154,7 @@ async function main() {
   applyTerminalRuntimeConfigDefaults(configManager);
 
   // Re-surface pre-TUI launch-update lines in-session (the alt screen wipes
-  // stdout). Launch-time update mechanics are routine, not urgent — low
+  // stdout). Launch-time update mechanics are routine, not urgent, low
   // priority, not high (a skipped/deferred check is not the kind of thing
   // that should compete with real session alerts for attention).
   for (const line of launchUpdateLines) systemMessageRouter.low(`[Update] ${line}`);
@@ -186,7 +186,7 @@ async function main() {
   let lastMaxScroll: number | null = null;
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
   const streamMetrics: StreamMetrics = createStreamMetrics();
-  // Live failover record — written by the failover path, read every frame so the header and footer agree.
+  // Live failover record, written by the failover path, read every frame so the header and footer agree.
   const failoverState = createFailoverTurnState();
 
   const getPromptContentWidth = () => computePromptContentWidth(stdout.columns);
@@ -222,7 +222,7 @@ async function main() {
   const unsubs: Array<() => void> = [];
   let recoveryInterval: ReturnType<typeof setInterval> | null = null;
   let stopSpokenOutputForExit: (() => Promise<void>) | null = null;
-  // The optional "used N memories" provenance chip (default OFF) — see interaction-seams.ts.
+  // The optional "used N memories" provenance chip (default OFF), see interaction-seams.ts.
   const memoryProvenanceUi = createMemoryProvenanceUi({ render: () => render(), memorySpine: ctx.services.memorySpine });
   // Topology-aware keep-awake: the chip renders the DAEMON's state in adopted-external mode (power-chip-source.ts) and every toggle is forwarded to that daemon (power-keepawake-remote.ts) so keep-awake survives the TUI closing in BOTH topologies.
   const isExternalDaemon = () => uiServices.platform.externalServices?.inspect()?.daemonStatus?.mode === 'external';
@@ -426,10 +426,10 @@ async function main() {
   commandContext.openComposerEditor = makeComposerEditorOpener({ buffer: input, stdin, stdout, writeGuard: allowTerminalWrite, repaint: () => { compositor.resetDiff(); render(); }, cwd: workingDir, env: process.env, notify: (m) => systemMessageRouter.high(m) });
   input.setConversationManager(conversation);
   input.setContentWidth(getPromptContentWidth()); input.filePicker.setOnUpdate(() => render());
-  // retirement: agentDetailModal/processModal setOnRefresh wiring removed —
+  // retirement: agentDetailModal/processModal setOnRefresh wiring removed,
   // those modals were deleted (Fleet subsumes the live process tree via F2).
 
-  // Model picker callback is handled in bootstrap.ts — do not duplicate here.
+  // Model picker callback is handled in bootstrap.ts, do not duplicate here.
   input.setHistory(inputHistory);
   // ONE microphone path, shared by push-to-talk voice input (Alt+V) and wake-word detection; opens no device by itself (shell/voice-capture-shell.ts).
   voiceCaptureStatus = installVoiceCapture({ configManager, shellPaths: ctx.services.shellPaths, homeDirectory, sessionId: ctx.runtime.sessionId, commandContext, unsubs, buffer: input, submitInput, notify: (m) => { systemMessageRouter.high(m); render(); }, render: () => render() });
@@ -504,7 +504,7 @@ async function main() {
       // Cross-surface spine posture segment (adopted-daemon mode only).
       sessionSpineStatus: (() => { const s = uiServices.platform.externalServices?.inspect(); return s?.sessionSpineActive && s.sessionSpineStatus && s.sessionSpineStatus !== 'unknown' ? s.sessionSpineStatus : undefined; })(), runningAgentCount, runningProcessCount,
       webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,
-      // Always-visible "sleep disabled" chip — topology-aware: the DAEMON's state in adopted-external mode, the in-process manager otherwise (power-chip-source.ts).
+      // Always-visible "sleep disabled" chip, topology-aware: the DAEMON's state in adopted-external mode, the in-process manager otherwise (power-chip-source.ts).
       powerKeepAwake: powerChipSource.get().keepAwake,
       // Composer must not read as focused while the panel/process indicator owns keyboard focus.
       promptFocused: !input.panelFocused && !input.indicatorFocused,
@@ -579,7 +579,7 @@ async function main() {
       const partialToolPreview = showPreview ? sessionSnapshot.streamToolPreview : undefined;
       // Elapsed from turn start (stream or tool execution), used for the thinking indicator timer.
       const turnElapsedMs = streamMetrics.startTime > 0 ? Date.now() - streamMetrics.startTime : undefined;
-      // Suppressed while a tool executes — its ticking timer is the honest indicator then.
+      // Suppressed while a tool executes, its ticking timer is the honest indicator then.
       const stallInfo = UIFactory.computeRenderStallInfo(streamMetrics, Date.now());
       const thinking = UIFactory.createThinkingFragment(
         conversationWidth,
@@ -698,19 +698,19 @@ async function main() {
 
   unsubs.push(uiServices.events.turns.on('TURN_COMPLETED', (evt) => memoryProvenanceUi.onTurnCompleted(evt)));
 
-  // Stable turn context for failover retry — set in submitInput, read by retryTurn.
+  // Stable turn context for failover retry, set in submitInput, read by retryTurn.
   let retryCtx: { count: number; text: string; content?: ContentPart[]; opts?: Parameters<typeof orchestrator.handleUserInput>[2] } | null = null;
   // One-key retry affordance, active right after a user-visible TURN_ERROR: 'r' re-submits on the
   // current provider, 'm' opens the model picker, any other character clears it and routes normally.
   // Surfaced as a transient FOOTER hint (see retryAffordanceHint below), not a transcript message.
   // Time-bounded: onExpire repaints once the 60s disarm timer fires, so a stray keypress hours
-  // later can never trigger a real retry — see retry-affordance.ts.
+  // later can never trigger a real retry, see retry-affordance.ts.
   const retryAffordance = createRetryAffordanceState({ onExpire: render });
   const retryTurn = (notice?: string): boolean => {
     if (!retryCtx) return false; // nothing to roll back to; the caller narrates instead
     const { count, text, content: rContent, opts: rOpts } = retryCtx;
-    // Roll back to pre-submission count, then re-submit. SDK gap — no retry-in-place (see handoff).
-    // The rollback erases the failed turn's transcript — the failover notice included, which is how
+    // Roll back to pre-submission count, then re-submit. SDK gap, no retry-in-place (see handoff).
+    // The rollback erases the failed turn's transcript, the failover notice included, which is how
     // that notice used to vanish before anyone could read it. The caller hands it over instead, and
     // it is posted here: after the rollback, above the prompt it explains.
     conversation.removeMessagesAfter(count);
@@ -775,7 +775,7 @@ async function main() {
   });
   process.on('SIGINT', sigintHandler); process.on('unhandledRejection', unhandledRejectionHandler); stdout.on('resize', resizeHandler);
 
-  // State restores happen ONLY when the user explicitly asks — a CLI flag
+  // State restores happen ONLY when the user explicitly asks, a CLI flag
   // (--continue/--resume/--fork), a slash command (/session resume,
   // /checkpoints, /rewind), or the startup recovery offer's modal. There is
   // deliberately no unconditional auto-restore here: a bare launch never
@@ -793,7 +793,7 @@ async function main() {
   }));
 
   // Auto-save to recovery file every 60s + multi-instance liveness-marker
-  // refresh — see runtime/recovery-autosave.ts.
+  // refresh, see runtime/recovery-autosave.ts.
   recoveryInterval = startRecoveryAutosave({ conversation, runtime, surface: ctx.services.surface, buildSessionContinuityHints });
 }
 

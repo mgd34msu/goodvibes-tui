@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// failover-effort-remap.test.ts — a failover re-resolves the configured
+// failover-effort-remap.test.ts, a failover re-resolves the configured
 // reasoning level against the model that is about to serve.
 //
 // The gap this closes: failover switched the registry to a different model and
@@ -14,7 +14,7 @@
 //
 // The retryTurn double below models the REAL rollback (see main.ts): the failed
 // turn's transcript is erased and only the notice handed in is re-posted. It
-// used to be `() => true`, which swallowed the notice and rolled nothing back —
+// used to be `() => true`, which swallowed the notice and rolled nothing back,
 // and that unrealistic double is exactly why the "rolled-back effort notice"
 // defect shipped. The sentence was announced BEFORE retryTurn, so in production
 // the rollback deleted it every time while these tests still saw it.

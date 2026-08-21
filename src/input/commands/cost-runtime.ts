@@ -11,7 +11,7 @@ import {
 } from './cost-attribution-format.ts';
 
 /**
- * /cost budget <usd> — makes the CostTrackerPanel's budget alert real.
+ * /cost budget <usd>, makes the CostTrackerPanel's budget alert real.
  * Opens the cost panel (creating it via the registered factory if not already
  * open) and sets its budget threshold directly, so the meter+alert already
  * built into CostTrackerPanel.render() (:266-290) actually fires. 0 disables
@@ -73,7 +73,7 @@ export function registerCostRuntimeCommands(registry: CommandRegistry): void {
           ctx.print(JSON.stringify(results, null, 2));
           return;
         }
-        const lines: string[] = [`Cost Attribution — ${window}`];
+        const lines: string[] = [`Cost Attribution: ${window}`];
         for (const result of results) {
           const isOptional = (COST_ATTRIBUTION_OPTIONAL_DIMENSIONS as readonly string[]).includes(result.dimension);
           const section = formatCostAttributionSection(result, isOptional);

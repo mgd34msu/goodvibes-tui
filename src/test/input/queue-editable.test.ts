@@ -5,7 +5,7 @@ import { UIFactory } from '../../renderer/ui-factory.ts';
 import { lineToString } from '../setup.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 2b — mid-turn queued messages render as an editable list; edit/delete
+// STEP 2b, mid-turn queued messages render as an editable list; edit/delete
 // go through the SDK verbs until delivery, after which a message has left the
 // queue (delivered = immutable).
 // ---------------------------------------------------------------------------

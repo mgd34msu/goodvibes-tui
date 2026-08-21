@@ -30,7 +30,7 @@ describe('wizard progress persistence', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // readWizardProgress — missing file
+  // readWizardProgress, missing file
   // ---------------------------------------------------------------------------
 
   test('returns exists=false when no progress file is present', () => {
@@ -41,7 +41,7 @@ describe('wizard progress persistence', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // writeWizardProgress + readWizardProgress — round-trip
+  // writeWizardProgress + readWizardProgress, round-trip
   // ---------------------------------------------------------------------------
 
   test('round-trips scalar fields correctly', () => {
@@ -142,7 +142,7 @@ describe('wizard progress persistence', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // readWizardProgress — corrupt file
+  // readWizardProgress, corrupt file
   // ---------------------------------------------------------------------------
 
   test('returns exists=true, payload=null with parseError for non-JSON content', () => {
@@ -309,7 +309,7 @@ describe('wizard progress persistence', () => {
   test('writes only non-masked textState entries passed by the caller', () => {
     // Simulates what saveWizardProgressForHandler does: it strips masked
     // fields before calling writeWizardProgress. The function itself does
-    // not filter — the contract is at the call site. This test documents
+    // not filter, the contract is at the call site. This test documents
     // that whatever is passed in is faithfully persisted (no surprise stripping).
     writeWizardProgress(shellPaths, {
       mode: 'new',
@@ -329,7 +329,7 @@ describe('wizard progress persistence', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // saveWizardProgressForHandler — masked-field security boundary
+  // saveWizardProgressForHandler, masked-field security boundary
   // ---------------------------------------------------------------------------
 
   test('saveWizardProgressForHandler does not write masked field secrets to disk', () => {

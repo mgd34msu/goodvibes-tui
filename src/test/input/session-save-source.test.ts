@@ -1,14 +1,14 @@
 /**
- * session-save-source.test.ts — who caused each save.
+ * session-save-source.test.ts, who caused each save.
  *
  * The session-conversations retention sweep expires automatic saves and
  * spares ones the user explicitly asked for, which only works if the consumer
  * says which is which. The honest split:
  *
- *   'user' — the operator directly asked for this file to exist: /save,
+ *   'user', the operator directly asked for this file to exist: /save,
  *            /session save, /session fork, /session rename's backfill, and
  *            the crash-recovery restore they accepted in the startup modal.
- *   'auto' — machinery: per-turn persistence and the journal-replay
+ *   'auto', machinery: per-turn persistence and the journal-replay
  *            gap-closure write.
  *
  * Getting this backwards is silent and slow: a session the user deliberately
@@ -81,7 +81,7 @@ describe('user-directed saves are stamped as user saves', () => {
     expect(sm.getMeta(forked!.name)?.saveSource).toBe('user');
   });
 
-  test("/session rename's backfill save — naming a session is an act of curation", async () => {
+  test("/session rename's backfill save: naming a session is an act of curation", async () => {
     const sm = new SessionManager(tmpDir, { surface });
     const printed: string[] = [];
     // No file exists for 'current-session' yet, so rename materializes one.

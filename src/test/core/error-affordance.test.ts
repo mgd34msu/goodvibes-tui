@@ -33,8 +33,8 @@ function makeTurnBus() {
   return {
     on<K extends TurnEvent>(event: K, handler: K extends 'TURN_ERROR' ? (ev: { error: string }) => void : () => void) {
       // Lazily create the bucket for event names outside the fixed TurnEvent
-      // union (e.g. the structurally-consumed STREAM_RETRY/STREAM_STALL —
-      // see stream-event-wiring.ts) — a real event bus does not throw when
+      // union (e.g. the structurally-consumed STREAM_RETRY/STREAM_STALL,
+      // see stream-event-wiring.ts), a real event bus does not throw when
       // something subscribes to an event type it hasn't seen yet.
       const bucket = (listeners[event] ??= []);
       (bucket as Array<unknown>).push(handler);
@@ -102,7 +102,7 @@ function wireBasic(
   const messages: string[] = [];
   const result = wireStreamEventMetrics({
     // events is consumed structurally here (only .turns/.tools/.providers are ever
-    // read — see stream-event-wiring.ts's own LooseTurnEventFeed comment for the
+    // read, see stream-event-wiring.ts's own LooseTurnEventFeed comment for the
     // same rationale); this mirrors the existing convention in
     // failover-wiring.test.ts for the identical WireStreamEventMetricsOptions field.
     events: { turns: turnBus, tools: toolBus } as unknown as WireStreamEventMetricsOptions['events'],
@@ -120,7 +120,7 @@ function wireBasic(
 // Tests: onErrorSurfaced callback
 // ---------------------------------------------------------------------------
 
-describe('wireStreamEventMetrics — onErrorSurfaced', () => {
+describe('wireStreamEventMetrics: onErrorSurfaced', () => {
   test('fires when TURN_ERROR surfaces immediately (no optimizer)', () => {
     const turns = makeTurnBus();
     const tools = makeToolBus();
@@ -164,7 +164,7 @@ describe('wireStreamEventMetrics — onErrorSurfaced', () => {
     const optimizer = makeOptimizer({
       enabled: true,
       chain: [
-        // Only the current provider — no alternative capable node
+        // Only the current provider, no alternative capable node
         { position: 0, providerId: 'anthropic', modelId: 'claude-3-5-sonnet', capable: true },
       ],
     });
@@ -314,7 +314,7 @@ describe('error affordance state machine', () => {
 
   test('affordance only active while retryCtx is armed', () => {
     const sim = makeAffordanceSim();
-    // No submission — retryCtx is null, so onErrorSurfaced should not arm affordance
+    // No submission, retryCtx is null, so onErrorSurfaced should not arm affordance
     sim.onErrorSurfaced();
     expect(sim.isAffordanceActive()).toBe(false);
   });
@@ -322,7 +322,7 @@ describe('error affordance state machine', () => {
   test('affordance inactive during normal composing (no TURN_ERROR)', () => {
     const sim = makeAffordanceSim();
     sim.submitInput('query');
-    // No error fired — affordance should not be active
+    // No error fired, affordance should not be active
     expect(sim.isAffordanceActive()).toBe(false);
     // Normal key routes normally
     const result = sim.handleKey('a');

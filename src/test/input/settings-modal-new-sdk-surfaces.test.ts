@@ -6,7 +6,7 @@
  *
  * All three are already honestly described at the SDK schema layer
  * (CONFIG_SCHEMA), and buildSettingGroups() surfaces every schema entry
- * generically by category — no TUI-side override needed. These tests pin
+ * generically by category, no TUI-side override needed. These tests pin
  * that the honesty properties the task called out actually reach the
  * rendered description text through the real TUI path, so a future SDK
  * description rewrite that drops them fails loudly here instead of only
@@ -25,7 +25,7 @@ function findEntry(groups: ReturnType<typeof buildSettingGroups>, key: string) {
   return undefined;
 }
 
-describe('new SDK settings surfaces — honest descriptions reach the modal', () => {
+describe('new SDK settings surfaces: honest descriptions reach the modal', () => {
   test('behavior.compactionStrategy says the distiller path is gated and what it falls back to', () => {
     const { configManager } = createTestManagers();
     const groups = buildSettingGroups(configManager);
@@ -72,7 +72,7 @@ describe('new SDK settings surfaces — honest descriptions reach the modal', ()
  * the proactive occasions/plans loop (docs/occasions.md §8).
  *
  * buildSettingGroups() guards every push with `if (groups.has(cat))`, keyed
- * off the setting key's own prefix as a SettingsCategory — the exact failure
+ * off the setting key's own prefix as a SettingsCategory, the exact failure
  * class the settings-modal-types.ts comments document for push.* and
  * cluster.* (dropped from the workspace entirely, reachable only by
  * hand-editing a settings file). Before this test, 'occasions' had no entry
@@ -81,9 +81,9 @@ describe('new SDK settings surfaces — honest descriptions reach the modal', ()
  * modal despite being real, invokable, schema-declared config. Fixed by
  * adding 'occasions' to all four; this test pins that every key actually
  * lands in a group and that the category has a real label and description
- * (never an empty modal panel — see the "modals show full text" standard).
+ * (never an empty modal panel, see the "modals show full text" standard).
  */
-describe('occasions settings surface — all eleven keys reach the modal, not dropped', () => {
+describe('occasions settings surface: all eleven keys reach the modal, not dropped', () => {
   const OCCASIONS_SETTING_KEYS = [
     'occasions.enabled',
     'occasions.leadDays',
@@ -102,7 +102,7 @@ describe('occasions settings surface — all eleven keys reach the modal, not dr
     const { configManager } = createTestManagers();
     const groups = buildSettingGroups(configManager);
     for (const key of OCCASIONS_SETTING_KEYS) {
-      expect(findEntry(groups, key), `${key} missing from buildSettingGroups — dropped from the workspace`).toBeDefined();
+      expect(findEntry(groups, key), `${key} missing from buildSettingGroups; dropped from the workspace`).toBeDefined();
     }
   });
 
@@ -146,12 +146,12 @@ describe('occasions settings surface — all eleven keys reach the modal, not dr
  * setting reachable only by hand-editing a file. `hostedSessions` had neither
  * before this round.
  *
- * The detach default matters more than most: the owner ruled it stays `kill` —
- * what closing a client has always done — so a flipped default would silently
+ * The detach default matters more than most: the owner ruled it stays `kill`,
+ * what closing a client has always done, so a flipped default would silently
  * change what quitting means. That value is asserted here, not just its
  * presence.
  */
-describe('hosted-session settings surface — every key reaches the modal, not dropped', () => {
+describe('hosted-session settings surface: every key reaches the modal, not dropped', () => {
   const HOSTED_SETTING_KEYS = [
     'hostedSessions.detachPolicy',
     'hostedSessions.maxSessions',
@@ -165,12 +165,12 @@ describe('hosted-session settings surface — every key reaches the modal, not d
     const entries = groups.get('hostedSessions') ?? [];
     const keys = new Set(entries.map((entry) => entry.setting.key));
     for (const key of HOSTED_SETTING_KEYS) {
-      expect(findEntry(groups, key), `${key} missing from buildSettingGroups — dropped from the workspace`).toBeDefined();
+      expect(findEntry(groups, key), `${key} missing from buildSettingGroups; dropped from the workspace`).toBeDefined();
       expect(keys.has(key), `${key} not in the 'hostedSessions' group`).toBe(true);
     }
   });
 
-  test('the shipped detach default is kill — the behavior closing a client has always had', () => {
+  test('the shipped detach default is kill; the behavior closing a client has always had', () => {
     const { configManager } = createTestManagers();
     const groups = buildSettingGroups(configManager);
     const entry = findEntry(groups, 'hostedSessions.detachPolicy');

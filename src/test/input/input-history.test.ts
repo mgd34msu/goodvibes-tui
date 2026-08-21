@@ -74,14 +74,14 @@ describe('InputHistory.add', () => {
   });
 
   test('caps at maxEntries (500)', () => {
-    // persist:false — the 500-entry cap is in-memory logic. Persisting 510 adds
+    // persist:false, the 500-entry cap is in-memory logic. Persisting 510 adds
     // (each a synchronous full-file write) makes this test load-dependent and can
     // exceed the 5s timeout; persistence is covered by the round-trip tests below.
     const h = new InputHistory({ historyPath: makeTmpPath(), persist: false });
     for (let i = 0; i < 510; i++) {
       h.add(`entry ${i}`);
     }
-    // Navigate to end — should stop at 500
+    // Navigate to end, should stop at 500
     let count = 0;
     let result: string | null = '';
     while ((result = h.up(result ?? '')) !== null) {
@@ -259,7 +259,7 @@ describe('InputHistory.isBrowsing', () => {
 });
 
 // ===========================================================================
-// save() / load() — persistence round-trip
+// save() / load(), persistence round-trip
 // ===========================================================================
 
 describe('InputHistory persistence', () => {
@@ -360,7 +360,7 @@ describe('InputHistory persistence', () => {
 });
 
 // ===========================================================================
-// Redaction — built-in rules for local-auth password commands
+// Redaction, built-in rules for local-auth password commands
 // ===========================================================================
 
 describe('InputHistory redaction', () => {
@@ -425,7 +425,7 @@ describe('InputHistory redaction', () => {
   });
 
   test('redacts cleartext password in entry loaded from disk (pre-fix persistence)', () => {
-    // Simulate a history file written before redaction was deployed — cleartext password on disk.
+    // Simulate a history file written before redaction was deployed, cleartext password on disk.
     const path = makeTmpPath();
     writeFileSync(
       path,
@@ -447,7 +447,7 @@ describe('InputHistory redaction', () => {
 });
 
 // ===========================================================================
-// handleLocalAuthCommand — warning and panel routing
+// handleLocalAuthCommand, warning and panel routing
 // ===========================================================================
 
 import { handleLocalAuthCommand } from '../../input/commands/local-auth-runtime.ts';
@@ -487,7 +487,7 @@ function makeAuthContext(overrides: Partial<{
   return { ctx, printed };
 }
 
-describe('handleLocalAuthCommand — add-user password safety', () => {
+describe('handleLocalAuthCommand: add-user password safety', () => {
   test('emits warning when password supplied as argv', () => {
     const { ctx, printed } = makeAuthContext({});
     handleLocalAuthCommand(['add-user', 'alice', 's3cr3t'], ctx);
@@ -518,7 +518,7 @@ describe('handleLocalAuthCommand — add-user password safety', () => {
   });
 
   test('prints fallback guidance when no password supplied and masked entry unavailable', () => {
-    // No openLocalAuthMaskedEntry wired — fallback print path.
+    // No openLocalAuthMaskedEntry wired, fallback print path.
     const { ctx, printed } = makeAuthContext({});
     handleLocalAuthCommand(['add-user', 'alice'], ctx);
     expect(printed.length).toBeGreaterThan(0);
@@ -526,7 +526,7 @@ describe('handleLocalAuthCommand — add-user password safety', () => {
   });
 });
 
-describe('handleLocalAuthCommand — rotate-password safety', () => {
+describe('handleLocalAuthCommand: rotate-password safety', () => {
   test('emits warning when password supplied as argv', () => {
     const { ctx, printed } = makeAuthContext({});
     handleLocalAuthCommand(['rotate-password', 'alice', 'newpass'], ctx);
@@ -552,7 +552,7 @@ describe('handleLocalAuthCommand — rotate-password safety', () => {
   });
 
   test('prints fallback guidance when no password supplied to rotate-password and masked entry unavailable', () => {
-    // No openLocalAuthMaskedEntry wired — fallback print path.
+    // No openLocalAuthMaskedEntry wired, fallback print path.
     const { ctx, printed } = makeAuthContext({});
     handleLocalAuthCommand(['rotate-password', 'alice'], ctx);
     expect(printed.length).toBeGreaterThan(0);

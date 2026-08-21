@@ -15,15 +15,15 @@ import type {
 } from './onboarding-wizard-types.ts';
 
 /**
- * Providers with a wired in-wizard subscription sign-in flow. This is DATA — the
- * set of providers whose OAuth login the wizard can start/finish itself — not an
+ * Providers with a wired in-wizard subscription sign-in flow. This is DATA, the
+ * set of providers whose OAuth login the wizard can start/finish itself, not an
  * assumption that any one vendor is the only subscription option.
  */
 const SUBSCRIPTION_SIGN_IN_PROVIDER_IDS = new Set<string>(['openai']);
 
 /**
  * One subscription-status row per subscription-capable provider. The row's copy
- * names the provider from data — never a vendor hardcoded in the field set — so
+ * names the provider from data, never a vendor hardcoded in the field set, so
  * the status surface tracks whatever subscription-capable providers the runtime
  * reports, not a single assumed one.
  */

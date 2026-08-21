@@ -1,5 +1,5 @@
 /**
- * SettingsModal — state management for the /settings and /config fullscreen workspace.
+ * SettingsModal, state management for the /settings and /config fullscreen workspace.
  *
  * Loads CONFIG_SCHEMA, groups settings by category, and tracks UI state:
  *   - Active category (Tab to cycle)
@@ -88,7 +88,7 @@ export interface SettingsModalOpenOptions {
   readonly onSettingApplied?: SettingsModalChangeHandler;
   /**
    * The daemon's credential write. A daemon-scoped credential (a mailbox
-   * password, a bot token, a card) must land where the daemon reads it — this
+   * password, a bot token, a card) must land where the daemon reads it, this
    * surface storing a copy is a credential in a place nothing consults.
    */
   readonly daemonCredentials?: SettingsDaemonCredentialWriter | null;
@@ -141,7 +141,7 @@ export class SettingsModal {
   /**
    * Scroll offset (in wrapped lines) of the documentation pane for the
    * selected row. The renderer clamps it to the pane's real content height
-   * and shows honest more-above/below markers — long feature documentation
+   * and shows honest more-above/below markers, long feature documentation
    * scrolls, it never clips. Reset whenever the selection changes.
    */
   public contextScroll = 0;
@@ -721,7 +721,7 @@ export class SettingsModal {
     // No-op (result.changed === false, effectMessage === null): leave lastSettingEffectMessage untouched.
 
     // Selecting 'prompt' for payments.cvvHandling states the tradeoff at the
-    // moment of selection, not just in the documentation pane — see the
+    // moment of selection, not just in the documentation pane, see the
     // SDK's own CVV_PROMPT_TRADEOFF_WARNING (platform/payments).
     if (key === PAYMENTS_CVV_HANDLING_CONFIG_KEY && value === 'prompt') {
       this.lastSettingEffectMessage = CVV_PROMPT_TRADEOFF_WARNING;

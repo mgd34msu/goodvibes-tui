@@ -72,7 +72,7 @@ describe('readBudgetAlertUsd', () => {
  * given the key has no schema entry, no default in DEFAULT_CONFIG.behavior,
  * and is deep-merged in as a bare extra property? These tests exercise the
  * real ConfigManager class (no mocking) against a scratch directory to prove
- * it does — and that clearing back to 0 survives a restart too, so "0
+ * it does, and that clearing back to 0 survives a restart too, so "0
  * reliably disables" holds after a real process restart, not just in-memory.
  */
 describe('behavior.budgetAlertUsd persistence across a ConfigManager restart', () => {
@@ -108,7 +108,7 @@ describe('behavior.budgetAlertUsd persistence across a ConfigManager restart', (
     expect(readBudgetAlertUsd((k) => second.get(k as ConfigKey))).toBe(12.5);
   });
 
-  test('clearing to 0 survives a restart — a later instance does not resurrect the old nonzero value', () => {
+  test('clearing to 0 survives a restart; a later instance does not resurrect the old nonzero value', () => {
     const first = makeConfigManager();
     first.set(BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey, 12.5 as never);
     first.set(BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey, 0 as never);
@@ -116,7 +116,7 @@ describe('behavior.budgetAlertUsd persistence across a ConfigManager restart', (
     const second = makeConfigManager();
     expect(readBudgetAlertUsd((k) => second.get(k as ConfigKey))).toBe(BUDGET_ALERT_USD_DEFAULT);
 
-    // And a third instance constructed after that — the value must not
+    // And a third instance constructed after that, the value must not
     // flip back on any later restart either.
     const third = makeConfigManager();
     expect(readBudgetAlertUsd((k) => third.get(k as ConfigKey))).toBe(0);

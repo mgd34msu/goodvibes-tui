@@ -43,7 +43,7 @@ describe('onboarding surface specs are derived from the SDK setup schema', () =>
         if (!sdkField.configKey) continue;
         if (sdkField.kind === 'boolean' || sdkField.configKey.endsWith('.enabled')) continue;
         // sdkField.configKey is the SDK's plain `string`; onboardingKeys is
-        // keyed by the TUI's narrower ConfigKey — this test's whole point is
+        // keyed by the TUI's narrower ConfigKey, this test's whole point is
         // checking that every SDK key IS a real onboarding ConfigKey.
         expect(onboardingKeys.has(sdkField.configKey as ConfigKey), `${sdkField.configKey} missing from onboarding`).toBe(true);
       }

@@ -56,7 +56,7 @@ type WireShellUiOpenersOptions = {
   getConfiguredProviderIds: () => string[];
   getPinned: () => Promise<string[]>;
   render: () => void;
-  /** Trust-at-consequence-time bridge — patched here with the real modal-driving implementation. */
+  /** Trust-at-consequence-time bridge, patched here with the real modal-driving implementation. */
   trustPromptRef: { requestTrustDecision: () => Promise<WorkspaceTrustLevel> };
 };
 
@@ -90,7 +90,7 @@ function deriveConfiguredVia(
 ): 'env' | 'secrets' | 'subscription' | 'anonymous' | undefined {
   if (!configuredIds.has(providerId)) return undefined;
 
-  // Tier 1: subscription check (most specific — subscription overrides env for this provider)
+  // Tier 1: subscription check (most specific, subscription overrides env for this provider)
   const subs = subscriptionManager.list();
   if (subs.some((s) => s.provider === providerId)) return 'subscription';
 
@@ -148,7 +148,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   // Trust-at-consequence-time: raised by trustGatedAsk on the first non-read
   // request in an undecided workspace; the answer persists via setLevel().
-  // Registration self-records here too when trusted (never for restricted —
+  // Registration self-records here too when trusted (never for restricted,
   // see selfRecordWorkspaceRegistration's doc).
   trustPromptRef.requestTrustDecision = () =>
     new Promise((resolve) => {
@@ -205,7 +205,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
    * Fetch the embedding-provider status list once per picker-open and shape
    * it into the picker's own tiny item type. Uses the registry's async
    * `.status()` (not the sync `.list()`) specifically because `.list()` does
-   * not carry `configured` — and unconfigured providers must be shown
+   * not carry `configured`, and unconfigured providers must be shown
    * honestly, not hidden.
    */
   async function resolveEmbeddingProviderEntries(): Promise<EmbeddingProviderPickerEntry[]> {
@@ -274,7 +274,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       {
         target: 'embeddings',
         label: 'Embeddings',
-        description: 'Embedding provider used for memory search and the code index. Not an LLM route — no model concept.',
+        description: 'Embedding provider used for memory search and the code index. Not an LLM route: no model concept.',
         provider: embeddingProviderId,
         model: '',
         enabled: true,
@@ -386,7 +386,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   };
 
   // Mirrors the Ctrl+F chord's own toggle exactly (handler-shortcuts.ts's
-  // 'search' case) — the transcript search overlay isn't tracked on the
+  // 'search' case), the transcript search overlay isn't tracked on the
   // modal stack, so this doesn't call modalOpened either.
   commandContext.openTranscriptSearch = () => {
     if (input.searchManager.active) input.searchManager.close(input.conversationManager);
@@ -411,7 +411,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     input.modalOpened('settings');
     input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager, {
       // The Connections category probes through this app's catalog, which is
-      // empty by construction — so those rows read 'unreachable' rather than
+      // empty by construction, so those rows read 'unreachable' rather than
       // inventing a settled state nothing established. Retargeting that probe
       // at the daemon is the remaining half of this seam.
       ...(commandContext.workspace?.gatewayMethods
@@ -451,11 +451,11 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   // open()-time modal-redirect callback (a legacy panel id resolving to a modal
   // name). Surfaces are registered in builtin-modals.ts; a name with no
   // registered surface degrades honestly to a print rather than a blank modal.
-  // The stack name is the stable 'config' slot (one config modal at a time —
+  // The stack name is the stable 'config' slot (one config modal at a time,
   // opening another swaps the surface), so Esc close/return and the modal-stack
   // machinery need only the single 'config' case (handler-ui-state.ts).
   // Some panel-id redirects (and migrated front-doors) resolve to a NATIVE
-  // modal that is not a ConfigModalSurface — e.g. `sessions` -> `sessionPicker`,
+  // modal that is not a ConfigModalSurface, e.g. `sessions` -> `sessionPicker`,
   // where 'sessionPicker' is the real session-picker modal opened by
   // commandContext.openSessionPicker below, NOT a registered config surface.
   // getModalSurface can never find these, so consult this small name->opener
@@ -513,7 +513,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     }
     if (panelManager.getAllOpen().length === 0) {
       // (the purge): 'panel-list' (a browse-all-panels picker PANEL)
-      // was DELETE-disposition — a picker over a handful of panels is dead
+      // was DELETE-disposition, a picker over a handful of panels is dead
       // weight now. Its replacement is this selection MODAL, built from the
       // live registry (PanelManager.getRegisteredTypes()) rather than a
       // hardcoded list, so it can never list a retired/deleted id.
@@ -547,8 +547,8 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   commandContext.getCommandCategories = () => getCommandCategoryMap();
 
   commandContext.openCommandPalette = () => {
-    // The palette is built live from the command registry — never a hardcoded
-    // list — so it can never drift from the real command set. Category labels
+    // The palette is built live from the command registry, never a hardcoded
+    // list, so it can never drift from the real command set. Category labels
     // come from the same source the generated docs use (getCommandCategoryMap).
     const registry = input.commandRegistry;
     if (!registry) return;
@@ -582,7 +582,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
         // Pre-fill the composer with the command (and a trailing space so the
         // inline args hint shows what the command wants). Keyboard-first: focus
         // returns to the composer with command mode armed so the user fills any
-        // args and presses Enter — matching tab-completion's fill behavior.
+        // args and presses Enter, matching tab-completion's fill behavior.
         input.prompt = `/${cmd.name} `;
         input.cursorPos = input.prompt.length;
         input.commandMode = true;
@@ -610,7 +610,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     panelManager.open(panelId, pane, target);
     panelManager.show();
     // focus rule 1a: every registered caller of showPanel is a slash
-    // command (/panel open, /routes, /approval, /tasks, /ops-control, ...) —
+    // command (/panel open, /routes, /approval, /tasks, /ops-control, ...),
     // the command path leaves focus in the composer ("the user is
     // mid-command-flow") unless the caller explicitly asks to grab it.
     if (opts?.focus) panelManager.focusPanels();

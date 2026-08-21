@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// useConfirmState<T> — reusable inline confirm/cancel helper
+// useConfirmState<T>, reusable inline confirm/cancel helper
 //
 // ── Project-standard confirm contract (all panels must match) ──────────────
 //
@@ -45,11 +45,11 @@ export interface ConfirmState<T = string> {
  *   - ABSORBED: any other key while confirm is active (keeps confirm pending)
  *
  * Returns:
- *   - `'confirmed'` — user pressed Enter, Return, or y; caller must execute
+ *   - `'confirmed'`, user pressed Enter, Return, or y; caller must execute
  *     the action and clear state (set confirm to null)
- *   - `'cancelled'` — user pressed n or Esc; caller must clear state
- *   - `'absorbed'`  — any other key while confirm is active; caller returns true
- *   - `'inactive'`  — no confirm pending; caller continues normal dispatch
+ *   - `'cancelled'`, user pressed n or Esc; caller must clear state
+ *   - `'absorbed'` , any other key while confirm is active; caller returns true
+ *   - `'inactive'` , no confirm pending; caller continues normal dispatch
  */
 export function handleConfirmInput<T = string>(
   confirm: ConfirmState<T> | null,

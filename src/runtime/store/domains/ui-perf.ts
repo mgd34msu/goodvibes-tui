@@ -1,5 +1,5 @@
 /**
- * UI performance domain state — tracks TUI render performance,
+ * UI performance domain state, tracks TUI render performance,
  * frame rates, and input responsiveness metrics.
  */
 
@@ -31,7 +31,7 @@ export interface InputLatencySample {
 }
 
 /**
- * UiPerfDomainState — TUI render and input performance metrics.
+ * UiPerfDomainState, TUI render and input performance metrics.
  */
 export interface UiPerfDomainState {
   // ── Domain metadata ────────────────────────────────────────────────────────

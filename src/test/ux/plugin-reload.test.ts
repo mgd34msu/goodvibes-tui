@@ -1,11 +1,11 @@
 /**
  * UX Anti-Regression: Plugin Reload While Panels Subscribed (v3 §18.5)
  *
- * Verifies that reloading a plugin does not break panel subscriptions —
+ * Verifies that reloading a plugin does not break panel subscriptions,
  * panel state remains intact, plugin metadata updates correctly, and the
  * plugin registry stays consistent through the reload lifecycle.
  *
- * All tests use pure state manipulation — no real I/O, no event bus.
+ * All tests use pure state manipulation, no real I/O, no event bus.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
@@ -103,7 +103,6 @@ function applyPluginReload(
   const plugin = plugins.plugins.get(pluginName);
   if (!plugin) throw new Error(`Plugin ${pluginName} not found`);
 
-  // Phase 1: unloading
   const unloadingMap = new Map(plugins.plugins);
   unloadingMap.set(pluginName, { ...plugin, status: 'unloading', active: false });
   const unloadingState: RuntimeState = {
@@ -120,7 +119,6 @@ function applyPluginReload(
     },
   };
 
-  // Phase 2: loading
   const loadingMap = new Map(unloadingState.plugins.plugins);
   loadingMap.set(pluginName, { ...plugin, status: 'loading', active: false });
   const loadingState: RuntimeState = {
@@ -135,7 +133,6 @@ function applyPluginReload(
     },
   };
 
-  // Phase 3: reloaded
   const reloadedMap = new Map(loadingState.plugins.plugins);
   const reloadedPlugin: RuntimePlugin = {
     ...plugin,
@@ -164,7 +161,7 @@ function applyPluginReload(
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('ux:plugin-reload — plugin reload while panels subscribed', () => {
+describe('ux:plugin-reload; plugin reload while panels subscribed', () => {
   let state: RuntimeState;
 
   beforeEach(() => {

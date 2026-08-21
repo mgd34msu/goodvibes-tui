@@ -3,7 +3,7 @@
  *
  * Every feature flag that is NOT already reached through a surface/server
  * capability selection (or the HITL experience step) is presented here as ONE
- * unit — its enable toggle plus a meaningful subset of its config sub-options —
+ * unit, its enable toggle plus a meaningful subset of its config sub-options,
  * grouped into thematic first-run steps (safety & sandboxing, memory & context,
  * telemetry & observability, automation & initiative, provider & runtime, and a
  * compact advanced-toggles step). Full sub-option depth lives in /settings; each
@@ -154,7 +154,7 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
             key: 'source',
             configKey: 'policy.bundleSource' as ConfigKey,
             label: 'Startup bundle source',
-            hint: 'none (bundles supplied via commands) or file (load policy.bundlePath — set it in /settings).',
+            hint: 'none (bundles supplied via commands) or file (load policy.bundlePath: set it in /settings).',
             valueType: 'enum',
             options: ['none', 'file'],
             defaultValue: 'none',
@@ -231,7 +231,7 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
       {
         flagId: 'otel-remote-export',
         label: 'OTLP remote export',
-        hint: 'Export spans over OTLP/HTTP JSON to a collector. Enabling this also turns on the OpenTelemetry foundation. Span export reads the OTEL_EXPORTER_OTLP_* environment variables; decision export reads telemetry.decisionOtlpEndpoint — this unit sets the latter.',
+        hint: 'Export spans over OTLP/HTTP JSON to a collector. Enabling this also turns on the OpenTelemetry foundation. Span export reads the OTEL_EXPORTER_OTLP_* environment variables; decision export reads telemetry.decisionOtlpEndpoint: this unit sets the latter.',
         requiresFlags: ['otel-foundation'],
         impliedConfig: [{ key: 'telemetry.decisionOtlpEnabled' as ConfigKey, value: true }],
         subOptions: [
@@ -284,7 +284,7 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
       {
         flagId: 'watcher-triggers',
         label: 'Trigger family',
-        hint: 'Three unattended watcher kinds over one supervision spine: stream watchers that regex-filter and batch a long-lived command\'s output, model-free condition checks running a probe/extract/rule pipeline with no LLM in the loop, and one-shot on-exit triggers that fire exactly one payload when a launched command terminates. A firing trigger runs an agent turn or a pre-registered digest-pinned action grant — never a command composed at fire time. Off by default because a trigger supervises real processes with nobody watching; with it on and no triggers defined the supervisor idles and consumes nothing.',
+        hint: 'Three unattended watcher kinds over one supervision spine: stream watchers that regex-filter and batch a long-lived command\'s output, model-free condition checks running a probe/extract/rule pipeline with no LLM in the loop, and one-shot on-exit triggers that fire exactly one payload when a launched command terminates. A firing trigger runs an agent turn or a pre-registered digest-pinned action grant; never a command composed at fire time. Off by default because a trigger supervises real processes with nobody watching; with it on and no triggers defined the supervisor idles and consumes nothing.',
         note: 'Backoff ladder, strike breaker, retention bounds, batching and process caps are tuned through watchers.triggers.* in /settings.',
         impliedConfig: [{ key: 'watchers.triggers.enabled' as ConfigKey, value: true }],
       },
@@ -331,14 +331,14 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
       {
         flagId: 'paired-device-capabilities',
         label: 'Paired phone capabilities',
-        hint: 'Turning this on grants access to nothing by itself — it lets the agent ASK to use a paired phone as a tool: either camera, its screen, its location, its clipboard, and a small set of device effects (notification, link, buzz). It rides the existing peer transport as a native contract, never an MCP server. Every capture and every effect asks the person holding the phone first, and answering one request grants nothing beyond it; choosing "always allow" is a separate, explicit choice you make later on that prompt, and it writes one durable, revocable grant for that one capability on that one phone, with an age limit and a count cap so nothing is granted forever.',
+        hint: 'Turning this on grants access to nothing by itself; it lets the agent ASK to use a paired phone as a tool: either camera, its screen, its location, its clipboard, and a small set of device effects (notification, link, buzz). It rides the existing peer transport as a native contract, never an MCP server. Every capture and every effect asks the person holding the phone first, and answering one request grants nothing beyond it; choosing "always allow" is a separate, explicit choice you make later on that prompt, and it writes one durable, revocable grant for that one capability on that one phone, with an age limit and a count cap so nothing is granted forever.',
         note: 'Captures are kept 24 hours by default and then deleted, and every housekeeping sweep records exactly what it removed and why. Retention, grant limits, clipboard and location posture are tuned through device.* in /settings.',
         subOptions: [
           {
             key: 'mode',
             configKey: 'device.capabilities.mode' as ConfigKey,
             label: 'Consent posture',
-            hint: 'honor-grants (stock) asks the first time and every time after unless you chose "always allow" for that capability on that phone; ask-every-time prompts on every single request and never consults a durable grant — use it when someone else is holding the phone; off stops any capability request reaching any paired device.',
+            hint: 'honor-grants (stock) asks the first time and every time after unless you chose "always allow" for that capability on that phone; ask-every-time prompts on every single request and never consults a durable grant; use it when someone else is holding the phone; off stops any capability request reaching any paired device.',
             valueType: 'enum',
             options: ['off', 'ask-every-time', 'honor-grants'],
             defaultValue: 'honor-grants',
@@ -349,7 +349,7 @@ export const FEATURE_ONBOARDING_SECTIONS: readonly FeatureSection[] = [
         flagId: 'wake-word-detection',
         label: 'Wake-word detection',
         hint: 'Listen continuously on a capture device for the pinned "hey goodvibes" phrase and hand the utterance that follows to speech-to-text. Off by default because holding a microphone open must be an explicit act.',
-        note: 'On this terminal, turning this on starts a recorder (pw-record, parecord, arecord, ffmpeg or sox — whichever is installed), scores every frame with the pinned classifier, plays a short chime the moment a wake confirms, and shows a persistent "listening" row in the footer for as long as it runs. What follows a wake goes to speech-to-text and lands in the composer, or is sent straight away if you turn voice.wake.autoSubmit on. The model it scores with is already here — installing GoodVibes downloads and checksum-verifies it, and a running daemon retries at boot if the install could not reach the network — so turning this on normally needs no setup step. What it will NOT do on its own is download anything at the moment you turn it on: a host whose artifacts are missing or fail verification says which and names /voice wake setup, instead of pretending to listen. That same provisioning fetches the speech gate, so voice.wake.vadThreshold above 0 screens frames once it has run and refuses to start before it has, rather than scoring frames it claims to be screening. voice.wake.noiseSuppression: speex runs here too — the filter travels with the platform, so there is nothing to install for it.',
+        note: 'On this terminal, turning this on starts a recorder (pw-record, parecord, arecord, ffmpeg or sox; whichever is installed), scores every frame with the pinned classifier, plays a short chime the moment a wake confirms, and shows a persistent "listening" row in the footer for as long as it runs. What follows a wake goes to speech-to-text and lands in the composer, or is sent straight away if you turn voice.wake.autoSubmit on. The model it scores with is already here: installing GoodVibes downloads and checksum-verifies it, and a running daemon retries at boot if the install could not reach the network, so turning this on normally needs no setup step. What it will NOT do on its own is download anything at the moment you turn it on: a host whose artifacts are missing or fail verification says which and names /voice wake setup, instead of pretending to listen. That same provisioning fetches the speech gate, so voice.wake.vadThreshold above 0 screens frames once it has run and refuses to start before it has, rather than scoring frames it claims to be screening. voice.wake.noiseSuppression: speex runs here too, the filter travels with the platform, so there is nothing to install for it.',
       },
     ],
   },
@@ -447,10 +447,6 @@ function radioOptionsForSubOption(sub: FeatureSubOption): readonly OnboardingWiz
   return (sub.options ?? []).map((id) => ({ id, label: id, hint: `Use ${id}.` }));
 }
 
-// ---------------------------------------------------------------------------
-// Step builder
-// ---------------------------------------------------------------------------
-
 export function buildFeatureUnitStep(
   controller: OnboardingWizardControllerLike,
   section: FeatureSection,
@@ -512,7 +508,7 @@ export function buildFeatureUnitStep(
     summaryTitle: `${section.title} selections`,
     summaryLines: [
       `${enabledCount}/${section.units.length} feature(s) enabled in this step`,
-      'Skippable — the honest defaults above apply if you make no change.',
+      'Skippable: the honest defaults above apply if you make no change.',
       'Full sub-option depth for every feature lives in /settings.',
     ],
     fields,
@@ -571,7 +567,7 @@ export function applyFeatureUnitOperations(
         }
         // A sub-option that writes the unit's OWN enablement key (e.g. the
         // provider-optimizer routing mode) is the authoritative enablement
-        // value — drop the pending override so the flush cannot clobber it.
+        // value, drop the pending override so the flush cannot clobber it.
         if (wrote && enablementKey !== undefined && sub.configKey === enablementKey) {
           overrides.delete(unit.flagId);
         }

@@ -1,16 +1,16 @@
 /**
- * sandbox-exec-gate.ts — sandbox-aware layer over the exec approval ask.
+ * sandbox-exec-gate.ts, sandbox-aware layer over the exec approval ask.
  *
  * The per-command exec sandbox already RUNS boundary-safe commands inside a
  * bubblewrap boundary (the SDK exec tool's runner half). This is the APPROVAL
  * half: when the base permission policy would prompt ("ask") for an exec, and
  * the sandbox is genuinely active, a command that runs entirely inside the OS
- * boundary with no host-access need should auto-allow instead of prompting —
+ * boundary with no host-access need should auto-allow instead of prompting,
  * and a command that still needs host access should surface as an explicit ask
  * that NAMES what it wants ("wants network …", "wants host privilege
  * escalation").
  *
- * The decision is the SDK's `decideSandboxedExec` — never re-implemented here.
+ * The decision is the SDK's `decideSandboxedExec`, never re-implemented here.
  * This module only (a) reads the live sandbox posture, (b) extracts the exec
  * command(s) from the request, (c) maps the SDK decision onto the existing ask
  * callback: allow → approve without prompting; ask → attach the named
@@ -20,7 +20,7 @@
  *
  * This runs INSIDE the permission machinery's ask layer (like trustGatedAsk), so
  * it composes with the real layer chain and is only ever consulted for execs the
- * base policy already resolved to "ask" — it can never turn a deny into an allow,
+ * base policy already resolved to "ask", it can never turn a deny into an allow,
  * and the frozen catastrophic block is untouched.
  */
 import { decideSandboxedExec } from '@pellux/goodvibes-sdk/platform/runtime/permissions/sandbox-policy';
@@ -57,7 +57,7 @@ export interface SandboxExecAskDeps {
   readonly readEgressAllowlist: () => readonly string[];
   /**
    * Honest host availability of the exec sandbox backend. Probing the host spawns
-   * bwrap, so the caller passes a memoized probe — invoked at most once, and only
+   * bwrap, so the caller passes a memoized probe, invoked at most once, and only
    * when an exec ask actually arrives while the feature + config are on.
    */
   readonly detectAvailability: () => SandboxAvailability;

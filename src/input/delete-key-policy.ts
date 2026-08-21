@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Delete-key policy — single source of truth for text-editing key semantics
+// Delete-key policy, single source of truth for text-editing key semantics
 //
 // In text-editing contexts:
 //   'backspace'  → delete one character backward (the character before cursor /

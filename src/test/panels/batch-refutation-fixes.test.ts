@@ -15,7 +15,7 @@ afterEach(() => {
   setActiveThemeMode('dark');
 });
 
-describe('finding 2 — MODAL_TONES follows theme flips in place', () => {
+describe('finding 2: MODAL_TONES follows theme flips in place', () => {
   test('light flip rebuilds tones; dark restore returns originals', () => {
     const darkInfo = MODAL_TONES.info;
     expect(darkInfo).toBe(resolveUiTones('dark').state.info);
@@ -29,7 +29,7 @@ describe('finding 2 — MODAL_TONES follows theme flips in place', () => {
   });
 });
 
-describe('finding 3 — async onOpen loads paint before the first interaction', () => {
+describe('finding 3: async onOpen loads paint before the first interaction', () => {
   function makeAsyncSurface(): { surface: ConfigModalSurface; finishLoad: () => void } {
     let loaded = false;
     const view = (): ConfigModalView => ({

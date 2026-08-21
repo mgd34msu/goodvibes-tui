@@ -1,4 +1,4 @@
-# Reference Operator Client
+# Reference operator client
 
 This is the smallest in-process reference consumer for the current GoodVibes foundation surface.
 

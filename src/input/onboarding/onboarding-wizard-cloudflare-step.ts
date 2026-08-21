@@ -257,7 +257,7 @@ export function buildCloudflareStep(controller: OnboardingWizardControllerLike):
       );
     }
 
-    // Trust-proxy notice — shown when Tunnel is selected so the
+    // Trust-proxy notice, shown when Tunnel is selected so the
     // operator sees the security implication before applying.
     const tunnelSelected = enabled && components.zeroTrustTunnel;
     if (tunnelSelected) {

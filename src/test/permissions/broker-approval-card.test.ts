@@ -72,7 +72,7 @@ describe('broker-originated approval cards', () => {
       defer: (cb) => cb(),
     });
 
-    // The existing local card is untouched — no second card built.
+    // The existing local card is untouched, no second card built.
     expect(pending).toBe(localCard);
   });
 
@@ -150,7 +150,7 @@ describe('broker-originated approval cards', () => {
     expect(handleFixSessionAttachKey('x', deps)).toBe(false);
     expect(attached).toEqual([]);
 
-    // 'j' attaches to the armed session — the machine runs the resume, no retype.
+    // 'j' attaches to the armed session, the machine runs the resume, no retype.
     expect(handleFixSessionAttachKey('j', deps)).toBe(true);
     expect(attached).toEqual(['sess-jump']);
     expect(renders).toBe(1);

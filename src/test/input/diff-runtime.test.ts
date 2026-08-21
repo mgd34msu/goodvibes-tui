@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// diff-runtime.test.ts — regression coverage:
+// diff-runtime.test.ts, regression coverage:
 //   (a) every Bun.spawn() call reachable from /diff captures stderr instead
 //       of letting git's `fatal: ...` write straight to the real tty.
 //   (b) /diff short-circuits with a friendly message in a non-git directory
@@ -16,7 +16,7 @@ import { createShellPathService } from '@/runtime/index.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /**
- * Every `Bun.spawn(` call site's option object must include `stderr:` — a
+ * Every `Bun.spawn(` call site's option object must include `stderr:`, a
  * cheap static guard against reintroducing the tty-corruption bug: for a
  * spawned child with no explicit stdio option, Bun inherits stderr from the
  * parent process (verified directly: `Bun.spawn([...], { stdout: 'pipe' })`

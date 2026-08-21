@@ -260,7 +260,7 @@ describe('PluginsPanel', () => {
       expect(afterText).toContain('beta-plugin');
     });
 
-    test('zero signposts — no /plugin act hint in the footer', () => {
+    test('zero signposts: no /plugin act hint in the footer', () => {
       const panel = new PluginsPanel(makeManager([alpha]));
       const text = linesText(panel.render(120, 16));
       expect(text).not.toContain('/plugin');

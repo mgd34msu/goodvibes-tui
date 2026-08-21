@@ -5,7 +5,7 @@ import { requireShellPaths } from './runtime-services.ts';
 
 /**
  * Timeout for a /test run, in milliseconds. Deliberately much longer than
- * WRFC's WRFC_GATE_TIMEOUT_MS (120s, tuned for CI gates) — this repo's own
+ * WRFC's WRFC_GATE_TIMEOUT_MS (120s, tuned for CI gates), this repo's own
  * suite is 600+ test files (scripts/run-tests.ts), and /test is an
  * interactive command with no other caller waiting on it.
  *
@@ -48,7 +48,7 @@ interface ParsedTestResults {
  * Parse this repo's own scripts/run-tests.ts output shape:
  *   per-file:  `==> path/to/file.test.ts  [FAIL]` (only present on failure)
  *   summary:   `Test files: N, passed: P, failed: F`
- * Returns null when the summary line isn't present at all — the fallback
+ * Returns null when the summary line isn't present at all, the fallback
  * path (raw tail, no fabricated counts) covers a different project's
  * jest/vitest/pytest output, or any run that bypassed run-tests.ts.
  */
@@ -96,7 +96,7 @@ export function parseTestOutput(output: string): ParsedTestResults | null {
  * quote into `'\''` (close quote, escaped literal quote, reopen quote).
  * Mirrors the injection-risk class already present in the SDK's
  * wrfc-gates.ts (executeGateCommand) and this repo's git-runtime.ts /
- * diff-runtime.ts, which build shell command strings the same way — a
+ * diff-runtime.ts, which build shell command strings the same way, a
  * pattern arg is never string-concatenated into the command raw.
  */
 export function shQuote(value: string): string {
@@ -215,13 +215,13 @@ export async function runTestCommand(
     // Durable end state: logToolResultBlock (above) renders straight into the
     // display-only history buffer and never touches the real message list, so
     // it does not survive the next full rebuildHistory() (which rebuilds
-    // strictly from conversationManager.getMessageSnapshot()) — the very next
+    // strictly from conversationManager.getMessageSnapshot()), the very next
     // dirty render silently wipes it back to how the transcript looked before
     // /test ran. addSystemMessage persists the same content as a real message
     // (same durable pattern as /rewind's confirm notice in
     // checkpoint-runtime.ts) so the timeout outcome survives like any other
     // command's output. The streamed output during the run is allowed to stay
-    // transient — only this final state needs to persist.
+    // transient, only this final state needs to persist.
     ctx.session.conversationManager.addSystemMessage(
       `[Test] Timed out after ${timeoutSeconds}s and was killed.`,
     );
@@ -241,7 +241,7 @@ export async function runTestCommand(
     const failedNoun = parsed.unit === 'files' ? 'file' : 'test';
     const errorMsg = ok ? undefined : `${parsed.failed} ${failedNoun}${parsed.failed === 1 ? '' : 's'} failed`;
     ctx.session.conversationManager.logToolResultBlock(toolCall, ok ? 'done' : 'error', summary, durationMs, errorMsg);
-    const durableLines = [`[Test] ${summary}${errorMsg ? ` — ${errorMsg}` : ''}`];
+    const durableLines = [`[Test] ${summary}${errorMsg ? `: ${errorMsg}` : ''}`];
     if (parsed.failingFiles.length > 0) {
       const shown = parsed.failingFiles.slice(0, MAX_FAILING_NAMES_SHOWN);
       const failListHeader = parsed.unit === 'files' ? 'Failing test files:' : 'Failing tests:';

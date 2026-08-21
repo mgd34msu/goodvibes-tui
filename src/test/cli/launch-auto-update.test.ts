@@ -10,7 +10,7 @@ import type { UpdateFetchLike } from '@/runtime/update-check.ts';
 
 // Decision-logic coverage for the launch-time self-update, with every seam
 // stubbed: fetch (never the real network), apply (never a real swap), spawn
-// (never a real process), and pinned fixture versions '1.0.0'/'v1.1.0' —
+// (never a real process), and pinned fixture versions '1.0.0'/'v1.1.0',
 // never the live build VERSION, per this repo's version-decoupled-tests rule.
 
 const RELEASES_LATEST_URL = 'https://github.com/mgd34msu/goodvibes-tui/releases/latest';
@@ -34,7 +34,7 @@ const failingFetch: UpdateFetchLike = async () => {
   throw new Error('network unreachable');
 };
 
-/** A fetch that never settles — the timeout path, without a real slow network. */
+/** A fetch that never settles, the timeout path, without a real slow network. */
 const hangingFetch: UpdateFetchLike = () => new Promise(() => {});
 
 /** A couple of milliseconds of real time, only ever used to prove that work STOPPED. */
@@ -79,7 +79,7 @@ describe('runLaunchAutoUpdate', () => {
     expect(env[LAUNCH_UPDATED_FROM_ENV]).toBeUndefined();
   });
 
-  test('autoUpdateAtLaunch=false turns the feature off — silently, with no network traffic', async () => {
+  test('autoUpdateAtLaunch=false turns the feature off; silently, with no network traffic', async () => {
     let fetched = false;
     const { options, printed } = baseOptions({
       settings: { autoUpdateAtLaunch: false },
@@ -107,14 +107,14 @@ describe('runLaunchAutoUpdate', () => {
     const { options, printed } = baseOptions({ fetchImpl: failingFetch });
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'continue', reason: 'check-skipped' });
-    expect(printed).toEqual(["couldn't reach the update server — check skipped"]);
+    expect(printed).toEqual(["couldn't reach the update server; check skipped"]);
   });
 
   test('a check that outlives its budget is skipped the same way (launch is never held hostage)', async () => {
     const { options, printed } = baseOptions({ fetchImpl: hangingFetch, timeoutMs: 10 });
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'continue', reason: 'check-skipped' });
-    expect(printed).toEqual(["couldn't reach the update server — check skipped"]);
+    expect(printed).toEqual(["couldn't reach the update server; check skipped"]);
   });
 
   test('an already-current binary continues silently', async () => {
@@ -142,7 +142,7 @@ describe('runLaunchAutoUpdate', () => {
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'restart', latestTag: 'v1.1.0' });
     expect(applyCalls).toEqual([{ execPath: '/opt/goodvibes/goodvibes', currentVersion: '1.0.0' }]);
-    expect(printed).toEqual(['downloading v1.1.0…', 'Updated to v1.1.0.', 'auto-update: v1.1.0 installed — restarting onto the new version']);
+    expect(printed).toEqual(['downloading v1.1.0…', 'Updated to v1.1.0.', 'auto-update: v1.1.0 installed; restarting onto the new version']);
   });
 
   test('a failed install states the failure and starts the current version', async () => {
@@ -155,7 +155,7 @@ describe('runLaunchAutoUpdate', () => {
     expect(outcome).toEqual({ action: 'continue', reason: 'update-failed' });
     expect(printed).toEqual([
       'downloading v1.1.0…',
-      'auto-update failed: checksum mismatch for goodvibes-linux-x64 — starting the current version v1.0.0',
+      'auto-update failed: checksum mismatch for goodvibes-linux-x64; starting the current version v1.0.0',
     ]);
   });
 
@@ -166,7 +166,7 @@ describe('runLaunchAutoUpdate', () => {
     });
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'continue', reason: 'update-deferred' });
-    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred — will retry next launch']);
+    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred: will retry next launch']);
   });
 
   test('update.applyTimeoutMs from settings is honored when no explicit override is passed', async () => {
@@ -176,7 +176,7 @@ describe('runLaunchAutoUpdate', () => {
     });
     const outcome = await runLaunchAutoUpdate(options);
     expect(outcome).toEqual({ action: 'continue', reason: 'update-deferred' });
-    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred — will retry next launch']);
+    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred: will retry next launch']);
   });
 
   // ── the receipt has to match what actually happened ───────────────────────
@@ -239,7 +239,7 @@ describe('runLaunchAutoUpdate', () => {
     expect(stepsAtAbort).not.toBeNull();
     await delay(5);
     expect(record.steps).toBe(stepsAtAbort!);
-    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred — will retry next launch']);
+    expect(printed).toEqual(['downloading v1.1.0…', 'update deferred: will retry next launch']);
   });
 
   test('a budget that runs out BEFORE the swap begins prints only the deferral, never the background line', async () => {
@@ -257,7 +257,7 @@ describe('runLaunchAutoUpdate', () => {
 
     expect(outcome).toEqual({ action: 'continue', reason: 'update-deferred' });
     expect(signalSeen?.aborted).toBe(true);
-    expect(printed).toContain('update deferred — will retry next launch');
+    expect(printed).toContain('update deferred: will retry next launch');
     expect(printed.some((line) => line.includes('updated in background'))).toBe(false);
   });
 
@@ -279,7 +279,7 @@ describe('runLaunchAutoUpdate', () => {
 
     expect(outcome).toEqual({ action: 'continue', reason: 'update-in-background' });
     expect(printed).toEqual(['downloading v1.1.0…', 'updated in background; restart to use v1.1.0']);
-    expect(printed).not.toContain('update deferred — will retry next launch');
+    expect(printed).not.toContain('update deferred: will retry next launch');
     // Cancellation is never signalled once the files are being replaced.
     expect(signalSeen?.aborted).toBe(false);
   });

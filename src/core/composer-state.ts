@@ -22,7 +22,7 @@ export function deriveComposerState(input: ComposerStateInput): ComposerState {
 
   // An approval wait is the dominant composer state and owns the single honest
   // status tag: `risk:approval-wait`. It is therefore NOT also duplicated as a
-  // `approval` flag, and (below) it suppresses the competing `state:` turn tag —
+  // `approval` flag, and (below) it suppresses the competing `state:` turn tag,
   // the turn is blocked on the user, not really streaming. Precedence:
   // approval-wait > live turn state. (item 4.)
   const approvalWait = input.pendingApproval === true;
@@ -53,7 +53,7 @@ export function deriveComposerState(input: ComposerStateInput): ComposerState {
     }
   })();
   // 'idle' is suppressed by the footer renderer, so an approval wait shows only
-  // `risk:approval-wait` — one honest tag, not three spellings of the wait.
+  // `risk:approval-wait`, one honest tag, not three spellings of the wait.
   const statusLabel = approvalWait ? 'idle' : turnStatus;
 
   return {

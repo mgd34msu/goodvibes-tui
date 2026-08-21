@@ -58,7 +58,7 @@ function parseAutomationTarget(raw: string | undefined): AutomationSessionTarget
  * the SDK's severity ladder, narrowed to the current model's own resolved
  * levels whenever the runtime has published them. A scheduled job may well run
  * on a different model than the one in use now, so a level this model does not
- * offer is still accepted when it is a real level — it is re-resolved against
+ * offer is still accepted when it is a real level, it is re-resolved against
  * whichever model actually serves the run.
  */
 function parseReasoningEffort(raw: string | undefined): AutomationExecutionPolicy['reasoningEffort'] | undefined {
@@ -123,7 +123,7 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
           // The SDK owns the presence + title of the how-to-create-your-first-
           // routine empty state (shown while automation is on and idle). Its
           // body points at a command name this registry doesn't have, so we
-          // render its title with THIS surface's real /schedule commands — a
+          // render its title with THIS surface's real /schedule commands, a
           // command pointer that actually exists in the registry.
           const emptyState = buildAutomationEmptyState({ enabled: true, routineCount: jobs.length });
           ctx.print([

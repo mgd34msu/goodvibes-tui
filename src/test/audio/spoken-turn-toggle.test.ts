@@ -68,7 +68,7 @@ async function drain(): Promise<void> {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
+describe('SpokenTurnController: always-speak via ui.voiceEnabled', () => {
   test('submitNextTurn arms the turn (baseline)', async () => {
     const { voiceService, calls } = makeSynthesizer();
     const { player, played } = makePlayer();
@@ -91,7 +91,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
     expect(played.join('')).toContain('Response.');
   });
 
-  test('turn not armed — no synthesis or playback', async () => {
+  test('turn not armed: no synthesis or playback', async () => {
     const { voiceService, calls } = makeSynthesizer();
     const { player, played } = makePlayer();
     const controller = new SpokenTurnController({
@@ -103,7 +103,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
       clearInterval: (() => {}) as never,
     });
 
-    // No submitNextTurn call — turn is not armed
+    // No submitNextTurn call, turn is not armed
     controller.handleTurnEvent({ type: 'TURN_SUBMITTED', turnId: 't2', prompt: 'silent' });
     controller.handleTurnEvent({ type: 'STREAM_DELTA', turnId: 't2', content: 'Silent.', accumulated: 'Silent.' });
     controller.handleTurnEvent({ type: 'TURN_COMPLETED', turnId: 't2', response: 'Silent.', stopReason: 'completed' });
@@ -161,16 +161,16 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
       clearInterval: (() => {}) as never,
     });
 
-    // First call — notice should fire
+    // First call, notice should fire
     controller.submitNextTurn('turn 1');
     expect(messages).toHaveLength(1);
     expect(messages[0]).toContain('unavailable');
 
-    // Second call — notice should be suppressed
+    // Second call, notice should be suppressed
     controller.submitNextTurn('turn 2');
     expect(messages).toHaveLength(1); // still just one message
 
-    // Third call — still suppressed
+    // Third call, still suppressed
     controller.submitNextTurn('turn 3');
     expect(messages).toHaveLength(1);
   });
@@ -207,7 +207,7 @@ describe('SpokenTurnController — always-speak via ui.voiceEnabled', () => {
 // SDK config defaults verification
 // ---------------------------------------------------------------------------
 
-describe('tts config defaults — SDK schema entries', () => {
+describe('tts config defaults: SDK schema entries', () => {
   test('DEFAULT_CONFIG.tts has all expected keys with correct types', () => {
     const tts = DEFAULT_CONFIG.tts;
     expect(typeof tts.provider).toBe('string');

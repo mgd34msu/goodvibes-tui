@@ -45,7 +45,7 @@ describe('FocusTracker', () => {
     expect(tracker.isFocused()).toBeNull();
   });
 
-  describe('shouldAlertWhenUnfocused — the honest fallback rule', () => {
+  describe('shouldAlertWhenUnfocused: the honest fallback rule', () => {
     test('true when focus was never observed (unknown terminal)', () => {
       const tracker = new FocusTracker();
       expect(tracker.shouldAlertWhenUnfocused()).toBe(true);

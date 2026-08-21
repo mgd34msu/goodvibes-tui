@@ -1,4 +1,4 @@
-<!-- GENERATED FILE — DO NOT EDIT BY HAND.
+<!-- GENERATED FILE: DO NOT EDIT BY HAND.
      Regenerate with `bun run docs:commands`.
      Source of truth: the slash-command registry (src/input/commands.ts).
      A drift check (src/test/release-gates/command-reference-gate.test.ts)
@@ -10,87 +10,87 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 ## Categories
 
-- [Automation](#automation) — 1
-- [Branches](#branches) — 3
-- [Channels](#channels) — 1
-- [Check-in](#check-in) — 1
-- [Checkpoints](#checkpoints) — 3
-- [CI](#ci) — 1
-- [Cloudflare](#cloudflare) — 1
-- [Cluster](#cluster) — 1
-- [Codebase](#codebase) — 1
-- [Configuration](#configuration) — 1
-- [Control Room](#control-room) — 5
-- [Conversation](#conversation) — 1
-- [Cost](#cost) — 1
-- [Diff & Review](#diff-review) — 2
-- [Discovery](#discovery) — 1
-- [Editor](#editor) — 1
-- [Eval](#eval) — 1
-- [Experience](#experience) — 8
-- [Fleet](#fleet) — 1
-- [Git](#git) — 1
-- [Guidance](#guidance) — 2
-- [Health](#health) — 1
-- [Hooks](#hooks) — 1
-- [Image](#image) — 1
-- [Incidents](#incidents) — 1
-- [Intelligence](#intelligence) — 1
-- [Knowledge](#knowledge) — 1
-- [Local Auth](#local-auth) — 1
-- [Local Providers](#local-providers) — 1
-- [Local Runtime](#local-runtime) — 10
-- [Local Setup](#local-setup) — 1
-- [Mail & Calendar](#mail-calendar) — 2
-- [Managed Runtime](#managed-runtime) — 1
-- [Marketplace](#marketplace) — 1
-- [MCP](#mcp) — 1
-- [Memory](#memory) — 5
-- [Notifications](#notifications) — 1
-- [Onboarding](#onboarding) — 1
-- [Operator](#operator) — 10
-- [Owner Profile](#owner-profile) — 1
-- [Payments](#payments) — 1
-- [Permissions](#permissions) — 1
-- [Planning](#planning) — 2
-- [Platform](#platform) — 1
-- [Platform Access](#platform-access) — 5
-- [Platform Services](#platform-services) — 3
-- [Plugins](#plugins) — 1
-- [Policy](#policy) — 1
-- [Principals](#principals) — 1
-- [Product](#product) — 3
-- [Profiles](#profiles) — 1
-- [Provider Accounts](#provider-accounts) — 1
-- [Providers](#providers) — 1
-- [QR Codes](#qr-codes) — 1
-- [Relay](#relay) — 1
-- [Remote](#remote) — 2
-- [Scheduling](#scheduling) — 1
-- [Secrets](#secrets) — 1
-- [Security](#security) — 1
-- [Services](#services) — 1
-- [Session Content](#session-content) — 10
-- [Sessions & Replay](#sessions-replay) — 4
-- [Settings Sync](#settings-sync) — 1
-- [Sharing](#sharing) — 1
-- [Shell & Session](#shell-session) — 20
-- [Skills](#skills) — 1
-- [Subscriptions](#subscriptions) — 1
-- [Tasks](#tasks) — 1
-- [Teamwork](#teamwork) — 1
-- [Testing](#testing) — 1
-- [Voice & TTS](#voice-tts) — 1
-- [Web Search](#web-search) — 1
-- [Work Plans](#work-plans) — 1
-- [Workstreams](#workstreams) — 1
-- [Worktrees](#worktrees) — 1
+- [Automation](#automation): 1
+- [Branches](#branches): 3
+- [Channels](#channels): 1
+- [Check-in](#check-in): 1
+- [Checkpoints](#checkpoints): 3
+- [CI](#ci): 1
+- [Cloudflare](#cloudflare): 1
+- [Cluster](#cluster): 1
+- [Codebase](#codebase): 1
+- [Configuration](#configuration): 1
+- [Control Room](#control-room): 5
+- [Conversation](#conversation): 1
+- [Cost](#cost): 1
+- [Diff & Review](#diff-review): 2
+- [Discovery](#discovery): 1
+- [Editor](#editor): 1
+- [Eval](#eval): 1
+- [Experience](#experience): 8
+- [Fleet](#fleet): 1
+- [Git](#git): 1
+- [Guidance](#guidance): 2
+- [Health](#health): 1
+- [Hooks](#hooks): 1
+- [Image](#image): 1
+- [Incidents](#incidents): 1
+- [Intelligence](#intelligence): 1
+- [Knowledge](#knowledge): 1
+- [Local Auth](#local-auth): 1
+- [Local Providers](#local-providers): 1
+- [Local Runtime](#local-runtime): 10
+- [Local Setup](#local-setup): 1
+- [Mail & Calendar](#mail-calendar): 2
+- [Managed Runtime](#managed-runtime): 1
+- [Marketplace](#marketplace): 1
+- [MCP](#mcp): 1
+- [Memory](#memory): 5
+- [Notifications](#notifications): 1
+- [Onboarding](#onboarding): 1
+- [Operator](#operator): 10
+- [Owner Profile](#owner-profile): 1
+- [Payments](#payments): 1
+- [Permissions](#permissions): 1
+- [Planning](#planning): 2
+- [Platform](#platform): 1
+- [Platform Access](#platform-access): 5
+- [Platform Services](#platform-services): 3
+- [Plugins](#plugins): 1
+- [Policy](#policy): 1
+- [Principals](#principals): 1
+- [Product](#product): 3
+- [Profiles](#profiles): 1
+- [Provider Accounts](#provider-accounts): 1
+- [Providers](#providers): 1
+- [QR Codes](#qr-codes): 1
+- [Relay](#relay): 1
+- [Remote](#remote): 2
+- [Scheduling](#scheduling): 1
+- [Secrets](#secrets): 1
+- [Security](#security): 1
+- [Services](#services): 1
+- [Session Content](#session-content): 10
+- [Sessions & Replay](#sessions-replay): 4
+- [Settings Sync](#settings-sync): 1
+- [Sharing](#sharing): 1
+- [Shell & Session](#shell-session): 20
+- [Skills](#skills): 1
+- [Subscriptions](#subscriptions): 1
+- [Tasks](#tasks): 1
+- [Teamwork](#teamwork): 1
+- [Testing](#testing): 1
+- [Voice & TTS](#voice-tts): 1
+- [Web Search](#web-search): 1
+- [Work Plans](#work-plans): 1
+- [Workstreams](#workstreams): 1
+- [Worktrees](#worktrees): 1
 
 ## Automation
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/graph` | — | `<workstreamId>` | Show a workstream's task graph — nodes, edges, states, and pool posture |
+| `/graph` | — | `<workstreamId>` | Show a workstream's task graph: nodes, edges, states, and pool posture |
 
 ## Branches
 
@@ -124,7 +124,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/ci` | — | `status <repo-or-pr> \| watch <repo-or-pr> <deliveryChannel> [--fix-session] \| watches \| unwatch <id>` | CI-watch: one-shot per-job status and standing watches over the operator surface |
+| `/ci` | — | `status <repo-or-pr> \| watch <repo-or-pr> <deliveryChannel> [--fix-session] \| watches \| unwatch <id>` | CI-watch: one-shot per-job status and standing watches over the operator panel |
 
 ## Cloudflare
 
@@ -136,13 +136,13 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/cluster` | — | `[status\|create\|join\|key\|nodes\|forget\|rotate\|leave\|rename\|groups] — status is the default; add --host/--port/--token to reach a daemon on another machine` | Share inbound channel work with your other goodvibes machines on this network |
+| `/cluster` | — | `[status\|create\|join\|key\|nodes\|forget\|rotate\|leave\|rename\|groups]: status is the default; add --host/--port/--token to reach a daemon on another machine` | Share inbound channel work with your other goodvibes machines on this network |
 
 ## Codebase
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/codebase` | — | `build \| status \| search <query...> [--limit n]` | Repo source-tree code index — build, inspect, and search |
+| `/codebase` | — | `build \| status \| search <query...> [--limit n]` | Repo source-tree code index: build, inspect, and search |
 
 ## Configuration
 
@@ -220,20 +220,20 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/git` | `/g` | `[status\|log\|diff]` | Git repository commands — status, log, diff |
+| `/git` | `/g` | `[status\|log\|diff]` | Git repository commands: status, log, diff |
 
 ## Guidance
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/guidance` | — | `[review\|dismiss <id>\|reset [id]]` | Review contextual operational guidance without interrupting the main conversation flow |
-| `/welcome` | `/guide` | `[open\|print]` | Open the product entry surface for the onboarding wizard, security, marketplace, remote, and operator workflows |
+| `/welcome` | `/guide` | `[open\|print]` | Open the product entry point for the onboarding wizard, security, marketplace, remote, and operator workflows |
 
 ## Health
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/health` | `/doctor` | `[report\|review\|open\|setup\|services\|sandbox\|provider\|accounts\|auth\|settings\|intelligence\|remote\|mcp\|memory\|metrics\|continuity\|worktrees\|maintenance\|term\|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)` | Health workspace for startup posture, service readiness, sandbox posture, and provider health |
+| `/health` | `/doctor` | `[report\|review\|open\|setup\|services\|sandbox\|provider\|accounts\|auth\|settings\|intelligence\|remote\|mcp\|memory\|metrics\|continuity\|worktrees\|maintenance\|term\|repair [domain]]: bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)` | Health workspace for startup posture, service readiness, sandbox posture, and provider health |
 
 ## Hooks
 
@@ -289,7 +289,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | `/pin` | — | `<model-id>` | Pin a model to the favorites list |
 | `/refresh-models` | — | — | Refresh model catalog, benchmarks, and token limits |
 | `/secrets` | — | `set <KEY> <value> [--user\|--project] [--secure\|--plaintext] \| link <KEY> <secret-ref> [--user\|--project] [--secure\|--plaintext] \| get <KEY> \| test <secret-ref> \| providers \| list \| delete <KEY> [--user\|--project] [--secure\|--plaintext]` | Persistent secret storage: hierarchy-aware, external secret refs, providers (a quick one-off masked value instead: /secret) |
-| `/tools` | `/t` | `[review\|panel]` | List available tools and review compact native tool capability surfaces |
+| `/tools` | `/t` | `[review\|panel]` | List available tools and review compact native tool capabilities |
 | `/unpin` | — | `<model-id>` | Unpin a model from the favorites list |
 
 ## Local Setup
@@ -329,7 +329,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | --- | --- | --- | --- |
 | `/handoff` | — | `[export <path> [scope] \| inspect <path> \| import <path>]` | Dedicated front-door for reviewable memory handoff bundles |
 | `/memory-sync` | `/memsync` | `[export <path> [scope] \| import <path>]` | Dedicated front-door for durable memory export/import and bundle exchange |
-| `/recall` | `/rc`, `/memory`, `/mem` | `[<subcommand> [args]] — bare opens the modal; report prints the subcommand usage text` | Bare opens the Memory modal; project memory subcommands add decisions, constraints, incidents, and patterns with provenance |
+| `/recall` | `/rc`, `/memory`, `/mem` | `[<subcommand> [args]]: bare opens the modal; report prints the subcommand usage text` | Bare opens the Memory modal; project memory subcommands add decisions, constraints, incidents, and patterns with provenance |
 | `/session-memory` | — | `[queue [limit] \| export <path> \| add <class> <summary...>]` | Dedicated front-door for session-scoped memory capture and review. All subcommands are filtered to scope=session |
 | `/team-memory` | — | `[queue [limit] \| export <path> \| import <path> \| capture policy]` | Dedicated front-door for team/shared memory review and exchange. The queue and export subcommands are filtered to scope=team |
 
@@ -358,7 +358,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | `/prev-error` | `/pe` | — | Jump to the previous error message in the conversation |
 | `/profiles` | — | — | Browse and load config profiles |
 | `/settings` | `/cfg-ui` | — | Open the fullscreen configuration workspace |
-| `/tool` | — | `verify <name> \| verify-all \| contract show <name>` | Tool contract verification — verify registered tool contracts |
+| `/tool` | — | `verify <name> \| verify-all \| contract show <name>` | Verify registered tool contracts |
 
 ## Owner Profile
 
@@ -382,7 +382,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/plan` | — | `[on \| off \| toggle]` | Enter or exit plan mode — a read-only planning posture where writes, commands, and network calls are blocked |
+| `/plan` | — | `[on \| off \| toggle]` | Enter or exit plan mode, a read-only planning posture where writes, commands, and network calls are blocked |
 | `/project-plan` | `/planning` | `[panel \| approve \| dismiss \| answer <n> <text> \| list \| show <id> \| mode \| explain \| override <strategy> \| status \| clear \| <planning goal>]` | Inspect or seed TUI-owned project planning state |
 
 ## Platform
@@ -405,8 +405,8 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/deeplink` | `/link` | `[review\|open <surface> [target]\|bundle export <path>\|bundle inspect <path>]` | Review and package deep-link entrypoints for setup and operator surfaces |
-| `/helpers` | `/integration-api` | `[review\|bundle export <path>\|bundle inspect <path>]` | Review local integration helper API surfaces for remote clients and future web frontends |
+| `/deeplink` | `/link` | `[review\|open <surface> [target]\|bundle export <path>\|bundle inspect <path>]` | Review and package deep-link entrypoints for setup and operator screens |
+| `/helpers` | `/integration-api` | `[review\|bundle export <path>\|bundle inspect <path>]` | Review local integration helper APIs for remote clients and future web frontends |
 | `/storage` | — | `[review\|list\|delete <key>\|bundle export <path>\|bundle inspect <path>]` | Review secure storage posture and export portable storage metadata bundles |
 
 ## Plugins
@@ -503,13 +503,13 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | `/export` | — | `[format] [path]` | Export conversation to a Markdown file |
 | `/load` | — | `<name>` | Load a saved session |
 | `/note` | — | `[list\|add <text>\|remove <id>]` | Manage session notes (pinned across context compaction) |
-| `/redo` | — | `[rewind\|file]` | Redo last undone action. /redo rewind — re-apply the last undone /rewind. /redo file — re-apply last reverted file. /redo — restore conversation turn |
+| `/redo` | — | `[rewind\|file]` | Redo last undone action. /redo rewind re-applies the last undone /rewind. /redo file re-applies the last reverted file. /redo alone restores a conversation turn |
 | `/retry` | `/r` | `[modified text]` | Re-send the last user message |
 | `/save` | — | `[name]` | Save current session to .goodvibes/tui/sessions/ |
 | `/sessions` | — | `[resume <id\|name>]` | List saved sessions |
 | `/template` | `/tmpl` | `save <name> \| use <name> [args] \| list \| edit <name> \| delete <name>` | Manage and use prompt templates |
 | `/title` | — | `[text]` | Show or set the conversation title |
-| `/undo` | — | `[rewind\|file]` | Undo last action. /undo rewind — reverse the last /rewind. /undo file — revert last file write/edit. /undo — remove last conversation turn |
+| `/undo` | — | `[rewind\|file]` | Undo last action. /undo rewind reverses the last /rewind. /undo file reverts the last file write/edit. /undo alone removes the last conversation turn |
 
 ## Sessions & Replay
 
@@ -517,14 +517,14 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | --- | --- | --- | --- |
 | `/hosted` | — | `[new\|list\|attach\|say\|later\|cancel\|detach\|kill] [args]` | Daemon-hosted sessions: start, join, steer and leave a conversation whose loop runs in the daemon |
 | `/replay` | `/rep` | `[load [runId] \| step [n] \| seek <rev> \| diff \| export <path>]` | Deterministic replay: load, step, seek, diff, and export recorded runs |
-| `/resume` | — | `[session-id-or-name]` | Resume a previous session — pick from a list, or pass an id/name |
+| `/resume` | — | `[session-id-or-name]` | Resume a previous session, pick from a list or pass an id/name |
 | `/session` | `/sess` | `<subcommand> [args]` | Session lifecycle and orchestration: list, resume, fork, save, export, link-task, handoff, graph, cancel |
 
 ## Settings Sync
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/settings-sync` | `/settingssync` | `[panel\|report\|review\|show <key>\|staged\|conflicts\|resolve <key> <local\|synced>\|failures\|rollback-history\|export <path>\|inspect <path>\|pull <path>\|push <path>\|lock <key> <source> <reason...>\|unlock <key>] — bare opens the modal` | Open the settings sync modal (bare); review posture, export/import bundles, or resolve conflicts by subcommand |
+| `/settings-sync` | `/settingssync` | `[panel\|report\|review\|show <key>\|staged\|conflicts\|resolve <key> <local\|synced>\|failures\|rollback-history\|export <path>\|inspect <path>\|pull <path>\|push <path>\|lock <key> <source> <reason...>\|unlock <key>]: bare opens the modal` | Open the settings sync modal (bare); review posture, export/import bundles, or resolve conflicts by subcommand |
 
 ## Sharing
 
@@ -542,7 +542,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | `/compact-history` | `/compaction-history` | — | Show compaction history for this session |
 | `/debug` | — | — | Toggle debug mode |
 | `/effort` | `/e` | `[level]` | Show or set reasoning effort level |
-| `/find` | `/findtext` | — | Search THIS conversation transcript (same as Ctrl+F) — searching the web instead? use /search |
+| `/find` | `/findtext` | — | Search THIS conversation transcript (same as Ctrl+F). Searching the web instead? Use /search |
 | `/help` | `/h`, `/?` | — | Browse every command with its description; picking one runs it |
 | `/keep` | — | `<text>` | Pin text to session memory (survives compaction) |
 | `/keybindings` | `/kb` | — | List current keyboard bindings and their config file path |
@@ -550,8 +550,8 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | `/palette` | `/k` | — | Open the command palette to search and run any slash command |
 | `/paste` | `/clip` | — | Insert clipboard text or image into the prompt |
 | `/pastes` | `/pending-pastes` | `[pN]` | Preview the actual content behind each [TEXT: pN, M lines] fold in the composer, before you submit |
-| `/power` | — | `[status \| on \| off \| toggle]` | Host sleep ownership — show status and toggle keep-awake |
-| `/queue` | `/q` | `[list \| edit <n> <text> \| delete <n>]` | Mid-turn message queue — list, edit, or delete still-undelivered messages |
+| `/power` | — | `[status \| on \| off \| toggle]` | Host sleep ownership: show status and toggle keep-awake |
+| `/queue` | `/q` | `[list \| edit <n> <text> \| delete <n>]` | Mid-turn message queue: list, edit, or delete still-undelivered messages |
 | `/quit` | `/:q` | — | Exit the application |
 | `/reset` | — | — | Full reset: clear display and conversation context |
 | `/shortcuts` | `/keys`, `/keybinds` | — | Show keyboard shortcuts reference |
@@ -597,7 +597,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/search` | — | `<query> [--limit <n>]` | Web search — ranked results with source labels (searching THIS transcript? use /find) |
+| `/search` | — | `<query> [--limit <n>]` | Web search, ranked results with source labels (searching THIS transcript? use /find) |
 
 ## Work Plans
 

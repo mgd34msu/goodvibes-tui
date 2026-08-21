@@ -121,13 +121,13 @@ describe('StateTool', () => {
   // get / set round-trip
   // -------------------------------------------------------------------------
 
-  test('set and get round-trip — string value', async () => {
+  test('set and get round-trip: string value', async () => {
     await tool.execute({ mode: 'set', values: { myKey: 'hello' } });
     const res = await run<StateGetOutput>(tool, { mode: 'get', keys: ['myKey'] });
     expect(res.parsed.values.myKey).toBe('hello');
   });
 
-  test('set and get round-trip — numeric value', async () => {
+  test('set and get round-trip: numeric value', async () => {
     await tool.execute({ mode: 'set', values: { count: 42 } });
     const res = await run<StateGetOutput>(tool, { mode: 'get', keys: ['count'] });
     expect(res.parsed.values.count).toBe(42);
@@ -216,7 +216,7 @@ describe('StateTool', () => {
   });
 
   // -------------------------------------------------------------------------
-  // set — reserved key rejection
+  // set, reserved key rejection
   // -------------------------------------------------------------------------
 
   test('set rejects reserved key "id" without partially writing safe values', async () => {

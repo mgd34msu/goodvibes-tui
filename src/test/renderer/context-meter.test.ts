@@ -1,5 +1,5 @@
 /**
- * Context meter threshold rendering tests — TASK-055.
+ * Context meter threshold rendering tests, TASK-055.
  *
  * Validates:
  *   1. Threshold marker ('▸') appears in the bar at the threshold column.
@@ -46,7 +46,7 @@ function buildFooterLines(
 
 describe('context meter threshold marker', () => {
   test('threshold marker \'▸\' present when usage is below compact threshold', () => {
-    // 50% usage, threshold at 80% — marker should appear in the empty region
+    // 50% usage, threshold at 80%, marker should appear in the empty region
     const texts = buildFooterLines(50_000, 100_000, 0.8);
     const barLine = texts.find((t) => t.includes('Context Usage'));
     expect(barLine).toBeDefined();
@@ -61,7 +61,7 @@ describe('context meter threshold marker', () => {
   });
 
   test('no threshold marker when usage has consumed the threshold column (filled region)', () => {
-    // 90% usage, threshold at 80% — bar is 90% filled, threshold col is inside filled region
+    // 90% usage, threshold at 80%, bar is 90% filled, threshold col is inside filled region
     const texts = buildFooterLines(90_000, 100_000, 0.8);
     const barLine = texts.find((t) => t.includes('Context Usage'));
     expect(barLine).toBeDefined();
@@ -80,7 +80,7 @@ describe('context meter threshold marker', () => {
     const texts = buildFooterLines(100_000, 100_000, 0.8);
     const barLine = texts.find((t) => t.includes('Context Usage'));
     expect(barLine).toBeDefined();
-    // At 100%, all cells are filled — no empty region for the marker
+    // At 100%, all cells are filled, no empty region for the marker
     expect(barLine).not.toContain('▸');
   });
 });
@@ -113,22 +113,22 @@ describe('context meter color at threshold', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Config path regression — verifies that main.ts converts percent → fraction
+// Config path regression, verifies that main.ts converts percent → fraction
 // ---------------------------------------------------------------------------
 // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80).
 // main.ts must divide by 100 before passing to UIFactory. Without the fix,
 // the raw value (80) reaches ui-factory, which clamps Math.min(1, 80) → 1.0,
-// making the threshold indistinguishable from 100% — no marker at 50% usage.
+// making the threshold indistinguishable from 100%, no marker at 50% usage.
 describe('context meter config path regression (percent→fraction mapping)', () => {
-  test('raw integer 80 (uncorrected config value) is clamped to 1.0 by ui-factory — no marker at 50%', () => {
+  test('raw integer 80 (uncorrected config value) is clamped to 1.0 by ui-factory: no marker at 50%', () => {
     // This represents the OLD broken behavior: raw percent integer passed through.
     // thresholdFraction = Math.min(1, 80) = 1.0; at 50% fill the threshold col is beyond filled,
-    // but thresholdCol = Math.round(1.0 * barWidth) which equals barWidth — outside the bar loop.
+    // but thresholdCol = Math.round(1.0 * barWidth) which equals barWidth, outside the bar loop.
     // Result: no marker rendered (the bug).
     const texts = buildFooterLines(50_000, 100_000, 80);
     const barLine = texts.find((t) => t.includes('Context Usage'));
     expect(barLine).toBeDefined();
-    // With raw integer 80, the threshold column is off-screen — no marker.
+    // With raw integer 80, the threshold column is off-screen, no marker.
     expect(barLine).not.toContain('▸');
   });
 
@@ -143,7 +143,7 @@ describe('context meter config path regression (percent→fraction mapping)', ()
 });
 
 // ---------------------------------------------------------------------------
-// Color-switch assertions — fg codes: green=82, yellow=220, red=196
+// Color-switch assertions, fg codes: green=82, yellow=220, red=196
 // ---------------------------------------------------------------------------
 /**
  * Build a raw footer Line[] and find the bar line (Context Usage line).
@@ -180,19 +180,19 @@ function buildFooterBarLineFg(
 
 describe('context meter fg color switches at threshold', () => {
   test('usage just below threshold → green (82)', () => {
-    // 79% usage, threshold 0.8 — pct (0.79) < compactThreshold (0.8) → color '82'
+    // 79% usage, threshold 0.8, pct (0.79) < compactThreshold (0.8) → color '82'
     const fg = buildFooterBarLineFg(79_000, 100_000, 0.8);
     expect(fg).toBe('82');
   });
 
   test('usage at threshold → yellow (220)', () => {
-    // 80% usage, threshold 0.8 — pct (0.8) >= compactThreshold (0.8), pct < 1.0 → color '220'
+    // 80% usage, threshold 0.8, pct (0.8) >= compactThreshold (0.8), pct < 1.0 → color '220'
     const fg = buildFooterBarLineFg(80_000, 100_000, 0.8);
     expect(fg).toBe('220');
   });
 
   test('usage at 100% → red (196)', () => {
-    // 100% usage — pct (1.0) >= 1.0 → color '196'
+    // 100% usage, pct (1.0) >= 1.0 → color '196'
     const fg = buildFooterBarLineFg(100_000, 100_000, 0.8);
     expect(fg).toBe('196');
   });

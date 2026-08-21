@@ -1,7 +1,7 @@
 /**
  * Containment tests for the payment card's CVV (and, where noted, the other
  * card secret fields): a value stored through the daemon secret path must
- * never appear in plaintext anywhere else — not in a log line, not in any
+ * never appear in plaintext anywhere else, not in a log line, not in any
  * rendered frame, not in the settings modal's mid-edit buffer, not in input
  * history, not in any export or diagnostic dump this app can produce.
  *
@@ -10,14 +10,14 @@
  * file on disk the daemon reads), never in a TUI-local store and never in
  * the ordinary user/client settings tier; and every card secret this app
  * writes lands at daemon scope, from every entry surface (the settings modal
- * and /payments card alike) — not just the one path that happened to pass
+ * and /payments card alike), not just the one path that happened to pass
  * an explicit scope before this round's fix.
  *
  * Each test below names the one surface it protects and asserts against
  * REAL production code paths (the settings modal's actual render function,
  * the actual /payments card command handler, the actual composer key-route
  * handler, the actual redaction functions a support-bundle export runs
- * through) — not a mock standing in for them. A fake CVV value is used
+ * through), not a mock standing in for them. A fake CVV value is used
  * throughout; it is never a real card number or code.
  */
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
@@ -96,7 +96,7 @@ describe('payments CVV containment', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 1. Storage: the config value is a secret reference, never the raw CVV —
+  // 1. Storage: the config value is a secret reference, never the raw CVV,
   //    AND it lands in the daemon-owned config tier, not a TUI-local file.
   // -------------------------------------------------------------------------
   test('storing the CVV through the daemon secret path writes a goodvibes:// reference to the real ConfigManager, never the raw value', async () => {
@@ -109,7 +109,7 @@ describe('payments CVV containment', () => {
     expect(String(configValue)).not.toContain(FAKE_CVV);
 
     // The reference lives in the daemon's own settings file (payments.* is a
-    // daemon-owned config prefix) — never in a TUI-local JSON file (there is
+    // daemon-owned config prefix), never in a TUI-local JSON file (there is
     // no such file anymore) and never in the ordinary global/user settings
     // file this same ConfigManager also owns.
     const daemonTierPath = cm.getDaemonTierPath();
@@ -118,7 +118,7 @@ describe('payments CVV containment', () => {
     expect(daemonRaw.payments?.cardCvv).toBe(stored);
     expect(existsSync(join(tmpDir, '.goodvibes', 'tui', 'payments.json'))).toBe(false);
     // The ordinary global (client-tier) settings file never even needed to be
-    // created — nothing in this write touched it, since payments.* is
+    // created, nothing in this write touched it, since payments.* is
     // entirely daemon-owned.
     if (existsSync(cm.getConfigPath())) {
       const globalRaw = JSON.parse(readFileSync(cm.getConfigPath(), 'utf-8')) as Record<string, unknown>;
@@ -126,7 +126,7 @@ describe('payments CVV containment', () => {
     }
 
     // Functional correctness: the raw value really did land in the secret store,
-    // under the daemon scope (the daemon — not just this interactive client —
+    // under the daemon scope (the daemon, not just this interactive client,
     // is what needs it for an unattended purchase).
     const secretKey = buildGoodVibesSecretKey('payments.cardCvv');
     expect(configValue).toBe(buildGoodVibesSecretRef(secretKey));
@@ -143,7 +143,7 @@ describe('payments CVV containment', () => {
     const daemonRaw = JSON.parse(readFileSync(daemonTierPath, 'utf-8')) as { payments?: { cvvHandling?: unknown } };
     expect(daemonRaw.payments?.cvvHandling).toBe('prompt');
 
-    // Not in the ordinary global (client-tier) settings file — which, since
+    // Not in the ordinary global (client-tier) settings file, which, since
     // payments.* is entirely daemon-owned, never even needed to be created.
     if (existsSync(cm.getConfigPath())) {
       const globalRaw = JSON.parse(readFileSync(cm.getConfigPath(), 'utf-8')) as Record<string, unknown>;
@@ -165,21 +165,21 @@ describe('payments CVV containment', () => {
   // 1c. Scope defaulting: every daemon-owned secret-backed key defaults to
   //     daemon scope; a genuinely client-owned key is unaffected.
   // -------------------------------------------------------------------------
-  describe('defaultSecretBackedScope — the fix behind every scope assertion below', () => {
+  describe('defaultSecretBackedScope: the fix behind every scope assertion below', () => {
     test('daemon-owned keys (payments.*, surfaces.*) default to daemon scope', () => {
       expect(defaultSecretBackedScope(PAYMENTS_CARD_CVV_CONFIG_KEY)).toBe('daemon');
       expect(defaultSecretBackedScope('surfaces.slack.botToken')).toBe('daemon');
       expect(defaultSecretBackedScope('surfaces.telegram.botToken')).toBe('daemon');
     });
 
-    test('a client-owned key is unaffected — still defaults to user scope', () => {
+    test('a client-owned key is unaffected; still defaults to user scope', () => {
       expect(defaultSecretBackedScope('behavior.autoApprove')).toBe('user');
     });
   });
 
   // -------------------------------------------------------------------------
   // 1d. The settings modal's generic secret-edit path (setSecretBackedSettingValue)
-  //     now writes every daemon-owned secret at daemon scope — the exact bug
+  //     now writes every daemon-owned secret at daemon scope, the exact bug
   //     this round fixed, generalized past the card special-case.
   // -------------------------------------------------------------------------
   describe('settings modal secret writes land at the right scope (Step 3 fix)', () => {
@@ -205,7 +205,7 @@ describe('payments CVV containment', () => {
       for (const call of recorder.calls) expect(call.scope).toBe('daemon');
     });
 
-    test('a messaging-surface secret field (same defect class — surfaces.slack.botToken) also writes at daemon scope', () => {
+    test('a messaging-surface secret field (same defect class; surfaces.slack.botToken) also writes at daemon scope', () => {
       const recorder = recordingSecretsManager();
       setSecretBackedSettingValue({
         key: 'surfaces.slack.botToken',
@@ -246,7 +246,7 @@ describe('payments CVV containment', () => {
       expect(modal.selectedIndex).toBeGreaterThanOrEqual(0);
     }
 
-    test('the CVV row never renders the typed value while editing — table row and the "Current:" doc line', () => {
+    test('the CVV row never renders the typed value while editing; table row and the "Current:" doc line', () => {
       selectCvvEntry();
       modal.editingMode = true;
       modal.editBuffer = FAKE_CVV;
@@ -262,7 +262,7 @@ describe('payments CVV containment', () => {
       modal.editingMode = true;
       modal.editBuffer = FAKE_CVV;
       // The in-memory editBuffer necessarily holds the plaintext while editing
-      // (there is no way to edit a value without holding it somewhere) — what
+      // (there is no way to edit a value without holding it somewhere), what
       // must never happen is that value reaching a render. This asserts the
       // render path specifically, the same invariant the row assertion above
       // proves, pinned here under its own name because it is the exact surface
@@ -310,7 +310,7 @@ describe('payments CVV containment', () => {
       expect(modal.getSelected()?.currentValue).toBe('prompt');
       expect(modal.lastSettingEffectMessage ?? '').toContain('disables unattended purchasing');
       // The exact SDK string, not a locally-authored copy: this is the
-      // shared-string fix (Step 4) — a local fork of this text is the drift
+      // shared-string fix (Step 4), a local fork of this text is the drift
       // class that caused the platform's Telegram outage.
       expect(modal.lastSettingEffectMessage).toBe(SDK_CVV_PROMPT_TRADEOFF_WARNING);
       // And it is NOT the old TUI-local literal this session deleted.
@@ -426,7 +426,7 @@ describe('payments CVV containment', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 4b. Card details are entered only at a local terminal or the webui —
+  // 4b. Card details are entered only at a local terminal or the webui,
   //     the entry-surface boundary is decided by the SDK's own allowlist,
   //     never a local literal in this command.
   // -------------------------------------------------------------------------
@@ -455,7 +455,7 @@ describe('payments CVV containment', () => {
       startCardEntryFlow(ctxNoConceal, 'telegram');
 
       // The flow must never even OFFER the masked-input prompt on a surface
-      // that cannot accept the answer — prompting is itself the harm (see
+      // that cannot accept the answer, prompting is itself the harm (see
       // payment-card-intake.ts's header).
       expect(concealedInputOffered).toBe(false);
       const transcript = printed.join('\n');
@@ -467,7 +467,7 @@ describe('payments CVV containment', () => {
       }
     });
 
-    test('startCardEntryFlow proceeds normally on this command\'s real surface (tui) — unchanged behavior', () => {
+    test('startCardEntryFlow proceeds normally on this command\'s real surface (tui); unchanged behavior', () => {
       const { ctx, printed } = makeCommandCtx();
       let concealedInputOffered = false;
       const ctxWithConceal = {
@@ -481,7 +481,7 @@ describe('payments CVV containment', () => {
       expect(printed.join('\n')).not.toContain("can't take card details");
     });
 
-    test('runPaymentsCommand(["card"], ...) — the real registered command — uses this same gate (defaults to CARD_ENTRY_SURFACE)', () => {
+    test('runPaymentsCommand(["card"], ...), the real registered command, uses this same gate (defaults to CARD_ENTRY_SURFACE)', () => {
       const { ctx } = makeCommandCtx();
       let concealedInputOffered = false;
       const ctxWithConceal = {
@@ -502,7 +502,7 @@ describe('payments CVV containment', () => {
 
     // Minimal KeyRouteState: submitConcealedInput simulates the composer's
     // real InputHandler.submitConcealedInput, which returns true and delivers
-    // the plaintext when concealed mode is active — see concealed-input.ts's
+    // the plaintext when concealed mode is active, see concealed-input.ts's
     // submitConcealedInputFor. The real enter-key route
     // (handlePromptKeyToken in handler-feed-routes.ts) is driven directly here,
     // not reimplemented, so this proves the actual ordering: the concealed
@@ -544,7 +544,7 @@ describe('payments CVV containment', () => {
 
     // Widening cast: `delivered` is only ever reassigned inside the
     // `submitConcealedInput` closure above, and TS's control-flow narrowing
-    // does not see across that call boundary — it keeps treating the
+    // does not see across that call boundary, it keeps treating the
     // variable as pinned to its literal `null` initializer here.
     expect(delivered as string | null).toBe(FAKE_CVV);
     expect(addSpy).not.toHaveBeenCalled();
@@ -562,7 +562,7 @@ describe('payments CVV containment', () => {
       await persistSecretBackedConfigValue(cm, secrets, PAYMENTS_CARD_CVV_CONFIG_KEY, FAKE_CVV, { scope: 'daemon' });
       const rawConfig = { payments: { cardCvv: cm.get(PAYMENTS_CARD_CVV_CONFIG_KEY) } };
       const redacted = redactConfig(rawConfig);
-      // Not redacted (a goodvibes:// reference is intentionally left visible —
+      // Not redacted (a goodvibes:// reference is intentionally left visible,
       // see shouldRedactValue in redaction.ts), but it is also not the CVV.
       expect(JSON.stringify(redacted.value)).not.toContain(FAKE_CVV);
       expect(String((redacted.value as { payments: { cardCvv: unknown } }).payments.cardCvv)).toMatch(/^goodvibes:\/\/secrets\//);
@@ -571,7 +571,7 @@ describe('payments CVV containment', () => {
     test('DEFECT FOUND AND FIXED: a raw literal under payments.card* is redacted by name, not just by suffix', () => {
       // Before this session's fix, isSensitiveConfigPath's suffix pattern
       // (…secret|password|token|keyFile$) did not match "cardNumber",
-      // "cardExpiry" or "cardholderName" — so if a raw value were EVER stored
+      // "cardExpiry" or "cardholderName", so if a raw value were EVER stored
       // under one of these keys instead of a goodvibes:// reference (a bug
       // elsewhere, not the normal path exercised above), a support-bundle
       // export would have carried it in plaintext. This proves the backstop:
@@ -594,7 +594,7 @@ describe('payments CVV containment', () => {
       expect(serialized).not.toContain(FAKE_CARD_NUMBER);
       expect(serialized).not.toContain(FAKE_EXPIRY);
       expect(serialized).not.toContain(FAKE_CARDHOLDER);
-      // The non-card, non-secret field is untouched — redaction is scoped to
+      // The non-card, non-secret field is untouched, redaction is scoped to
       // the four card-material fields, not to the whole payments domain.
       expect(serialized).toContain('123 Fake St');
       expect(redacted.redactedPaths).toContain('payments.cardNumber');

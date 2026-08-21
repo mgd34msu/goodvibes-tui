@@ -1,5 +1,5 @@
 /**
- * handler-types.ts — Leaf interface for InputHandler.
+ * handler-types.ts, Leaf interface for InputHandler.
  *
  * Extracted from handler.ts to break circular import chains between handler.ts
  * and handler-interactions.ts / handler-onboarding.ts / handler-onboarding-cloudflare.ts.
@@ -137,8 +137,8 @@ export interface InputHandlerLike {
   handleBookmark(): void;
   handleBlockToggle(): void;
   handleDiffApply(): boolean;
-  /** The absolute history line of the bottom-most visible block — the block
-   *  the user is actually looking at — used to anchor every one of the
+  /** The absolute history line of the bottom-most visible block, the block
+   *  the user is actually looking at, used to anchor every one of the
    *  actions above instead of the (possibly off-screen-above) raw scrollTop. */
   getBlockAnchorLine(): number;
 

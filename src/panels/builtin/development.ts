@@ -8,8 +8,8 @@ import { requireUiServices, withUnconfiguredFallback } from './shared.ts';
 
 // (the purge): plan, intelligence, explorer, preview, and symbols were
 // registered here before the purge. plan was RETIRE-INTO-FLEET (its
-// execution-plan view is subsumed by Fleet — operations.ts:84); the other
-// four were DELETE-disposition (no surviving human surface — intelligence's
+// execution-plan view is subsumed by Fleet, operations.ts:84); the other
+// four were DELETE-disposition (no surviving human surface, intelligence's
 // read-model still backs the surviving `/intelligence` CLI subcommands, see
 // intelligence-runtime.ts; explorer/preview/symbols had no dedicated
 // read-model to preserve). See .goodvibes/audit/2026-07-04-wave6-briefs.json
@@ -31,7 +31,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
   });
 
   // Compat: '/panel open plan' (and any saved layout/muscle memory) still
-  // resolves — redirected to fleet, which absorbs the execution-plan view.
+  // resolves, redirected to fleet, which absorbs the execution-plan view.
   manager.registerAlias('plan', 'fleet');
 
   manager.registerType({
@@ -57,7 +57,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
   });
 
   // 'inspector' registration moved to builtin/agent.ts (category
-  // 'agent') — it now absorbs the merged agent-logs capabilities.
+  // 'agent'), it now absorbs the merged agent-logs capabilities.
 
   // always registered (was gated behind `if (deps.getOrchestratorUsage)`,
   // so `/panel open cost` reported "Unknown panel" on builds without usage

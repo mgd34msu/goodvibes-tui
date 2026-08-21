@@ -1,7 +1,7 @@
 /**
  * Bug fix (a replay regression): opening the Fleet panel via the footer
  * status-strip route (Down to focus the process indicator, then Enter) opened
- * the panel WITHOUT transferring keyboard focus to it — j/k/K/i silently
+ * the panel WITHOUT transferring keyboard focus to it, j/k/K/i silently
  * landed in the composer until the user manually pressed Tab. The Ctrl+P
  * panel-picker launcher route (ui-openers.ts openPanelPicker) focuses
  * correctly because it calls panelManager.focusPanels() right after opening;
@@ -10,7 +10,7 @@
  * did the same.
  *
  * This test drives the REAL InputHandler.feed() pipeline (not just the
- * isolated handleIndicatorFocusToken route — see
+ * isolated handleIndicatorFocusToken route, see
  * panel-entry-points-reachable.test.ts for that) so a regression in the
  * openFleetPanel() closure itself is caught, not just a regression in the
  * route function it is passed to.
@@ -114,7 +114,7 @@ describe('opening the Fleet panel via the footer indicator route transfers keybo
     expect(handler.panelFocused).toBe(true);
   });
 
-  test('immediately after opening, j reaches the fleet panel — nothing lands in the composer', () => {
+  test('immediately after opening, j reaches the fleet panel; nothing lands in the composer', () => {
     const panelManager = new PanelManager();
     const stub = makeStubFleetPanel();
     panelManager.registerType({

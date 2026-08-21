@@ -44,7 +44,7 @@ import { trackDisposables } from '../helpers/disposables.ts';
 
 /**
  * registerBuiltinPanels wants a `MemoryAccess` client (the async facade), not
- * the raw synchronous `MemoryRegistry` — mirrors the real wiring in
+ * the raw synchronous `MemoryRegistry`, mirrors the real wiring in
  * runtime/services.ts (`new MemorySpineClient({ local: createLocalMemoryAccess(memoryRegistry) })`).
  */
 function makeMemoryAccess(registry: MemoryRegistry): MemorySpineClient {
@@ -52,7 +52,7 @@ function makeMemoryAccess(registry: MemoryRegistry): MemorySpineClient {
 }
 
 /**
- * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * A composed runtime graph starts a dozen pollers while it builds, the fleet
  * registry tick, the config-file watch, the memory governor, the knowledge
  * scheduler, the cross-session sweep, the orchestration snapshot writer, the
  * push-subscription sweep and the snapshot / retention / consolidation
@@ -205,7 +205,7 @@ describe('operator surfaces gate', () => {
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
 
-    // (the purge) — group B: the 12 ecosystem/governance panels
+    // (the purge), group B: the 12 ecosystem/governance panels
     // migrated to config-modal SURFACES registered centrally in
     // registerBuiltinModals. Each old panel id is gone and redirects to its
     // '-modal' surface; 'sessions' folds into the existing session picker.
@@ -225,13 +225,13 @@ describe('operator surfaces gate', () => {
       expect(manager.getModalSurface(name)?.name).toBe(name);
     }
     expect(ids).toContain('fleet');
-    // local-auth stays a registered panel — it is the host for the
+    // local-auth stays a registered panel, it is the host for the
     // masked password-entry sub-mode (LocalAuthPanel.openMaskedEntry) and cannot
     // be retired without regressing that secure input path.
     expect(ids).toContain('local-auth');
 
     // (the purge): services, subscription, remote, provider-health,
-    // settings-sync, and sandbox were MIGRATE-TO-MODAL — no longer registered as
+    // settings-sync, and sandbox were MIGRATE-TO-MODAL, no longer registered as
     // panels; each id resolves to a config-modal surface via
     // registerModalRedirect. 'providers'/'accounts' (former provider-health
     // panel aliases) now redirect to the same providers-modal.
@@ -250,7 +250,7 @@ describe('operator surfaces gate', () => {
     expect(manager.getModalRedirect('local-auth')).toBeUndefined();
 
     // (the purge): communication, cockpit, approval, incident,
-    // orchestration, and ops were RETIRE-INTO-FLEET — they no longer appear
+    // orchestration, and ops were RETIRE-INTO-FLEET, they no longer appear
     // as standalone registered types; each id now resolves (via
     // PanelManager.registerAlias) to the same Fleet instance.
     for (const retiredId of ['communication', 'cockpit', 'approval', 'incident', 'orchestration', 'ops']) {
@@ -258,12 +258,12 @@ describe('operator surfaces gate', () => {
       expect(manager.open(retiredId)).toBe(manager.open('fleet'));
     }
     // the 'forensics' panel merged into the incident console, which
-    // itself later retired into fleet — both ids now resolve straight
+    // itself later retired into fleet, both ids now resolve straight
     // to fleet (alias resolution is a single hop; forensics does not chain
     // through the also-retired 'incident').
     expect(manager.open('forensics')).toBe(manager.open('fleet'));
     // the 'agent-logs' console merged into inspector, which itself
-    // later retired into fleet — both ids now resolve straight to
+    // later retired into fleet, both ids now resolve straight to
     // fleet.
     expect(manager.open('agent-logs')).toBe(manager.open('fleet'));
     expect(manager.open('inspector')).toBe(manager.open('fleet'));
@@ -272,11 +272,11 @@ describe('operator surfaces gate', () => {
     // the 'context' visualizer merged into the tokens console; the
     // retired id survives only as a PanelManager alias.
     expect(manager.open('context')).toBe(manager.open('tokens'));
-    // (the purge) — group B: 'sessions' folded into the existing session
-    // picker modal — no longer a registered panel; redirects to 'sessionPicker'.
+    // (the purge), group B: 'sessions' folded into the existing session
+    // picker modal, no longer a registered panel; redirects to 'sessionPicker'.
     expect(ids).not.toContain('sessions');
     expect(manager.getModalRedirect('sessions')).toBe('sessionPicker');
-    // panel-list was DELETE-disposition — it no longer resolves at all
+    // panel-list was DELETE-disposition, it no longer resolves at all
     // (no alias, unlike the RETIRE ids above).
     expect(ids).not.toContain('panel-list');
   });
@@ -313,11 +313,11 @@ describe('operator surfaces gate', () => {
   test('cost/memory are always registered and open to a "not configured" state without their optional dependency', () => {
     const manager = new PanelManager();
     const uiServices = createUiRuntimeServices(runtimeServices);
-    // Deliberately omit memoryRegistry and getOrchestratorUsage — the exact
+    // Deliberately omit memoryRegistry and getOrchestratorUsage, the exact
     // conditions that used to skip registration entirely and make
     // `/panel open <id>` report "Unknown panel".
     // (forensicsRegistry/evalRegistry are also omitted here, but that
-    // no longer matters for this assertion — incident retired into fleet and
+    // no longer matters for this assertion, incident retired into fleet and
     // eval was deleted outright; see the next assertions below.)
     registerBuiltinPanels(manager, {
       providerRegistry: runtimeServices.providerRegistry,
@@ -330,14 +330,14 @@ describe('operator surfaces gate', () => {
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
     expect(ids).toContain('cost');
-    // (the purge) — group B: 'memory' migrated to the 'memory-modal'
+    // (the purge), group B: 'memory' migrated to the 'memory-modal'
     // config-modal surface. It no longer registers as a panel (the modal owns
-    // the "not configured" degraded state now — see memory-modal.ts); it redirects.
+    // the "not configured" degraded state now, see memory-modal.ts); it redirects.
     expect(ids).not.toContain('memory');
     expect(manager.getModalRedirect('memory')).toBe('memory-modal');
 
     for (const id of ['cost']) {
-      // Must not throw "Unknown panel" — the registration always exists now.
+      // Must not throw "Unknown panel", the registration always exists now.
       const panel = manager.open(id);
       expect(panel.id).toBe(id);
       const text = panel.render(80, 24).map((line) => line.map((c) => c.char ?? ' ').join('')).join('\n');
@@ -346,7 +346,7 @@ describe('operator surfaces gate', () => {
     }
 
     // (the purge): 'incident' retired into fleet (no "not configured"
-    // empty state anymore — it just opens Fleet); 'eval' was deleted
+    // empty state anymore, it just opens Fleet); 'eval' was deleted
     // outright (DELETE-disposition, no surviving human surface).
     expect(ids).not.toContain('eval');
     expect(manager.open('incident')).toBe(manager.open('fleet'));
@@ -433,7 +433,7 @@ describe('operator surfaces gate', () => {
     const subscription = registry.get('subscription');
     expect(subscription).toBeDefined();
 
-    // the subscription panel migrated to a config-modal surface — the bare
+    // the subscription panel migrated to a config-modal surface, the bare
     // command now opens it via ctx.openModal, not ctx.openSubscriptionPanel.
     let openedModal: string | null = null;
     await subscription!.handler([], makeCommandContext('sess-subscription-panel', {
@@ -520,7 +520,7 @@ describe('operator surfaces gate', () => {
     const remote = registry.get('remote');
     expect(remote).toBeDefined();
 
-    // the remote panel migrated to a config-modal surface — the bare
+    // the remote panel migrated to a config-modal surface, the bare
     // command now opens it via ctx.openModal, not ctx.openRemotePanel.
     let openedModal: string | null = null;
     await remote!.handler([], makeCommandContext('sess-remote-panel', {

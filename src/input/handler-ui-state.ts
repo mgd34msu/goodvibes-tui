@@ -203,7 +203,7 @@ type SearchRouteState = {
   scroll: (delta: number) => void;
   getScrollTop: () => number;
   getViewportHeight: () => number;
-  /** Optional — when present, search() also expands collapsed blocks whose
+  /** Optional, when present, search() also expands collapsed blocks whose
    *  raw content matches (see SearchManager.search's doc). */
   conversationManager?: ConversationManager | null;
 };

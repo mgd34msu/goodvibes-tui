@@ -1,5 +1,5 @@
 /**
- * cluster-runtime.ts — `/cluster` in the TUI.
+ * cluster-runtime.ts, `/cluster` in the TUI.
  *
  * The same operations as the `goodvibes-daemon cluster` subcommands, reaching
  * the same daemon verbs through the same caller. There is no cluster logic in
@@ -8,7 +8,7 @@
  *
  * The one honest difference is `join` without arguments. The CLI can stop and
  * ask which group and for the join key; a slash command has nowhere to ask, so
- * it requires `--group` and `--key` and says so — which is exactly what the
+ * it requires `--group` and `--key` and says so, which is exactly what the
  * shared caller already reports for any non-interactive invocation.
  */
 import { resolveDaemonHomeDir } from '@pellux/goodvibes-sdk/platform/workspace';
@@ -33,7 +33,7 @@ export function registerClusterRuntimeCommands(registry: CommandRegistry): void 
   registry.register({
     name: 'cluster',
     description: 'Share inbound channel work with your other goodvibes machines on this network',
-    usage: `[${CLUSTER_SUBCOMMANDS.join('|')}] — status is the default; `
+    usage: `[${CLUSTER_SUBCOMMANDS.join('|')}]: status is the default; `
       + 'add --host/--port/--token to reach a daemon on another machine',
     argsHint: `[${CLUSTER_SUBCOMMANDS.join('|')}]`,
     async handler(args, ctx) {

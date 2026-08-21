@@ -12,7 +12,7 @@ import type { WorkPlanItemStatus } from '@pellux/goodvibes-sdk/platform/workflow
 // All mutations (add/edit item, cycle/set status, remove, clear-completed)
 // route to the existing `/work-plan` command path (charter: no
 // destructive/interactive mutation direct-called from a modal; the panel's
-// inline add/edit draft form has no place in a read/navigate modal — the bare
+// inline add/edit draft form has no place in a read/navigate modal, the bare
 // `/work-plan add` subcommand is the honest stand-in). Selection-blind port:
 // the panel's selected-item owner/source/notes/linked detail is folded into
 // each row label.
@@ -65,7 +65,7 @@ class WorkPlanModalSurface implements ConfigModalSurface {
   private readonly hasRow = (row: ConfigModalRow | null): boolean => row !== null;
 
   /** 'i'/'w' jump to the selected item's linked agent/WRFC chain in Fleet
-   *  (item 4 — restores the retired WorkPlanPanel's per-item deep-link,
+   *  (item 4, restores the retired WorkPlanPanel's per-item deep-link,
    *  lost when migrated this surface to a modal without it). Gated on
    *  the link actually being present, same as the retired panel gated the key
    *  on `item?.linked?.agentId`/`wrfcId` before ever reaching the jump. */
@@ -137,7 +137,7 @@ class WorkPlanModalSurface implements ConfigModalSurface {
     if (id === 'jumpAgent') {
       const agentId = item.linked?.agentId;
       if (!agentId) return;
-      // 'agent' matches the SDK's ProcessKind for a live agent node — see
+      // 'agent' matches the SDK's ProcessKind for a live agent node, see
       // FleetPanel.receiveDeepLink's id+kind match.
       void ctx.executeCommand?.('panel', ['open', 'fleet', '--target', `${agentId}:agent`]);
       ctx.setStatus(`Opened Fleet on agent ${agentId}.`);
@@ -165,7 +165,7 @@ export function createWorkPlanModalSurface(deps: WorkPlanModalDeps): ConfigModal
 
 /**
  * Deterministic golden fixture: fixed work-plan items with frozen updatedAt
- * epoch values — no live store, no wall-clock, no random ids.
+ * epoch values, no live store, no wall-clock, no random ids.
  */
 export function workPlanModalGoldenSurface(): ConfigModalSurface {
   const FIXED_UPDATED_AT = 1735693200000; // 2025-01-01T01:00:00.000Z

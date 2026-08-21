@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
-// fleet-acts.test.ts — the Fleet panel's waiting-on-human acts round-trip
+// fleet-acts.test.ts, the Fleet panel's waiting-on-human acts round-trip
 // against a mocked daemon, never typing an id:
-//   • pick     — a flagged workstream row lists candidates (fleet.attempts.list),
+//   • pick    , a flagged workstream row lists candidates (fleet.attempts.list),
 //     the operator chooses a winner by navigation, and Enter drives
 //     fleet.attempts.pick preview (confirm:false) -> confirm (confirm:true)
 //     through the shared DiffPanel confirm overlay.
-//   • conflict — a flagged work-item row runs fleet.conflicts.resolve and hands
+//   • conflict, a flagged work-item row runs fleet.conflicts.resolve and hands
 //     the STAMPED session id to the shared jump/attach affordance; the failure
 //     path renders an honest error.
-//   • discard  — a worktree-owning row runs worktrees.discard behind a confirm
+//   • discard , a worktree-owning row runs worktrees.discard behind a confirm
 //     and renders the honest receipt (branch kept, preservation commit).
 // ---------------------------------------------------------------------------
 
@@ -185,7 +185,7 @@ describe('fleet-gateway id extraction (no id ever typed)', () => {
 
 // ── STEP 3: pick ────────────────────────────────────────────────────────────
 
-describe('pick act — preview -> confirm through fleet.attempts.pick, no id typed', () => {
+describe('pick act: preview -> confirm through fleet.attempts.pick, no id typed', () => {
   test('Enter on a flagged pick row opens the picker and shows the first held diff', async () => {
     const { gateway, log } = makeGateway({ groups: [group({ groupId: 'g-1' })] });
     const { surface, log: diff } = makeDiffSurface();
@@ -246,7 +246,7 @@ describe('pick act — preview -> confirm through fleet.attempts.pick, no id typ
 
 // ── STEP 4: conflict ──────────────────────────────────────────────────────
 
-describe('conflict act — resolve -> stamped session -> jump', () => {
+describe('conflict act: resolve -> stamped session -> jump', () => {
   test('Enter on a flagged conflict row resolves and arms the jump on the stamped session', async () => {
     const { gateway, log } = makeGateway();
     const { surface } = makeDiffSurface();
@@ -270,7 +270,7 @@ describe('conflict act — resolve -> stamped session -> jump', () => {
 
 // ── STEP 5: discard ──────────────────────────────────────────────────────
 
-describe('discard act — worktrees.discard behind a confirm, honest receipt', () => {
+describe('discard act: worktrees.discard behind a confirm, honest receipt', () => {
   test('D on a worktree row confirms then discards and renders the receipt', async () => {
     const { gateway, log } = makeGateway();
     const { surface, log: diff } = makeDiffSurface();

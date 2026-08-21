@@ -1,11 +1,11 @@
 /**
  * checkin-runtime.ts
  *
- * `/checkin` — the proactive check-in surface: config (enabled/cadence/
+ * `/checkin`, the proactive check-in surface: config (enabled/cadence/
  * delivery channel/quiet hours) and its receipt trail, over the operator
  * wire (see operator-rpc.ts for why this goes over HTTP rather than the
- * in-process OperatorClient facade). Off by default; every run — scheduled
- * or manual — leaves a receipt (`checkin.receipts.list`) recording whether it
+ * in-process OperatorClient facade). Off by default; every run, scheduled
+ * or manual, leaves a receipt (`checkin.receipts.list`) recording whether it
  * stayed quiet, delivered a message, or was skipped, so the config surface
  * in /config's Automation group is never the only place this feature's
  * behavior is visible.
@@ -79,7 +79,7 @@ export function registerCheckinRuntimeCommands(registry: CommandRegistry): void 
           lines.push('Recent receipts:');
           lines.push(...receipts.map(renderReceipt));
         }
-        lines.push('', '  /checkin run — trigger one now');
+        lines.push('', '  /checkin run: trigger one now');
         ctx.print(lines.join('\n'));
       } catch (error) {
         ctx.print(`[checkin] ${describeOperatorRpcError(error)}`);

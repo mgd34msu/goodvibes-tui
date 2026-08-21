@@ -95,7 +95,7 @@ export interface ModalConfig {
 // DEFAULT_STYLE is built from the mode-resolved chrome tones (activeUiTones) and
 // rebuilt IN PLACE on a mode flip via the registered refresher. createModal reads
 // it per call via `{ ...DEFAULT_STYLE, ...config.style }`, so the in-place rebuild
-// reaches every modal — see theme.ts's active-mode runtime note.
+// reaches every modal, see theme.ts's active-mode runtime note.
 function buildDefaultModalStyle(): Required<ModalStyle> {
   const t = activeUiTones();
   return {
@@ -120,7 +120,7 @@ registerThemeRefresh(() => Object.assign(DEFAULT_STYLE, buildDefaultModalStyle()
 // ── ModalFactory ─────────────────────────────────────────────────────────────
 
 /**
- * ModalFactory — unified modal rendering for goodvibes-tui.
+ * ModalFactory, unified modal rendering for goodvibes-tui.
  *
  * Renders modals as Line[] (Cell arrays) consistent with the compositor
  * overlay pipeline. All existing modals (file-picker, model-picker,
@@ -271,7 +271,7 @@ export class ModalFactory {
 
   /**
    * Render a single selectable list item row.
-   * ┤ text ├  — bordered left/right, with optional selection highlight.
+   * ┤ text ├ , bordered left/right, with optional selection highlight.
    */
   static renderListItem(
     boxW: number,

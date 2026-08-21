@@ -1,20 +1,20 @@
 /**
- * /session command handler — Multi-session Orchestration.
+ * /session command handler, Multi-session Orchestration.
  *
  * Implements session and workflow commands:
  *
  *   /session link-task <taskId> [--session <sessionId>] [--depends-on <ref>] [--label <label>]
- *     — Register a task as a global cross-session ref, optionally linking it to a
+ *    , Register a task as a global cross-session ref, optionally linking it to a
  *       dependency.
  *
  *   /session handoff <taskId> --to <sessionId> [--session <sessionId>] [--reason <reason>]
- *     — Initiate a task handoff from the current session to another.
+ *    , Initiate a task handoff from the current session to another.
  *
  *   /session graph [--session <sessionId>] [--format text|json]
- *     — Display the cross-session task dependency graph.
+ *    , Display the cross-session task dependency graph.
  *
  *   /session cancel <taskId|--scope session> [--session <sessionId>] [--scope task|subtree|session]
- *     — Cancel tasks with configurable scope semantics.
+ *    , Cancel tasks with configurable scope semantics.
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
@@ -92,7 +92,7 @@ function handleLinkTask(args: string[], context: CommandContext): void {
   }
 
   if (taskId.includes(':')) {
-    context.print('Error: taskId cannot contain ":" — it conflicts with the composite key format.');
+    context.print('Error: taskId cannot contain ":"; it conflicts with the composite key format.');
     return;
   }
 
@@ -318,11 +318,11 @@ function handleCancel(args: string[], context: CommandContext): void {
 // ── Top-level command definition ───────────────────────────────────────────────
 
 /**
- * SESSION_SUBCOMMAND_ARG_HINTS — the single source of truth for each
+ * SESSION_SUBCOMMAND_ARG_HINTS, the single source of truth for each
  * `/session <subcommand>` argument hint, co-located with the switch below so
  * the two can't silently drift apart (command-args-hint.ts imports this
- * directly instead of hand-maintaining its own copy; a drift test —
- * src/test/input/command-args-hint.test.ts — cross-checks every key here
+ * directly instead of hand-maintaining its own copy; a drift test,
+ * src/test/input/command-args-hint.test.ts, cross-checks every key here
  * against the default usage text's own subcommand list). Aliases (`link`,
  * `ho`, `g`) share their canonical subcommand's hint text.
  */
@@ -349,14 +349,14 @@ export const SESSION_SUBCOMMAND_ARG_HINTS: Record<string, string> = {
 };
 
 /**
- * sessionCommand — The `/session` slash command.
+ * sessionCommand, The `/session` slash command.
  *
  * The ONE front-door for all session operations. Owns two domains:
  *
  * Lifecycle (continuity, export, resume, pruning):
  *   list | rename | resume | fork | save | info | events | groups | hotspots | export | search | delete
  *
- * Orchestration (cross-session task DAG — 40 tests, cycle detection):
+ * Orchestration (cross-session task DAG, 40 tests, cycle detection):
  *   link-task | handoff | graph | cancel
  *
  * Orchestration-command decision (TASK-032):
@@ -380,7 +380,7 @@ export const sessionCommand: SlashCommand = {
     switch (sub) {
       // ── Lifecycle subcommands ────────────────────────────────────────────────
       // Each delegates explicitly to handleSessionWorkflowCommand so every
-      // subcommand has a deterministic, named path — no silent fallthrough.
+      // subcommand has a deterministic, named path, no silent fallthrough.
       case 'list':
       case 'rename':
       case 'resume':
@@ -457,7 +457,7 @@ export const sessionCommand: SlashCommand = {
 };
 
 /**
- * /resume — the discoverable front door to session resume.
+ * /resume, the discoverable front door to session resume.
  *
  * `/session resume <id>` has always existed but is buried behind a
  * subcommand nobody remembers mid-context-switch. `/resume` with no
@@ -469,7 +469,7 @@ export const sessionCommand: SlashCommand = {
 export const resumeCommand: SlashCommand = {
   name: 'resume',
   aliases: [],
-  description: 'Resume a previous session — pick from a list, or pass an id/name',
+  description: 'Resume a previous session, pick from a list or pass an id/name',
   usage: '[session-id-or-name]',
   argsHint: '[id|name]',
   handler: async (args: string[], ctx: CommandContext): Promise<void> => {
@@ -479,7 +479,7 @@ export const resumeCommand: SlashCommand = {
     }
     const sm = requireSessionManager(ctx);
     // Excludes the current session and subagent-shaped transcripts (see
-    // session-picker-filter.ts) — a direct `/resume agent-xxxxxxxx` still
+    // session-picker-filter.ts), a direct `/resume agent-xxxxxxxx` still
     // reaches them, this only keeps the picker itself readable.
     const sessions = filterUserFacingSessions(sm.list()).filter((s) => s.name !== ctx.session.runtime.sessionId);
     if (sessions.length === 0) {

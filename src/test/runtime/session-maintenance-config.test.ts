@@ -1,5 +1,5 @@
 /**
- * Session maintenance config-driven tests — TASK-058.
+ * Session maintenance config-driven tests, TASK-058.
  *
  * Validates that evaluateSessionMaintenance reads behavior.autoCompactThreshold correctly.
  * The SDK schema validates threshold in range [10, 100]; the key cannot be set to 0.
@@ -55,7 +55,7 @@ describe('evaluateSessionMaintenance config path (TASK-058)', () => {
   test('suggest-compact triggers at configured threshold (75%)', () => {
     const configManager = createTestConfigManager();
     configManager.setDynamic('behavior.autoCompactThreshold', 75);
-    // 76% usage — at or above threshold
+    // 76% usage, at or above threshold
     const status = evaluateSessionMaintenance({
       configManager,
       currentTokens: 76_000,
@@ -79,7 +79,7 @@ describe('evaluateSessionMaintenance config path (TASK-058)', () => {
   });
 
   test('stable below threshold at 60% usage with default threshold (80)', () => {
-    // 60% usage — below 70% watch band and below 80% threshold/floor.
+    // 60% usage, below 70% watch band and below 80% threshold/floor.
     const configManager = createTestConfigManager();
     const status = evaluateSessionMaintenance({
       configManager,

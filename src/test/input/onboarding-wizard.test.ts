@@ -692,7 +692,7 @@ describe('OnboardingWizardController', () => {
     expect(configValues.get('service.autostart')).toBe(true);
     expect(configValues.get('service.restartOnFailure')).toBe(true);
     // Daemon-by-default (docs/decisions/2026-07-05-daemon-by-default.md): onboarding
-    // no longer writes daemon.enabled/danger.daemon at all — the loopback session
+    // no longer writes daemon.enabled/danger.daemon at all, the loopback session
     // daemon is ambient infrastructure independent of these network-exposing
     // capabilities, so the SDK's own default (or an existing explicit override)
     // governs untouched.
@@ -719,7 +719,7 @@ describe('OnboardingWizardController', () => {
     expect(configValues.get('provider.model')).toBe('openai:gpt-5-test');
     expect(configValues.get('provider.reasoningEffort')).toBe('high');
     expect(configValues.get('storage.secretPolicy')).toBe('plaintext_allowed');
-    // behavior.hitlMode is the capability's own enablement key — operator is
+    // behavior.hitlMode is the capability's own enablement key, operator is
     // an active mode, so the single write both selects and enables it.
     expect(configValues.get('behavior.hitlMode')).toBe('operator');
     expect(configValues.get('behavior.guidanceMode')).toBe('guided');
@@ -757,7 +757,7 @@ describe('OnboardingWizardController', () => {
   // behavior.hitlMode is gated by the hitl-ux-modes feature flag: ModeManager
   // (SDK-owned, test-guarded there) only applies the chosen preset to the
   // notification router when that flag is enabled. The TUI's job at the apply
-  // seam is to never emit a hitlMode choice without its gating flag — otherwise
+  // seam is to never emit a hitlMode choice without its gating flag, otherwise
   // the choice is silently inert. These two tests pin that seam.
   test('a non-default hitlMode enables the gating flag so the choice takes effect', () => {
     const wizard = new OnboardingWizardController();
@@ -776,7 +776,7 @@ describe('OnboardingWizardController', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
     // Leave experience.hitl at its schema default ('balanced'): the single
-    // behavior.hitlMode write is the whole story — no extra enablement
+    // behavior.hitlMode write is the whole story, no extra enablement
     // namespace exists to flip.
     wizard.setFieldValue('experience.hitl', 'balanced');
 
@@ -994,7 +994,7 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('capabilities.browser-access', true);
     wizard.setFieldValue('network.mode', 'custom');
     wizard.setStep(1);
-    // See the note above — 'network.service-port' is now at index 4.
+    // See the note above, 'network.service-port' is now at index 4.
     wizard.moveSelection(4, 10);
 
     const routeState = {
@@ -1326,7 +1326,7 @@ describe('InputHandler onboarding integration', () => {
     const accessStepIndex = input.onboardingWizard.steps.findIndex((s) => s.id === 'access');
     expect(accessStepIndex).toBeGreaterThan(0);
     input.onboardingWizard.setStep(accessStepIndex);
-    // Leave password empty — it is required when bootstrap credential is present
+    // Leave password empty, it is required when bootstrap credential is present
     input.onboardingWizard.setFieldValue('accounts.admin-password', '');
 
     await (input as unknown as { handleOnboardingAction(action: 'apply-and-continue'): Promise<void> }).handleOnboardingAction('apply-and-continue');
@@ -1792,8 +1792,8 @@ describe('InputHandler onboarding integration', () => {
         restarted = true;
         // Daemon-by-default: onboarding no longer writes daemon.enabled/danger.daemon
         // at all, so the loopback session daemon keeps running (cross-surface
-        // visibility) even for Local TUI Only. Only the HTTP listener — a real
-        // network-facing surface — actually stops.
+        // visibility) even for Local TUI Only. Only the HTTP listener, a real
+        // network-facing surface, actually stops.
         httpListenerRunning = false;
         return { daemonRunning, httpListenerRunning };
       },
@@ -2007,7 +2007,7 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     // The tunnel route is exactly the deployment the stricter forwarded-address
     // read is for: CF-Connecting-IP, accepted only from a peer inside a
     // published Cloudflare range. Writing it here is what stops a client that
-    // reaches the listener directly from naming its own address — with only
+    // reaches the listener directly from naming its own address, with only
     // trustProxy set, X-Forwarded-For is caller-controlled.
     const wizard = new OnboardingWizardController();
     wizard.open('new');
@@ -2157,7 +2157,7 @@ describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)',
     // equivalent setting, so the tunnel is its only protection.
     expect(hint).toContain('The control plane has no equivalent setting');
     expect(hint).toContain('reachable only through the tunnel');
-    // The retired claim must be gone — it was true before the key existed.
+    // The retired claim must be gone, it was true before the key existed.
     expect(hint).not.toContain('has no setting behind it yet');
   });
 });
@@ -2411,7 +2411,7 @@ describe('network step: migrate the install-script daemon service', () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
     ensureLocalAdminAuth(uiServices);
-    // A distinctive, unlikely-to-be-bound high port — never 3421/4444 — so this
+    // A distinctive, unlikely-to-be-bound high port, never 3421/4444, so this
     // exercises the engine's real (uninjected) TCP port probe deterministically
     // without depending on, or risking interaction with, any real GoodVibes
     // daemon. The test's homeDirectory is an ephemeral per-test tempdir, so

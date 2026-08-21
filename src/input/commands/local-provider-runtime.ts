@@ -69,7 +69,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
             }
           }
         } catch {
-          ctx.print(`Could not reach ${baseURL}/models — creating provider with a minimal starter config.`);
+          ctx.print(`Could not reach ${baseURL}/models: creating provider with a minimal starter config.`);
         }
 
         let contextWindows: Record<string, number> = {};
@@ -117,7 +117,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
         }
         ctx.print(`Provider '${name}' added with ${models.length} model(s):\n${discoveredModelIds.length > 0 ? discoveredModelIds.map((id) => `  • ${id} (${(contextWindows[id] ?? 8192).toLocaleString()} ctx)`).join('\n') : `  • ${defaultModel} (starter entry)`}\nThe file watcher will auto-register it shortly.`);
         // Capture the key with the keystrokes masked, straight into the secrets
-        // manager — never a cleartext argument, never written into the JSON.
+        // manager, never a cleartext argument, never written into the JSON.
         if (ctx.beginConcealedInput) {
           const secretsManager = requireSecretsManager(ctx);
           ctx.print(`Enter the API key for provider '${name}' (input is masked; press Enter to store, Esc to skip if the endpoint needs no key).`);
@@ -139,7 +139,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
                   // has to reach the daemon tier or a locally-hosted endpoint
                   // is usable only while this TUI is open.
                   await secretsManager.set(keyName, value, { scope: 'daemon', medium: 'secure' });
-                  ctx.print(`Stored the API key for '${name}' (value hidden). It resolves live for this provider — no restart needed.`);
+                  ctx.print(`Stored the API key for '${name}' (value hidden). It resolves live for this provider; no restart needed.`);
                 } catch (error) {
                   ctx.print(`Could not store the key for '${name}': ${summarizeError(error)}`);
                 }

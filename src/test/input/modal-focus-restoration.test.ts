@@ -88,7 +88,7 @@ describe('modal focus restoration', () => {
     const state = buildState();
     // retirement: this exercised the process modal as the "previous" entry
     // in the stack; it now uses the bookmark modal (a surviving reopenable
-    // modal) — the escape/reopen focus-restoration logic under test is unchanged.
+    // modal), the escape/reopen focus-restoration logic under test is unchanged.
     state.bookmarkModal.active = true;
     modalOpened(state, 'bookmark');
     modalOpened(state, 'contextInspector');

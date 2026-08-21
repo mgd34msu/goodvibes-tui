@@ -22,15 +22,15 @@ import { GLYPHS } from '../renderer/ui-primitives.ts';
  * Base class for all list-based panels that require scroll/cursor navigation.
  *
  * Subclasses implement:
- *   - `getItems()` — the ordered list of items to display
- *   - `renderItem(item, index, selected, width)` — one `Line` per item
+ *   - `getItems()`, the ordered list of items to display
+ *   - `renderItem(item, index, selected, width)`, one `Line` per item
  *
  * Optionally override:
- *   - `getEmptyStateMessage()` / `getEmptyStateActions()` — empty-state copy
- *   - `onSelect(item)` — called when the user presses Enter
- *   - `onAction(item, action)` — for secondary key bindings
- *   - `getPalette()` — colour palette (defaults to `DEFAULT_PANEL_PALETTE`)
- *   - `getPageSize()` — rows per page-up/page-down (default 10)
+ *   - `getEmptyStateMessage()` / `getEmptyStateActions()`, empty-state copy
+ *   - `onSelect(item)`, called when the user presses Enter
+ *   - `onAction(item, action)`, for secondary key bindings
+ *   - `getPalette()`, colour palette (defaults to `DEFAULT_PANEL_PALETTE`)
+ *   - `getPageSize()`, rows per page-up/page-down (default 10)
  *
  * `renderList()` produces the full `Line[]` output that a trivial panel's
  * `render()` can return directly:
@@ -71,7 +71,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   }
 
   /**
-   * The list after applying the active filter — used for both display and
+   * The list after applying the active filter, used for both display and
    * navigation. Identical to `getItems()` unless a filter is enabled and a
    * non-empty query is set, so existing panels are unaffected.
    */
@@ -84,12 +84,12 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
 
   /**
    * The item currently under the cursor, resolved against the FILTERED list
-   * that navigation actually moves over (`getVisibleItems()`) — never the raw
+   * that navigation actually moves over (`getVisibleItems()`), never the raw
    * `getItems()` source.
    *
    * Subclasses MUST read the selected row through this method (or, when a
    * function also needs the list for counts/windows, through a function-scope
-   * `const visible = this.getVisibleItems()` local — indexing that local, never
+   * `const visible = this.getVisibleItems()` local, indexing that local, never
    * the raw source). Indexing a raw item array (`this.rows`, `this.entries`,
    * `getItems()`, …) with `this.selectedIndex` silently returns the wrong row
    * whenever a filter is active, because `selectedIndex` is an offset into the
@@ -126,7 +126,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
         this.needsRender = true;
         return true;
       }
-      // Arrow/paging keys navigate the filtered list — fall through.
+      // Arrow/paging keys navigate the filtered list, fall through.
       if (key === 'up' || key === 'down' || key === 'pageup' || key === 'pagedown' || key === 'home' || key === 'end') {
         return null;
       }
@@ -172,7 +172,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   }
 
   // -------------------------------------------------------------------------
-  // Abstract — subclasses must implement
+  // Abstract, subclasses must implement
   // -------------------------------------------------------------------------
 
   /** Return the full ordered list of items to display. */
@@ -224,7 +224,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   }
 
   // -------------------------------------------------------------------------
-  // Navigation — consistent across ALL panels
+  // Navigation, consistent across ALL panels
   // -------------------------------------------------------------------------
 
   /**
@@ -245,7 +245,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   /**
    * The `/`-to-filter buffer wants every character of a burst (paste, or a
    * fast-typed query landing in one input.feed() call), same as it always
-   * has — see the interface doc on `Panel.isCapturingTextBurst`.
+   * has, see the interface doc on `Panel.isCapturingTextBurst`.
    */
   isCapturingTextBurst(): boolean {
     return this.filterEnabled && this.filterActive;
@@ -348,7 +348,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   }
 
   // -------------------------------------------------------------------------
-  // Render helper — the main convenience entry point
+  // Render helper, the main convenience entry point
   // -------------------------------------------------------------------------
 
   /**

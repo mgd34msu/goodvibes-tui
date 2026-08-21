@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=fleet-panel-tab-normal width=100 height=30
-| Fleet — agent iewer-01                                                                             |
+| Fleet: agent iewer-01                                                                              |
 | SESSIONS  │Tree │[agent iewer-01] │                                                                |
 | (no messages yet)                                                                                  |
 |                                                                                                    |
@@ -96,9 +96,7 @@
 0 21 fg=#e2e8f0
 0 21 bg=#0f172a
 0 21 bold=1
-0 22 fg=#e2e8f0
 0 22 bg=#0f172a
-0 22 bold=1
 0 23 bg=#0f172a
 0 24 bg=#0f172a
 0 25 bg=#0f172a

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// fleet-detail-surfaces.test.ts — the in-panel review checklist (7b) and the
+// fleet-detail-surfaces.test.ts, the in-panel review checklist (7b) and the
 // task-graph edges/pool posture (7c) rendered under a chain/workstream row.
 // ---------------------------------------------------------------------------
 

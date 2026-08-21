@@ -2,13 +2,13 @@
  * Shared ms-duration formatters for the panel layer.
  *
  * Two families are exported, each matching a distinct behavior cluster.
- * DO NOT replace these with formatElapsed from utils/format-elapsed.ts —
+ * DO NOT replace these with formatElapsed from utils/format-elapsed.ts,
  * formatElapsed floors to integer seconds and lacks the null/'?ms' guards
  * that the latency panels require.
  *
  * (the purge): formatShortDuration (used only by incident-review-panel
- * and eval-panel, both removed — RETIRE-INTO-FLEET and DELETE respectively)
- * was removed as a genuinely orphaned export — no remaining caller anywhere
+ * and eval-panel, both removed, RETIRE-INTO-FLEET and DELETE respectively)
+ * was removed as a genuinely orphaned export, no remaining caller anywhere
  * in src/.
  */
 

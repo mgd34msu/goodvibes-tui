@@ -1,6 +1,6 @@
 /**
  * The pricing settings domain reaches the modal from CONFIG_SCHEMA
- * generically — including the object-typed pricing.modelPrices key, which
+ * generically, including the object-typed pricing.modelPrices key, which
  * must render honestly (never "[object Object]") and edit as validated JSON
  * persisted live. Also pins that the new notifications.push* and
  * watchers.ciPollIntervalMs keys from this SDK round surface in their

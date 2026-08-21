@@ -1,5 +1,5 @@
 /**
- * settings-modal-connections.ts — the Connections category of the settings
+ * settings-modal-connections.ts, the Connections category of the settings
  * workspace: whether mail and calendar are actually usable, and if not, the
  * exact next step.
  *
@@ -14,7 +14,7 @@
  * Every other settings category reads a value out of config and renders it.
  * This one cannot: "is mail connected?" is only answerable by asking the
  * daemon's handler, which is real I/O. The workspace renders synchronously, so
- * the rows start in `checking` — which is true — and the refresh replaces them
+ * the rows start in `checking`, which is true, and the refresh replaces them
  * and asks for a re-render, the same contract the Services surface uses for its
  * inspections. Nothing is ever shown as "not configured" merely because an
  * answer has not arrived yet; that would be a guess rendered as a fact.

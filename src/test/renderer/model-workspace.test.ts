@@ -185,16 +185,16 @@ describe('renderModelWorkspace', () => {
   });
 
   // Owner design test (v1.16.1 modal rule, extended here): UI-authored
-  // descriptive text is always shown in full — wrap or scroll, never clip.
+  // descriptive text is always shown in full, wrap or scroll, never clip.
   // detailLines(...) used to be sliced to a fixed 32%-of-body-rows proportion
   // via .slice(0, detailRows), silently dropping whatever detail content
   // didn't fit that guess (typically the trailing filter line). The fix sizes
   // the detail band to the actual content instead. Full strings, not
-  // prefixes — a facade assertion that only checks a short substring would
+  // prefixes, a facade assertion that only checks a short substring would
   // stay green even if the rest were clipped.
   describe('detail lines are never silently dropped, at 80x24 and 60-col narrow heights', () => {
     /** The workspace is two columns (targets | detail) sharing one row per
-     * line — flattening whole rows would interleave target-column text
+     * line, flattening whole rows would interleave target-column text
      * between wrapped detail sentences. Extract just the detail column
      * (right of the shared vertical divider, itself found from the header
      * row) and join it back into one string. */
@@ -225,11 +225,11 @@ describe('renderModelWorkspace', () => {
         const detailText = extractDetailColumnText(renderModelWorkspace(picker, width, height));
 
         // The model-selection instruction line and the full "Selected: ..."
-        // summary line (key | display name | context | capabilities) —
+        // summary line (key | display name | context | capabilities),
         // previously the first casualty of the 32%-of-body-rows slice.
         expect(detailText).toContain('Model selection: choose the model to store for Main Chat. Use filters to narrow large catalogs.');
         expect(detailText).toContain(`Selected: ${selected!.registryKey} | ${selected!.displayName} | context`);
-        // The trailing filter line — previously dropped entirely at narrow
+        // The trailing filter line, previously dropped entirely at narrow
         // heights because it was always last in the wrapped-lines array.
         expect(detailText).toContain('Price:');
         expect(detailText).toContain('Capability:');

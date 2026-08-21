@@ -37,7 +37,7 @@ function makeCtx(store: unknown) {
   return { ctx, printed, selections };
 }
 
-describe('/permissions rules — list and revoke remembered approvals', () => {
+describe('/permissions rules: list and revoke remembered approvals', () => {
   test('lists remembered rules and revokes the selected one through the live store', async () => {
     const store = makeRuleStore([
       { id: 'rule-1', tool: 'exec', effect: 'allow', tier: 'command', description: 'allow git status' },

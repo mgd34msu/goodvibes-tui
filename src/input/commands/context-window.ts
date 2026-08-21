@@ -1,5 +1,5 @@
 /**
- * /context window — view, set, or clear a custom context window for the
+ * /context window, view, set, or clear a custom context window for the
  * current model.
  *
  * The override is stored by the SDK's ProviderRegistry (persisted under the
@@ -84,7 +84,7 @@ export function handleContextWindowSubcommand(args: readonly string[], ctx: Comm
   } else {
     const size = parseContextWindowSize(arg);
     if (size === null) {
-      output = `Invalid size '${args[0]}'. Use a token count between 1 and ${MAX_CONTEXT_WINDOW_OVERRIDE.toLocaleString()} — e.g. 120000, 200k, 1m — or 'clear'.`;
+      output = `Invalid size '${args[0]}'. Use a token count between 1 and ${MAX_CONTEXT_WINDOW_OVERRIDE.toLocaleString()}, e.g. 120000, 200k, 1m, or 'clear'.`;
     } else {
       registry.setModelContextCap(model.registryKey, size);
       output = `Context window for ${model.displayName} set to ${size.toLocaleString()} tokens (was ${registry.getContextWindowForModel(model).toLocaleString()}). Clear with /context window clear.`;

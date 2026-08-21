@@ -1,5 +1,5 @@
 /**
- * Context status hint tests — TASK-056.
+ * Context status hint tests, TASK-056.
  *
  * Validates:
  *  1. Hint appears on suggest-compact and needs-repair signals.
@@ -7,8 +7,8 @@
  *  3. Auto-compact vs manual wording is toggled by autoCompactEnabled.
  *  4. Usage percent is reflected in the hint text.
  *  5. The boot state (no tokens counted yet, window still the provider
- *     fallback) produces NO pressure hint — the regression that shipped
- *     "Context high (0% used) — auto-compact will run before the next turn."
+ *     fallback) produces NO pressure hint, the regression that shipped
+ *     "Context high (0% used), auto-compact will run before the next turn."
  *     to every launch. Every case above therefore states real, resolved
  *     numbers, because a pressure claim now has to be backed by them.
  *
@@ -95,7 +95,7 @@ describe('resolveContextStatusHint', () => {
     }
   });
 
-  test('the evaluator is handed exactly the numbers the guards use — they cannot be given different ones', () => {
+  test('the evaluator is handed exactly the numbers the guards use; they cannot be given different ones', () => {
     const seen: Array<{ currentTokens: number; contextWindow: number }> = [];
     resolveContextStatusHint({
       evaluate: (args) => { seen.push(args); return { level: 'stable', autoCompactEnabled: true, usagePct: 10 }; },
@@ -106,7 +106,7 @@ describe('resolveContextStatusHint', () => {
   });
 });
 
-describe('boot state — a pressure claim must be backed by real numbers', () => {
+describe('boot state: a pressure claim must be backed by real numbers', () => {
   // What a real v1.19.6 boot actually looked like: nothing counted yet, and
   // the resolved window still the SDK's DEFAULT_CONTEXT_WINDOW fallback. The
   // evaluator legitimately reports 'suggest-compact' here, because 8,192 free
@@ -146,7 +146,7 @@ describe('boot state — a pressure claim must be backed by real numbers', () =>
     expect(text).toContain('auto-compact');
   });
 
-  test("'compacting' is exempt — it reports work that is provably running, not predicted pressure", () => {
+  test("'compacting' is exempt: it reports work that is provably running, not predicted pressure", () => {
     expect(bootHint('compacting')).toContain('Compacting');
   });
 });

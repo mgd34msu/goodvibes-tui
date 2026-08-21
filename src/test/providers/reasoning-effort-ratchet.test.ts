@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// reasoning-effort-ratchet.test.ts — the requested level survives a model hop.
+// reasoning-effort-ratchet.test.ts, the requested level survives a model hop.
 //
 // The defect these pin: both model-switch paths (`/model <id>` in shell-core.ts
 // and the picker's commit path in bootstrap-command-parts.ts) re-resolved the
@@ -97,7 +97,7 @@ function makeConfig(initial: Record<string, unknown> = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// `/model <id>` — the shell-core command path
+// `/model <id>`, the shell-core command path
 // ---------------------------------------------------------------------------
 
 function makeCommandContext(config: ReturnType<typeof makeConfig>, printed: string[]) {
@@ -139,7 +139,7 @@ function makeCommandContext(config: ReturnType<typeof makeConfig>, printed: stri
   return { context, runtime };
 }
 
-describe('/model — the requested level is never overwritten by the snapped one', () => {
+describe('/model: the requested level is never overwritten by the snapped one', () => {
   test('capable -> capped -> capable returns to the requested level on its own', async () => {
     const registry = new CommandRegistry();
     registerShellCoreCommands(registry);
@@ -192,7 +192,7 @@ describe('/model — the requested level is never overwritten by the snapped one
   });
 });
 
-describe('/effort — an explicit user choice still persists', () => {
+describe('/effort: an explicit user choice still persists', () => {
   test('setting a level writes the preference and the effective level together', async () => {
     const registry = new CommandRegistry();
     registerShellCoreCommands(registry);
@@ -224,7 +224,7 @@ describe('/effort — an explicit user choice still persists', () => {
   });
 });
 
-describe('/effort — the list opens on the level in effect, not a level the model lacks', () => {
+describe('/effort: the list opens on the level in effect, not a level the model lacks', () => {
   test('a capped model preselects its own top level, not the lowest one', async () => {
     const registry = new CommandRegistry();
     registerShellCoreCommands(registry);
@@ -274,14 +274,14 @@ function makePickerActions(config: ReturnType<typeof makeConfig>, logged: string
   return { actions, runtime };
 }
 
-describe('model picker commit — same rules as /model', () => {
+describe('model picker commit: same rules as /model', () => {
   test('capable -> capped -> capable returns to the requested level, preference untouched', () => {
     const config = makeConfig({ 'provider.reasoningEffort': 'xhigh' });
     const logged: string[] = [];
     const { actions, runtime } = makePickerActions(config, logged);
 
     // No effort STEP ran, so `effort` here is the level carried over from the
-    // previously selected model — not a choice.
+    // previously selected model, not a choice.
     actions.completeModelSelection?.({ model: CAPPED, effort: 'xhigh' });
     expect(runtime.reasoningEffort).toBe('medium');
     expect(config.store['provider.reasoningEffort']).toBe('xhigh');
@@ -320,7 +320,7 @@ describe('model picker commit — same rules as /model', () => {
 // ---------------------------------------------------------------------------
 
 describe('requested-level helper', () => {
-  test('reads config only — a snapped effective value cannot become the baseline', () => {
+  test('reads config only: a snapped effective value cannot become the baseline', () => {
     const config = makeConfig({ 'provider.reasoningEffort': 'xhigh' });
     expect(requestedEffortLevel(config as never)).toBe('xhigh');
     const serving = resolveRequestedEffortForServingModel(config as never, CAPPED);
@@ -347,7 +347,7 @@ describe('requested-level helper', () => {
   test('a model that offers nothing low enough says THAT, not "no configurable level"', () => {
     // Resolution snaps DOWN only, so a request for 'low' against a model whose
     // lowest level is 'high' drops the field. Saying the model has no
-    // configurable reasoning would be false — it has levels, just none this low.
+    // configurable reasoning would be false, it has levels, just none this low.
     const highOnly: EffortModelLike = {
       id: 'test-only-high-floor-model',
       provider: 'testprov',

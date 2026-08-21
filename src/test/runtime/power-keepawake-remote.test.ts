@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// power-keepawake-remote.test.ts — the keep-awake toggle is forwarded to an
+// power-keepawake-remote.test.ts, the keep-awake toggle is forwarded to an
 // adopted EXTERNAL daemon over power.keepAwake.set, and is a strict no-op in
 // the embedded topology (the in-process manager IS the daemon).
 // ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ function spyConfig() {
 }
 
 describe('keep-awake remote forward (3a)', () => {
-  test('embedded topology: forward is a strict no-op — never reaches the operator client', async () => {
+  test('embedded topology: forward is a strict no-op; never reaches the operator client', async () => {
     const { configManager, getKeys } = spyConfig();
     await forwardKeepAwakeToDaemon(true, { configManager, homeDirectory: '/tmp/home', isExternalDaemon: () => false });
     // No config read at all: it returned before resolveOperatorRpc.
@@ -58,7 +58,7 @@ describe('keep-awake remote forward (3a)', () => {
 
 // ── The ruling's core property: keep-awake survives the TUI closing ─────────
 
-describe('keep-awake survives the TUI closing — external topology', () => {
+describe('keep-awake survives the TUI closing; external topology', () => {
   test('the toggle rides power.keepAwake.set to the DAEMON (the daemon holds the inhibitor beyond this process)', async () => {
     const calls: Array<{ id: string; input: unknown }> = [];
     const resolveRpc = (() => ({
@@ -82,7 +82,7 @@ describe('keep-awake survives the TUI closing — external topology', () => {
   });
 });
 
-describe('keep-awake survives the TUI closing — embedded topology', () => {
+describe('keep-awake survives the TUI closing; embedded topology', () => {
   test('the toggle persists to power.keepAwake and a fresh composition re-applies it at start', async () => {
     const dir = makeProjectTempDir('gv-power-embed-test');
     try {
@@ -102,7 +102,7 @@ describe('keep-awake survives the TUI closing — embedded topology', () => {
       // Persisted: the config key now carries the toggle...
       expect(configManager.get('power.keepAwake')).toBe(true);
       // ...and the NEXT composition (the next TUI start on this
-      // config) re-applies it at start — the toggle outlives the process.
+      // config) re-applies it at start, the toggle outlives the process.
       const second = wireIdlePowerAndLiveTurn(stubDeps);
       await new Promise((resolve) => setTimeout(resolve, 25));
       expect(second.powerManager.getState().keepAwake.enabled).toBe(true);

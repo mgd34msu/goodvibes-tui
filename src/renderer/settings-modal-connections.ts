@@ -1,5 +1,5 @@
 /**
- * settings-modal-connections.ts — rendering for the Connections category of the
+ * settings-modal-connections.ts, rendering for the Connections category of the
  * settings workspace.
  *
  * Split out of settings-modal.ts for the 800-line file cap, the same reason
@@ -18,7 +18,7 @@ import { clamp, padDisplay, stableWindow } from './fullscreen-workspace.ts';
  *
  * `checking` is rendered as its own state rather than blanked, because a row
  * that showed nothing while the probe was in flight would read as "nothing
- * configured" — the one thing this category exists to stop claiming falsely.
+ * configured", the one thing this category exists to stop claiming falsely.
  */
 export function renderConnectionRows(modal: SettingsModal, width: number, height: number): string[] {
   const rows: string[] = [];
@@ -44,7 +44,7 @@ export function renderConnectionRows(modal: SettingsModal, width: number, height
 /**
  * The detail pane for one connection: the state, what it means, and every next
  * step verbatim. The next steps are the daemon's requirements, so they are
- * listed in full rather than summarized — a truncated instruction is a wrong
+ * listed in full rather than summarized, a truncated instruction is a wrong
  * instruction.
  */
 export function buildConnectionContext(modal: SettingsModal): string[] {

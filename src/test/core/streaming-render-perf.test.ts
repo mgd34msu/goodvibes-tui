@@ -16,7 +16,7 @@ import { createTestConfigManager } from '../helpers/test-managers.ts';
 // ---------------------------------------------------------------------------
 
 /**
- * lineToString — extract plain text from a Line (Cell[]).
+ * lineToString, extract plain text from a Line (Cell[]).
  * Used to compare render output without importing test setup.
  */
 function lineToString(line: { char: string }[]): string {
@@ -99,7 +99,7 @@ describe('streaming render: 16ms throttle gate', () => {
     cm.addUserMessage('q');
     cm.startStreamingBlock();
 
-    // First delta — should trigger a render
+    // First delta, should trigger a render
     cm.updateStreamingBlock('first token');
 
     // History should be non-empty (render happened)
@@ -119,7 +119,7 @@ describe('streaming render: 16ms throttle gate', () => {
       cm.addUserMessage('q');
       cm.startStreamingBlock();
 
-      // First delta at t=1000 — renders (0ms since start, throttle resets)
+      // First delta at t=1000, renders (0ms since start, throttle resets)
       cm.updateStreamingBlock('a');
       const afterFirst = cm.getDisplayBlocks().length;
       expect(afterFirst).toBeGreaterThan(0);
@@ -129,7 +129,7 @@ describe('streaming render: 16ms throttle gate', () => {
       // Record buffer line count BEFORE the throttled delta
       const lineCountBefore = cm.getDisplayBlocks().length;
 
-      // These deltas arrive within 16ms of the last render — throttled
+      // These deltas arrive within 16ms of the last render, throttled
       for (let i = 0; i < 10; i++) {
         cm.updateStreamingBlock('a'.repeat(i + 2));
       }
@@ -147,7 +147,7 @@ describe('streaming render: 16ms throttle gate', () => {
       // The buffer line count stays the same from the last throttled-path update.
       expect(lineCountAfter).toBe(lineCountBefore);
 
-      // Now advance past the 16ms window — next delta should render
+      // Now advance past the 16ms window, next delta should render
       mockNow = 1017;
       const contentFinal = 'a'.repeat(20);
       cm.updateStreamingBlock(contentFinal);
@@ -183,7 +183,7 @@ describe('streaming render: 16ms throttle gate', () => {
     cm.updateStreamingBlock('first streaming response');
     cm.finalizeStreamingBlock();
     cm.addAssistantMessage('first streaming response');
-    // Second streaming cycle — throttle must be reset by startStreamingBlock
+    // Second streaming cycle, throttle must be reset by startStreamingBlock
     cm.addUserMessage('q2');
     cm.startStreamingBlock();
     cm.updateStreamingBlock('second streaming response');

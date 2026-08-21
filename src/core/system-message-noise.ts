@@ -1,5 +1,5 @@
 /**
- * System-message noise policy — decides whether an operational status message
+ * System-message noise policy, decides whether an operational status message
  * should reach the transcript unchanged, be dropped, or be folded. Every noisy
  * source these rules catch is emitted (from the SDK) through
  * SystemMessageRouter, so this one funnel is where first-run plumbing is kept
@@ -19,9 +19,9 @@ export interface NoiseGateDeps {
 export type NoiseVerdict =
   /** Pass through to the transcript unchanged. */
   | { readonly action: 'emit' }
-  /** Suppress entirely — reachable via another live surface. */
+  /** Suppress entirely, reachable via another live surface. */
   | { readonly action: 'drop' }
-  /** Provider "from last session" replay line — buffer and fold to one line. */
+  /** Provider "from last session" replay line, buffer and fold to one line. */
   | { readonly action: 'foldProviderReplay' };
 
 const EMIT: NoiseVerdict = { action: 'emit' };
@@ -42,12 +42,12 @@ const REPLAY_CHAIN_RE = /WRFC chain (\S+) transitioned .* waiting for action/;
  * lookup, so it is trivially testable.
  */
 export function classifyNoise(message: string, deps: NoiseGateDeps): NoiseVerdict {
-  // 1b — provider-discovery replay burst ("[Local] … — from last session").
+  // 1b, provider-discovery replay burst ("[Local] …, from last session").
   if (message.startsWith('[Local]') && PROVIDER_REPLAY_RE.test(message)) {
     return FOLD;
   }
 
-  // 1d — periodic "[Agents] N running:" status snapshot. The same live detail
+  // 1d, periodic "[Agents] N running:" status snapshot. The same live detail
   // is shown in the fleet panel (per-agent activity) and the footer count, so
   // the 30-second transcript churn is dropped. Meaningful lifecycle lines
   // ("[Agents] ✓ …", "[Agents] Cohort …", "[Agents] ✗ …") do not match.
@@ -55,7 +55,7 @@ export function classifyNoise(message: string, deps: NoiseGateDeps): NoiseVerdic
     return DROP;
   }
 
-  // 1c — stale "[Replay] … waiting for action" for a terminal/killed chain.
+  // 1c, stale "[Replay] … waiting for action" for a terminal/killed chain.
   if (message.startsWith('[Replay]') && deps.isChainTerminal) {
     const match = REPLAY_CHAIN_RE.exec(message);
     if (match && deps.isChainTerminal(match[1])) return DROP;
@@ -64,7 +64,7 @@ export function classifyNoise(message: string, deps: NoiseGateDeps): NoiseVerdic
   return EMIT;
 }
 
-/** Provider name from a "[Local] <name> at host:port (…) — from last session" line. */
+/** Provider name from a "[Local] <name> at host:port (…), from last session" line. */
 export function providerNameFromReplay(message: string): string {
   const match = /^\[Local\]\s+(.+?)\s+at\s/.exec(message);
   if (match) return match[1];

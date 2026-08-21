@@ -19,7 +19,7 @@ disposeTestRuntimeServicesAfterAll();
  * `mock:mock-model`. If either site were constructed WITHOUT the registry, that
  * same call would throw instead of resolving.
  */
-describe('model override resolution — services composition wiring', () => {
+describe('model override resolution: services composition wiring', () => {
   afterAll(() => resetTestRuntimeServices());
 
   test('agent spawn: a bare model id resolves through the shared resolver', () => {

@@ -3,7 +3,7 @@ import type { WorkspaceTab } from '../panels/panel-manager.ts';
 import { renderTabStrip, type TabHitRegion } from './tab-strip.ts';
 import { UI_TONES } from './ui-primitives.ts';
 
-// Theme tokens (no raw hex) — keeps the bar in sync with the shared palette.
+// Theme tokens (no raw hex), keeps the bar in sync with the shared palette.
 const ACTIVE_FG = UI_TONES.fg.primary;       // selected tab text
 const ACTIVE_BG = UI_TONES.bg.selected;      // selected tab fill (stronger contrast)
 const INACTIVE_FG = UI_TONES.fg.muted;       // unselected tabs

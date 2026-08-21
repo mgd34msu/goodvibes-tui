@@ -3,7 +3,7 @@
  *
  * The footer's context-info line carries a `spine:online` / `spine:offline`
  * segment ONLY in adopted-daemon mode (when sessionSpineStatus is defined).
- * Embedded/local mode (undefined) renders no segment — plain words, no blame,
+ * Embedded/local mode (undefined) renders no segment, plain words, no blame,
  * matching the repo's `notify:`/`N tools` context-segment style.
  */
 import { describe, test, expect } from 'bun:test';

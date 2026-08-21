@@ -1,12 +1,12 @@
 /**
- * W6 liveness coverage — E's liveness-contract harness (../helpers/liveness.ts)
+ * W6 liveness coverage, E's liveness-contract harness (../helpers/liveness.ts)
  * pointed at the config-modal surfaces through the REAL host render path
  * (ConfigModal + renderConfigModal + ModalFactory), as the integrator brief
  * requires. A values-only update (mutating a non-selected row's live value while
  * the row-id set is unchanged) must repaint in place: identical skeleton, cursor
  * unmoved, exactly one row differs, no structural glyph touched.
  *
- * Covered: providers-modal (the charter's live-modal exemplar — REQUIRED; its
+ * Covered: providers-modal (the charter's live-modal exemplar, REQUIRED; its
  * async inspect cache is driven deterministically), remote-modal (a second
  * group-A surface, read-model backed), AND memory-modal (a group-B ported
  * surface —): a values-only mutation of a non-selected record's live label
@@ -29,7 +29,7 @@ const W = 120;
 const H = 28;
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 15));
 
-describe('liveness contract — providers-modal (values-only update, real host path)', () => {
+describe('liveness contract: providers-modal (values-only update, real host path)', () => {
   test('a model-count value update on a NON-selected provider row repaints in place: no reflow, cursor unchanged, one row differs', async () => {
     // Same ids across both frames (structure stable); only modelCount changes.
     const snaps: Array<{ providerId: string; active: boolean; modelCount: number }> = [
@@ -53,7 +53,7 @@ describe('liveness contract — providers-modal (values-only update, real host p
 
       // Values-only live tick: reinspect() stored the snapshot object refs in the
       // surface's cache, so mutating the NON-selected first provider's modelCount
-      // mutates the cached object — the next render's buildView() reflects it with
+      // mutates the cached object, the next render's buildView() reflects it with
       // no interaction (exactly what the surface's 3s live tick repaints). No
       // status line, no structural change.
       snaps[0]!.modelCount = 6;
@@ -92,7 +92,7 @@ describe('liveness contract — providers-modal (values-only update, real host p
   });
 });
 
-describe('liveness contract — remote-modal (values-only update, real host path)', () => {
+describe('liveness contract: remote-modal (values-only update, real host path)', () => {
   function makeSnapshot() {
     return {
       daemon: { transportState: 'connected', isRunning: true, reconnectAttempts: 0, runningJobCount: 1 },
@@ -140,7 +140,7 @@ describe('liveness contract — remote-modal (values-only update, real host path
   });
 });
 
-describe('liveness contract — memory-modal (group-B ported surface, values-only update, real host path)', () => {
+describe('liveness contract: memory-modal (group-B ported surface, values-only update, real host path)', () => {
   test('a summary value update on a NON-selected record row repaints in place: no reflow, cursor unchanged, one row differs', async () => {
     // Two records; only the first (non-selected) record's summary changes, at
     // the SAME display width, so the id set is stable (values-only tick).
@@ -149,7 +149,7 @@ describe('liveness contract — memory-modal (group-B ported surface, values-onl
       { id: 'mem-live-2', scope: 'session', cls: 'risk', summary: 'liveness record row bravo', tags: [], reviewState: 'reviewed', confidence: 80, createdAt: 1735689600000, provenance: [] },
     ];
     // The surface reads through the MemoryAccess shape (spine client), never the raw
-    // registry — `honestSearch` resolves the SAME record array each call so buildView
+    // registry, `honestSearch` resolves the SAME record array each call so buildView
     // sees live mutations to `records[i]` without a second fetch.
     const surface = createMemoryModalSurface({ memoryRegistry: { honestSearch: async () => ({ records }) } });
     const modal = new ConfigModal();

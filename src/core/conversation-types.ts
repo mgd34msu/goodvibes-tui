@@ -1,5 +1,5 @@
 /**
- * conversation-types.ts — shared TUI extension types for ConversationManager.
+ * conversation-types.ts, shared TUI extension types for ConversationManager.
  *
  * Extracted from conversation.ts so that conversation-rendering.ts can import
  * BlockMeta without creating a circular dependency:
@@ -17,7 +17,7 @@ import type { BlockMeta as SdkBlockMeta } from '@pellux/goodvibes-sdk/platform/c
  * a run of >=2 consecutive tool-result messages under one collapsible header
  * (see conversation-tool-groups.ts). Defined as an intersection rather than
  * `interface X extends SdkBlockMeta` because TypeScript requires an extending
- * interface's members to be subtypes of the base interface's — widening the
+ * interface's members to be subtypes of the base interface's, widening the
  * `type` union that way is a compile error. Omit + intersection adds the new
  * variant without touching the SDK's published type.
  */
@@ -42,7 +42,7 @@ export type BlockMeta = Omit<SdkBlockMeta, 'type'> & {
   /**
    * The tool call's name, when this block renders a 'tool' result (or is an
    * 'assistant_turn' header whose calls all share one label). Used to name the block honestly in action
-   * receipts (e.g. "tool result: exec") — see describeBlockForReceipt in
+   * receipts (e.g. "tool result: exec"), see describeBlockForReceipt in
    * handler-content-actions.ts. Undefined for non-tool block types and for
    * standalone tool results with no recorded name.
    */

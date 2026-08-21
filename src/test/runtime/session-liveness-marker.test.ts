@@ -1,5 +1,5 @@
 /**
- * Tests for session-liveness-marker.ts — marker lifecycle (write/refresh/
+ * Tests for session-liveness-marker.ts, marker lifecycle (write/refresh/
  * remove) plus the best-effort liveness check (fresh+alive, stale, missing,
  * pid-not-alive) that the boot resume notice's suppression and /session
  * resume's confirm gate both build on.

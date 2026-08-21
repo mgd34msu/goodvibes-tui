@@ -4,7 +4,7 @@
 // Covers the one-key retry/switch-model affordance's lifecycle: it renders
 // as a transient hint only while armed and disappears the instant it's
 // disarmed (never a permanent transcript message), and 'm' is gated on
-// armed exactly like 'r' — pressing 'm' before any error surfaced (or after
+// armed exactly like 'r', pressing 'm' before any error surfaced (or after
 // the affordance already disarmed) must not open the model picker.
 //
 // Also covers the disarm timer: arming starts a real time bound (60s in
@@ -75,7 +75,7 @@ describe('retry affordance lifecycle', () => {
     disarmRetryAffordance(state);
   });
 
-  test('disarming removes the hint entirely — never lingers', () => {
+  test('disarming removes the hint entirely; never lingers', () => {
     const state = createRetryAffordanceState();
     armRetryAffordance(state, false);
     expect(retryAffordanceHint(state)).not.toBeNull();
@@ -110,7 +110,7 @@ describe('retry affordance lifecycle', () => {
     expect(state.armed).toBe(false);
     expect(schedule.pendingCount()).toBe(0);
 
-    // Firing whatever is left over must not resurrect the affordance or call onExpire —
+    // Firing whatever is left over must not resurrect the affordance or call onExpire,
     // the timer was actually cancelled, not just superseded.
     schedule.fireAll();
     expect(state.armed).toBe(false);
@@ -175,7 +175,7 @@ describe('retry affordance lifecycle', () => {
   });
 });
 
-describe('handleErrorAffordanceKey — both r and m gated on armed', () => {
+describe('handleErrorAffordanceKey: both r and m gated on armed', () => {
   test('r retries when armed', () => {
     let retried = 0;
     let rendered = 0;
@@ -190,7 +190,7 @@ describe('handleErrorAffordanceKey — both r and m gated on armed', () => {
     expect(rendered).toBe(1);
   });
 
-  test('r does nothing when unarmed — falls through as normal input', () => {
+  test('r does nothing when unarmed; falls through as normal input', () => {
     let retried = 0;
     const handled = handleErrorAffordanceKey('r', {
       retryArmed: false,

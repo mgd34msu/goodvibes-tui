@@ -99,7 +99,7 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
         // instant filter: an unclaimed keystroke arms search AND starts
         // the query immediately, instead of silently doing nothing until the
         // user discovers '/' first (the "help search needs '/' arming while
-        // the palette filters instantly" evaluator finding — /help has no
+        // the palette filters instantly" evaluator finding, /help has no
         // customActions, so every letter used to be swallowed here). '/'
         // above still works too; this is additive, not a replacement, and
         // never fires for a claimed hotkey letter (checked first, above).
@@ -110,10 +110,10 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
   } else if (token.type === 'key') {
     if (token.logicalName === 'escape') {
       // ONE Escape always closes the modal, regardless of search state.
-      // Clearing an in-progress query is Backspace's job, not Esc's — the old
+      // Clearing an in-progress query is Backspace's job, not Esc's, the old
       // two-stage contract (1st Esc clears query, 2nd blurs search, 3rd
       // finally closes) was the "help modal took 3 Escapes after searching"
-      // evaluator finding (searchFocused is not modal-specific — every
+      // evaluator finding (searchFocused is not modal-specific, every
       // SelectionModal-based picker had the same multi-Esc pattern).
       state.handleEscape();
       return true;
@@ -372,7 +372,7 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
   if (token.type === 'key') {
     const focusPane = state.settingsModal.focusPane ?? 'settings';
     if (token.logicalName === 'escape') {
-      // Cancel inline edit first — mirrors the global contract in handler-modal-stack.ts.
+      // Cancel inline edit first, mirrors the global contract in handler-modal-stack.ts.
       // Must check editingMode before searchFocused: the reachable path
       // search→Enter(string/number)→Esc must cancel the edit, NOT just clear search.
       if (state.settingsModal.editingMode) {
@@ -400,7 +400,7 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
       else {
         // Feature-unit toggle headers are boolean settings rows now, so
         // activateSelected toggles them (via the flag-toggle chokepoint) the same
-        // way it edits/toggles any other setting — no flags-category special case.
+        // way it edits/toggles any other setting, no flags-category special case.
         state.settingsModal.activateSelected();
         consumeSettingsPickerRequest(state);
       }
@@ -456,7 +456,7 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
     }
   } else if (token.type === 'text') {
     if (state.settingsModal.editingMode) {
-      // editingMode takes priority over search — Enter on a string/number search
+      // editingMode takes priority over search, Enter on a string/number search
       // result enters inline edit; subsequent chars must go to editChar, not the query.
       state.settingsModal.editChar(token.value);
     } else if (state.settingsModal.searchFocused) {
@@ -577,16 +577,16 @@ type ConfigModalRouteState = {
 /**
  * Route a key to the generic config-modal host (MIGRATE-TO-MODAL
  * surfaces). The host owns the reserved navigation keys (Esc, up/down/j/k tab
- * left/right, and now '/' — item 1's type-to-filter, armed the same
+ * left/right, and now '/', item 1's type-to-filter, armed the same
  * way as scrollable-list-panel.ts's opt-in filter and SettingsModal's own
  * '/'-armed search); every other key is offered to the active surface's
  * declarative action table (fireAction handles the two-press confirm for
  * destructive actions). Any unrecognised key is absorbed so the modal stays
- * modal — this is the same "active modal captures all keys" shape as the
+ * modal, this is the same "active modal captures all keys" shape as the
  * other modal routers.
  *
  * While the filter is armed (`configModal.isFilterActive()`), printable text
- * tokens go to the query instead of nav/action dispatch — this is WHY 'j'/'k'
+ * tokens go to the query instead of nav/action dispatch, this is WHY 'j'/'k'
  * lose their vim-nav meaning mid-filter (you're typing, not navigating) but
  * Escape, Backspace, and the arrow/tab nav keys keep their ordinary meaning
  * (arrows navigate the FILTERED list; Enter still acts on the selected row).
@@ -594,7 +594,7 @@ type ConfigModalRouteState = {
 export function handleConfigModalToken(state: ConfigModalRouteState, token: InputToken): boolean {
   if (!state.configModal.active) return false;
 
-  // Every token that reaches the modal is a user interaction — after the
+  // Every token that reaches the modal is a user interaction, after the
   // first one, structure freezes to interaction boundaries (liveness rule).
   // Before it, renders may sync structure so async onOpen loads appear
   // without a keypress (batch refutation finding 3).
@@ -646,7 +646,7 @@ export function handleConfigModalToken(state: ConfigModalRouteState, token: Inpu
         return true;
     }
     // Any other 'key' token (e.g. 'enter') falls through to the action table
-    // below even while filtering — only printable TEXT tokens are captured
+    // below even while filtering, only printable TEXT tokens are captured
     // by the filter (below), so Enter still fires on the current selection.
   } else if (token.type === 'text') {
     if (!filtering && token.value === '/') {
@@ -655,8 +655,8 @@ export function handleConfigModalToken(state: ConfigModalRouteState, token: Inpu
       return true;
     }
     if (filtering) {
-      // The WHOLE token value lands in the filter in one call — including a
-      // multi-char paste token — never split into per-char nav/action
+      // The WHOLE token value lands in the filter in one call, including a
+      // multi-char paste token, never split into per-char nav/action
       // dispatch (the text-capture invariant this item's brief calls out).
       state.configModal.appendFilterText(token.value);
       state.requestRender();

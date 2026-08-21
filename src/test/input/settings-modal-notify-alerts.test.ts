@@ -12,7 +12,7 @@ import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { buildNotifyAlertSyntheticEntries, buildSettingGroups } from '../../input/settings-modal-data.ts';
 
 // These are synthetic settings (buildNotifyAlertSyntheticEntries), not real
-// ConfigKey schema entries — the module itself stamps them `as ConfigKey`
+// ConfigKey schema entries, the module itself stamps them `as ConfigKey`
 // (settings-modal-data.ts), so the test matches that same convention here.
 const EXPECTED_KEYS = ([
   'behavior.notifyOnBudgetBreach',

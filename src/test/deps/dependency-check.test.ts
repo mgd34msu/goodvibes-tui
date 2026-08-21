@@ -1,16 +1,16 @@
 /// <reference types="@pellux/goodvibes-sdk/sql-js" />
 // `sql.js` ships no types. The declaration is SDK-owned and reaches here
-// through that reference — there is no local copy to keep in step.
+// through that reference, there is no local copy to keep in step.
 
 /**
- * G6 — Dependency verification smoke tests.
+ * G6, Dependency verification smoke tests.
  *
  * Each test verifies that a dependency is importable and functional at a
  * basic level.  These are not unit tests of the dep's API; they are
  * production-readiness checks confirming every dep is resolvable and
  * can perform its primary operation without throwing.
  *
- * sql.js  — tested as optional: presence is verified, full init covered
+ * sql.js , tested as optional: presence is verified, full init covered
  *            separately since WASM loading may require extra config.
  */
 import { describe, test, expect } from 'bun:test';
@@ -99,7 +99,7 @@ describe('fuse.js', () => {
 });
 
 // ---------------------------------------------------------------------------
-// sql.js — WASM presence + functional init
+// sql.js, WASM presence + functional init
 // ---------------------------------------------------------------------------
 
 describe('sql.js', () => {
@@ -138,7 +138,7 @@ describe('sql.js', () => {
 });
 
 // ---------------------------------------------------------------------------
-// tree-sitter WASM files — existence checks
+// tree-sitter WASM files, existence checks
 // ---------------------------------------------------------------------------
 
 describe('tree-sitter WASM files', () => {
@@ -181,7 +181,7 @@ describe('tree-sitter WASM files', () => {
 });
 
 // ---------------------------------------------------------------------------
-// web-tree-sitter — init and basic parse
+// web-tree-sitter, init and basic parse
 // ---------------------------------------------------------------------------
 
 describe('web-tree-sitter', () => {
@@ -202,7 +202,7 @@ describe('web-tree-sitter', () => {
     // init() initialises the WASM runtime; call it and verify it does not throw
     let threw = false;
     try {
-      // @ts-ignore — web-tree-sitter typings don't include init() but it exists at runtime
+      // @ts-ignore, web-tree-sitter typings don't include init() but it exists at runtime
       await Parser.init();
     } catch {
       threw = true;
@@ -212,7 +212,7 @@ describe('web-tree-sitter', () => {
 });
 
 // ---------------------------------------------------------------------------
-// simple-git — instance creation and smoke op
+// simple-git, instance creation and smoke op
 // ---------------------------------------------------------------------------
 
 describe('simple-git', () => {
@@ -251,7 +251,7 @@ describe('simple-git', () => {
 });
 
 // ---------------------------------------------------------------------------
-// openai — client creation and SDK introspection
+// openai, client creation and SDK introspection
 // ---------------------------------------------------------------------------
 
 describe('openai', () => {
@@ -296,7 +296,7 @@ describe('openai', () => {
 });
 
 // ---------------------------------------------------------------------------
-// @agentclientprotocol/sdk — exports existence checks
+// @agentclientprotocol/sdk, exports existence checks
 // ---------------------------------------------------------------------------
 
 describe('@agentclientprotocol/sdk', () => {
@@ -365,7 +365,7 @@ describe('dependency ranges agree with the platform that declares them', () => {
    * bun.lock resolves exactly ONE copy of a package both this repository and
    * the SDK depend on. When the two declare different ranges the older one can
    * win, and the SDK is then compiled and run against a version older than the
-   * one it is written for — which is how an ACP pin five minors behind the
+   * one it is written for, which is how an ACP pin five minors behind the
    * SDK's went unnoticed. Nothing observes that at runtime, so it is asserted
    * here on the declarations themselves.
    */
@@ -391,7 +391,7 @@ describe('dependency ranges agree with the platform that declares them', () => {
         if (!platformRange.startsWith('file:')) return platformRange !== range;
         // A file: declaration means the platform VENDORS the tool inside its
         // own package; the range to agree with is the vendored copy's real
-        // version — this repo's caret pin must include it.
+        // version, this repo's caret pin must include it.
         const vendored = JSON.parse(
           readFileSync(
             join(repoRoot, 'node_modules', '@pellux', 'goodvibes-sdk', platformRange.slice('file:'.length), 'package.json'),

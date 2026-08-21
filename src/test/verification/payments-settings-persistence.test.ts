@@ -11,14 +11,14 @@
  *
  * These tests supply that missing coverage: for every key in
  * PAYMENTS_LOCAL_SETTINGS they exercise the real persistence behavior end to
- * end — schema default, `set()` write to disk, reload into a fresh
- * ConfigManager, read-back equality, and reset-to-default — through the
+ * end, schema default, `set()` write to disk, reload into a fresh
+ * ConfigManager, read-back equality, and reset-to-default, through the
  * actual ConfigManager, not a mock. Passing here is what makes counting these
  * keys as behavior-verified in the ledger honest.
  *
  * Card MATERIAL (number, expiry, CVV, cardholder name) is deliberately absent
  * from PAYMENTS_LOCAL_SETTINGS and from this file: those four fields are not
- * CONFIG_SCHEMA keys at all (see input/payments-config.ts) — their own
+ * CONFIG_SCHEMA keys at all (see input/payments-config.ts), their own
  * containment and daemon-scope coverage lives in
  * src/test/security/payments-cvv-containment.test.ts.
  */
@@ -80,7 +80,7 @@ function freshManager(): { manager: ConfigManager; root: string; configDir: stri
   return { manager, root, configDir };
 }
 
-describe('payments settings — inventory integrity', () => {
+describe('payments settings: inventory integrity', () => {
   test('PAYMENTS_LOCAL_SETTINGS is exactly the CONFIG_SCHEMA payments.* key set', () => {
     const schemaPaymentsKeys: string[] = CONFIG_SCHEMA
       .map((s): string => s.key)
@@ -108,7 +108,7 @@ describe('payments settings — inventory integrity', () => {
   });
 });
 
-describe('payments settings — default exposure', () => {
+describe('payments settings: default exposure', () => {
   test('a fresh ConfigManager returns each key at its schema default', () => {
     const { manager } = freshManager();
     for (const key of PAYMENTS_LOCAL_SETTINGS) {
@@ -118,13 +118,13 @@ describe('payments settings — default exposure', () => {
   });
 });
 
-describe('payments settings — write/reload persistence round-trip', () => {
+describe('payments settings: write/reload persistence round-trip', () => {
   test('each key persists to disk and reloads into a fresh ConfigManager', () => {
     const { manager, root, configDir } = freshManager();
 
     // Write every alternate value through the real set() path (validates +
     // saves to disk). payments.* is entirely daemon-owned, so these all land
-    // in the daemon tier file rather than the ordinary global settings file —
+    // in the daemon tier file rather than the ordinary global settings file,
     // exactly the routing this round's daemon-visibility fix depends on.
     for (const key of PAYMENTS_LOCAL_SETTINGS) {
       manager.set(key as ConfigKey, ALTERNATE_VALUE[key] as never);
@@ -134,7 +134,7 @@ describe('payments settings — write/reload persistence round-trip', () => {
     }
 
     // A brand-new manager over the same on-disk config must read every value
-    // back — proving the write actually reached durable storage.
+    // back, proving the write actually reached durable storage.
     const reloaded = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, configDir });
     reloaded.load();
     for (const key of PAYMENTS_LOCAL_SETTINGS) {
@@ -145,7 +145,7 @@ describe('payments settings — write/reload persistence round-trip', () => {
   });
 });
 
-describe('payments settings — reset restores default', () => {
+describe('payments settings: reset restores default', () => {
   test('reset returns each key to its schema default and persists that', () => {
     const { manager, root, configDir } = freshManager();
 

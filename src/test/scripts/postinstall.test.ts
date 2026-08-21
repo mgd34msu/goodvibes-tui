@@ -9,7 +9,7 @@ import {
   verifyChecksum,
 } from '../../runtime/release-artifacts.ts';
 // postinstall.js re-exports these same bindings (its download-verify loop
-// calls them directly) — importing it here proves that wiring holds, and
+// calls them directly), importing it here proves that wiring holds, and
 // is safe: import.meta.main is only true when the file is the process
 // entry point, so this import does not trigger its network install.
 import * as postinstall from '../../../scripts/postinstall.js';
@@ -25,7 +25,7 @@ describe('verifyChecksum', () => {
     );
   });
 
-  test('throws when the manifest has NO entry for the artifact — a missing entry is a hard failure, not a skip', () => {
+  test('throws when the manifest has NO entry for the artifact; a missing entry is a hard failure, not a skip', () => {
     expect(() => verifyChecksum('goodvibes-linux-x64', 'abc123', undefined)).toThrow(
       /no checksum entry for goodvibes-linux-x64/,
     );
@@ -141,7 +141,7 @@ describe('the wake-word model install step in postinstall', () => {
   test('postinstall exposes the step, and running it in a source checkout is a stated skip', async () => {
     expect(typeof postinstall.installWakeWordModel).toBe('function');
     // This repository IS a source checkout, so the step must decline rather than
-    // pull 6 MB into the developer's home on every `bun install` — the same rule
+    // pull 6 MB into the developer's home on every `bun install`, the same rule
     // the release-binary install already follows.
     await expect(postinstall.installWakeWordModel()).resolves.toBeUndefined();
   });
@@ -152,7 +152,7 @@ describe('the wake-word model install step in postinstall', () => {
     // checksum of its own for the wake artifacts.
     expect(source).toContain('provisionWakeWordModelsAtInstall');
     // And the managed root comes from the SDK's one derivation, not a hand-written
-    // join — an installer writing to a directory the daemon does not read would
+    // join, an installer writing to a directory the daemon does not read would
     // report success and provision nothing usable.
     expect(source).toContain('resolveManagedVoiceRoot(home)');
     expect(source).not.toContain('voice-runtimes-v1');

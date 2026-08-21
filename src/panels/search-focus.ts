@@ -20,7 +20,7 @@ export function getPanelSearchFocusTransition(
 // Panel search filters are end-anchored (no moveable cursor).
 // Per the delete-key policy (src/input/delete-key-policy.ts):
 //   'backspace' removes the last character.
-//   'delete' is a no-op — there is no cursor, so forward-delete is meaningless.
+//   'delete' is a no-op, there is no cursor, so forward-delete is meaningless.
 export function isPanelSearchBackspace(key: string): boolean {
   return isTextBackspace(key);
 }

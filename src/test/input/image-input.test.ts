@@ -42,7 +42,7 @@ function createConfigManager(): ConfigManager {
 }
 
 // ---------------------------------------------------------------------------
-// registerPaste — base64 prefix detection
+// registerPaste, base64 prefix detection
 // ---------------------------------------------------------------------------
 
 describe('registerPaste base64 image detection', () => {
@@ -92,7 +92,7 @@ describe('registerPaste base64 image detection', () => {
     const ih = makeInput();
     const shortData = 'iVBORw0KGgo' + 'A'.repeat(10);
     const result = ih.registerPaste(shortData);
-    // Too short — returned as-is (not a marker)
+    // Too short, returned as-is (not a marker)
     expect(result).not.toMatch(/^\[IMAGE:/);
     expect(ih.getImageAttachments().size).toBe(0);
   });
@@ -198,7 +198,7 @@ describe('handleClipboardPaste', () => {
 });
 
 // ---------------------------------------------------------------------------
-// expandPrompt — via private accessor
+// expandPrompt, via private accessor
 // ---------------------------------------------------------------------------
 
 describe('expandPrompt', () => {
@@ -241,7 +241,7 @@ describe('expandPrompt', () => {
     const gifData = 'R0lGOD' + 'A'.repeat(200);
     const m1 = ih.registerPaste(pngData);
     const m2 = ih.registerPaste(gifData);
-    // Use m2 first, then m1 — reverse of insertion order
+    // Use m2 first, then m1, reverse of insertion order
     const result = asImageTestAccess(ih).expandPrompt(`${m2} text ${m1}`);
     expect(Array.isArray(result)).toBe(true);
     const imageParts = (result as ContentPart[]).filter((p): p is Extract<ContentPart, { type: 'image' }> => p.type === 'image');
@@ -253,7 +253,7 @@ describe('expandPrompt', () => {
 });
 
 // ---------------------------------------------------------------------------
-// addUserMessage — ContentPart[] storage
+// addUserMessage, ContentPart[] storage
 // ---------------------------------------------------------------------------
 
 describe('addUserMessage with ContentPart[]', () => {

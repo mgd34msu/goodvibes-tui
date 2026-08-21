@@ -1,5 +1,5 @@
 /**
- * Notification dispatch — the production wiring that finally gives the
+ * Notification dispatch, the production wiring that finally gives the
  * panel_only notification target a live producer.
  *
  * The SDK's NotificationRouter decides where each domain notification goes
@@ -28,7 +28,7 @@ export interface NotificationDispatcher {
 /**
  * The runtime event domains whose events surface as operational notifications.
  * Deliberately a curated set of user-relevant, completion/attention-shaped
- * domains — not every domain — so the panel reflects meaningful operational
+ * domains, not every domain, so the panel reflects meaningful operational
  * activity rather than raw event churn. The router's per-domain verbosity and
  * burst/batch policies still collapse floods within these.
  */
@@ -48,7 +48,7 @@ export function humanizeEventType(type: string): string {
   return words.map((word, index) => (index === 0 ? word[0]!.toUpperCase() + word.slice(1) : word)).join(' ');
 }
 
-/** Derive a notification severity from an event type — errors/failures warn, the rest are informational. */
+/** Derive a notification severity from an event type, errors/failures warn, the rest are informational. */
 export function levelForEventType(type: string): Notification['level'] {
   const upper = type.toUpperCase();
   if (/(FAILED|ERROR|CRASH|DENIED|BLOCKED)/.test(upper)) return 'warning';
@@ -91,7 +91,7 @@ export function createNotificationDispatcher(
  * attention line. The MemoryGovernor emits this on the 'ops' domain when the
  * pressure tier changes or the leak tripwire fires; that domain also carries
  * high-churn audit/metric events, so it is deliberately NOT in
- * NOTIFICATION_BRIDGE_DOMAINS — this targeted bridge lifts only the
+ * NOTIFICATION_BRIDGE_DOMAINS, this targeted bridge lifts only the
  * memory-pressure event into notices (critical at the critical tier / on a
  * tripwire, warning at high), leaving the rest of the ops churn out of the
  * feed. Returns an unsubscribe function.

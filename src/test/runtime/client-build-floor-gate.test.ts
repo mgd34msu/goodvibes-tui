@@ -1,10 +1,10 @@
 /**
- * client-build-floor-gate.test.ts — the daemon's build floor, on the seam that
+ * client-build-floor-gate.test.ts, the daemon's build floor, on the seam that
  * actually executes work.
  *
  * build-floors.test.ts pins the verdicts. This pins the consequence: a terminal
  * the daemon has declared too old stops taking shared-session work. The path is
- * the real one — a follow-up arrives while an agent is busy, so it queues, and
+ * the real one, a follow-up arrives while an agent is busy, so it queues, and
  * the queued follow-up is handed to the continuation runner when that agent
  * completes. That runner is the one services.ts binds to BOTH the local broker
  * and the wire dispatch, so a message arriving over the daemon's queue takes
@@ -30,7 +30,7 @@ const FROM_A_CHANNEL = { surfaceKind: 'telegram' as const, surfaceId: 'surface:t
 
 /**
  * A session with an agent already working it, plus a follow-up queued behind
- * that agent — the exact state whose completion runs the continuation runner.
+ * that agent, the exact state whose completion runs the continuation runner.
  */
 async function sessionWithQueuedFollowUp(
   services: ReturnType<typeof getTestRuntimeServices>,

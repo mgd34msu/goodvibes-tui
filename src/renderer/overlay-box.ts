@@ -18,7 +18,7 @@ export interface OverlayBoxPalette {
 
 // Built from the mode-resolved chrome tones (activeUiTones) and rebuilt IN PLACE
 // on a mode flip via the registered refresher (60+ call sites read it by
-// reference — see theme.ts's active-mode runtime note).
+// reference, see theme.ts's active-mode runtime note).
 function buildOverlayPalette(): OverlayBoxPalette {
   const t = activeUiTones();
   return {

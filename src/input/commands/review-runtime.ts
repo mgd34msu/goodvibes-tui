@@ -4,7 +4,7 @@ import type { ReviewHunk } from '../../panels/diff-review-model.ts';
 import { hunkPatchText, buildHunkRevertReceiptBlock } from '../../panels/diff-review-model.ts';
 import { requirePanelManager } from './runtime-services.ts';
 
-/** checkpoints.revertHunkPreview result — the read-only clean-or-conflict check plus a confirm token. */
+/** checkpoints.revertHunkPreview result, the read-only clean-or-conflict check plus a confirm token. */
 interface RevertHunkPreview {
   readonly applies: boolean;
   readonly conflict: string | null;
@@ -13,7 +13,7 @@ interface RevertHunkPreview {
   readonly token: string | null;
 }
 
-/** checkpoints.revertHunk result — one applied hunk revert, or a confirmation refusal. */
+/** checkpoints.revertHunk result, one applied hunk revert, or a confirmation refusal. */
 interface RevertHunkResult {
   readonly receipt: {
     readonly path: string;
@@ -31,7 +31,7 @@ interface RevertHunkResult {
  *
  * `explicitUserRequest: true` is honest here and only here-shaped: this path
  * runs because a person is looking at a hunk and pressed a key. Scheduled
- * work, triggers and channel-driven work must never set it — the distinction
+ * work, triggers and channel-driven work must never set it, the distinction
  * is exactly "did the owner ask for this right now", and it is what lets a
  * confirmation-gated verb tell an authorized action apart from one initiated
  * by content.
@@ -75,7 +75,7 @@ async function revertHunkFlow(ctx: CommandContext, panel: DiffReviewPanel, hunk:
   }
 
   if (!preview.applies || !preview.token) {
-    panel.note(`Cannot revert — ${preview.conflict ?? 'this hunk no longer applies'}. The file changed since this diff was captured; press r again after /review reloads. Nothing was changed.`);
+    panel.note(`Cannot revert: ${preview.conflict ?? 'this hunk no longer applies'}. The file changed since this diff was captured; press r again after /review reloads. Nothing was changed.`);
     await panel.refresh();
     return;
   }
@@ -95,7 +95,7 @@ async function revertHunkFlow(ctx: CommandContext, panel: DiffReviewPanel, hunk:
   const summary = `restore ${preview.removedLinesRestored} deleted / drop ${preview.addedLinesRemoved} added line(s)`;
   diffPanel.confirmOverlay.arm({
     id: `${path}:${hunk.header}`,
-    label: `Revert hunk in ${path} — ${summary}`,
+    label: `Revert hunk in ${path}: ${summary}`,
     verb: 'Revert',
     onConfirm: async () => {
       let result: RevertHunkResult;
@@ -105,7 +105,7 @@ async function revertHunkFlow(ctx: CommandContext, panel: DiffReviewPanel, hunk:
         pm.close('diff');
         ctx.focusPanels?.();
         if (isConflict(err)) {
-          panel.note(`Not reverted — ${errorText(err)}. The file changed since captured; nothing was written. Reloading /review…`);
+          panel.note(`Not reverted: ${errorText(err)}. The file changed since captured; nothing was written. Reloading /review…`);
           await panel.refresh();
         } else {
           panel.note(`Revert failed: ${errorText(err)}`);
@@ -125,14 +125,14 @@ async function revertHunkFlow(ctx: CommandContext, panel: DiffReviewPanel, hunk:
     onCancel: () => {
       pm.close('diff');
       ctx.focusPanels?.();
-      panel.note('Revert cancelled — nothing changed.');
+      panel.note('Revert cancelled: nothing changed.');
     },
   });
   ctx.renderRequest();
 }
 
 /**
- * `/review` — open the comment-on-hunk review loop. Loads this session's file
+ * `/review`, open the comment-on-hunk review loop. Loads this session's file
  * changes (the files the SDK SessionChangeTracker recorded) as a git working-
  * tree diff, hunk-boundaried, and wires the panel's steering submit path to the
  * session so an attached comment is sent to the model as a steering message with

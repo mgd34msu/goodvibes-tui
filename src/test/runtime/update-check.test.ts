@@ -64,7 +64,7 @@ function stubFetch(response: { location?: string | null; url?: string }): Update
 }
 
 describe('resolveLatestReleaseTag', () => {
-  test('resolves the tag from a stubbed redirect Location header — no live network call', async () => {
+  test('resolves the tag from a stubbed redirect Location header; no live network call', async () => {
     const fetchImpl = stubFetch({ location: 'https://github.com/mgd34msu/goodvibes-tui/releases/tag/v9.9.9' });
     const tag = await resolveLatestReleaseTag(fetchImpl, 'https://github.com/mgd34msu/goodvibes-tui/releases/latest');
     expect(tag).toBe('v9.9.9');

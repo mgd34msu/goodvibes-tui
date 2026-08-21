@@ -10,7 +10,7 @@ import type { MintedPairingToken, PublicPairingToken } from '@pellux/goodvibes-s
 import { formatDeviceLine, shortTokenId } from '@pellux/goodvibes-sdk/platform/pairing';
 
 // ---------------------------------------------------------------------------
-// Paired Devices — the settings security-domain device/token management surface.
+// Paired Devices, the settings security-domain device/token management surface.
 // Lists every per-device pairing token (name · created · last-seen · id) and
 // mirrors the pairing.tokens.* gateway verbs: revoke a device, migrate off the
 // legacy shared token, revoke the shared token. Rename needs a name, which the
@@ -19,7 +19,7 @@ import { formatDeviceLine, shortTokenId } from '@pellux/goodvibes-sdk/platform/p
 // fresh every render, so a revoke/migrate reflects immediately.
 // ---------------------------------------------------------------------------
 
-/** The token-store capability this surface needs — satisfied by PairingTokenManager. */
+/** The token-store capability this surface needs, satisfied by PairingTokenManager. */
 export interface DevicesModalPairingTokens {
   list(): PublicPairingToken[];
   rename(id: string, name: string): boolean;
@@ -62,10 +62,10 @@ class DevicesModalSurface implements ConfigModalSurface {
     const now = this.deps.now?.() ?? Date.now();
     const tokens = this.deps.pairingTokens.list();
     const rows: ConfigModalRow[] = [];
-    rows.push(infoRow('intro', 'Devices paired to this daemon. Each has its own token — revoke one without affecting the others.', { dim: true }));
+    rows.push(infoRow('intro', 'Devices paired to this daemon. Each has its own token; revoke one without affecting the others.', { dim: true }));
 
     if (tokens.length === 0) {
-      rows.push(infoRow('empty', 'No devices paired yet — run /pair (or open the pairing QR) to add one.'));
+      rows.push(infoRow('empty', 'No devices paired yet: run /pair (or open the pairing QR) to add one.'));
     } else {
       for (const token of tokens) {
         rows.push({ id: `${DEVICE_ROW_PREFIX}${token.id}`, label: formatDeviceLine(token, now) });
@@ -77,7 +77,7 @@ class DevicesModalSurface implements ConfigModalSurface {
       'legacy',
       legacyRevoked
         ? 'Legacy shared token: revoked.'
-        : 'Legacy shared token: active — migrate a device off it (m), then revoke it (s).',
+        : 'Legacy shared token: active; migrate a device off it (m), then revoke it (s).',
       legacyRevoked ? { dim: true } : { fg: MODAL_TONES.reasoning },
     ));
 
@@ -93,7 +93,7 @@ class DevicesModalSurface implements ConfigModalSurface {
     if (id === 'rename') {
       const deviceId = deviceIdOf(ctx.row);
       if (!deviceId) { ctx.setStatus('Select a device row first.'); return; }
-      // The stable-layout modal cannot capture a name inline — route to the
+      // The stable-layout modal cannot capture a name inline, route to the
       // command with the id pre-filled so the user only types the new name.
       ctx.print(`To rename this device, run:  /devices rename ${shortTokenId(deviceId)} <new name>`);
       return;
@@ -104,7 +104,7 @@ class DevicesModalSurface implements ConfigModalSurface {
       if (!deviceId) { ctx.setStatus('Select a device row first.'); return; }
       const record = tokens.list().find((t) => t.id === deviceId);
       const revoked = tokens.revoke(deviceId);
-      ctx.setStatus(revoked ? `Revoked "${record?.name ?? shortTokenId(deviceId)}" — its token stops working now.` : 'That device was already absent.');
+      ctx.setStatus(revoked ? `Revoked "${record?.name ?? shortTokenId(deviceId)}": its token stops working now.` : 'That device was already absent.');
       this.requestRender();
       return;
     }
@@ -124,7 +124,7 @@ class DevicesModalSurface implements ConfigModalSurface {
     if (id === 'revokeShared') {
       if (tokens.isLegacyRevoked()) { ctx.setStatus('The legacy shared token is already revoked.'); return; }
       tokens.revokeLegacyShared();
-      ctx.setStatus('Revoked the legacy shared token — devices on it must re-pair with their own token.');
+      ctx.setStatus('Revoked the legacy shared token; devices on it must re-pair with their own token.');
       this.requestRender();
       return;
     }

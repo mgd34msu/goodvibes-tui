@@ -17,7 +17,7 @@
 export interface ConcealedInputRequest {
   /**
    * Short label describing what is being asked for, e.g. 'Password' or
-   * 'API key'. Surfaced by the caller (e.g. as a system message) — the composer
+   * 'API key'. Surfaced by the caller (e.g. as a system message), the composer
    * itself only masks; it does not print the label.
    */
   readonly label?: string;
@@ -30,7 +30,7 @@ export interface ConcealedInputRequest {
 /**
  * Mask a composer buffer for display. Every UTF-16 code unit except a newline
  * becomes a bullet, so the masked string has the EXACT same length and line
- * structure as the plaintext — word-wrap and cursor-position math (which index
+ * structure as the plaintext, word-wrap and cursor-position math (which index
  * the string by code unit) stay correct while no plaintext character ever
  * reaches the screen buffer.
  */

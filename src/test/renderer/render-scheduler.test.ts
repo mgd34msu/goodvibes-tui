@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// render-scheduler.test.ts — coalescing semantics.
+// render-scheduler.test.ts, coalescing semantics.
 //
 // Pins the same-tick render coalescer that sits over main.ts's direct render()
 // fan-out: k schedule() calls in one tick collapse to exactly ONE composite,
@@ -52,7 +52,7 @@ describe('render-scheduler: same-tick coalescing', () => {
     expect(composites).toBe(2); // second burst -> one more composite
   });
 
-  test('flushNow() composites synchronously — the immediate path', () => {
+  test('flushNow() composites synchronously: the immediate path', () => {
     let composites = 0;
     const q = manualQueue();
     const s = createRenderScheduler(() => { composites++; }, q.schedule);
@@ -62,7 +62,7 @@ describe('render-scheduler: same-tick coalescing', () => {
     expect(q.size).toBe(0);     // nothing deferred
   });
 
-  test('flushNow() satisfies a pending coalesced flush — no double composite', () => {
+  test('flushNow() satisfies a pending coalesced flush; no double composite', () => {
     let composites = 0;
     const q = manualQueue();
     const s = createRenderScheduler(() => { composites++; }, q.schedule);

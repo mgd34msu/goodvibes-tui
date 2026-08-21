@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// checkpoint-runtime.ts — /checkpoints, /checkpoint
+// checkpoint-runtime.ts, /checkpoints, /checkpoint
 //
 // UX over WorkspaceCheckpointManager (@pellux/goodvibes-sdk/platform/workspace),
 // the whole-workspace, git-backed snapshot engine wired onto RuntimeServices as
@@ -8,7 +8,7 @@
 //
 // Restoring a checkpoint is now done through the unified, message-anchored
 // /rewind (rewind-runtime.ts), which rewinds files AND/OR conversation to a
-// completed turn — reusing this same checkpoint store for the files half.
+// completed turn, reusing this same checkpoint store for the files half.
 // ---------------------------------------------------------------------------
 
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -77,7 +77,7 @@ export function registerCheckpointRuntimeCommands(registry: CommandRegistry): vo
       // them would cost one diff spawn per checkpoint (O(checkpoints)), which
       // stops being cheap once there are more than a handful. /rewind <id>
       // loads exactly one diff, so the exact file list is available there.
-      ctx.print('Use /rewind to preview and restore a completed turn (files and/or conversation) — it reuses these checkpoints for the files half. With no completed turns recorded this run (e.g. right after a restart), /rewind falls back to restoring one of these checkpoints directly, by number or id — files only, no conversation state.');
+      ctx.print('Use /rewind to preview and restore a completed turn (files and/or conversation); it reuses these checkpoints for the files half. With no completed turns recorded this run (e.g. right after a restart), /rewind falls back to restoring one of these checkpoints directly, by number or id; files only, no conversation state.');
     },
   });
 
@@ -96,7 +96,7 @@ export function registerCheckpointRuntimeCommands(registry: CommandRegistry): vo
       try {
         const checkpoint = await mgr.create({ kind: 'manual', label, retentionClass: 'forensic' });
         if (!checkpoint) {
-          ctx.print('No changes since the last checkpoint — nothing to save.');
+          ctx.print('No changes since the last checkpoint; nothing to save.');
           return;
         }
         ctx.print(`Checkpoint created: ${shortId(checkpoint.id)} "${checkpoint.label}" (forensic retention).`);

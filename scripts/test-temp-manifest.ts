@@ -42,7 +42,7 @@ export function parseTempManifest(contents: string): string[] {
 
 /**
  * Remove every directory the manifest at `manifestPath` names, then the manifest
- * itself. Returns the paths it attempted to remove — empty when there was no
+ * itself. Returns the paths it attempted to remove, empty when there was no
  * readable manifest.
  */
 export function removeManifestedTempDirs(manifestPath: string): string[] {

@@ -57,10 +57,10 @@ describe('worktree.setup.* synthetic settings', () => {
     // A stub stands in here rather than a real ConfigManager purely to isolate
     // the read-mapping logic from any on-disk store state. (The SDK now
     // registers the `worktree` section in DEFAULT_CONFIG, so a real
-    // ConfigManager reads/writes these keys without throwing — covered by the
+    // ConfigManager reads/writes these keys without throwing, covered by the
     // two "real ConfigManager" tests below.)
     // worktree.setup.* keys are not in the SDK's ConfigKey union (see
-    // worktree-setup-config.ts's header comment) — the real ConfigManager
+    // worktree-setup-config.ts's header comment), the real ConfigManager
     // itself reads them "via a cast" per the SDK's own documented convention,
     // so this stub mirrors that same cast rather than fabricating a scalar
     // ConfigValue branch that doesn't exist for these array-shaped keys.
@@ -82,12 +82,12 @@ describe('worktree.setup.* synthetic settings', () => {
   test('a real ConfigManager reads the worktree section the SDK now registers, without crashing', () => {
     // The SDK's DEFAULT_CONFIG registers the `worktree` section (setup.commands
     // and setup.carryOverGlobs, both empty lists) as of this repack, so
-    // configManager.get no longer throws for these keys on a fresh store — it
+    // configManager.get no longer throws for these keys on a fresh store, it
     // returns the registered empty default. The synthetic-entry builder (and
     // its defensive try/catch, now belt-and-suspenders) reflects that default.
     // worktree.setup.commands has no branch in the SDK's ConfigValue mapped
     // type (it's an array-shaped key read "via a cast", not a scalar
-    // ConfigKey — see worktree-setup-config.ts). Widen through `unknown`
+    // ConfigKey, see worktree-setup-config.ts). Widen through `unknown`
     // before comparing, same as the production readWorktreeSetupList() does.
     const storedCommands: unknown = cm.get(WORKTREE_SETUP_COMMANDS_CONFIG_KEY);
     expect(storedCommands).toEqual([]);

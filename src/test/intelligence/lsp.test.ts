@@ -347,7 +347,7 @@ describe('LspService auto-detection', () => {
       // (detected.size may be higher due to multi-langId servers, but <= bundled languages)
       // The key assertion: detected is a Map (not throwing)
       expect(detected instanceof Map).toBe(true);
-      // And no PATH-only servers are counted — bundledCount servers or fewer are found
+      // And no PATH-only servers are counted, bundledCount servers or fewer are found
       // (each bundled server can register multiple langIds, so detected.size >= bundledCount)
       expect(detected.size).toBeGreaterThanOrEqual(0);
     } finally {

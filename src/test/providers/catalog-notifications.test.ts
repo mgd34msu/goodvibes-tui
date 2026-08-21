@@ -65,7 +65,7 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// diffCatalogs — structural diff
+// diffCatalogs, structural diff
 // ---------------------------------------------------------------------------
 
 describe('diffCatalogs', () => {
@@ -167,7 +167,7 @@ describe('diffCatalogs', () => {
 });
 
 // ---------------------------------------------------------------------------
-// filterRelevantChanges — user-specific filtering
+// filterRelevantChanges, user-specific filtering
 // ---------------------------------------------------------------------------
 
 describe('filterRelevantChanges', () => {
@@ -270,7 +270,7 @@ describe('filterRelevantChanges', () => {
 });
 
 // ---------------------------------------------------------------------------
-// formatChangeNotifications — message formatting
+// formatChangeNotifications, message formatting
 // ---------------------------------------------------------------------------
 
 describe('formatChangeNotifications', () => {

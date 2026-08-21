@@ -2,10 +2,10 @@
  * UX Anti-Regression: Cancellation During Heavy Updates (v3 §18.5)
  *
  * Verifies that aborting a turn during heavy tool/agent updates cleanly
- * resets conversation state — no tool calls left dangling, agent counts
+ * resets conversation state, no tool calls left dangling, agent counts
  * reconcile, and turn state lands in 'cancelled'.
  *
- * All tests use pure state manipulation — no real I/O, no event bus.
+ * All tests use pure state manipulation, no real I/O, no event bus.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
@@ -147,7 +147,7 @@ function applyCancel(busyState: RuntimeState): RuntimeState {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('ux:cancellation — abort during heavy tool/agent updates', () => {
+describe('ux:cancellation; abort during heavy tool/agent updates', () => {
   let state: RuntimeState;
 
   beforeEach(() => {

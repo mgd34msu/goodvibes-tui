@@ -1,5 +1,5 @@
 /**
- * settings-modal-activation — pure action helpers for SettingsModal.
+ * settings-modal-activation, pure action helpers for SettingsModal.
  *
  * These functions encapsulate the two activation/interaction operations:
  *   - activateSelected: toggle boolean, cycle enum, enter edit mode, launch pickers

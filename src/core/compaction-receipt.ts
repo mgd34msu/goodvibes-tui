@@ -4,14 +4,14 @@
  * The SDK emits a mandatory COMPACTION_RECEIPT event after every automatic (and
  * the manual) compaction path, so a compaction is never silent. This module
  * turns that receipt into a distinct, multi-line `[Compaction]` block for the
- * transcript. It is a pure formatter — no state, no I/O — so it is unit-testable
+ * transcript. It is a pure formatter, no state, no I/O, so it is unit-testable
  * and the wiring layer only has to route the returned string.
  *
  * Why a visible receipt: automatic behavior (the orchestrator's post-turn
  * auto-compaction) previously ran without any transcript trace. The receipt
  * makes the audit trail visible: what was compacted, the quality the guard
  * computed, whether the standing-instruction chain was re-injected, and the
- * outcome — applied, kept-original (quality guard rejected it), or failed.
+ * outcome, applied, kept-original (quality guard rejected it), or failed.
  *
  * The `[Compaction]` prefix is one of the FORCE_CONVERSATION_PREFIXES the
  * system-message router always surfaces inline (see system-message-router.ts),
@@ -41,7 +41,7 @@ export interface CompactionReceiptInput {
   readonly detail?: string | undefined;
   /**
    * The strategy the caller REQUESTED (from `behavior.compactionStrategy`),
-   * present only when it differs from `strategy` — i.e. a distiller→structured
+   * present only when it differs from `strategy`, i.e. a distiller→structured
    * fallback happened. `strategy` always names what actually ran.
    */
   readonly requestedStrategy?: string | undefined;
@@ -57,11 +57,11 @@ function fmtN(n: number): string {
 function describeOutcome(outcome: CompactionReceiptInput['outcome']): string {
   switch (outcome) {
     case 'applied':
-      return 'applied — compacted context committed';
+      return 'applied: compacted context committed';
     case 'kept-original':
-      return 'kept original — quality guard rejected the summary, conversation retained';
+      return 'kept original: quality guard rejected the summary, conversation retained';
     case 'failed':
-      return 'failed — compaction did not produce a usable result';
+      return 'failed: compaction did not produce a usable result';
     default:
       return outcome;
   }
@@ -80,7 +80,7 @@ export function buildCompactionReceiptBlock(receipt: CompactionReceiptInput): st
     : 0;
 
   const lines: string[] = [];
-  lines.push(`[Compaction] Receipt — ${triggerWord.toLowerCase()} compaction, outcome: ${describeOutcome(receipt.outcome)}`);
+  lines.push(`[Compaction] Receipt: ${triggerWord.toLowerCase()} compaction, outcome: ${describeOutcome(receipt.outcome)}`);
 
   // Only report the size delta when the summary was actually applied; on
   // kept-original / failed the "after" counts describe the retained original,
@@ -99,7 +99,7 @@ export function buildCompactionReceiptBlock(receipt: CompactionReceiptInput): st
   const qualitySuffix = receipt.lowQuality ? ' (below the quality bar)' : '';
   lines.push(`  Quality: ${gradeStr}${Math.round(receipt.qualityScore)}/100${qualitySuffix} · strategy: ${receipt.strategy || 'unknown'}.`);
 
-  // Only present on a distiller→structured fallback — say plainly what was
+  // Only present on a distiller→structured fallback, say plainly what was
   // requested, what actually ran, and why, so the fallback is never silent.
   if (receipt.requestedStrategy && receipt.requestedStrategy !== receipt.strategy) {
     const reasonSuffix = receipt.strategyFallbackReason ? `: ${receipt.strategyFallbackReason}` : '';

@@ -66,7 +66,7 @@ describe('consumeDaemonAttachNotices', () => {
 
 /**
  * A stub external daemon: its /status?receipts=consume endpoint serves the
- * daemon-side receipts shape ({ receipts: [{id,text,at}] }) once, then nothing —
+ * daemon-side receipts shape ({ receipts: [{id,text,at}] }) once, then nothing,
  * exactly-once, mirroring the daemon's own consume-and-mark-delivered store. It
  * requires the shared bearer, so a request with the wrong/missing token 401s.
  */

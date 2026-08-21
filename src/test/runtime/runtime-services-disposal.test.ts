@@ -3,7 +3,7 @@
  *
  * This surface composes its own runtime graph and hands the SAME object to
  * DaemonServer. By the SDK's ownership rule the facade disposes only a graph it
- * built itself, so nothing upstream will ever stop these pollers for us — the
+ * built itself, so nothing upstream will ever stop these pollers for us, the
  * shutdown paths here (daemon/cli.ts, main.ts's teardown registry, the one-shot
  * CLI commands) are the only thing that can.
  *
@@ -33,7 +33,7 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
  * `workspace/checkpoint/cross-process-lock`'s 5s mtime refresh, which exists
  * only while the checkpoint manager's async init holds a cross-process lock and
  * ends when that lock is released. It belongs to an operation that was
- * genuinely in flight, not to a subsystem the graph left running — the same
+ * genuinely in flight, not to a subsystem the graph left running, the same
  * distinction the SDK's own daemon-shutdown test draws.
  */
 const POLLER_OWNERS = [
@@ -145,7 +145,7 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test('composing the graph really does start pollers — the measurement is not vacuous', () => {
+test('composing the graph really does start pollers; the measurement is not vacuous', () => {
   const started = liveBeforeDispose.filter((e) => POLLER_OWNERS.some((o) => e.includes(o)));
   expect(created).toBeGreaterThan(5);
   expect(started.length).toBeGreaterThan(0);

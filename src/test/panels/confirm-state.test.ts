@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// confirm-state.test.ts — handleConfirmInput + renderConfirmLines unit tests
+// confirm-state.test.ts, handleConfirmInput + renderConfirmLines unit tests
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect } from 'bun:test';

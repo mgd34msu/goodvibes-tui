@@ -1,5 +1,5 @@
 /**
- * browser.ts — cross-platform browser launcher utility.
+ * browser.ts, cross-platform browser launcher utility.
  *
  * Extracted from cli/management.ts so it can be used by input-layer commands
  * without creating an upward cli→input dependency. Lives in utils (Layer 0)
@@ -12,7 +12,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 /**
  * Open the given URL in the user's default browser.
  * Returns a status string (success or error description).
- * Does not throw — errors are returned as a descriptive string.
+ * Does not throw, errors are returned as a descriptive string.
  */
 export function openBrowser(url: string): string {
   const platform = process.platform;

@@ -6,7 +6,7 @@ describe('getDiscoveredTraits', () => {
     const traits = getDiscoveredTraits('lm-studio');
     expect(traits.adapter).toBe('lm-studio');
     expect(traits.modelCapabilities.reasoning).toBe(true);
-    // A discovered server advertises a spec, not a bare list — the wire shape
+    // A discovered server advertises a spec, not a bare list, the wire shape
     // matters as much as the level names.
     expect(traits.reasoningEffort?.kind).toBe('effort');
     expect(traits.reasoningEffort?.values).toEqual(['instant', 'low', 'medium', 'high']);

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// golden-frames.test.ts — Deterministic renderer regression snapshots
+// golden-frames.test.ts, Deterministic renderer regression snapshots
 //
 // Strategy:
 //   Each test renders a fixed surface with frozen inputs (no timestamps,
@@ -19,14 +19,14 @@
 //   CI: env var is absent → mismatch = fail.
 //
 // Surfaces covered:
-//   1. shell-footer       — buildShellFooter (fixed inputs, no timestamps)
-//   2. context-meter      — UIFactory.createFooter with context window + threshold
-//   3. markdown-transcript — renderMarkdown with code fence, headings, inline code
-//   4. panel-workspace    — A static mock panel render (Panel.render contract)
+//   1. shell-footer      , buildShellFooter (fixed inputs, no timestamps)
+//   2. context-meter     , UIFactory.createFooter with context window + threshold
+//   3. markdown-transcript, renderMarkdown with code fence, headings, inline code
+//   4. panel-workspace   , A static mock panel render (Panel.render contract)
 //
 // Determinism exclusions:
 //   - UIFactory.createHeader: gradient phase depends on frame counter; excluded.
-//     (frame=0 is stable, but header embeds model/provider — add if model list stabilises)
+//     (frame=0 is stable, but header embeds model/provider, add if model list stabilises)
 //   - createThinkingFragment: dynamic THINKING_PHRASES rotate on frame; excluded.
 //   - renderContextInspector: requires live ConversationManager (stateful); excluded.
 //   - renderSettingsModal: requires live ConfigManager + SettingsModal (reads fs env);
@@ -131,11 +131,11 @@ function snapshotEncode(surface: string, lines: Line[]): string {
 
   for (let row = 0; row < height; row++) {
     const line = lines[row]!;
-    // Text layer — join chars and pad to width
+    // Text layer, join chars and pad to width
     const chars = line.map((c) => (c.char === '' ? ' ' : c.char)).join('');
     textBlock.push(`|${chars}|`);
 
-    // Style layer — emit only non-default values
+    // Style layer, emit only non-default values
     for (let col = 0; col < line.length; col++) {
       const c = line[col] as Cell;
       if (c.fg)            styleBlock.push(`${row} ${col} fg=${c.fg}`);
@@ -228,7 +228,7 @@ function snapshotDiff(
     }
   }
 
-  // Style diff — find lines present in one but not the other
+  // Style diff, find lines present in one but not the other
   const expStyleSet = new Set(exp.styleLines);
   const actStyleSet = new Set(act.styleLines);
   for (const s of expStyleSet) {
@@ -292,7 +292,7 @@ function assertGolden(surface: string, lines: Line[]): string {
 
 /**
  * Render the shell footer surface.
- * Inputs are fully fixed — no timestamps, no dynamic values.
+ * Inputs are fully fixed, no timestamps, no dynamic values.
  * lastCopyTime=0 suppresses any copy-flash state.
  */
 function renderShellFooterSurface(): Line[] {
@@ -541,21 +541,21 @@ describe('golden-frames', () => {
 });
 
 // ---------------------------------------------------------------------------
-// — Golden contract expansion
+//, Golden contract expansion
 //
-// Additional surfaces covered below (all new — the surfaces above are
+// Additional surfaces covered below (all new, the surfaces above are
 // untouched):
-//   5. splash               — addConversationSplashScreen at 3 widths, pins
+//   5. splash              , addConversationSplashScreen at 3 widths, pins
 //      the fullwidth/halfwidth vaporwave glyph aesthetic byte-for-byte
 //      (constraint 4: splash-lines.ts is never touched by this WO).
-//   6. conversation scenes  — plain tool result, diff-shaped tool result
+//   6. conversation scenes , plain tool result, diff-shaped tool result
 //      (collapsed + expanded), fenced code block (tree-sitter path + regex
 //      fallback tokenizer path), thinking block, streaming partial frame.
-//   7. overlays             — help, shortcuts, model picker, settings,
+//   7. overlays            , help, shortcuts, model picker, settings,
 //      session picker, profile picker, agent detail, process, context
-//      inspector, history search, selection modal — each at a normal size
+//      inspector, history search, selection modal, each at a normal size
 //      and a hostile size (<24 rows or ~28 cols).
-//   8. shell-footer (compact) — buildShellFooter with compact:true.
+//   8. shell-footer (compact), buildShellFooter with compact:true.
 //
 // Determinism notes for the additions below:
 //   - Every fixture uses fixed epoch timestamps, never a bare Date.now()
@@ -563,7 +563,7 @@ describe('golden-frames', () => {
 //     time since start" text (agent detail, process entries), startedAt is
 //     set to `Date.now() - N` at fixture-build time so the elapsed bucket
 //     (formatElapsed's Xm YYs granularity) is stable regardless of the
-//     wall-clock date the suite runs on — only the delta N matters, and N is
+//     wall-clock date the suite runs on, only the delta N matters, and N is
 //     chosen well clear of any second/minute boundary.
 //   - Where a renderer formats a timestamp through local Date accessors
 //     (formatTimestamp in the session/profile pickers), the affected tests
@@ -602,7 +602,7 @@ function withUtcTz<T>(fn: () => T): T {
  * Render the splash surface via the real production entry point
  * (addConversationSplashScreen), backed by a minimal fake history/context
  * matching the shape conversation-rendering.ts expects. All splashOptions
- * are fixed fixtures — no wall-clock, no environment-dependent values.
+ * are fixed fixtures, no wall-clock, no environment-dependent values.
  */
 function renderSplashSurface(width: number): Line[] {
   const lines: Line[] = [];
@@ -626,7 +626,7 @@ function renderSplashSurface(width: number): Line[] {
       lastSessionId: 'gv-20260612-a1b2c3',
       // Pinned to the version the splash goldens were captured at. The
       // version's display width shifts the line's centering, so goldens tied
-      // to the live build VERSION break on every release bump — this fixture
+      // to the live build VERSION break on every release bump, this fixture
       // keeps them byte-stable (found by the v1.0.0 release validate run).
       version: '0.29.0',
     },
@@ -662,7 +662,7 @@ describe('golden-frames — splash (constraint 4)', () => {
     // as a padding space), so checking a multi-glyph substring like
     // "ｇｏｏｄ" would spuriously fail even though every glyph is present
     // byte-for-byte. Check each individual codepoint from splash-lines.ts's
-    // TAGLINE/VERSION_LINE instead — that's what "verbatim" means at the
+    // TAGLINE/VERSION_LINE instead, that's what "verbatim" means at the
     // per-cell golden-file grain.
     const REQUIRED_GLYPHS = [
       'ｇ', 'ｏ', 'ｄ', 'ｖ', 'ｉ', 'ｂ', 'ｅ', 'ｓ', // fullwidth Latin (tagline)
@@ -721,7 +721,7 @@ const PLAIN_TOOL_RESULT = {
 };
 
 // Deliberately > 200 chars so the default isShort-based auto-expand does not
-// kick in — this exercises the real default-collapsed path.
+// kick in, this exercises the real default-collapsed path.
 const DIFF_TOOL_RESULT_CONTENT = [
   '--- a/src/example.ts',
   '+++ b/src/example.ts',
@@ -759,7 +759,7 @@ function renderToolResultDiffCollapsedSurface(): Line[] {
 }
 
 function renderToolResultDiffExpandedSurface(): Line[] {
-  // collapseKey is `msg_${msgIdx}` — pre-seed it to false (expanded).
+  // collapseKey is `msg_${msgIdx}`, pre-seed it to false (expanded).
   const collapseState = new Map<string, boolean>([['msg_0', false]]);
   const { context, lines } = makeToolRenderContext(collapseState);
   renderConversationToolMessage(context as never, DIFF_TOOL_RESULT, NORMAL_W, 0);
@@ -805,7 +805,7 @@ describe('golden-frames — conversation: tool result (diff, expanded)', () => {
   });
 });
 
-// Folded tool-result group — a run of >=2 consecutive tool-result messages
+// Folded tool-result group, a run of >=2 consecutive tool-result messages
 // sharing one assistant turn, consolidated under one collapsible header (see
 // conversation-turn-structure.ts). Both messages are rendered through the real
 // renderConversationToolMessage, with a hand-built membership map standing in
@@ -823,7 +823,7 @@ const GROUP_TOOL_RESULT_B = {
   content: 'Wrote 3 lines to output.ts',
 };
 // Both results belong to one assistant turn. Unlike the retired folded-group
-// model, turns default to EXPANDED — collapsing must never hide prose — so the
+// model, turns default to EXPANDED, collapsing must never hide prose, so the
 // collapsed surface below sets the turn key explicitly rather than relying on
 // a default.
 const TURN_MEMBER = {
@@ -841,7 +841,7 @@ const GROUP_MEMBERSHIP = new Map<number, AssistantTurnMembership>([
   [1, { ...TURN_MEMBER }],
 ]);
 
-/** The assistant message that owns the turn — it renders the header the
+/** The assistant message that owns the turn, it renders the header the
  *  collapsed surface is actually about. */
 const TURN_HEAD_MESSAGE = {
   role: 'assistant' as const,
@@ -913,10 +913,10 @@ describe('golden-frames — conversation: assistant turn (expanded)', () => {
   });
 });
 
-// Fenced code block — regex-fallback tokenizer path. 'yaml' is recognized by
+// Fenced code block, regex-fallback tokenizer path. 'yaml' is recognized by
 // code-block.ts's own detectLanguage() (drives the regex tokenizer) but is
 // NOT in syntax-highlighter.ts's FENCE_TO_LANG_ID map, so
-// _sharedHighlighter.highlight() returns null unconditionally — no
+// _sharedHighlighter.highlight() returns null unconditionally, no
 // tree-sitter parse is ever scheduled for this language tag. Permanently
 // deterministic, no async race.
 const CODE_BLOCK_FALLBACK_LINES = [
@@ -946,7 +946,7 @@ describe('golden-frames — conversation: fenced code block (regex-fallback path
   });
 });
 
-// Fenced code block — real tree-sitter path. code-block.ts owns a
+// Fenced code block, real tree-sitter path. code-block.ts owns a
 // module-private shared SyntaxHighlighter singleton; the first call to
 // renderCodeBlock for a given (lang, code) schedules a background WASM parse
 // and synchronously returns the regex-fallback tokens. This test polls for
@@ -985,7 +985,7 @@ describe('golden-frames — conversation: fenced code block (tree-sitter path)',
       }
       if (afterText === beforeText) {
         // Background parse never completed in this environment (e.g. WASM
-        // init failed) — nothing to pin here. The regex-fallback golden
+        // init failed), nothing to pin here. The regex-fallback golden
         // above still covers the fallback path unconditionally.
         return;
       }
@@ -996,7 +996,7 @@ describe('golden-frames — conversation: fenced code block (tree-sitter path)',
   );
 });
 
-// Thinking block — renderThinkingBlock is the completed-content renderer
+// Thinking block, renderThinkingBlock is the completed-content renderer
 // used by conversation-rendering.ts for reasoningContent/reasoningSummary.
 // (createThinkingFragment, the live-streaming spinner variant with rotating
 // THINKING_PHRASES, stays excluded per the header note above.)
@@ -1021,7 +1021,7 @@ describe('golden-frames — conversation: thinking block', () => {
   });
 });
 
-// Streaming partial frame — renderMarkdown with isStreaming:true, the same
+// Streaming partial frame, renderMarkdown with isStreaming:true, the same
 // call conversation.ts's updateStreamingBlock/rebuildHistory make for
 // in-progress assistant content. isStreaming:true also suppresses
 // tree-sitter parse scheduling (markdown.ts), so this is unconditionally
@@ -1054,7 +1054,7 @@ describe('golden-frames — conversation: streaming partial frame', () => {
   });
 });
 
-// ─── 7. Overlays — normal size + hostile size (<24 rows or ~28 cols) ──────
+// ─── 7. Overlays, normal size + hostile size (<24 rows or ~28 cols) ──────
 
 interface OverlaySizeVariant {
   readonly label: 'normal' | 'hostile';
@@ -1090,7 +1090,7 @@ function describeOverlayGolden(
   });
 }
 
-// help / shortcuts — KeybindingsManager pointed at a nonexistent config path
+// help / shortcuts, KeybindingsManager pointed at a nonexistent config path
 // so it always resolves to DEFAULT_KEYBINDINGS (no user override file to race).
 const GOLDEN_KEYBINDINGS = new KeybindingsManager({ configPath: '/nonexistent/golden-keybindings.json' });
 
@@ -1104,7 +1104,7 @@ function renderShortcutsSurface(width: number, height: number): Line[] {
 describeOverlayGolden('help-overlay', renderHelpSurface);
 describeOverlayGolden('shortcuts-overlay', renderShortcutsSurface);
 
-// settings — mirrors settings-modal.test.ts's tmp HOME/cwd redirection,
+// settings, mirrors settings-modal.test.ts's tmp HOME/cwd redirection,
 // scoped to a single synchronous try/finally per render call.
 function renderSettingsSurface(width: number, height: number): Line[] {
   const originalCwd = process.cwd();
@@ -1143,7 +1143,7 @@ function renderSettingsSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('settings-modal', renderSettingsSurface);
 
-// session picker / profile picker — fixed timestamps, TZ pinned to UTC for
+// session picker / profile picker, fixed timestamps, TZ pinned to UTC for
 // the duration of the render (formatTimestamp in modal-utils.ts reads local
 // Date accessors).
 function renderSessionPickerSurface(width: number, height: number): Line[] {
@@ -1189,14 +1189,14 @@ function renderProfilePickerSurface(width: number, height: number): Line[] {
 describeOverlayGolden('profile-picker-modal', renderProfilePickerSurface);
 
 // retirement: the agent-detail-modal and process-modal golden surfaces
-// (and their goldens) were removed — those modals were deleted once the F2
+// (and their goldens) were removed, those modals were deleted once the F2
 // repoint made them unreachable; the Fleet panel subsumes the live process
 // tree (its own golden is defined below).
 
-// fleet — a deterministic multi-level tree (WRFC owner->engineer->reviewer
+// fleet, a deterministic multi-level tree (WRFC owner->engineer->reviewer
 // chain, one exec node, one terminal agent) with a FIXED `now` passed into
 // buildFleetSnapshot (never Date.now()) so elapsed columns never flicker
-// across runs/machines — golden fixture.
+// across runs/machines, golden fixture.
 const FIXED_FLEET_NOW = 1_700_000_000_000;
 
 function buildFleetGoldenNodes(): ProcessNode[] {
@@ -1281,7 +1281,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
     // 'interrupted' fixture row so the new
     // glyph/tone gets golden coverage (distinct from 'killed'/⊘ above).
     // startedAt is deliberately the MOST RECENT of all roots so this row
-    // sorts last and simply appends — it must not reorder or disturb any
+    // sorts last and simply appends, it must not reorder or disturb any
     // existing row (in particular the `j`-selected wrfc-owner-01 below).
     {
       id: 'agent-interrupted-01',
@@ -1339,7 +1339,7 @@ describeOverlayGolden('fleet-panel-tab', renderFleetTabSurface);
 // (not folded into 'fleet-panel-tab' above) since the composer and the
 // queued badge are mutually-exclusive views (the composer input line
 // replaces the badge line while open; the badge reappears once the draft
-// closes) — one fixed frame cannot honestly show both at once, so each
+// closes), one fixed frame cannot honestly show both at once, so each
 // state gets its own deterministic golden.
 function fleetSteerGoldenNode(): ProcessNode {
   return {
@@ -1360,7 +1360,7 @@ function fleetSteerGoldenNode(): ProcessNode {
   };
 }
 
-// State 1: the composer is open with in-progress typed text (pre-submit) —
+// State 1: the composer is open with in-progress typed text (pre-submit),
 // exercises the 's' gate, the one-line input, and the Enter/Esc footer hints.
 function renderFleetSteerComposeSurface(width: number, height: number): Line[] {
   const snapshot = buildFleetSnapshot([fleetSteerGoldenNode()], FIXED_FLEET_NOW);
@@ -1374,7 +1374,7 @@ function renderFleetSteerComposeSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('fleet-panel-steer-compose', renderFleetSteerComposeSurface);
 
-// State 2: post-submit — the composer has closed and a queued badge is
+// State 2: post-submit, the composer has closed and a queued badge is
 // visible (both in the tab footer's status line and the tree row's
 // activity-column glyph, once switched back to the root tab).
 function renderFleetSteerQueuedSurface(width: number, height: number): Line[] {
@@ -1392,9 +1392,9 @@ function renderFleetSteerQueuedSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('fleet-panel-steer-queued', renderFleetSteerQueuedSurface);
 
-// — a terminal agent's tab whose full-fidelity snapshot is unavailable
+//, a terminal agent's tab whose full-fidelity snapshot is unavailable
 // (evicted from the SDK's retention ring, or never registered), degraded to
-// the on-disk ledger fallback. Attaches 'agent-done-01' (row 0 — the same
+// the on-disk ledger fallback. Attaches 'agent-done-01' (row 0, the same
 // terminal fixture node the base fleet-panel golden already uses) with
 // getConversationSnapshot always empty, then populates the tab's
 // ledgerEntries directly (bypassing the async fs read, same technique as
@@ -1419,7 +1419,7 @@ function renderFleetLedgerTabSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('fleet-panel-ledger-tab', renderFleetLedgerTabSurface);
 
-// context inspector — ConversationManager with fixed message content, no
+// context inspector, ConversationManager with fixed message content, no
 // timestamps rendered by this surface.
 function renderContextInspectorSurface(width: number, height: number): Line[] {
   const conv = new ConversationManager(() => width);
@@ -1430,7 +1430,7 @@ function renderContextInspectorSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('context-inspector', renderContextInspectorSurface);
 
-// history search — width-only signature (single bottom-bar line), no
+// history search, width-only signature (single bottom-bar line), no
 // viewportHeight param. Hostile size means narrow width only.
 function renderHistorySearchSurface(width: number): Line[] {
   const hs = new HistorySearch(() => [
@@ -1477,12 +1477,12 @@ function renderSelectionModalSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('selection-modal-overlay', renderSelectionModalSurface);
 
-// Consequence-time trust modal — owner-hit defect: option descriptions were
+// Consequence-time trust modal, owner-hit defect: option descriptions were
 // clipped to unreadability in this exact modal (back when it was also the
 // combined first-open trust+register prompt; the registration half has
-// since been dissolved — registration self-records instead, see
+// since been dissolved, registration self-records instead, see
 // tui-startup.ts). Rendered at a normal width and a narrow one, asserting
-// every item's FULL detail text survives — never ellipsized, clipped, or
+// every item's FULL detail text survives, never ellipsized, clipped, or
 // overflow-hidden.
 describe('golden-frames — consequence-time trust modal (full detail text never clipped)', () => {
   const widths: ReadonlyArray<{ readonly label: string; readonly width: number }> = [
@@ -1493,7 +1493,7 @@ describe('golden-frames — consequence-time trust modal (full detail text never
   const { title, items } = buildFirstOpenItems();
   for (const { label, width } of widths) {
     test(`trust prompt @ ${label} width (${width}x24): every item's full label and detail text render when reached`, () => {
-      // Reaching an item is what matters — not whether every item is
+      // Reaching an item is what matters, not whether every item is
       // simultaneously on screen without scrolling (a "(N below)" scroll
       // hint for the rest of the list is the intended, non-clipping
       // behavior when everything doesn't fit at once). Navigate the
@@ -1601,8 +1601,8 @@ for (const indicator of ['statusline', 'banner'] as const) {
 //
 // One normal+hostile golden pair per new MIGRATE-TO-MODAL surface. Each renders
 // a fixed, representative ConfigModalView through the REAL config-modal host
-// (ConfigModal + renderConfigModal + ModalFactory) — the same render path
-// production uses — with row labels built from the same shared helpers the live
+// (ConfigModal + renderConfigModal + ModalFactory), the same render path
+// production uses, with row labels built from the same shared helpers the live
 // surfaces use (statusGlyph/toneStyle/pad/postureLine/kv), so the pinned bytes
 // are the surface's actual on-screen layout. Views are hand-built with frozen
 // sample data (no wall-clock, no host/platform reads, no async) so the goldens
@@ -1617,7 +1617,7 @@ function renderConfigSurfaceGolden(view: ConfigModalView, width: number, height:
   return renderConfigModal(modal, width, height);
 }
 
-// services-modal — new modal surface, migrated from panel `services`.
+// services-modal, new modal surface, migrated from panel `services`.
 const SERVICES_VIEW: ConfigModalView = {
   title: 'Services',
   tabs: [{
@@ -1633,7 +1633,7 @@ const SERVICES_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('services-modal', (w, h) => renderConfigSurfaceGolden(SERVICES_VIEW, w, h));
 
-// subscription-modal — new modal surface, migrated from panel `subscription`.
+// subscription-modal, new modal surface, migrated from panel `subscription`.
 const SUBSCRIPTION_VIEW: ConfigModalView = {
   title: 'Subscriptions',
   tabs: [{
@@ -1650,7 +1650,7 @@ const SUBSCRIPTION_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('subscription-modal', (w, h) => renderConfigSurfaceGolden(SUBSCRIPTION_VIEW, w, h));
 
-// remote-modal — new modal surface, migrated from panel `remote`.
+// remote-modal, new modal surface, migrated from panel `remote`.
 const REMOTE_VIEW: ConfigModalView = {
   title: 'Remote',
   tabs: [
@@ -1678,7 +1678,7 @@ const REMOTE_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('remote-modal', (w, h) => renderConfigSurfaceGolden(REMOTE_VIEW, w, h));
 
-// providers-modal — new modal surface, migrated from panel `provider-health`
+// providers-modal, new modal surface, migrated from panel `provider-health`
 // (also the target of the providers/accounts redirects).
 const PROVIDERS_VIEW: ConfigModalView = {
   title: 'Providers',
@@ -1704,7 +1704,7 @@ const PROVIDERS_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('providers-modal', (w, h) => renderConfigSurfaceGolden(PROVIDERS_VIEW, w, h));
 
-// settings-sync-modal — new modal surface, migrated from panel `settings-sync`.
+// settings-sync-modal, new modal surface, migrated from panel `settings-sync`.
 const SETTINGS_SYNC_VIEW: ConfigModalView = {
   title: 'Settings Sync',
   hints: ['←/→ tab'],
@@ -1732,7 +1732,7 @@ const SETTINGS_SYNC_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('settings-sync-modal', (w, h) => renderConfigSurfaceGolden(SETTINGS_SYNC_VIEW, w, h));
 
-// local-auth-modal — new modal surface, migrated from panel `local-auth`
+// local-auth-modal, new modal surface, migrated from panel `local-auth`
 // (browse view; the panel itself is kept as the masked password-entry host).
 const LOCAL_AUTH_VIEW: ConfigModalView = {
   title: 'Local Auth',
@@ -1749,7 +1749,7 @@ const LOCAL_AUTH_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('local-auth-modal', (w, h) => renderConfigSurfaceGolden(LOCAL_AUTH_VIEW, w, h));
 
-// sandbox-modal — new modal surface, migrated from panel `sandbox`.
+// sandbox-modal, new modal surface, migrated from panel `sandbox`.
 const SANDBOX_VIEW: ConfigModalView = {
   title: 'Sandbox',
   tabs: [
@@ -1779,7 +1779,7 @@ describeOverlayGolden('sandbox-modal', (w, h) => renderConfigSurfaceGolden(SANDB
 //
 // The existing goldens above are all dark (headless auto → dark). These two pin
 // the LIGHT rendering of the two surfaces that actually swap tokens: the
-// transcript (fully-designed light ThemeTokens — heading/code/link/etc.) and a
+// transcript (fully-designed light ThemeTokens, heading/code/link/etc.) and a
 // ModalFactory modal (DEFAULT_STYLE.accentFg = state.info flips to the light
 // chrome tone; the accent helper row exercises it). Both reuse render paths
 // already proven deterministic in dark; underLight() flips the active mode for
@@ -1833,7 +1833,7 @@ describe('golden-frames — light theme', () => {
   });
 });
 
-// ─── ux/light-chrome — header/footer/thinking chrome flips with themeMode ──
+// ─── ux/light-chrome, header/footer/thinking chrome flips with themeMode ──
 //
 // The persistent chrome (header + footer + live-thinking row) paints on the
 // TRANSPARENT terminal background, so in light mode its foregrounds must invert
@@ -1848,7 +1848,7 @@ const CHROME_GIT: GitHeaderInfo = { branch: 'main', dirty: true, ahead: 0, behin
 
 // Version-decoupled goldens: the header embeds `v${VERSION}`, whose display width
 // shifts the chrome layout, so a golden tied to the LIVE build VERSION breaks on
-// every release bump (the documented version-fixture failure class — see the
+// every release bump (the documented version-fixture failure class, see the
 // splash goldens' pinned `version` at the top of this file). Pin a fixture here
 // so the chrome goldens are stable across bumps; the live header still renders
 // the real VERSION in production (createHeader defaults to it).
@@ -1930,7 +1930,7 @@ describe('golden-frames — chrome light/dark flip (ux/light-chrome)', () => {
     expect(headerLight).not.toBe(headerDark);
     expect(thinkLight).not.toBe(thinkDark);
 
-    // Concrete role assertions — the exact hex must appear/disappear per mode.
+    // Concrete role assertions, the exact hex must appear/disappear per mode.
     expect(headerDark).toContain('fg=#475569'); // chrome.faint (dark)
     expect(headerLight).toContain('fg=#94a3b8'); // chrome.faint (light)
     expect(headerDark).toContain('fg=#f59e0b'); // chrome.warn (dark, dirty git)
@@ -1947,7 +1947,7 @@ describe('golden-frames — chrome light/dark flip (ux/light-chrome)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Exec sandbox approval prompt — the named-escalation "Sandbox" row.
+// Exec sandbox approval prompt, the named-escalation "Sandbox" row.
 //
 // When the sandbox-aware exec gate turns an auto-allow into an ask because the
 // boundary-safe command still needs host access, the approval card renders a
@@ -1991,7 +1991,7 @@ describe('golden-frames — permission prompt: exec sandbox escalation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Non-foreground approval attribution — the generic "Requested by: …" row for
+// Non-foreground approval attribution, the generic "Requested by: …" row for
 // asks the SDK's approval broker attributes to an origin other than the
 // foreground turn loop (see PermissionAttribution). Two new origins as of the
 // 1.6.1 SDK: an MCP server's elicitation request, and a sandbox brokering a

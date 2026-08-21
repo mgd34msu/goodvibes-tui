@@ -10,7 +10,7 @@ import {
 } from '../../core/power-status.ts';
 
 // ---------------------------------------------------------------------------
-// STEP 3 — power surfaces. The ops/status projection: the "sleep disabled"
+// STEP 3, power surfaces. The ops/status projection: the "sleep disabled"
 // chip meaning, "held because X" work-inhibition reasons, and the honest
 // lid-split note rendered VERBATIM when the SDK serves it.
 // ---------------------------------------------------------------------------

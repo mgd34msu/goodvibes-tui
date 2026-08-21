@@ -66,7 +66,7 @@ describe('pairing modal surface', () => {
     // The labeled capability list (what the device will get), from the posture.
     expect(text).toContain('This device will get:');
     expect(text).toContain('Push notifications — needs https — available via tailscale');
-    // The ONE honest LAN line is the SDK export verbatim — never a local rewording.
+    // The ONE honest LAN line is the SDK export verbatim, never a local rewording.
     expect(text).toContain(LAN_PLAIN_HTTP_NOTICE);
   });
 
@@ -84,7 +84,7 @@ describe('pairing modal surface', () => {
     open(surface);
     const printed: string[] = [];
     surface.onAction?.('copyLink', actionCtx(null, { print: (m) => printed.push(m) }));
-    // Reassigned inside the copyToClipboard closure above — cast back to the
+    // Reassigned inside the copyToClipboard closure above, cast back to the
     // declared type since TS freezes the narrowed type at the `let` initializer
     // and doesn't see through the closure's later assignment.
     expect(copied as string | null).toBe('http://workshop.local:3141/#pair=secret-token-abc123&offers=notifications~relay');
@@ -121,7 +121,7 @@ describe('pairing modal surface', () => {
   });
 });
 
-describe('pairing modal — full-text render (no clipping)', () => {
+describe('pairing modal: full-text render (no clipping)', () => {
   // At a standard 24-row terminal the modal scrolls (never clips horizontally):
   // every rendered row fits the width, and the posture region that is in view
   // reads as whole words, not a truncated-to-the-edge stub.
@@ -137,7 +137,7 @@ describe('pairing modal — full-text render (no clipping)', () => {
 
     // Completeness: the one honest LAN line and every capability are carried as
     // intact rows in the built view (the modal windows/scrolls them, never
-    // truncates a line) — the "modals show their full text" contract at the data
+    // truncates a line), the "modals show their full text" contract at the data
     // level that the grid then renders width-fit.
     test(`${label}: the full LAN notice and all capabilities are present, unabridged`, () => {
       const rows = tabRows(open(createPairingModalSurface({ getConnectionInfo: () => FIXED_INFO })), 'pairing').map((r) => r.label);
@@ -153,16 +153,16 @@ describe('pairing modal — full-text render (no clipping)', () => {
   }
 });
 
-describe('pairing modal — tailscale serve affordance', () => {
+describe('pairing modal: tailscale serve affordance', () => {
   const available: PairingTailscaleStatus = { available: true, loggedIn: true, magicDnsName: 'workshop.tail1234.ts.net', detail: 'tailscale up, logged in' };
 
-  test('absent tailscale stays quiet — no affordance, no hint', async () => {
+  test('absent tailscale stays quiet: no affordance, no hint', async () => {
     const surface = createPairingModalSurface({ getConnectionInfo: () => FIXED_INFO, probeTailscale: async () => null });
     surface.onOpen?.(() => {});
     await Promise.resolve();
     const view = surface.buildView();
     // The LAN notice itself names Tailscale; what must be absent is the serve
-    // AFFORDANCE — no detection row, no encrypted-access row, no serve hint.
+    // AFFORDANCE, no detection row, no encrypted-access row, no serve hint.
     const text = tabText(view, 'pairing');
     expect(text).not.toContain('Tailscale detected');
     expect(text).not.toContain('Encrypted access (Tailscale)');

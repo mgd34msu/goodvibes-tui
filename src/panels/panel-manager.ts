@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// PanelManager — central manager for panel lifecycle, navigation, and split
+// PanelManager, central manager for panel lifecycle, navigation, and split
 // ---------------------------------------------------------------------------
 
 import type { Panel, PanelRegistration, PanelCategory, PanelDeepLinkTarget } from './types.ts';
 export type { PanelDeepLinkTarget } from './types.ts';
 // Type-only, erased at runtime, routed through the `@/` alias (not a relative
 // path) so it stays out of the relative-import graph the architecture
-// cycle-checker walks — same discipline as the PanelManager import in types.ts.
+// cycle-checker walks, same discipline as the PanelManager import in types.ts.
 import type { ConfigModalSurface } from '@/input/config-modal-types.ts';
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ export class PanelManager {
   /**
    * Retired panel id -> modal name (panels migrated to config-modal surfaces).
    * Unlike `aliases` (panel -> panel), a hit here means no panel is ever
-   * constructed for this id — `open()` invokes `openModalCallback` instead
+   * constructed for this id, `open()` invokes `openModalCallback` instead
    * and returns a sentinel. This map and the open()-time check are the
    * sole mechanism for that redirect.
    */
@@ -75,7 +75,7 @@ export class PanelManager {
   // panel focus to disagree with workspace visibility (see getFocusTarget).
   private _focusTarget: 'prompt' | 'panel' = 'prompt';
 
-  // Cache for getWorkspaceTabs() — invalidated on every panel lifecycle event
+  // Cache for getWorkspaceTabs(), invalidated on every panel lifecycle event
   private _cachedWorkspaceTabs: readonly WorkspaceTab[] | null = null;
 
   // Most-recently-opened panel ids (front = newest), for the picker's "Recent"
@@ -146,7 +146,7 @@ export class PanelManager {
   }
 
   /**
-   * The modal name `panelIdOrAlias` redirects to, if any — lets callers
+   * The modal name `panelIdOrAlias` redirects to, if any, lets callers
    * (e.g. the `/panel` command) print "moved to the <name> modal" before or
    * instead of calling open().
    */
@@ -173,7 +173,7 @@ export class PanelManager {
 
   /**
    * Placeholder returned by open() for a modal-redirected id. Never pushed
-   * into a pane, never retained, never rendered — it exists only so open()
+   * into a pane, never retained, never rendered, it exists only so open()
    * can keep its non-null `Panel` return type without constructing the real
    * (deleted) panel view. `name` carries the modal name so a caller that
    * inspects the returned panel's `name` (rather than calling
@@ -221,7 +221,7 @@ export class PanelManager {
   }
 
   // -------------------------------------------------------------------------
-  // Panel lifecycle — operates on a specific pane (defaults to focused)
+  // Panel lifecycle, operates on a specific pane (defaults to focused)
   // -------------------------------------------------------------------------
 
   /** Invalidate the workspace tab cache. Call on every panel lifecycle mutation. */
@@ -278,7 +278,7 @@ export class PanelManager {
   /**
    * Hand an optional deep-link target (item 4) to a panel that just
    * resolved from open(). Panels without a "node" concept simply don't
-   * implement `receiveDeepLink` — the call is a no-op via optional chaining.
+   * implement `receiveDeepLink`, the call is a no-op via optional chaining.
    */
   private _deliverDeepLink(panel: Panel, target: PanelDeepLinkTarget | undefined): Panel {
     if (target) panel.receiveDeepLink?.(target);
@@ -353,7 +353,7 @@ export class PanelManager {
   }
 
   // -------------------------------------------------------------------------
-  // Navigation — operates on focused pane
+  // Navigation, operates on focused pane
   // -------------------------------------------------------------------------
 
   nextPanel(): void {
@@ -456,7 +456,7 @@ export class PanelManager {
 
   /**
    * Give keyboard focus to the panel workspace. No-op when there is nothing
-   * focusable (no visible, non-empty pane with an active panel) — this is the
+   * focusable (no visible, non-empty pane with an active panel), this is the
    * guard that upholds the focus/visibility invariant on the write path.
    */
   focusPanels(): void {
@@ -497,10 +497,10 @@ export class PanelManager {
           this.bottomPane.activeIndex = 0;
         } else {
           // Open a predictable default panel in the bottom pane. purge:
-          // 'panel-list' was deleted (dead weight over a 5-panel registry —
+          // 'panel-list' was deleted (dead weight over a 5-panel registry,
           // see the DELETE disposition), so the default is explicitly
           // 'fleet' rather than falling back to registry[0] (whatever
-          // registers first, currently 'git' — see risk 5 in the brief).
+          // registers first, currently 'git', see risk 5 in the brief).
           const defaultPanel = this._getRegistration('fleet') ?? this.registry[0];
           if (defaultPanel) {
             this.open(defaultPanel.id, 'bottom');
@@ -606,7 +606,7 @@ export class PanelManager {
   toggle(): void {
     this._visible = !this._visible;
     // Auto-open a default panel if toggling visible with nothing open.
-    // purge: explicitly 'fleet' rather than registry[0] — see the
+    // purge: explicitly 'fleet' rather than registry[0], see the
     // matching comment in toggleBottomPane() above.
     if (this._visible && this.topPane.panels.length === 0 && this.bottomPane.panels.length === 0) {
       const defaultPanel = this._getRegistration('fleet') ?? this.registry[0];

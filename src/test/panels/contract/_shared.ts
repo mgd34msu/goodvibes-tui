@@ -149,7 +149,7 @@ export const EMPTY_KNOWLEDGE_API = {
 // This fixture has no consumer left in the current codebase (nothing in
 // src/panels imports it), so it's pointed at the modal's equivalent
 // workbench type to keep it type-correct rather than deleting live test
-// scaffolding — flagged for the coordinator in case a hooks-modal contract
+// scaffolding, flagged for the coordinator in case a hooks-modal contract
 // test wants to pick it up.
 export const EMPTY_HOOKS_WORKBENCH = {
   listManagedHooks: () => [],

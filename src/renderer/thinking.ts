@@ -8,7 +8,7 @@ export function renderThinkingBlock(text: string, width: number): Line[] {
   // terminal background (renderConversationNotice passes no bodyBg), so both
   // colors resolve per-render through activeUiTones() to stay legible on a
   // light terminal. Dark values are byte-identical to the prior static reads
-  // (state.reasoning for the accent, chrome.faint — which equals fg.dim — for
+  // (state.reasoning for the accent, chrome.faint, which equals fg.dim, for
   // the body text).
   const t = activeUiTones();
   return renderConversationNotice(

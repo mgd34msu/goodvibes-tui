@@ -19,16 +19,16 @@ import { buildAnswerActions, isGenericRecommendation, type PlanningAnswerAction 
 
 // ---------------------------------------------------------------------------
 // Project Planning → 'planning' config-modal surface (group-B port). Shows
-// readiness/questions/decisions/task-graph/handoff — read-only except choosing
+// readiness/questions/decisions/task-graph/handoff, read-only except choosing
 // an answer to the current open question, approving execution, dismissing the
 // plan, or refreshing.
 //
-// — the seams are now real:
+//, the seams are now real:
 //   - A CANNED answer to a real open question dispatches `/plan answer <id> <text>`
 //     (records it; the open-question gap clears on the next refine).
 //   - The CUSTOM free-form typed answer (and any answer to a synthetic readiness
 //     question with no open-question record) is submitted to chat via the generic
-//     `submitInput` seam — a real model turn. ORDERING GUARD: the modal closes
+//     `submitInput` seam, a real model turn. ORDERING GUARD: the modal closes
 //     BEFORE the turn starts (a turn under a live modal is the modal-liveness
 //     hazard). No more `/plan <text>` reseed approximation.
 //   - Dismiss is a first-class CONFIRMED action (`d`) dispatching `/plan dismiss`,
@@ -293,7 +293,7 @@ function buildGoldenService(): PlanningModalService {
 
 /**
  * Deterministic golden fixture. All ids/timestamps are frozen literals. Because
- * every service method is Promise-based, this helper is async — it opens the
+ * every service method is Promise-based, this helper is async, it opens the
  * surface, waits a macrotask so the fire-and-forget load resolves, then returns.
  */
 export async function planningModalGoldenSurface(): Promise<ConfigModalSurface> {

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// command-args-hint.test.ts — drift guard for the hardcoded subcommand-hint
+// command-args-hint.test.ts, drift guard for the hardcoded subcommand-hint
 // table in src/input/command-args-hint.ts.
 //
 // Covers:
@@ -34,13 +34,13 @@ describe('command-args-hint drift guard', () => {
 
   // Aliases share their canonical subcommand's hint text (see
   // SESSION_SUBCOMMAND_ARG_HINTS's doc) and are never spelled out on their
-  // own in the printed usage text (only the canonical name is) — verified
+  // own in the printed usage text (only the canonical name is), verified
   // structurally below instead of by text match.
   const SESSION_SUBCOMMAND_ALIASES: Record<string, string> = { link: 'link-task', ho: 'handoff', g: 'graph' };
 
   test('SESSION_SUBCOMMAND_ARG_HINTS canonical keys are all real /session subcommands (per the default-branch usage text)', async () => {
     // Trigger the default branch (an unrecognized subcommand) to get the
-    // authoritative usage listing straight from the live handler — the same
+    // authoritative usage listing straight from the live handler, the same
     // text a confused user actually sees.
     const printed: string[] = [];
     const ctx = { print: (s: string) => printed.push(s) } as unknown as Parameters<typeof sessionCommand.handler>[1];

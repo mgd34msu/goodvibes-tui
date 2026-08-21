@@ -8,7 +8,7 @@
  * - Stop-reason consistency enforcement
  * - Warning-only mode when the enforcement flag is disabled
  *
- * Note: Tests access private orchestrator internals via type casts — this is
+ * Note: Tests access private orchestrator internals via type casts, this is
  * intentional for unit testing reconciliation logic without requiring a full
  * provider-wired turn loop. Full turn-loop integration is covered by the
  * broader orchestrator test suite.
@@ -260,7 +260,7 @@ describe('Orchestrator tool result reconciliation', () => {
     const messages: string[] = [];
     runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_RECONCILED' }>>('TOOL_RECONCILED', () => messages.push('reconciled'));
 
-    // Call with empty pending state — must not emit event
+    // Call with empty pending state, must not emit event
     (orch as unknown as { reconcileUnresolvedToolCalls: (r: ToolResult[], reason: ReconciliationReason) => void })
       .reconcileUnresolvedToolCalls([], 'exception-before-results');
 

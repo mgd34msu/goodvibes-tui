@@ -1,9 +1,9 @@
 /**
- * relay-settings-descriptions.ts — appends the relay threat-model one-liner to
+ * relay-settings-descriptions.ts, appends the relay threat-model one-liner to
  * the `relay.*` CONFIG_SCHEMA descriptions shown in /config and the settings
  * modal.
  *
- * `relay.*` is a real SDK CONFIG_SCHEMA domain (schema-domain-runtime.ts) —
+ * `relay.*` is a real SDK CONFIG_SCHEMA domain (schema-domain-runtime.ts),
  * the settings-modal-data.ts CONFIG_SCHEMA loop already surfaces it once
  * `relay` is listed in SETTINGS_CATEGORIES (see settings-modal-types.ts). The
  * SDK's own descriptions explain WHAT each key does but not the trust
@@ -18,7 +18,7 @@ import type { SettingEntry, SettingsCategory } from './settings-modal-types.ts';
 
 /** The threat-model note every relay.* setting description gets appended with. */
 export const RELAY_THREAT_MODEL_NOTE =
-  'The relay operator sees only ciphertext and connection metadata — it cannot read message contents. Self-host your own relay for full control.';
+  'The relay operator sees only ciphertext and connection metadata; it cannot read message contents. Self-host your own relay for full control.';
 
 /** Append the threat-model note to every relay.* entry's description, in place. */
 export function enrichRelaySettingDescriptions(groups: Map<SettingsCategory, SettingEntry[]>): void {

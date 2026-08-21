@@ -1,5 +1,5 @@
 /**
- * settings-modal-adjustment — pure adjustment helpers for SettingsModal.
+ * settings-modal-adjustment, pure adjustment helpers for SettingsModal.
  *
  * These functions encapsulate the directional-adjustment operation:
  *   - adjustSelected: cycle enum/boolean/number values via left/right arrow keys
@@ -43,7 +43,7 @@ export function adjustSelected(
   if (ctx.editingMode) return;
 
   // Feature-unit headers are the real config rows for their enablement keys
-  // (boolean or enum), so they fall through to the ordinary branches below —
+  // (boolean or enum), so they fall through to the ordinary branches below,
   // a plain config write the settings bridge forwards to the gate manager.
 
   if (ctx.currentCategory === 'mcp') {

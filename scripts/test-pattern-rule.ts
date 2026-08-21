@@ -1,5 +1,5 @@
 /**
- * test-pattern-rule.ts — pure argv/filter logic backing run-tests.ts's optional
+ * test-pattern-rule.ts, pure argv/filter logic backing run-tests.ts's optional
  * positional pattern filter (the TUI's /test <pattern> passthrough).
  *
  * Extracted from run-tests.ts (rather than left inline) so it can be unit

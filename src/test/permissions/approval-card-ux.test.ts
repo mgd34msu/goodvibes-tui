@@ -91,10 +91,10 @@ describe('remember tiers as one-key choices', () => {
     const lines = cardText(PermissionPromptUI.createPromptLines(WIDTH, request as never));
     const rememberRows = lines.filter((t) => /\[\d\]/.test(t));
     expect(rememberRows.map((t) => t.trimEnd())).toEqual([
-      '   Remember : [1] this exact command — git push origin main',
-      '            : [2] this command class — git push …',
-      '            : [3] every Bash command — all runs of Bash',
-      '            : [4] everything this session — until this session ends',
+      '   Remember : [1] this exact command; git push origin main',
+      '            : [2] this command class; git push …',
+      '            : [3] every Bash command; all runs of Bash',
+      '            : [4] everything this session; until this session ends',
     ]);
     expect(lines.some((t) => t.includes('[Y] Allow once    [1-4] Allow + remember    [N] Deny    type a reason to deny'))).toBe(true);
   });
@@ -130,7 +130,7 @@ describe('remember tiers as one-key choices', () => {
   });
 });
 
-describe('full command rendering — wrapped, never truncated', () => {
+describe('full command rendering: wrapped, never truncated', () => {
   const longCommand = `git commit --no-verify -m "adopt the pricing resolver and the durable approval rules across every cost surface" && git push origin feature/approval-ux-and-pricing --force-with-lease`;
   const request = makeExecRequest({ args: { command: longCommand } });
 
@@ -243,7 +243,7 @@ describe('exec-prompt asks: an answerable card', () => {
     expect(lines.some((t) => t.includes('[Enter] Send answer    [Esc] Clear    [Ctrl+C] Abort turn'))).toBe(true);
   });
 
-  test("typed characters — including 'y' and 'n' — are answer text, and Enter feeds the run", () => {
+  test("typed characters (including 'y' and 'n') are answer text, and Enter feeds the run", () => {
     const decisions: Record<string, unknown>[] = [];
     let pending: PendingPermissionState | null = makePending(execPromptRequest, (d) => decisions.push(d));
     for (const ch of 'yes') pending = press(pending, ch).pendingPermission;
@@ -267,7 +267,7 @@ describe('honest queue count', () => {
     const request = makeExecRequest();
     const view: PromptViewState = { queueCount: 2, width: WIDTH };
     const lines = cardText(PermissionPromptUI.createPromptLines(WIDTH, request as never, undefined, false, undefined, view));
-    expect(lines.some((t) => t.includes('— 2 more waiting'))).toBe(true);
+    expect(lines.some((t) => t.includes(': 2 more waiting'))).toBe(true);
   });
 
   test('promptViewState counts only OTHER pending records (coalesced asks share one record)', () => {

@@ -1,5 +1,5 @@
 /**
- * Tests for reapQuarantinedFiles — quarantining renames a corrupt file to
+ * Tests for reapQuarantinedFiles, quarantining renames a corrupt file to
  * `<path>.unrecognized` so a human can inspect it, and nothing ever removed
  * the result. These are forensic, so the retention window is long (30 days),
  * but "keep forever" is a leak.

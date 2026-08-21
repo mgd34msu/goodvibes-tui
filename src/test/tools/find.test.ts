@@ -79,7 +79,7 @@ afterEach(async () => {
 // ---------------------------------------------------------------------------
 
 describe('files mode', () => {
-  test('basic glob — matches .ts files', async () => {
+  test('basic glob: matches .ts files', async () => {
     const results = await find({
       queries: [{ id: 'ts', mode: 'files', patterns: ['**/*.ts'], path: dir }],
     });
@@ -722,7 +722,7 @@ describe('references mode', () => {
   test('outside-root path is blocked when symbol file is outside root', async () => {
     // This test ensures path security still works: the fallback searches projectRoot,
     // not the supplied file path, so no path validation issue. But the file param
-    // can be anything — LSP would reject it anyway, and grep searches project root.
+    // can be anything, LSP would reject it anyway, and grep searches project root.
     // Verify tool still succeeds gracefully.
     const result = await findTool.execute({
       queries: [{
@@ -949,7 +949,7 @@ describe('structural mode', () => {
   });
 
   test('unsupported file extensions are skipped silently', async () => {
-    // .xyz files are not supported — should produce no matches, not an error
+    // .xyz files are not supported, should produce no matches, not an error
     await writeTempFile(dir, 'src/data.xyz', 'export function foo() {}');
     const results = await find({
       queries: [{ id: 'xyz', mode: 'structural', pattern: 'export function $NAME($$$) {}', path: dir }],

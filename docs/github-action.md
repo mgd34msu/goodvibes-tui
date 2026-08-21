@@ -4,8 +4,8 @@ A composite action (`action.yml` at the repo root) that installs a pinned,
 checksum-verified GoodVibes release and runs a non-interactive command or prompt
 against a workspace in CI. It runs the published suite installer, fetched from
 `https://goodvibes.sh/install.sh` (a Cloudflare Pages project; its `_redirects`
-file owns this path) — the same script `curl -fsSL https://goodvibes.sh/install.sh
-| sh` runs — so every binary is verified against its own repository's
+file owns this path), the same script `curl -fsSL https://goodvibes.sh/install.sh
+| sh` runs, so every binary is verified against its own repository's
 `SHA256SUMS.txt` (a missing manifest entry is a hard failure). The installer is
 hosted there, not attached to any one product's GitHub release, because it
 installs across all four product repositories; there is one copy of it, not

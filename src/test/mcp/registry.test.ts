@@ -57,9 +57,9 @@ function createRegistry(): McpRegistry {
 }
 
 // ---------------------------------------------------------------------------
-// Registry — no servers
+// Registry, no servers
 // ---------------------------------------------------------------------------
-describe('McpRegistry — empty state', () => {
+describe('McpRegistry: empty state', () => {
   test('serverNames is empty by default', () => {
     const registry = createRegistry();
     expect(registry.serverNames).toEqual([]);
@@ -100,9 +100,9 @@ describe('McpRegistry — empty state', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Registry — qualified name parsing
+// Registry, qualified name parsing
 // ---------------------------------------------------------------------------
-describe('McpRegistry — qualified name parsing', () => {
+describe('McpRegistry: qualified name parsing', () => {
   test('getClient() returns undefined for unknown server', () => {
     const registry = createRegistry();
     expect(registry.getClient('unknown')).toBeUndefined();
@@ -110,9 +110,9 @@ describe('McpRegistry — qualified name parsing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Registry — with a live stub server
+// Registry, with a live stub server
 // ---------------------------------------------------------------------------
-describe('McpRegistry — with stub server', () => {
+describe('McpRegistry: with stub server', () => {
   let registry: McpRegistry;
 
   afterEach(async () => {
@@ -273,9 +273,9 @@ describe('McpRegistry — with stub server', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Registry — connectAll from config file
+// Registry, connectAll from config file
 // ---------------------------------------------------------------------------
-describe('McpRegistry — connectAll from file', () => {
+describe('McpRegistry: connectAll from file', () => {
   let tmpDir: string;
   let registry: McpRegistry;
 

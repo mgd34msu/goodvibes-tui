@@ -139,7 +139,7 @@ function validateConfigValue(operation: Extract<OnboardingApplyOperation, { kind
 
   // Feature enablement arrives as plain domain settings writes (e.g.
   // sandbox.enabled, controlPlane.gateway), validated by the schema path below
-  // like any other key — there is no separate enablement namespace.
+  // like any other key, there is no separate enablement namespace.
   const schema = CONFIG_SCHEMA.find((entry) => entry.key === operation.key);
   if (!schema) {
     const defaultValue = operation.key.split('.').reduce<unknown>((cursor, part) => (

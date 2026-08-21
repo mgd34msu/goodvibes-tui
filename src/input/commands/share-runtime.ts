@@ -80,7 +80,7 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
       };
 
       if (!convData.messages || convData.messages.length === 0) {
-        ctx.print('Nothing to export — conversation is empty.');
+        ctx.print('Nothing to export: conversation is empty.');
         return;
       }
 
@@ -113,12 +113,12 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
       const sessionCostUsd = calcSessionCost(
         totalInput, totalOutput, totalCacheRead, totalCacheWrite, sessionModel,
       );
-      // The exported document has no field for "this cost is a placeholder" —
+      // The exported document has no field for "this cost is a placeholder",
       // omit `cost` entirely rather than embed a misleading 0 when the model
       // never resolved to a real price.
       const costIsUnpriced = !isModelPriced(sessionModel);
       if (costIsUnpriced) {
-        ctx.print(`Note: cost omitted from export — no pricing data for model "${sessionModel}".`);
+        ctx.print(`Note: cost omitted from export; no pricing data for model "${sessionModel}".`);
       }
 
       const metadata = {
@@ -167,7 +167,7 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
             authHeaders = await svcRegistry.resolveAuth('github').catch(() => null);
           }
         } catch {
-          // serviceRegistry absent or resolveAuth threw — fall through to env var
+          // serviceRegistry absent or resolveAuth threw, fall through to env var
         }
 
         const token = resolveGithubToken(authHeaders ?? undefined);

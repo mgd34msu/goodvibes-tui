@@ -38,7 +38,7 @@ describe('/cost attribution', () => {
     const registry = makeRegistry();
     const ctx = makeCtx((key) => (key === 'daemon.enabled' ? false : undefined));
     await registry.get('cost')!.handler(['attribution', '7d'], ctx);
-    // Still refused honestly (no daemon) — this asserts the flag is accepted without throwing.
+    // Still refused honestly (no daemon), this asserts the flag is accepted without throwing.
     expect(ctx.printed.join('\n')).toContain('[cost attribution]');
   });
 

@@ -12,7 +12,7 @@ let _gitCeilingSet = false;
  *
  * `.test-tmp` lives inside this project's own working tree, so a scratch
  * dir with no `.git` of its own (nothing else creates one) sits inside a
- * real git repository — this project's. Any code that shells out to
+ * real git repository, this project's. Any code that shells out to
  * `git rev-parse --show-toplevel` (or similar discovery) from a
  * makeProjectTempDir path, expecting a plain non-repo directory, would
  * silently walk up and resolve to this project's own repo root instead.
@@ -24,15 +24,15 @@ let _gitCeilingSet = false;
  * paths; discovery stops there). This mutation only reaches git subprocess
  * calls that build their own env from a *live* read of `process.env` at
  * call time (e.g. simple-git's `.env(process.env)`, or execSync given an
- * explicit `env` option) — confirmed empirically. It does NOT reach a raw
+ * explicit `env` option), confirmed empirically. It does NOT reach a raw
  * `Bun.spawnSync(['git', ...])` with no `env` option (e.g.
  * `GitService.isGitRepo`): Bun snapshots the environment at its own process
- * start, so a same-process mutation after that point is invisible to it —
+ * start, so a same-process mutation after that point is invisible to it,
  * also confirmed empirically. That gap is why `scripts/run-tests.ts` sets
  * this same variable in the *spawn* env of each per-file `bun test` child
  * (reaching the child's own startup snapshot, which every mechanism
  * respects) rather than relying on this function alone. Keep this as a
- * partial, defense-in-depth backstop for the live-env-reading mechanisms —
+ * partial, defense-in-depth backstop for the live-env-reading mechanisms,
  * it is not a complete fix by itself. Appends to (never clobbers) any
  * ceiling already present.
  */
@@ -65,7 +65,7 @@ function ensureProjectTestTmpRoot(): string {
  *
  * The directory is removed when the test process finishes, by the `afterAll`
  * that src/test/preload/temp-cleanup.ts registers. It is NOT removed by a
- * `process.on('exit')` hook — this helper used to register one, and `bun test`
+ * `process.on('exit')` hook, this helper used to register one, and `bun test`
  * never fires exit handlers, so every directory it handed out survived a green
  * run (98 of them across a 314-file run) until the age-gated sweep in
  * scripts/stale-tmp-sweep.ts reaped them an hour later.

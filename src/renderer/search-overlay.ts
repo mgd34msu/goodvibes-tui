@@ -14,7 +14,7 @@ export function renderSearchOverlay(
   manager: SearchManager,
   width: number
 ): Line[] {
-  // Match count / status text — displayed in dim grey, right of query
+  // Match count / status text, displayed in dim grey, right of query
   const hasMatches = manager.matches.length > 0;
   const matchCount = hasMatches
     ? `${manager.currentMatch + 1}/${manager.matches.length}${manager.wrapAround ? ' (wrap)' : ''}`
@@ -31,11 +31,11 @@ export function renderSearchOverlay(
     : '  [Enter/Tab] lock  [Esc] close';
   const shortHints = locked ? '  [n/N]  [Esc]' : '  [Esc]';
 
-  // Build left portion: label + query (no match count — that gets separate styling)
+  // Build left portion: label + query (no match count, that gets separate styling)
   const leftPart = label + queryDisplay;
 
   // Tiered degradation: as the terminal narrows, first shorten the hints, then
-  // drop them, then drop the match-count segment — so the query area (leftWidth)
+  // drop them, then drop the match-count segment, so the query area (leftWidth)
   // never collapses to zero or negative and the overlay never renders garbage.
   const minLeft = getDisplayWidth(label) + 4; // label + a few query cells
   let hints = fullHints;

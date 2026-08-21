@@ -4,7 +4,7 @@
  *
  * A test that builds a runtime graph, scheduler, manager, watcher or listener
  * and never disposes it leaves that object's `setInterval` / `setTimeout` chain
- * running. `createRuntimeServices()` alone starts a dozen of them — the fleet
+ * running. `createRuntimeServices()` alone starts a dozen of them, the fleet
  * registry tick, the config-file watch, the memory governor, the knowledge
  * scheduler, the cross-session orchestration sweep, the orchestration snapshot
  * writer, the push-subscription sweep and the snapshot / retention /
@@ -18,7 +18,7 @@
  * noisier than the behaviour it is testing. `scripts/leak-scan.ts` collapses
  * the suite into one process precisely so this is measurable at all.
  *
- * Usage — call `trackDisposables()` ONCE at the top level of a test file:
+ * Usage, call `trackDisposables()` ONCE at the top level of a test file:
  *
  *   const disposables = trackDisposables();
  *
@@ -29,7 +29,7 @@
  *
  * `add()` returns its argument, so it wraps a constructor call in place.
  *
- * IMPORTANT — why this is a function you must call, and not an import side
+ * IMPORTANT, why this is a function you must call, and not an import side
  * effect: `bun test` caches modules, so a helper that registered `afterEach` at
  * import time would bind that hook ONLY to the first file that imported it.
  * Every later file would import the cached module, register nothing, and
@@ -60,7 +60,7 @@ export interface DisposableRegistry {
   defer(fn: Disposer): void;
   /** Dispose everything registered so far. Runs automatically; idempotent. */
   flush(): Promise<void>;
-  /** Outstanding registrations — used by this helper's own guard test. */
+  /** Outstanding registrations, used by this helper's own guard test. */
   readonly size: number;
 }
 
@@ -103,8 +103,8 @@ function autoDisposer(value: unknown): Disposer {
 
 export interface TrackOptions {
   /**
-   * `'each'` (default) disposes after every test — right for anything built
-   * inside a test body. `'all'` disposes once at the end of the file — right
+   * `'each'` (default) disposes after every test, right for anything built
+   * inside a test body. `'all'` disposes once at the end of the file, right
    * for something built in `beforeAll` and shared by the file's tests.
    */
   readonly scope?: 'each' | 'all';
@@ -126,7 +126,7 @@ export function trackDisposables(options: TrackOptions = {}): DisposableRegistry
       }
     }
     if (failures.length > 0) {
-      // Surfaced, never swallowed — a teardown that throws is a real defect,
+      // Surfaced, never swallowed, a teardown that throws is a real defect,
       // and hiding it is how a leak survives a green suite.
       throw new Error(`disposal failed for ${failures.length} item(s):\n  ${failures.join('\n  ')}`);
     }

@@ -90,7 +90,7 @@ describe('KeybindingsManager.lookup()', () => {
   it('conflicting bindings: last-writer-wins (deterministic)', () => {
     // Map both 'search' and 'clear-cancel' to Ctrl+X in the config.
     // buildLookupMap iterates Object.entries(this.bindings) in DEFAULT_KEYBINDINGS
-    // declaration order — NOT config file order. 'clear-cancel' appears at key
+    // declaration order, NOT config file order. 'clear-cancel' appears at key
     // position 2 in DEFAULT_KEYBINDINGS; 'search' appears at position 10.
     // Therefore 'search' is the last writer for Ctrl+X and wins.
     // Contract: last-writer-wins is the documented conflict resolution policy.

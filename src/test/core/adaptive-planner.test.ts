@@ -1,5 +1,5 @@
 /**
- * AdaptivePlanner unit tests — Section 5.5
+ * AdaptivePlanner unit tests, Section 5.5
  *
  * Covers:
  * - select() scoring: single vs cohort based on isMultiStep
@@ -32,7 +32,7 @@ function baseInputs(overrides: Partial<PlannerInputs> = {}): PlannerInputs {
 }
 
 // ---------------------------------------------------------------------------
-// AdaptivePlanner — select() scoring
+// AdaptivePlanner, select() scoring
 // ---------------------------------------------------------------------------
 
 describe('AdaptivePlanner.select() scoring', () => {
@@ -99,7 +99,7 @@ describe('AdaptivePlanner.select() scoring', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AdaptivePlanner — override() precedence
+// AdaptivePlanner, override() precedence
 // ---------------------------------------------------------------------------
 
 describe('AdaptivePlanner.override() precedence', () => {
@@ -142,7 +142,7 @@ describe('AdaptivePlanner.override() precedence', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AdaptivePlanner — clearOverride()
+// AdaptivePlanner, clearOverride()
 // ---------------------------------------------------------------------------
 
 describe('AdaptivePlanner.clearOverride()', () => {
@@ -166,7 +166,7 @@ describe('AdaptivePlanner.clearOverride()', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AdaptivePlanner — override('auto') clears override
+// AdaptivePlanner, override('auto') clears override
 // ---------------------------------------------------------------------------
 
 describe("AdaptivePlanner.override('auto')", () => {
@@ -191,7 +191,7 @@ describe("AdaptivePlanner.override('auto')", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AdaptivePlanner — getHistory()
+// AdaptivePlanner, getHistory()
 // ---------------------------------------------------------------------------
 
 describe('AdaptivePlanner.getHistory()', () => {
@@ -239,7 +239,7 @@ describe('AdaptivePlanner.getHistory()', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AdaptivePlanner — explain()
+// AdaptivePlanner, explain()
 // ---------------------------------------------------------------------------
 
 describe('AdaptivePlanner.explain()', () => {
@@ -282,7 +282,7 @@ describe('AdaptivePlanner.explain()', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AdaptivePlanner — input validation
+// AdaptivePlanner, input validation
 // ---------------------------------------------------------------------------
 
 describe('AdaptivePlanner input validation', () => {
@@ -319,7 +319,7 @@ describe('AdaptivePlanner input validation', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AdaptivePlanner — setMode() / getMode()
+// AdaptivePlanner, setMode() / getMode()
 // ---------------------------------------------------------------------------
 
 describe('AdaptivePlanner.setMode()', () => {
@@ -363,7 +363,7 @@ describe('VALID_STRATEGIES', () => {
 });
 
 // ---------------------------------------------------------------------------
-// handlePlanCommand — command handler subcommands
+// handlePlanCommand, command handler subcommands
 // ---------------------------------------------------------------------------
 
 describe('handlePlanCommand', () => {

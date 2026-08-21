@@ -23,7 +23,7 @@ export function resolveBundlePath(pathArg: string, shellPaths: ShellPathService)
 }
 
 /**
- * Compact inline label for a record's temporal validity window — appended
+ * Compact inline label for a record's temporal validity window, appended
  * wherever `/recall` lists records, so an out-of-window record is visibly
  * `[pending]`/`[expired]` rather than silently indistinguishable from an
  * always-valid one. Empty string for 'active' (the common case; no window,

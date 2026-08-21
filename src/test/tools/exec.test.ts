@@ -42,7 +42,7 @@ beforeEach(() => {
 // 1. Simple command execution
 // ---------------------------------------------------------------------------
 
-describe('exec tool — simple commands', () => {
+describe('exec tool: simple commands', () => {
   test('runs a simple echo command', async () => {
     const result = await execTool.execute(withWorkingDir({ commands: [{ cmd: 'echo hello' }] }));
     expect(result.success).toBe(true);
@@ -87,7 +87,7 @@ describe('exec tool — simple commands', () => {
 // 2. Batch sequential commands
 // ---------------------------------------------------------------------------
 
-describe('exec tool — batch sequential', () => {
+describe('exec tool: batch sequential', () => {
   test('runs multiple commands sequentially and returns all results', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [
@@ -117,7 +117,7 @@ describe('exec tool — batch sequential', () => {
 // 3. Batch parallel commands
 // ---------------------------------------------------------------------------
 
-describe('exec tool — parallel', () => {
+describe('exec tool: parallel', () => {
   test('runs commands in parallel and returns all results', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'echo a' }, { cmd: 'echo b' }, { cmd: 'echo c' }],
@@ -138,7 +138,7 @@ describe('exec tool — parallel', () => {
 // 4. Timeout
 // ---------------------------------------------------------------------------
 
-describe('exec tool — timeout', () => {
+describe('exec tool: timeout', () => {
   test('kills process on timeout and marks timed_out', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'exec sleep 30', timeout_ms: 200 }],
@@ -154,7 +154,7 @@ describe('exec tool — timeout', () => {
 // 5. Expectations: exit_code
 // ---------------------------------------------------------------------------
 
-describe('exec tool — expectations: exit_code', () => {
+describe('exec tool: expectations: exit_code', () => {
   test('passes when exit_code matches', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'true', expect: { exit_code: 0 } }],
@@ -178,7 +178,7 @@ describe('exec tool — expectations: exit_code', () => {
 // 6. Expectations: stdout_contains / stderr_contains
 // ---------------------------------------------------------------------------
 
-describe('exec tool — expectations: stdout/stderr contains', () => {
+describe('exec tool: expectations: stdout/stderr contains', () => {
   test('passes when stdout_contains found', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'echo needle_value', expect: { stdout_contains: 'needle_value' } }],
@@ -218,8 +218,8 @@ describe('exec tool — expectations: stdout/stderr contains', () => {
 // 7. Retry on failure
 // ---------------------------------------------------------------------------
 
-describe('exec tool — retry', () => {
-  test('non-transient failure (exit_code 1) is not retried — reports retries=0', async () => {
+describe('exec tool: retry', () => {
+  test('non-transient failure (exit_code 1) is not retried; reports retries=0', async () => {
     // `false` exits with code 1 which is not a transient error (not network/lock/busy),
     // so the SDK retry mechanism does not re-run it. retries remains 0.
     const result = await execTool.execute(withWorkingDir({
@@ -251,7 +251,7 @@ describe('exec tool — retry', () => {
 // 8. Background mode
 // ---------------------------------------------------------------------------
 
-describe('exec tool — background mode', () => {
+describe('exec tool: background mode', () => {
   test('spawns background process and returns process_id immediately', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'sleep 1', background: true }],
@@ -324,7 +324,7 @@ describe('exec tool — background mode', () => {
 // 9. Until pattern
 // ---------------------------------------------------------------------------
 
-describe('exec tool — until pattern', () => {
+describe('exec tool: until pattern', () => {
   test('stops capturing when pattern matches in stdout', async () => {
     // Print lines, stop when we see STOP
     const result = await execTool.execute(withWorkingDir({
@@ -355,7 +355,7 @@ describe('exec tool — until pattern', () => {
 // 10. File operations
 // ---------------------------------------------------------------------------
 
-describe('exec tool — file_ops', () => {
+describe('exec tool: file_ops', () => {
   test('copy: copies a file before command runs', async () => {
     const dir = makeTmpDir();
     const src = join(dir, 'source.txt');
@@ -412,7 +412,7 @@ describe('exec tool — file_ops', () => {
 // 11. Base64 command decoding
 // ---------------------------------------------------------------------------
 
-describe('exec tool — base64 commands', () => {
+describe('exec tool: base64 commands', () => {
   test('decodes cmd_base64 and runs the command', async () => {
     // echo "hello base64" in base64
     const cmdB64 = Buffer.from('echo "hello base64"').toString('base64');
@@ -436,7 +436,7 @@ describe('exec tool — base64 commands', () => {
 // 12. Working directory (cwd)
 // ---------------------------------------------------------------------------
 
-describe('exec tool — working directory', () => {
+describe('exec tool: working directory', () => {
   test('uses global working_dir', async () => {
     const dir = makeTmpDir();
     writeFileSync(join(dir, 'marker.txt'), 'found_it');
@@ -487,9 +487,9 @@ describe('exec tool — working directory', () => {
 // 13. Output truncation
 // ---------------------------------------------------------------------------
 
-describe('exec tool — output truncation', () => {
+describe('exec tool: output truncation', () => {
   test('truncates stdout at 50000 chars and sets stdout_truncated', async () => {
-    // Generate more than 50000 chars — use yes with head
+    // Generate more than 50000 chars, use yes with head
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'yes x | head -c 60000', timeout_ms: 5000 }],
     }));
@@ -506,7 +506,7 @@ describe('exec tool — output truncation', () => {
 // 14. Safe mode warnings on dangerous commands
 // ---------------------------------------------------------------------------
 
-describe('exec tool — safe mode warnings', () => {
+describe('exec tool: safe mode warnings', () => {
   test('allows command but warns for rm -rf / patterns', async () => {
     // We test that the tool does NOT block the command (returns a result, not an error)
     // We use a harmless variant that matches the pattern syntactically but is safe
@@ -520,7 +520,7 @@ describe('exec tool — safe mode warnings', () => {
     expect(result.success).toBe(true);
   });
 
-  test('dangerous pattern does not throw — execute returns result', async () => {
+  test('dangerous pattern does not throw; execute returns result', async () => {
     // mkfs pattern - we pass a false path but check that execute() does not throw
     // Use echo to simulate the command text without actually running mkfs
     const result = await execTool.execute(withWorkingDir({
@@ -532,7 +532,7 @@ describe('exec tool — safe mode warnings', () => {
 
   test('rm -rf / pattern is detected and logs warning (does not block execution)', async () => {
     // The dangerous pattern regex matches "rm -rf /" but we run a safe echo to
-    // verify the tool does NOT throw or return an error — it only warns via logger.
+    // verify the tool does NOT throw or return an error, it only warns via logger.
     // We use cmd_base64 to pass the text "rm -rf /" without the shell actually executing it.
     const cmdB64 = Buffer.from('echo "would have been: rm -rf /"').toString('base64');
     const result = await execTool.execute(withWorkingDir({
@@ -543,7 +543,7 @@ describe('exec tool — safe mode warnings', () => {
     expect((out.stdout as string)).toContain('rm -rf /');
   });
 
-  test('mkfs pattern detected — tool warns but still executes', async () => {
+  test('mkfs pattern detected: tool warns but still executes', async () => {
     // Run a command whose text matches the /\bmkfs\b/ pattern.
     // We echo the dangerous string rather than invoking mkfs.
     const cmdB64 = Buffer.from('echo "simulating mkfs call"').toString('base64');
@@ -560,10 +560,10 @@ describe('exec tool — safe mode warnings', () => {
 // 15. Verbosity formats
 // ---------------------------------------------------------------------------
 
-describe('exec tool — verbosity', () => {
+describe('exec tool: verbosity', () => {
   test('count_only returns exit_code and success, and NAMES what it omitted', async () => {
     // Platform runtime 2.0.9: output shaping never hides that it dropped
-    // content — even count_only says what was omitted, with a count.
+    // content, even count_only says what was omitted, with a count.
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'echo verbosity_test' }],
       verbosity: 'count_only',
@@ -612,7 +612,7 @@ describe('exec tool — verbosity', () => {
 // 16. Invalid input
 // ---------------------------------------------------------------------------
 
-describe('exec tool — invalid input', () => {
+describe('exec tool: invalid input', () => {
   test('returns error for empty commands array', async () => {
     const result = await execTool.execute({ commands: [] });
     expect(result.success).toBe(false);
@@ -637,7 +637,7 @@ describe('exec tool — invalid input', () => {
 // 17. Env vars
 // ---------------------------------------------------------------------------
 
-describe('exec tool — env vars', () => {
+describe('exec tool: env vars', () => {
   test('merges additional env vars into command environment', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [{ cmd: 'echo $MY_TEST_VAR', env: { MY_TEST_VAR: 'custom_value_xyz' } }],
@@ -652,7 +652,7 @@ describe('exec tool — env vars', () => {
 // 18. fail_fast / stop_on_error
 // ---------------------------------------------------------------------------
 
-describe('exec tool — fail_fast', () => {
+describe('exec tool: fail_fast', () => {
   test('fail_fast: stops on first failure and marks remaining as skipped', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [
@@ -744,7 +744,7 @@ describe('exec tool — fail_fast', () => {
 // 19. Progress tracking
 // ---------------------------------------------------------------------------
 
-describe('exec tool — progress tracking', () => {
+describe('exec tool: progress tracking', () => {
   test('progress: true adds progress_file to result', async () => {
     const result = await execTool.execute(withWorkingDir({
       commands: [{

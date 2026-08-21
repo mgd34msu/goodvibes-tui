@@ -35,7 +35,7 @@ describe('marketplace modal surface', () => {
       const view = open(createMarketplaceModalSurface({ ecosystemPaths: paths }));
       const labels = tabRows(view, 'catalog').map((r) => r.label);
       // Byte-for-byte: the exact locked copy (curly quotes, em-dashes, alignment spacing).
-      expect(labels).toContain('This is your local plugin, skill, hook-pack, and policy-pack catalog — not a remote store.');
+      expect(labels).toContain('This is your local plugin, skill, hook-pack, and policy-pack catalog; not a remote store.');
       expect(labels).toContain('It’s empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle.');
       expect(labels).toContain('Populate it');
       expect(labels).toContain('/marketplace publish <kind> <path>  — publish local plugins/skills into the catalog');

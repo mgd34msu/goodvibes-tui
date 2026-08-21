@@ -28,7 +28,7 @@ describe('parseTestPattern', () => {
 
   test("--timeout's VALUE is skipped, never mistaken for the pattern", () => {
     // A value-taking flag whose value is not skipped is read as the pattern,
-    // and the run then filters every test file out and exits 1 — a silent way
+    // and the run then filters every test file out and exits 1, a silent way
     // to run nothing at all.
     expect(parseTestPattern(['--timeout', '60000'])).toBeUndefined();
     expect(parseTestPattern(['--timeout', '60000', 'diff-runtime'])).toBe('diff-runtime');

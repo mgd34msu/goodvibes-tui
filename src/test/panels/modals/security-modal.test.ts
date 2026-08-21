@@ -34,7 +34,7 @@ describe('security modal surface', () => {
     expect(tokens).toContain('tokens 2');
     expect(tokens).toContain('blocked 1');
     expect(view.tabs[0]!.rows.some((r) => r.id === 'tok-openai')).toBe(true);
-    // Absolute ISO audit timestamp — never a wall-clock relative string.
+    // Absolute ISO audit timestamp, never a wall-clock relative string.
     expect(tokens).toContain('Last audit 2023-11-14T22:13:20.000Z');
   });
 

@@ -215,7 +215,7 @@ export function createBootstrapCommandActions(
   const showPanel = (panelId: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget) => {
     // (the purge): a MIGRATE-TO-MODAL id resolves to a modal, not a panel.
     // panelManager.open() fires the injected openModal callback and returns a
-    // no-op sentinel — so skip panelManager.show() (which would reveal an empty
+    // no-op sentinel, so skip panelManager.show() (which would reveal an empty
     // panel workspace behind the modal) when this id redirects. Keeps every
     // showPanel-based front-door (openHooksPanel/openSecurityPanel/… and the
     // migrated command runtimes) opening the modal cleanly.
@@ -272,7 +272,7 @@ export function createBootstrapCommandActions(
           // the preference. Every other route into this callback (model-only
           // commit, context-cap commit) carries a level merely carried over
           // from the previous model; storing that is what used to ratchet the
-          // preference down for good — one hop through a model that caps at
+          // preference down for good, one hop through a model that caps at
           // 'medium' and 'xhigh' was gone from config, so hopping back could
           // not restore it.
           //
@@ -344,7 +344,7 @@ export function createBootstrapCommandActions(
       showPanel('memory');
     },
     // remote/subscription migrated to config-modal surfaces. open() hits
-    // the modal redirect and invokes the openModal callback — do NOT go through
+    // the modal redirect and invokes the openModal callback, do NOT go through
     // showPanel here, which would additionally reveal + focus an (empty) panel
     // workspace behind the fullscreen modal.
     openRemotePanel: () => {

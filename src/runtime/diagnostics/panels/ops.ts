@@ -1,5 +1,5 @@
 /**
- * OpsPanel — diagnostic data provider for the Operator Control Plane.
+ * OpsPanel, diagnostic data provider for the Operator Control Plane.
  *
  * Subscribes to OPS_AUDIT events from the UI-facing ops event feed and maintains a
  * bounded buffer of intervention records for display
@@ -149,7 +149,7 @@ export class OpsPanel {
       try {
         cb();
       } catch {
-        // Non-fatal — subscriber errors must not crash the panel
+        // Non-fatal, subscriber errors must not crash the panel
       }
     }
   }

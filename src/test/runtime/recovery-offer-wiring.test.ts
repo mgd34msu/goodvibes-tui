@@ -1,11 +1,11 @@
 /**
- * recovery-offer-wiring.test.ts — the startup recovery offer against real
+ * recovery-offer-wiring.test.ts, the startup recovery offer against real
  * objects, not stubs of its own edges.
  *
  * recovery-prompt.test.ts covers the flow with an injected `applySnapshot`.
  * This file covers what that injection actually does in the app: a real
  * ConversationManager, a real SessionManager, the real surface, and the real
- * pointer writer — because a fix can be correct in isolation and still ship
+ * pointer writer, because a fix can be correct in isolation and still ship
  * inert if nothing invokes it. The sibling repo's pointer arity fix did
  * exactly that, so the pointer assertion here reads the file off disk and
  * parses it rather than trusting a spy.
@@ -43,7 +43,7 @@ function answerWith(...ids: Array<string | null>): SelectionOpener {
 
 function setup(sessionId: string, messages: Array<Record<string, unknown>>) {
   writeRecoveryFile(
-    // ConversationTitleSource is 'system' | 'user' — 'system' is the
+    // ConversationTitleSource is 'system' | 'user', 'system' is the
     // not-user-set value this snapshot represents (there never was an 'auto').
     { messages: messages as never, title: 'Crashed mid-refactor', titleSource: 'system', timestamp: Date.now() - 60_000 },
     sessionId,
@@ -99,7 +99,7 @@ describe('accepting the offer restores the real conversation', () => {
     expect(runtime.sessionId).toBe('crashed-2');
   });
 
-  test('the last-session pointer genuinely lands on disk — read raw, not through a spy', async () => {
+  test('the last-session pointer genuinely lands on disk; read raw, not through a spy', async () => {
     const { deps } = setup('crashed-3', [{ role: 'user', content: 'hi' }]);
 
     await offerRecoverySnapshot(withOperator(deps, answerWith('resume')));
@@ -123,7 +123,7 @@ describe('accepting the offer restores the real conversation', () => {
     expect(listed).toContain('crashed-4');
   });
 
-  test('the session store entry is stamped as a user save — the operator asked for this recovery', async () => {
+  test('the session store entry is stamped as a user save; the operator asked for this recovery', async () => {
     const { deps } = setup('crashed-5', [{ role: 'user', content: 'hi' }]);
 
     await offerRecoverySnapshot(withOperator(deps, answerWith('resume')));

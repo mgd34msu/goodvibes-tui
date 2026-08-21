@@ -1,5 +1,5 @@
 /**
- * footer-tips.ts — the persistent discoverability hint shown in the shell
+ * footer-tips.ts, the persistent discoverability hint shown in the shell
  * footer's tip slot.
  *
  * instead of a single frozen "/help for commands" line, the footer
@@ -8,7 +8,7 @@
  * is actively running, the process-monitor tip is promoted to the front so the
  * operator can jump to F2 while work is in flight. Selection is a pure function
  * of context so the footer renders deterministically (golden frames stay
- * stable) — no wall-clock input.
+ * stable), no wall-clock input.
  */
 
 export interface FooterTipContext {
@@ -25,7 +25,7 @@ export function isAgentActive(composerStatus: string | undefined): boolean {
 }
 
 // Ctrl+P is a TOGGLE (open+focus when nothing is open or unfocused,
-// hide when the workspace already has focus — see openPanelPicker in
+// hide when the workspace already has focus, see openPanelPicker in
 // shell/ui-openers.ts). The bare noun 'panels' undersold that; naming the verb
 // keeps the tip honest about what the chord actually does.
 const TIP_PANELS = 'Ctrl+P toggle panels';
@@ -33,7 +33,7 @@ const TIP_PANELS = 'Ctrl+P toggle panels';
 // tip names 'fleet', not 'processes'.
 const TIP_PROCESSES = 'F2 fleet';
 const TIP_HELP = '? help';
-// f: an empty-composer Ctrl+C does NOT quit on the first press — it arms a
+// f: an empty-composer Ctrl+C does NOT quit on the first press, it arms a
 // ~1s "press again to exit" confirm, and only a SECOND Ctrl+C within that window
 // exits (an intentional accidental-exit guard). The old 'Ctrl+C quit' tip
 // implied a single press quits, so two presses seconds apart appeared to do

@@ -16,7 +16,7 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
  * Memory front-door scope isolation tests.
  *
  * Verifies that /session-memory queue and /team-memory queue are genuinely
- * scope-filtered first-class views — not identical delegates of recall queue.
+ * scope-filtered first-class views, not identical delegates of recall queue.
  *
  * Core assertion: a session-scoped record appears in /session-memory queue
  * but NOT in /team-memory queue, and vice versa.
@@ -51,7 +51,7 @@ function makeContext(registry: MemoryRegistry, printed: string[], dir: string): 
       } as never,
       // The memory-scoped front doors (/session-memory, /team-memory,
       // /memory-sync, /incident capture) route through the memory spine now,
-      // not knowledgeApi.memory — see recall-query.ts's getMemorySpine.
+      // not knowledgeApi.memory, see recall-query.ts's getMemorySpine.
       memorySpine: new MemorySpineClient({
         local: createLocalMemoryAccess(registry as unknown as LocalMemoryStore),
       }),

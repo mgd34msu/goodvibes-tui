@@ -298,7 +298,7 @@ describe('SearchManager', () => {
       const cm = new ConversationManager(() => 80);
       const needle = 'zzzFindableMarkerZzz';
       // A long tool result (>200 chars, no recognized summarizer shape) stays
-      // collapsed by default — its needle is nowhere in the 1-line collapsed
+      // collapsed by default, its needle is nowhere in the 1-line collapsed
       // preview, only in the raw content.
       const longContent = `line one\nline two with ${needle} inside\n` + 'padding '.repeat(60);
       cm.addAssistantMessage('', { toolCalls: [{ id: 'c1', name: 'exec', arguments: {} }] });
@@ -327,7 +327,7 @@ describe('SearchManager', () => {
       expect(sm.matches.length).toBeGreaterThan(0);
       // A single keystroke must never expand a block it merely matched.
       expect(cm.isCollapsed(block!.blockIndex)).toBe(true);
-      // getCurrentMatchLine() reports -1 for a still-hidden match — there is
+      // getCurrentMatchLine() reports -1 for a still-hidden match, there is
       // no real line to scroll to until the user navigates there.
       expect(sm.getCurrentMatchLine()).toBe(-1);
     });
@@ -415,8 +415,8 @@ describe('SearchManager', () => {
     /** Two results for one assistant turn hang under a single 'assistant_turn'
      *  header (see conversation-turn-structure.ts). Once that turn is
      *  collapsed the header is its entire visible representation and no result
-     *  registers a BlockMeta of its own, so the needle — which lives ONLY in
-     *  the second result's content, never in the header's summary — is
+     *  registers a BlockMeta of its own, so the needle, which lives ONLY in
+     *  the second result's content, never in the header's summary, is
      *  reachable only through the turn's groupMemberIndexes. */
     function buildFoldedToolGroup(): { cm: ConversationManager; hitMemberIdx: number } {
       const cm = new ConversationManager(() => 80);
@@ -486,12 +486,12 @@ describe('SearchManager', () => {
       const registry = cm.getBlockRegistry();
       const groupAfter = registry.find((b) => b.type === 'assistant_turn');
       expect(cm.isCollapsed(groupAfter!.blockIndex)).toBe(false);
-      // The hit member now has a block of its own, and it is expanded — the
+      // The hit member now has a block of its own, and it is expanded, the
       // header alone would have left its content invisible.
       const member = registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`);
       expect(member).toBeDefined();
       expect(cm.isCollapsed(member!.blockIndex)).toBe(false);
-      // Its sibling member (no hit inside it) is left exactly as it was —
+      // Its sibling member (no hit inside it) is left exactly as it was,
       // "exactly that block" expands, not every member indiscriminately. It
       // still has its own (collapsed-by-default) BlockMeta now that the
       // group itself has unfolded.
@@ -523,7 +523,7 @@ describe('SearchManager', () => {
       const groupAfter = registry.find((b) => b.type === 'assistant_turn');
       expect(groupAfter).toBeDefined();
       expect(cm.isCollapsed(groupAfter!.blockIndex)).toBe(true);
-      // The member no longer materializes its own BlockMeta — folded again
+      // The member no longer materializes its own BlockMeta, folded again
       // right along with its group, exactly as it was before search opened.
       expect(registry.some((b) => b.collapseKey === `msg_${hitMemberIdx}`)).toBe(false);
     });
@@ -538,7 +538,7 @@ describe('SearchManager', () => {
       expect(sm.getCurrentMatchLine()).toBe(-1);
       const registry = cm.getBlockRegistry();
       expect(cm.isCollapsed(group!.blockIndex)).toBe(true);
-      // No member materialized — the fold is untouched.
+      // No member materialized, the fold is untouched.
       expect(registry.some((b) => b.collapseKey.startsWith('msg_'))).toBe(false);
     });
 
@@ -564,7 +564,7 @@ describe('SearchManager', () => {
 
     test('result indexes that outlived their messages are skipped, not thrown on', () => {
       // undo() splices the messages tail while the (unflushed) block registry
-      // still names the group's member indexes — so the member lookup runs
+      // still names the group's member indexes, so the member lookup runs
       // against a snapshot shorter than those indexes.
       const { cm } = buildFoldedToolGroup();
       expect(cm.undo()).toBe(true);

@@ -9,7 +9,7 @@ export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap' | 'embed
  * 'tool'       -> tools.llmProvider + tools.llmModel (+ tools.llmEnabled: true)
  * 'tts'        -> tts.llmProvider + tts.llmModel
  * 'embeddings' -> provider.embeddingProvider, via MemoryEmbeddingProviderRegistry.setDefaultProvider()
- *                 (not an LLM route — no model concept, see ModelPickerTargetInfo.configuredNote)
+ *                 (not an LLM route, no model concept, see ModelPickerTargetInfo.configuredNote)
  */
 export type ModelPickerTarget = 'main' | 'helper' | 'tool' | 'tts' | 'embeddings';
 
@@ -25,7 +25,7 @@ export interface ModelPickerTargetInfo {
   readonly inherited: boolean;
   /**
    * Honest override for the "Current:" summary line. Used by the 'embeddings'
-   * target (which has no model concept — only a provider id + dimensions +
+   * target (which has no model concept, only a provider id + dimensions +
    * configured state) so the renderer never prints a phantom "model:" value.
    * When set, this replaces the computed provider:model route text.
    */

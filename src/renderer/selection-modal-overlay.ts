@@ -88,7 +88,7 @@ function frameRowsFor(modal: SelectionModal): number {
 }
 
 /**
- * Physical rows every row of the list needs, category headers included — the
+ * Physical rows every row of the list needs, category headers included, the
  * height the box would have to give the list for nothing to be scrolled away.
  */
 function totalContentRowsFor(modal: SelectionModal, remaining: number): number {
@@ -124,7 +124,7 @@ export function renderSelectionModalOverlay(
   // Size to content before falling back to the viewport's height ratio. When
   // every row (and its wrapped detail) fits in the space the terminal
   // actually has, ask for exactly that many rows, so a short list is never
-  // split behind a "(n below)" hint with screen still empty below the box —
+  // split behind a "(n below)" hint with screen still empty below the box,
   // a two-item question in particular must always show both its answers. A
   // list genuinely taller than the terminal keeps the ratio-derived budget
   // and scrolls as before.
@@ -142,7 +142,7 @@ export function renderSelectionModalOverlay(
     // Modals size to content: items whose detail wraps onto extra lines can
     // need more physical rows than a plain one-row-per-item modal, so this
     // ceiling grows with the viewport rather than staying pinned at a small
-    // constant (still bounded — never larger than the terminal can show).
+    // constant (still bounded, never larger than the terminal can show).
     maxContentRows: Math.max(10, viewportHeight - chromeRows - 4),
     // A floor only. The shared budget keeps its own target and ceiling, so a
     // modal whose content is shorter than that target is unaffected: this can
@@ -208,7 +208,7 @@ export function renderSelectionModalOverlay(
     // visible window never silently shows fewer full items than the budget
     // allows just because a fixed item-count cap ran out. Always shows the
     // selected item (even alone, if its wrapped detail is taller than the
-    // whole budget — descriptive text is never clipped to make it fit),
+    // whole budget, descriptive text is never clipped to make it fit),
     // then grows outward, roughly centered, until the budget is spent.
     const selected = Math.max(0, Math.min(modal.selectedIndex, items.length - 1));
     let startIdx = selected;
@@ -278,7 +278,7 @@ export function renderSelectionModalOverlay(
       });
       if (item.detail) {
         if (detailLayout.wrappedDetail === null) {
-          // Fits beside the label at a readable width — no truncation needed.
+          // Fits beside the label at a readable width, no truncation needed.
           putText(labelLine, layout.margin + 2 + INDICATOR_WIDTH + labelWidth, 2, '  ', {
             fg: BODY_FG,
             bg: isSelected ? SELECTED_BG : DEFAULT_OVERLAY_PALETTE.bodyBg,
@@ -289,7 +289,7 @@ export function renderSelectionModalOverlay(
           });
           lines.push(labelLine);
         } else {
-          // Doesn't fit beside the label — wrap the FULL detail text onto as
+          // Doesn't fit beside the label, wrap the FULL detail text onto as
           // many lines as it needs below the label, rather than clipping it.
           lines.push(labelLine);
           for (const detailLineText of detailLayout.wrappedDetail) {

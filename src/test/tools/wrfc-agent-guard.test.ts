@@ -148,7 +148,7 @@ describe('guard trace: batch-collapsed-to-wrfc', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Expanded heuristic matrix — ambiguous phrasings (pinning current behavior)
+// Expanded heuristic matrix, ambiguous phrasings (pinning current behavior)
 // ---------------------------------------------------------------------------
 
 describe('heuristic: implementation-like tasks without keywords', () => {
@@ -227,7 +227,7 @@ describe('heuristic: read-only tasks with strong verbs (should NOT get WRFC)', (
   });
 });
 
-describe('heuristic: regression class — analysis tasks referencing action verbs (no WRFC)', () => {
+describe('heuristic: regression class; analysis tasks referencing action verbs (no WRFC)', () => {
   // These were falsely routed to WRFC before the isReadOnlyTask leading-verb fix.
   // The tasks DISCUSS or ANALYZE an action; they do not perform it.
 

@@ -9,7 +9,7 @@ import { activeUiTones, registerThemeRefresh } from '../renderer/theme.ts';
 // The leaf foundation of the panel formatting toolkit: both `polish.ts` and
 // `polish-tables.ts` build on these. Kept dependency-free (only grid /
 // terminal-width / ui-primitives) so it never participates in an import cycle.
-// All symbols are re-exported from `polish.ts` — panels import from there.
+// All symbols are re-exported from `polish.ts`, panels import from there.
 // ---------------------------------------------------------------------------
 
 export interface PanelPalette {
@@ -33,7 +33,7 @@ export interface PanelPalette {
 
 // Built from the mode-resolved chrome tones (activeUiTones). Because 100+ call
 // sites read this object by reference, mode changes rebuild it IN PLACE via the
-// registered refresher below rather than re-resolving per call — see theme.ts's
+// registered refresher below rather than re-resolving per call, see theme.ts's
 // active-mode runtime note. This refresher is registered before any panel's
 // extendPalette() runs (panels import polish → polish-core first), so on a mode
 // flip the base is rebuilt before the extended palettes re-merge from it.

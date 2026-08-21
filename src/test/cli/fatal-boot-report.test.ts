@@ -1,5 +1,5 @@
 /**
- * fatal-boot-report.test.ts — writing the reason to a DESCRIPTOR, not to a
+ * fatal-boot-report.test.ts, writing the reason to a DESCRIPTOR, not to a
  * console that may not be there.
  *
  * ── The defect this module exists for ─────────────────────────────────────
@@ -21,11 +21,11 @@
  * The module, in process: that it writes to descriptor 2 and descriptor 1
  * directly, so a replaced `console`, a torn-down stream, or a process with no
  * console at all cannot swallow the reason. `cli/tui-startup.ts` is the caller
- * — this app has its own version of the same failure, and this is what makes it
+ *, this app has its own version of the same failure, and this is what makes it
  * say so.
  *
- * The end-to-end half — compiling a daemon entry, feeding it a corrupt settings
- * file, and reading the reason back off stderr and the activity log — went with
+ * The end-to-end half, compiling a daemon entry, feeding it a corrupt settings
+ * file, and reading the reason back off stderr and the activity log, went with
  * the daemon to its own repository. It boots a daemon, and there is no longer
  * one here to boot.
  */
@@ -42,7 +42,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/daemon';
 
 const REPO_ROOT = process.cwd();
-/** The runs themselves fail fast — anything near this is a hang, not a write. */
+/** The runs themselves fail fast, anything near this is a hang, not a write. */
 const RUN_TIMEOUT_MS = 30_000;
 
 interface InlineRun {
@@ -151,9 +151,9 @@ describe('fatal-boot-report writes to descriptors, not to replaceable globals', 
 });
 
 /*
- * The compiled-daemon boot-honesty suite that used to live here — the one that
+ * The compiled-daemon boot-honesty suite that used to live here, the one that
  * built a daemon entry, fed it an unparseable settings file, and proved the
- * reason reached stderr and the activity log — went with the daemon. It boots a
+ * reason reached stderr and the activity log, went with the daemon. It boots a
  * daemon, and this repository no longer contains one to boot; the daemon
  * repository runs it against its own entry point, which is where a regression
  * in daemon boot honesty would actually appear.

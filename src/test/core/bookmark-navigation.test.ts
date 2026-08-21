@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
-// bookmark-navigation.test.ts — fallback resolution for a bookmark whose
+// bookmark-navigation.test.ts, fallback resolution for a bookmark whose
 // direct BlockMeta lookup misses because it targets a folded (non-owning)
 // member of a currently-collapsed tool-result group (see
 // conversation-turn-structure.ts). A folded member pushes no BlockMeta of its
-// own, so `getBlockRegistry().find(b => b.collapseKey === key)` — the direct
-// lookup jumpToBookmark (src/main.ts) tries first — reports nothing even
+// own, so `getBlockRegistry().find(b => b.collapseKey === key)`, the direct
+// lookup jumpToBookmark (src/main.ts) tries first, reports nothing even
 // though the message is still present, just folded under its group header.
 // ---------------------------------------------------------------------------
 
@@ -36,7 +36,7 @@ describe('resolveFoldedBookmarkLine', () => {
     expect(groupBlock).toBeDefined();
 
     // A bookmark stored on the SECOND tool message's own collapseKey
-    // (absolute index 3, the non-owning member) — this key is not in the
+    // (absolute index 3, the non-owning member), this key is not in the
     // block registry at all while the group is folded.
     expect(cm.getBlockRegistry().find((b) => b.collapseKey === 'msg_3')).toBeUndefined();
 

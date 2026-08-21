@@ -11,8 +11,8 @@
 //   • the per-surface auto-start enablement model (see the auto-start helpers),
 //   • numeric UI bounds (min/max) the SDK schema does not carry,
 //   • radio option copy (with hints) for select fields.
-// Everything else — a field's existence, its config key, its input kind, and its
-// default value — is derived from the SDK schema + DEFAULT_CONFIG, so the two can
+// Everything else, a field's existence, its config key, its input kind, and its
+// default value, is derived from the SDK schema + DEFAULT_CONFIG, so the two can
 // never silently drift. A field the overlay names that the SDK no longer defines
 // is a loud build error; a field the SDK adds that the overlay has not curated is
 // appended automatically with SDK-derived presentation.
@@ -65,7 +65,7 @@ function kebab(value: string): string {
 
 /**
  * The default value shown for a field. Derived, not hand-authored: the current
- * snapshot value if present, otherwise the config default (DEFAULT_CONFIG) — which
+ * snapshot value if present, otherwise the config default (DEFAULT_CONFIG), which
  * is exactly what the previous per-field literals returned. Numbers stringify.
  */
 function readFieldDefault(configKey: ConfigKey, snapshot: OnboardingSnapshotState | null): string {
@@ -286,7 +286,7 @@ const SURFACE_OVERLAYS: readonly SurfaceOverlay[] = [
     onboardingId: 'telephony',
     sdkSurface: 'telephony',
     label: 'Telephony surface',
-    hint: 'Enable SMS/voice notification delivery — direct Twilio, or a self-hosted bridge.',
+    hint: 'Enable SMS/voice notification delivery: direct Twilio, or a self-hosted bridge.',
     fields: [
       { configKey: 'surfaces.telephony.provider', label: 'Telephony provider', hint: 'twilio for direct Twilio delivery, bridge for a self-hosted telephony bridge.', placeholder: 'twilio' },
       { configKey: 'surfaces.telephony.mode', label: 'Telephony mode', hint: 'sms, voice (call with spoken text), or bridge.', placeholder: 'sms' },

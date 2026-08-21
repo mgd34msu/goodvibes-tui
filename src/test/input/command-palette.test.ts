@@ -1,5 +1,5 @@
 /**
- * Command palette wiring — the palette is generated live from the command
+ * Command palette wiring, the palette is generated live from the command
  * registry (never a hand-maintained list) and is reachable via the /palette
  * command and the Ctrl+K chord.
  */
@@ -31,7 +31,7 @@ describe('command palette', () => {
   it('every registered command can be turned into a categorized palette item', () => {
     // Mirror the opener's item-building (shell/ui-openers.ts openCommandPalette)
     // to lock the contract: every command in the live registry yields exactly
-    // one palette item with a non-empty label and a category — proving the
+    // one palette item with a non-empty label and a category, proving the
     // palette is registry-derived, not a curated subset.
     const registry = makeRegistry();
     const categoryByName = new Map(categorizeBuiltinCommands().map((e) => [e.command.name, e.category]));

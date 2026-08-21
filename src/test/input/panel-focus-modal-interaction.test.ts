@@ -1,5 +1,5 @@
 /**
- * item 1e: Esc-from-focused-panel must always return to the composer —
+ * item 1e: Esc-from-focused-panel must always return to the composer,
  * including after F2, and including when a modal sat on top of the focused
  * panel in the meantime. One evaluator reported Escape working correctly;
  * an earlier one reported a case where it didn't. Static analysis of the
@@ -9,7 +9,7 @@
  * correctly wired: `modalOpened()` snapshots `modalReturnFocus` from the
  * CURRENT panelFocused/indicatorFocused state the moment a modal is pushed
  * onto an empty stack, and `handleEscape()`'s `restoreFocus()` reads it back
- * once the stack drains — verified here through the REAL
+ * once the stack drains, verified here through the REAL
  * InputHandler.feed() pipeline (not just the isolated pure functions already
  * covered by modal-focus-restoration.test.ts and panel-escape-contract.test.ts)
  * so a regression in the wiring between them, not just in either function
@@ -18,10 +18,10 @@
  * Confirmed root causes for the evaluator-reported friction were elsewhere
  * (both fixed as part of, not here):
  *   - F2 pressed while already focused used to be silently swallowed by
- *     handlePanelFocusToken before ever reaching F2's toggle logic — see
- *     global-shortcuts.test.ts's "F2 / Ctrl+O — toggleFleetPanel" suite.
+ *     handlePanelFocusToken before ever reaching F2's toggle logic, see
+ *     global-shortcuts.test.ts's "F2 / Ctrl+O, toggleFleetPanel" suite.
  *   - Ctrl+X detach (FleetPanel session-tab, interceptPanelClose) used to
- *     leave panelFocused untouched — see the interceptPanelClose test
+ *     leave panelFocused untouched, see the interceptPanelClose test
  *     in global-shortcuts.test.ts.
  */
 import { describe, test, expect } from 'bun:test';
@@ -76,7 +76,7 @@ function buildHandler(panelManager: PanelManager): InputHandler {
       bookmarkManager: { getAll: () => [] } as unknown,
       profileManager: { getAll: () => [] } as unknown,
       panelManager,
-      // Real keybindings would never bind bare escape/f2 to a lookup action —
+      // Real keybindings would never bind bare escape/f2 to a lookup action,
       // stubbing to always-false/null keeps the outcome determined by the
       // fast-path/global-shortcut logic under test, not by keybinding config.
       keybindingsManager: { matches: () => false, lookup: () => null } as unknown,
@@ -127,7 +127,7 @@ describe('Esc-from-focused-panel through the real feed() pipeline (item 1e)', ()
 
     // A modal opens while the panel already has focus. modalOpened() snapshots
     // modalReturnFocus from the CURRENT focus state the instant the stack goes
-    // from empty to non-empty — mirrors what any real opener (e.g. a future
+    // from empty to non-empty, mirrors what any real opener (e.g. a future
     // panel-driven modal affordance) does internally.
     handler.modalOpened('help');
     handler.helpOverlayActive = true;
@@ -135,7 +135,7 @@ describe('Esc-from-focused-panel through the real feed() pipeline (item 1e)', ()
     // First Escape (real pipeline: handleOverlayToken sees helpOverlayActive
     // and calls the modal-stack-aware handleEscape() BEFORE the token can ever
     // reach handlePanelFocusToken) closes only the modal and restores focus to
-    // the panel — NOT the composer, because modalReturnFocus was 'panel'.
+    // the panel, NOT the composer, because modalReturnFocus was 'panel'.
     handler.feed('\x1b');
     expect(handler.helpOverlayActive).toBe(false);
     expect(handler.panelFocused).toBe(true);

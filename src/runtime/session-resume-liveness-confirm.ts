@@ -1,5 +1,5 @@
 /**
- * session-resume-liveness-confirm.ts — the "this session is open somewhere
+ * session-resume-liveness-confirm.ts, the "this session is open somewhere
  * else" check for the session-browser / panel resume seam.
  *
  * `/session resume <id>` already refuses to resume a session whose liveness
@@ -12,7 +12,7 @@
  * Semantics are unchanged from the text-command check and stay best-effort: a
  * missing, stale, or unreadable marker means "we can't tell", and the resume
  * proceeds exactly as it always did. The marker belonging to THIS process is
- * ignored too — re-resuming the session already open here is not a fork.
+ * ignored too, re-resuming the session already open here is not a fork.
  */
 import { checkSessionLiveness } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { SessionSurface } from '@/runtime/index.ts';
@@ -28,8 +28,8 @@ export type LiveResumeSelectionOpener = (
 /**
  * The confirm modal's title. Short by necessity: the selection overlay
  * truncates its title to the box width (selection-modal-overlay.ts), so
- * anything the operator must actually read — the pid, and what resuming would
- * do — belongs in a row's `detail`, which that overlay wraps instead.
+ * anything the operator must actually read, the pid, and what resuming would
+ * do, belongs in a row's `detail`, which that overlay wraps instead.
  */
 export const LIVE_RESUME_CONFIRM_TITLE = 'Session open elsewhere';
 

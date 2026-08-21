@@ -1,6 +1,6 @@
 # GV_GOLDEN surface=pairing-modal-normal width=100 height=18
 |    ┌─Device Pairing───────────────────────────────────────────────────────────┐                    |
-|    │   Scan with the GoodVibes web app to pair this device — it opens already │                    |
+|    │   Scan with the GoodVibes web app to pair this device; it opens already  │                    |
 |    │   signed in.                                                             │                    |
 |    │   Web app   http://workshop.local:3141                                   │                    |
 |    │   Device    golden device                                                │                    |

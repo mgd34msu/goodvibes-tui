@@ -64,7 +64,7 @@ describe('renderAutocompleteOverlay', () => {
   }
 
   // Owner design test (v1.16.1 modal rule, extended here): UI-authored
-  // descriptive text is always shown in full — wrap or scroll, never clip.
+  // descriptive text is always shown in full, wrap or scroll, never clip.
   // Full strings, not prefixes: a facade assertion that only checks the first
   // few words would stay green even if everything after them were clipped.
   test('a description too long for its column wraps onto its own line(s) in full, never clipped, at 80x24 and 60-col', () => {

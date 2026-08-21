@@ -30,7 +30,7 @@ export interface AbbreviateCountOpts {
   mDecimals?: number;
   /**
    * 'fixed'  → value.toFixed(decimals)  (default)
-   * 'round'  → String(Math.round(value)) — always integer, decimals ignored
+   * 'round'  → String(Math.round(value)), always integer, decimals ignored
    */
   rounding?: 'fixed' | 'round';
   /**
@@ -39,7 +39,7 @@ export interface AbbreviateCountOpts {
    */
   bSuffix?: boolean;
   /**
-   * When true, never produce M/B/T — format as k even for millions.
+   * When true, never produce M/B/T, format as k even for millions.
    * Default: false
    */
   noM?: boolean;

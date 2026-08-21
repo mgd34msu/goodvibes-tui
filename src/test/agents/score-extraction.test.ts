@@ -47,7 +47,7 @@ describe('extractScoreFromText', () => {
   });
 
   test('ignores rated pattern if value > 10', () => {
-    // "scored 42" is nonsensical for a /10 scale — should not match via pattern 3
+    // "scored 42" is nonsensical for a /10 scale, should not match via pattern 3
     // but pattern 2 (X/10) would only match if followed by /10
     expect(extractScoreFromText('scored 42 goals')).toBeNull();
   });
@@ -81,7 +81,7 @@ describe('extractScoreFromText', () => {
   });
 
   test('prefers pattern 1 (Score: X/10) over standalone X/10', () => {
-    // Text has both — pattern 1 should win and return the first match
+    // Text has both, pattern 1 should win and return the first match
     const text = 'Score: 9/10. The implementation is 8/10 on style.';
     expect(extractScoreFromText(text)).toBe(9);
   });

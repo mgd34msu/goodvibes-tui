@@ -27,11 +27,11 @@ import { GOODVIBES_TUI_SURFACE_ROOT } from '../config/surface.ts';
 /**
  * Immediately (not deferred to the final wizard Apply):
  *   1. Installs the pasted token into <homeDirectory>/.goodvibes/daemon/operator-tokens.json
- *      via `resolveDaemonCompanionToken` — the same durable-persistence logic
+ *      via `resolveDaemonCompanionToken`, the same durable-persistence logic
  *      the `GOODVIBES_DAEMON_TOKEN` non-interactive override uses.
  *   2. Points `controlPlane.host`/`controlPlane.port` at the pasted host/port.
  *   3. Restarts the external-services controller and reports back, honestly,
- *      whether the daemon at that host/port was actually adopted — reusing
+ *      whether the daemon at that host/port was actually adopted, reusing
  *      the same `onboarding-runtime-status.ts` helpers the normal
  *      start-a-new-daemon path uses to report success/failure after Apply.
  *
@@ -64,7 +64,7 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
     resolveDaemonCompanionToken(daemonHomeDir, GOODVIBES_TUI_SURFACE_ROOT, token);
     // hostMode has to move with the host. The control-plane URL is DERIVED from
     // hostMode/host/port, and 'local' pins the dial target to 127.0.0.1 no
-    // matter what host is stored — so adopting a daemon on another machine
+    // matter what host is stored, so adopting a daemon on another machine
     // while leaving hostMode alone would derive a loopback URL for a remote
     // daemon. Adopting a loopback address stays 'local'.
     handler.uiServices.platform.configManager.setDynamic(
@@ -103,7 +103,7 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
  * `goodvibes-daemon.service` unit (an earlier release shipped detect+disclose only; this
  * closes that inheritance). This is a thin wrapper over
  * `detectLegacyUnit` + `runLegacyDaemonMigration`
- * (`../runtime/legacy-daemon-migration.ts`) — the actual migration mechanics
+ * (`../runtime/legacy-daemon-migration.ts`), the actual migration mechanics
  * (never auto-migrate, new-up-then-old-down with a health check before the
  * legacy unit is touched, adopt-or-warn for an unrecognized process on the
  * port) live there and are exercised against fakes in
@@ -117,7 +117,7 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
  * This lives in `src/input/` rather than importing
  * `../daemon/service-commands.ts` directly because the architecture gate's
  * `input-no-entrypoints` rule forbids `src/input/**` from depending on
- * `src/daemon/**` (input must stay a pure event-handling layer) — the shared
+ * `src/daemon/**` (input must stay a pure event-handling layer), the shared
  * engine lives in the entrypoint-agnostic `src/runtime/` layer instead.
  *
  * `confirm` is caller-supplied rather than read from a fixed field name here
@@ -125,7 +125,7 @@ export async function handleConnectExistingDaemonForHandler(handler: InputHandle
  * step (`onboarding-wizard-network-adopt.ts`'s `pushLegacyDaemonMigrationFields`,
  * dispatched from `handler-onboarding.ts`'s `migrate-legacy-daemon-service`
  * action) reads its own `network.migrate-legacy-daemon-confirm` checklist
- * toggle and passes it through as this parameter — unchecked previews the
+ * toggle and passes it through as this parameter, unchecked previews the
  * dry-run plan (`confirm: false`), checked executes the real migration
  * (`confirm: true`).
  */

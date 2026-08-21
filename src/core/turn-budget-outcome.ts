@@ -1,10 +1,10 @@
 /**
- * turn-budget-outcome.ts — render a turn-budget exhaustion as an honest budget
+ * turn-budget-outcome.ts, render a turn-budget exhaustion as an honest budget
  * line, distinct from an infrastructure failure.
  *
  * When a member agent spends its whole turn budget the SDK stamps a typed
- * outcome — failureKind 'max_turns' with the ceiling that applied and which
- * input set it — instead of leaving consumers to regex a prose message. This
+ * outcome, failureKind 'max_turns' with the ceiling that applied and which
+ * input set it, instead of leaving consumers to regex a prose message. This
  * renders that typed outcome in plain language: a budget was reached (not a
  * crash), with the number and where the number came from.
  */
@@ -30,14 +30,14 @@ export interface TurnBudgetOutcome {
 }
 
 /**
- * A short budget line: "reached its turn budget — 50 turns (the default limit
+ * A short budget line: "reached its turn budget, 50 turns (the default limit
  * (agents.maxTurns))". Honest about the fact that the run stopped because it hit
  * a ceiling, not because something broke.
  */
 export function formatTurnBudgetOutcome(outcome: TurnBudgetOutcome): string {
   const source = describeTurnBudgetSource(outcome.source);
   return outcome.limit !== undefined
-    ? `reached its turn budget — ${outcome.limit} turn${outcome.limit === 1 ? '' : 's'} (${source})`
+    ? `reached its turn budget: ${outcome.limit} turn${outcome.limit === 1 ? '' : 's'} (${source})`
     : `reached its turn budget (${source})`;
 }
 

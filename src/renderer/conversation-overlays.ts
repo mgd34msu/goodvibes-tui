@@ -42,7 +42,7 @@ export function applyConversationOverlays(
   // Overlay posture rule: workspaces (onboarding, model, settings, mcp, help,
   // shortcuts) claim the full viewport and are mutually exclusive with docked
   // pickers/modals. Once a fullscreen workspace claims the screen, no docked
-  // overlay is drawn on top of it — enforcing a single visible overlay even if
+  // overlay is drawn on top of it, enforcing a single visible overlay even if
   // stray state survives the handler's clearModalStack. The input layer keeps
   // the modal stack to one entry; this is the renderer-side backstop.
   let fullscreenClaimed = false;
@@ -78,7 +78,7 @@ export function applyConversationOverlays(
   }
 
   // retirement: the process, agent-detail, and live-tail modal overlays
-  // were removed with those modals — F2 now opens the Fleet panel, which
+  // were removed with those modals, F2 now opens the Fleet panel, which
   // subsumes the live process tree.
 
   if (!fullscreenClaimed && input.contextInspectorModal.active) {

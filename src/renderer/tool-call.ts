@@ -198,9 +198,9 @@ export function renderToolCallBlock(
 
 
   // Status icon. 'pending' means the tool is still awaiting a decision
-  // (e.g. an approval prompt) and has NOT run yet — it uses the hollow idle
+  // (e.g. an approval prompt) and has NOT run yet, it uses the hollow idle
   // glyph so a not-yet-run tool never shows the completed green ✓ (2c).
-  // 'cancelled' means the user stopped THIS call mid-flight — the blocked glyph
+  // 'cancelled' means the user stopped THIS call mid-flight, the blocked glyph
   // in the warn tone, distinct from both success and a real error.
   const icon = status === 'done' ? TOOL_STATUS.SUCCESS_ICON
     : status === 'error' ? TOOL_STATUS.FAIL_ICON
@@ -233,8 +233,8 @@ export function renderToolCallBlock(
     : contentEnd;
   let col: number = leftStart;
 
-  // In tree mode the status glyph goes in the bullet column — the same column
-  // as the `●` of the `● assistant` header this row hangs under — so a turn's
+  // In tree mode the status glyph goes in the bullet column, the same column
+  // as the `●` of the `● assistant` header this row hangs under, so a turn's
   // markers read as that bullet's column continuing down the turn. The row's
   // own text then starts at its depth's text column with no inline icon slot.
   if (inTree) {
@@ -246,7 +246,7 @@ export function renderToolCallBlock(
     col += 2; // icon + space
   }
 
-  // Tool name — extract short name for long MCP tool names, but keep a readable dynamic width.
+  // Tool name, extract short name for long MCP tool names, but keep a readable dynamic width.
   const rawName = toolCall.name.includes('__')
     ? toolCall.name.split('__').pop()!
     : toolCall.name;

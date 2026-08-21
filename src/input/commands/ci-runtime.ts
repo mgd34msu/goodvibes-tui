@@ -1,7 +1,7 @@
 /**
  * ci-runtime.ts
  *
- * `/ci` — the CI-watch surface: a one-shot per-job status check (`ci.status`)
+ * `/ci`, the CI-watch surface: a one-shot per-job status check (`ci.status`)
  * and standing watches (`ci.watches.*`) over the operator wire (see
  * operator-rpc.ts for why this goes over HTTP rather than the in-process
  * OperatorClient facade). The doctrine, verbatim from the operator contract's
@@ -10,7 +10,7 @@
  * violations and force the verdict off 'passed'." `platform/ci-watch` (the
  * module implementing that doctrine server-side) is not in this SDK's public
  * export map yet, so the per-job rendering below is a thin, doctrine-faithful
- * mirror of the contract's own `ci.status`/`ci.watches.run` output — every job
+ * mirror of the contract's own `ci.status`/`ci.watches.run` output, every job
  * name and conclusion listed individually, never summarized.
  */
 import type { CommandRegistry } from '../command-registry.ts';
@@ -83,7 +83,7 @@ export function renderWatch(watch: CiWatchSubscription): string {
 export function registerCiRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'ci',
-    description: 'CI-watch: one-shot per-job status and standing watches over the operator surface',
+    description: 'CI-watch: one-shot per-job status and standing watches over the operator panel',
     usage: 'status <repo-or-pr> | watch <repo-or-pr> <deliveryChannel> [--fix-session] | watches | unwatch <id>',
     argsHint: '[status|watch|watches|unwatch]',
     async handler(args, ctx) {
@@ -158,7 +158,7 @@ export function registerCiRuntimeCommands(registry: CommandRegistry): void {
             lines.push(`fix-session triggered: ${result.fixSessionTriggered ? 'yes' : 'no'}`);
             ctx.print(lines.join('\n'));
             // Route the spawned session through the shared one-key jump affordance
-            // instead of printing the id for the user to retype — same attach flow
+            // instead of printing the id for the user to retype, same attach flow
             // as the accepted fix-this card.
             if (result.fixSessionId) ctx.armFixSessionAttach?.(result.fixSessionId);
           } catch (error) {

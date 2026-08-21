@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// codebase-runtime-command.test.ts — /codebase
+// codebase-runtime-command.test.ts, /codebase
 //
 // Command-layer test against a REAL CodeIndexStore (via
-// createCodeIndexServices) on a scratch fixture tree — no fake/stub store.
+// createCodeIndexServices) on a scratch fixture tree, no fake/stub store.
 // Degraded/lexical mode is expected and fine (no embedding provider is
 // configured beyond the SDK's own hashed default). Exercises: the
 // store-absent guard, status before/after a build, an explicit build, the
@@ -93,7 +93,7 @@ describe('codebase-runtime command registration', () => {
   });
 });
 
-describe('/codebase — store-absent guard', () => {
+describe('/codebase: store-absent guard', () => {
   test('prints an honest "not available" message when ctx.session.codeIndexStore is missing', () => {
     const { configManager } = makeRealStore();
     const registry = new CommandRegistry();
@@ -115,7 +115,7 @@ describe('/codebase status', () => {
     const output = printed.join('\n');
     expect(output).toContain('available: yes');
     expect(output).toContain('indexed: 0 file(s), 0 chunk(s)');
-    expect(output).toContain('last build: never — run /codebase build');
+    expect(output).toContain('last build: never; run /codebase build');
     expect(output).toContain('auto-build on startup: off');
     expect(output).toMatch(/bounds: max \d+ files/);
 
@@ -129,7 +129,7 @@ describe('/codebase status', () => {
     const { ctx, printed } = makeCtx(store, configManager);
 
     registry.get('codebase')!.handler([], ctx);
-    expect(printed.join('\n')).toContain('Code index — backend: sqlite-vec');
+    expect(printed.join('\n')).toContain('Code index: backend: sqlite-vec');
 
     store.close();
   });
@@ -304,7 +304,7 @@ describe('/codebase search', () => {
   });
 });
 
-describe('/codebase — unknown subcommand', () => {
+describe('/codebase: unknown subcommand', () => {
   test('prints usage for an unrecognized subcommand', () => {
     const { store, configManager } = makeRealStore();
     const registry = new CommandRegistry();

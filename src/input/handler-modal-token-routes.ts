@@ -78,7 +78,7 @@ export type ModalTokenRouteState = {
   searchManager: SearchManager;
   scroll: (delta: number) => void;
   getScrollTop: () => number;
-  /** Callback to open the model picker with a specific target (helper or tool). Optional — only wired when available. */
+  /** Callback to open the model picker with a specific target (helper or tool). Optional, only wired when available. */
   openModelPickerWithTarget?: (
     target: import('./model-picker.ts').ModelPickerTarget,
     source?: 'settings' | 'onboarding',

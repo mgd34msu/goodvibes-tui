@@ -1,5 +1,5 @@
 /**
- * GC-TOOL-004 — Runtime budget enforcement tests.
+ * GC-TOOL-004, Runtime budget enforcement tests.
  *
  * Covers per-phase budget checks for time (BUDGET_EXCEEDED_MS),
  * token consumption (BUDGET_EXCEEDED_TOKENS), and cost (BUDGET_EXCEEDED_COST).
@@ -92,10 +92,10 @@ function makeRecord(
 }
 
 // ---------------------------------------------------------------------------
-// 1. No budget — fast path (pass-through)
+// 1. No budget, fast path (pass-through)
 // ---------------------------------------------------------------------------
 
-describe('budgetPhase — no budget configured', () => {
+describe('budgetPhase: no budget configured', () => {
   test('entry: returns success when budget is undefined', async () => {
     const ctx = makeContext(undefined);
     const record = makeRecord({ elapsedMs: 999_999 });
@@ -113,10 +113,10 @@ describe('budgetPhase — no budget configured', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. BUDGET_EXCEEDED_MS — time budget
+// 2. BUDGET_EXCEEDED_MS, time budget
 // ---------------------------------------------------------------------------
 
-describe('budgetPhase — BUDGET_EXCEEDED_MS', () => {
+describe('budgetPhase: BUDGET_EXCEEDED_MS', () => {
   test('entry: aborts when elapsed exceeds maxMs', async () => {
     const ctx = makeContext({ maxMs: 100 });
     const record = makeRecord({ elapsedMs: 200 }); // 200ms elapsed > 100ms limit
@@ -164,10 +164,10 @@ describe('budgetPhase — BUDGET_EXCEEDED_MS', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. BUDGET_EXCEEDED_TOKENS — token budget
+// 3. BUDGET_EXCEEDED_TOKENS, token budget
 // ---------------------------------------------------------------------------
 
-describe('budgetPhase — BUDGET_EXCEEDED_TOKENS', () => {
+describe('budgetPhase: BUDGET_EXCEEDED_TOKENS', () => {
   test('exit: aborts when result tokenCount exceeds maxTokens', async () => {
     const ctx = makeContext({ maxTokens: 1000 });
     const record = makeRecord({ result: { tokenCount: 2000 } });
@@ -207,10 +207,10 @@ describe('budgetPhase — BUDGET_EXCEEDED_TOKENS', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. BUDGET_EXCEEDED_COST — cost budget
+// 4. BUDGET_EXCEEDED_COST, cost budget
 // ---------------------------------------------------------------------------
 
-describe('budgetPhase — BUDGET_EXCEEDED_COST', () => {
+describe('budgetPhase: BUDGET_EXCEEDED_COST', () => {
   test('exit: aborts when result costUsd exceeds maxCostUsd', async () => {
     const ctx = makeContext({ maxCostUsd: 0.01 });
     const record = makeRecord({ result: { costUsd: 0.05 } });
@@ -243,7 +243,7 @@ describe('budgetPhase — BUDGET_EXCEEDED_COST', () => {
 // 5. Multi-budget: time checked first
 // ---------------------------------------------------------------------------
 
-describe('budgetPhase — multi-budget priority', () => {
+describe('budgetPhase: multi-budget priority', () => {
   test('exit: time breach takes priority over token breach', async () => {
     const ctx = makeContext({ maxMs: 10, maxTokens: 1, maxCostUsd: 0.0001 });
     const record = makeRecord({
@@ -280,14 +280,14 @@ describe('budgetPhase — multi-budget priority', () => {
 // 6. Budget phase is non-throwing (error safety)
 // ---------------------------------------------------------------------------
 
-describe('budgetPhase — error safety', () => {
+describe('budgetPhase: error safety', () => {
   test('returns a result even when context budget has NaN values', async () => {
     // Passing NaN as maxMs should not throw; comparison will be false
     const ctx = makeContext({ maxMs: NaN });
     const record = makeRecord({ elapsedMs: 9999 });
     // NaN > NaN is false so no breach fires
     const result = await budgetPhase(STUB_CALL, STUB_TOOL, ctx, record, 'entry');
-    // Implementation relies on `>` — NaN comparison returns false (no breach)
+    // Implementation relies on `>`, NaN comparison returns false (no breach)
     expect(result.success).toBe(true);
   });
 });

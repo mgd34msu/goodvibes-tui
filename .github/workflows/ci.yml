@@ -184,7 +184,7 @@ jobs:
           # Idempotent no-op if the tag already exists on the remote (a re-run,
           # or a manual tag already pushed): do not re-tag or re-dispatch.
           if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "refs/tags/${TAG}"; then
-            echo "Tag ${TAG} already exists on origin — nothing to do."
+            echo "Tag ${TAG} already exists on origin; nothing to do."
             exit 0
           fi
           git config user.name "GoodVibes CI"

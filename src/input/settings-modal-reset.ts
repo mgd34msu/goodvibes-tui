@@ -1,5 +1,5 @@
 /**
- * settings-modal-reset — pure reset helpers for SettingsModal.
+ * settings-modal-reset, pure reset helpers for SettingsModal.
  *
  * These functions encapsulate the three reset operations:
  *   - resetSelected: reset the currently selected setting to its schema default
@@ -9,7 +9,7 @@
  *
  * Each function takes its dependencies as explicit arguments rather than
  * accessing class-level state. resetCategoryConfirm and resetAllConfirm
- * remain public class fields on SettingsModal — the renderer reads them
+ * remain public class fields on SettingsModal, the renderer reads them
  * directly to decide the footer state.
  */
 
@@ -44,7 +44,7 @@ export function resetSelected({
     // Delete from the tier the write went to. A daemon-owned key was stored in
     // the daemon tier (defaultSecretBackedScope), so a delete narrowed to 'user'
     // would report a cleared setting while the daemon kept using the live
-    // credential — the reset that isn't one.
+    // credential, the reset that isn't one.
     void secretsManager.delete(buildGoodVibesSecretKey(key), { scope: defaultSecretBackedScope(key) }).catch((error) => {
       logger.error('SettingsModal: failed to clear secret while resetting setting', { key, error: summarizeError(error) });
     });

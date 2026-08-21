@@ -1,5 +1,5 @@
 /**
- * install-self-check-startup.ts — the boot-time surfacing of the install
+ * install-self-check-startup.ts, the boot-time surfacing of the install
  * self-check (install-self-check.ts). Called once from the runtime bootstrap,
  * it wires the real host inputs (process exec path, the packaged root, the
  * real daemon resolution, and existsSync) into the pure evaluator and prints
@@ -32,7 +32,7 @@ export function announceInstallSelfCheck(router: SystemMessageRouter): void {
       router.high(`[Install] ${finding.summary} ${finding.detail} Repair: ${finding.repairCommand}`);
     }
   } catch {
-    // Best-effort — an install self-check must never block or crash boot.
+    // Best-effort, an install self-check must never block or crash boot.
   }
 }
 
@@ -42,7 +42,7 @@ export function announceInstallSelfCheck(router: SystemMessageRouter): void {
  * current release (path-shadow-startup).
  *
  * They are announced together because they are the same question from the
- * user's side — "am I looking at the build I think I am" — and because the
+ * user's side, "am I looking at the build I think I am", and because the
  * three answers are useless apart: a complete install nobody can reach, or a
  * reachable install three versions old, both end with the product appearing
  * to have lost a capability it never had.
@@ -54,6 +54,6 @@ export function announceInstallSelfCheck(router: SystemMessageRouter): void {
 export function announceInstallHealth(router: SystemMessageRouter): void {
   announceInstallSelfCheck(router);
   void announceInstallReachability(router).catch(() => {
-    // Best-effort — a reachability check must never block or crash boot.
+    // Best-effort, a reachability check must never block or crash boot.
   });
 }

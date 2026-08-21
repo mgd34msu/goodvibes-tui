@@ -10,8 +10,8 @@
  * and either way the verbs stayed cataloged-but-unhandled while every surface
  * below reported "unreachable" on a daemon that was working perfectly.
  *
- * That composition is the daemon's now. This app answers no verbs at all — its
- * catalog is empty by construction — and mail and calendar reach the daemon
+ * That composition is the daemon's now. This app answers no verbs at all, its
+ * catalog is empty by construction, and mail and calendar reach the daemon
  * over the wire like every other verb family. So the claim this file makes is
  * the opposite one, and it is the honest one for a client: an empty catalog
  * reports UNREACHABLE, plainly, rather than inventing "nothing is configured"
@@ -20,8 +20,8 @@
  * (src/test/runtime/client-adopt-e2e.test.ts) and the daemon repository's own
  * conformance suites.
  *
- * Everything else here — the argument parsing, the rendering, the status
- * derivation, the Connections category's behaviour — is surface work.
+ * Everything else here, the argument parsing, the rendering, the status
+ * derivation, the Connections category's behaviour, is surface work.
  */
 
 import { describe, expect, test } from 'bun:test';
@@ -86,7 +86,7 @@ describe('daemon ownership of what setup writes', () => {
 
   test('the mail/calendar PASSWORDS are daemon-owned too, which is what closed the gap this surface refused to paper over', () => {
     // This assertion is inverted from what it was, and the inversion is the
-    // point — the previous version said in as many words that it would fail
+    // point, the previous version said in as many words that it would fail
     // when the owning round declared these paths, and that the setup guidance
     // should change in the same commit. Both happened here.
     //
@@ -108,7 +108,7 @@ describe('daemon ownership of what setup writes', () => {
   test('setup guidance now names the store write that reaches the daemon', () => {
     // The other half of the flip above: with the keys declared, a write
     // carrying an explicit scope is RELOCATED to the daemon tier rather than
-    // filed where it was asked for, so `/secrets set` is the step that works —
+    // filed where it was asked for, so `/secrets set` is the step that works,
     // and it needs no restart and no shell on the daemon's machine.
     const status = describeConnectionProbe('mail', { code: 'EMAIL_CREDENTIALS_MISSING' });
     const actions = status.nextActions.join('\n');
@@ -237,7 +237,7 @@ describe('the Connections category of the settings workspace', () => {
     expect(painted).toBe(1);
     // Both rows must LEAVE 'checking' for a state something actually
     // established, and carry a next step with it. Against this client's empty
-    // catalog that state is 'unreachable' — the honest answer when no daemon
+    // catalog that state is 'unreachable', the honest answer when no daemon
     // has been asked. What must never happen is a row left in 'checking'
     // forever, or one that settles with no next step.
     for (const surface of ['mail', 'calendar']) {

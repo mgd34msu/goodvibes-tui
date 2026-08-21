@@ -1,10 +1,10 @@
 /**
  * Tests for the transcript journal's crash-residue handling:
  *
- *   - reapOrphanedJournals — a session that crashes and is never resumed never
+ *   - reapOrphanedJournals, a session that crashes and is never resumed never
  *     reaches rotate(), so before this sweep existed its journal stayed on disk
  *     permanently.
- *   - the zero-byte-journal header fix — a crash between creating the journal
+ *   - the zero-byte-journal header fix, a crash between creating the journal
  *     file and writing its header used to leave a file that an existence-only
  *     check treated as already initialised, so every later record landed in a
  *     header-less file that the next replay quarantined wholesale.
@@ -85,7 +85,7 @@ describe('reapOrphanedJournals', () => {
     expect(existsSync(path)).toBe(true);
   });
 
-  test('a torn tail does NOT make a recent journal reapable — an unparseable tail is what replay salvages', () => {
+  test('a torn tail does NOT make a recent journal reapable; an unparseable tail is what replay salvages', () => {
     const path = putJournal(
       'torn-tail',
       60_000,
@@ -100,7 +100,7 @@ describe('reapOrphanedJournals', () => {
     expect(existsSync(path)).toBe(true);
   });
 
-  test('a zero-byte journal for a dead session is reaped immediately — it holds no records to lose', () => {
+  test('a zero-byte journal for a dead session is reaped immediately; it holds no records to lose', () => {
     const path = putJournal('empty-journal', 1_000, '');
     const result = reapOrphanedJournals(surface, { now: () => NOW, isSessionLive: neverLive });
     expect(result.reaped).toBe(1);

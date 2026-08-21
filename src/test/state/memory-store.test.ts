@@ -1,5 +1,5 @@
 /**
- * Tests for MemoryStore — CRUD, search, links, delete cascade.
+ * Tests for MemoryStore, CRUD, search, links, delete cascade.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';

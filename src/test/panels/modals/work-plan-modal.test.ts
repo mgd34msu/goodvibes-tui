@@ -98,7 +98,7 @@ describe('work-plan modal surface', () => {
       expect(jumpAgent.enabledFor?.(null, 'items')).toBe(false);
     });
 
-    test('jumpAgent/jumpWrfc on a row with no linked target are a no-op (defensive — enabledFor should already have excluded them)', () => {
+    test('jumpAgent/jumpWrfc on a row with no linked target are a no-op (defensive; enabledFor should already have excluded them)', () => {
       const surface = createWorkPlanModalSurface(fixedDeps());
       open(surface);
       const cap = captureCommands();

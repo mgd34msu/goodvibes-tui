@@ -20,9 +20,9 @@ const ONBOARDING_RUNTIME_STATE_FILE = 'onboarding-state.json';
  * This is the simplest correct approach for two same-host processes (daemon
  * + TUI) that both run this read-modify-write path:
  *
- *   - Acquire: open(<statefile>.lock, O_CREAT|O_EXCL|O_WRONLY) — atomic on POSIX.
+ *   - Acquire: open(<statefile>.lock, O_CREAT|O_EXCL|O_WRONLY), atomic on POSIX.
  *   - Stale detection: if the lockfile mtime is >= LOCK_STALE_MS old, force-remove.
- *   - Retry: up to LOCK_MAX_RETRIES rapid non-blocking attempts (no sleep — main-thread safe).
+ *   - Retry: up to LOCK_MAX_RETRIES rapid non-blocking attempts (no sleep, main-thread safe).
  *   - Release: unlink the lockfile (best-effort on failure).
  *
  * O_EXCL was chosen over flock(2) because it works on all POSIX targets
@@ -103,7 +103,7 @@ function acquireLock(lp: string): boolean {
     } catch { /* lockfile does not exist — expected happy path */ }
 
     try {
-      // 'wx' ≡ O_CREAT | O_EXCL | O_WRONLY — fails atomically if file exists.
+      // 'wx' ≡ O_CREAT | O_EXCL | O_WRONLY, fails atomically if file exists.
       const fd = openSync(lp, 'wx');
       closeSync(fd);
       return true;
@@ -180,7 +180,7 @@ export function writeOnboardingAcknowledgementState(
   const acquired = acquireLock(lp);
   if (!acquired) {
     // Lock exhaustion: another process has held the lock for all LOCK_MAX_RETRIES
-    // attempts. Proceeding without the lock — the atomic write (rename) prevents
+    // attempts. Proceeding without the lock, the atomic write (rename) prevents
     // torn files, but under true concurrent contention a concurrent read-modify-write
     // may result in a lost-update (last writer wins). Surfaced here so it is
     // detectable in logs rather than silently discarded.

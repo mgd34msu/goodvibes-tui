@@ -2,7 +2,7 @@
  * session-inbound-steer-daemon-integration.test.ts
  *
  * Acceptance evidence (the substantive one): drives the FULL live-surface
- * steer path against a REAL bootDaemon over a real HttpTransport — no mocked wire.
+ * steer path against a REAL bootDaemon over a real HttpTransport, no mocked wire.
  *
  * Proves the charter end-to-end: a TUI registers a session (surface-managed, live
  * participant); a webui surface steers that session over the wire; the daemon
@@ -29,7 +29,7 @@ const SILENT = { debug: () => {}, info: () => {} };
 
 // 8s (not 2s): a real bootDaemon() + real HTTP round trips are sensitive to host
 // load (observed flaky timeouts under load despite the daemon-side plumbing being
-// correct) — both tests below also raise bun's own per-test timeout accordingly.
+// correct), both tests below also raise bun's own per-test timeout accordingly.
 async function waitFor<T>(fn: () => Promise<T | undefined | null>, timeoutMs = 8_000, intervalMs = 20): Promise<T> {
   const startedAt = Date.now();
   for (;;) {
@@ -107,7 +107,7 @@ async function listInputsByState(
 }
 
 // Each test owns a LOCAL `harness` const (never a shared describe-block `let`)
-// and tears down via try/finally, including any poller it activated — a leftover
+// and tears down via try/finally, including any poller it activated, a leftover
 // setInterval or a stale closure over a shared mutable `harness` variable is
 // exactly the class of cross-test flake this file must never reintroduce.
 describe('live-surface steer delivery against a real bootDaemon', () => {
@@ -127,7 +127,7 @@ describe('live-surface steer delivery against a real bootDaemon', () => {
           return inputs.find((i) => i.intent === 'steer' && i.body === 'please resize the left panel') ?? null;
         });
       } catch (waitErr) {
-        // Dump the real session/input state on failure — this is a real-daemon
+        // Dump the real session/input state on failure, this is a real-daemon
         // wire test, so a timeout here is either a genuine regression or an
         // environmental slowdown; either way the state dump is worth more than
         // a bare "timed out".
@@ -161,7 +161,7 @@ describe('live-surface steer delivery against a real bootDaemon', () => {
     }
   }, 15_000);
 
-  test('D7b — two live TUI sessions (different projects): a steer to each lands only in the owning poller', async () => {
+  test('D7b: two live TUI sessions (different projects): a steer to each lands only in the owning poller', async () => {
     const harness = await startHarness();
     let pollerA: SessionInboundInputPoller | null = null;
     let pollerB: SessionInboundInputPoller | null = null;

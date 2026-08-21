@@ -1,8 +1,8 @@
 /**
- * recall-files-config.ts — TUI-local synthetic setting for the memory file
+ * recall-files-config.ts, TUI-local synthetic setting for the memory file
  * projection directory (`memory.projection.dir`).
  *
- * `memory.projection.dir` is not in the SDK's ConfigKey union — same
+ * `memory.projection.dir` is not in the SDK's ConfigKey union, same
  * situation as worktree.setup.commands (see worktree-setup-config.ts, which
  * this file mirrors): a brand-new top-level config section with no
  * DEFAULT_CONFIG entry, so ConfigManager.get()/set() path resolution can
@@ -10,7 +10,7 @@
  * degrades a resolution failure into an honest "Save failed" message.
  *
  * Default: `.goodvibes/memory/projection`, relative to the project working
- * directory — under the project's own `.goodvibes/` control directory,
+ * directory, under the project's own `.goodvibes/` control directory,
  * alongside the (separate) KV-state memory directory used by the state tool.
  */
 import type { ConfigKey, ConfigManager, ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
@@ -24,7 +24,7 @@ export const MEMORY_PROJECTION_DIR_SYNTHETIC_SETTING: ConfigSetting = {
   key: MEMORY_PROJECTION_DIR_CONFIG_KEY,
   type: 'string',
   default: MEMORY_PROJECTION_DIR_DEFAULT,
-  description: '/recall files sync writes one markdown file per standing (project/team-scope) memory record here, and commits the directory when it sits inside a git repository. Relative paths resolve against the project working directory. /recall files review reads user edits back from this directory as proposals — a file edit or deletion never mutates the store directly.',
+  description: '/recall files sync writes one markdown file per standing (project/team-scope) memory record here, and commits the directory when it sits inside a git repository. Relative paths resolve against the project working directory. /recall files review reads user edits back from this directory as proposals; a file edit or deletion never mutates the store directly.',
 };
 
 /** Read the configured projection directory, falling back to the default for an absent/malformed value. */

@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
 // fleet-panel.ts
 //
-// — FleetPanel: the live unified observability tree. Renders the
+//, FleetPanel: the live unified observability tree. Renders the
 // registered process fleet (agents incl. WRFC roles, WRFC chains/subtasks,
 // workflow-tool FSMs, watchers, background processes) as a depth-first tree
 // with a selected-row detail region. Session tabs (Part C): Enter on an
 // attachable node (agent/wrfc-chain) opens a tab with that process's
-// transcript/member summary — see fleet-tabs.ts + fleet-transcript.ts. This
+// transcript/member summary, see fleet-tabs.ts + fleet-transcript.ts. This
 // file owns input dispatch and layout; fleet-deep-link.ts owns the
 // cross-panel jump target (item 4).
 // ---------------------------------------------------------------------------
@@ -53,14 +53,14 @@ const C = DEFAULT_PANEL_PALETTE;
 export interface FleetActionCallbacks {
   /** Graceful interruption (AgentManager.cancel / trigger-schedule disable, via the registry). */
   readonly interrupt: (id: string) => boolean;
-  /** Re-arm a `paused` node (disabled trigger/schedule or automation job) — interrupt()'s inverse. Honest false when not paused / non-resumable. */
+  /** Re-arm a `paused` node (disabled trigger/schedule or automation job), interrupt()'s inverse. Honest false when not paused / non-resumable. */
   readonly resume: (id: string) => boolean;
   /** Hard stop, optionally cascading to killable descendants. Returns the node ids acted on. */
   readonly kill: (id: string, opts: { readonly cascade: boolean }) => readonly string[];
   /**
-   * Fetch an agent's conversation history — live (running) or
+   * Fetch an agent's conversation history, live (running) or
    * frozen (just-completed, still in the SDK's retention ring). Empty array
-   * means "unavailable" (evicted, or never registered) — FleetPanel degrades
+   * means "unavailable" (evicted, or never registered), FleetPanel degrades
    * to the on-disk ledger fallback in that case, never fabricating content.
    */
   readonly getConversationSnapshot: (agentId: string) => readonly ConversationMessageSnapshot[];
@@ -69,7 +69,7 @@ export interface FleetActionCallbacks {
   /**
    * Queue a human message for a live in-process agent (or a
    * wrfc-subtask's current live member agent), delivered at the target's
-   * next turn boundary — never mid-token. Honest refusal
+   * next turn boundary, never mid-token. Honest refusal
    * (`{queued:false,reason}`) for anything that cannot take mid-run input
    * (terminal nodes, non-agent kinds, the wrfc-chain coordinator itself).
    */
@@ -112,7 +112,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     actions: Partial<FleetActionCallbacks> = {},
     private readonly configManager: ConfigManager | null = null,
     // The waiting-on-human acts (pick / conflict / discard). Null in a runtime
-    // with no daemon gateway wired — those keys then fall through honestly.
+    // with no daemon gateway wired, those keys then fall through honestly.
     private readonly acts: FleetActs | null = null,
     // The ACP spawn affordance ('n' hosts a discovered third-party agent); null with no gateway wired.
     private readonly spawn: FleetSpawn | null = null,
@@ -128,7 +128,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       this.markDirty();
     });
     // The honest "the agent actually consumed this steer at
-    // its turn boundary" signal — see fleet-tabs.ts's SteerBadgeStatus doc.
+    // its turn boundary" signal, see fleet-tabs.ts's SteerBadgeStatus doc.
     // A read-model without a runtimeBus dep never invokes this (graceful
     // no-op), same degrade as steer()/steerable without a messageBus dep.
     this.unsubConsumed = readModel.subscribeConsumed((event) => {
@@ -184,7 +184,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * True while the steer composer on the active tab is open —
+   * True while the steer composer on the active tab is open,
    * every character of a burst (paste, or several fast-typed chars in one
    * stdin chunk) must land in the draft one at a time rather than being
    * routed away as panel hotkeys or exploded to the main composer. See
@@ -231,21 +231,21 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
   protected override getEmptyStateMessage(): string {
     return this.viewMode === 'archived'
-      ? ' Archive is empty — press a on a finished process (or A for all) to move it here.'
+      ? ' Archive is empty: press a on a finished process (or A for all) to move it here.'
       : ' No processes tracked yet.';
   }
 
   /**
    * (cross-restart honesty): a restart starts from an empty `AgentManager` Map
    * (no bridge from a prior registry), so a completed process from a previous
-   * session can never reappear here — a real, permanent limitation, documented
+   * session can never reappear here, a real, permanent limitation, documented
    * rather than implying "nothing has ever run" or that a restart brings it back.
    */
   protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
     return [
       {
         command: 'previous sessions',
-        summary: "not shown here — this list resets on TUI restart; each agent's .goodvibes/tui/sessions/<id>.jsonl event log still persists on disk",
+        summary: "not shown here: this list resets on TUI restart; each agent's .goodvibes/tui/sessions/<id>.jsonl event log still persists on disk",
       },
     ];
   }
@@ -281,7 +281,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
    * Re-locate `selectedNodeId` in the current snapshot and repoint
    * `selectedIndex` at it, so the selection follows a specific process across
    * adds/removes/reorders instead of drifting onto whatever row occupies the old
-   * index. When the anchored node is gone (pruned) — or no anchor exists yet —
+   * index. When the anchored node is gone (pruned), or no anchor exists yet,
    * falls back to clampSelection() (nearest valid index) and re-anchors there.
    */
   private reanchorSelection(): void {
@@ -308,7 +308,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     if (idx < 0) { this.setError('node no longer present.'); return; }
     // A successful reveal must be VISIBLE: with a session tab active, render()
     // routes to the tab view and the selection change would be silently
-    // swallowed (batch refutation finding 1) — return to the tree first
+    // swallowed (batch refutation finding 1), return to the tree first
     // (tabs kept; only the active view switches).
     this.tabsState = { tabs: this.tabsState.tabs, activeTabIndex: 0 };
     this.clearError(); this.selectedIndex = idx; this.selectedNodeId = target.id; this.markDirty();
@@ -394,7 +394,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     // Once the steer composer is open on the active tab, it
     // owns EVERY key (same full-priority-while-composing contract as
     // git-panel.ts's commitMessage entry) until Enter (submit) or Esc
-    // (cancel) — a burst/paste and single hotkeys like 'j'/'s'/'[' all land
+    // (cancel), a burst/paste and single hotkeys like 'j'/'s'/'[' all land
     // in the draft, never as tree/tab navigation (focus rule).
     const composingTab = activeFleetTab(this.tabsState);
     if (composingTab && composingTab.steerDraft !== null) {
@@ -402,9 +402,9 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     }
 
     // Tab switching works from ANY view (root tree or an attached tab) once
-    // at least one tab is open — [ / ] step through Tree, tab 1, tab 2, ...
+    // at least one tab is open, [ / ] step through Tree, tab 1, tab 2, ...
     // Ctrl+X detach is handled by interceptPanelClose(), not handleInput (it
-    // must win a global-shortcut race — see that method's doc comment).
+    // must win a global-shortcut race, see that method's doc comment).
     if ((key === '[' || key === ']') && this.tabsState.tabs.length > 0) {
       this.tabsState = stepFleetTab(this.tabsState, key === ']' ? 1 : -1);
       this.markDirty();
@@ -422,7 +422,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       if (key === 's') {
         return this.tryOpenSteerDraft(activeFleetTab(this.tabsState)!);
       }
-      // A session tab is focused — the tree isn't visible, so tree-only keys
+      // A session tab is focused, the tree isn't visible, so tree-only keys
       // (navigate/i/K/f/Enter) don't apply here.
       return false;
     }
@@ -477,7 +477,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       // Guard: only consume on a real, non-terminal node (cockpit-panel.ts
       // precedent) so the key falls through when there is nothing to act on.
       if (!selected || isTerminalProcessState(selected.node.state)) return false;
-      // Not every kind can be interrupted (only 'agent' nodes ever are — see
+      // Not every kind can be interrupted (only 'agent' nodes ever are, see
       // the SDK's fleet adapters: schedule/trigger/watcher/workflow/
       // wrfc-chain/wrfc-subtask/background-process all report
       // capabilities.interruptible: false unconditionally). Consume the key
@@ -495,7 +495,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
 
     if (key === 'K') {
       if (!selected || isTerminalProcessState(selected.node.state)) return false;
-      // Observed foreign agents have killable:false — the refusal below reads
+      // Observed foreign agents have killable:false, the refusal below reads
       // honestly; goodvibes only observes them, so stop is never offered.
       if (!selected.node.capabilities.killable) {
         this.setError(`${selected.node.kind} does not support kill.`);
@@ -541,7 +541,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     }
 
     if (key === 's') {
-      // An earlier replay fix: 's' from the TREE was silently dead — steering
+      // An earlier replay fix: 's' from the TREE was silently dead, steering
       // required an undiscoverable Enter-attach first. Attach-and-steer in
       // one press for a steerable node; honest refusal otherwise.
       if (!selected) return false;
@@ -550,10 +550,10 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       // acts.handleTreeKey above (opens the composer in the row's detail), so it
       // never reaches this attach path.
       // Closure replay note: a node that FINISHED in the hint→keypress race
-      // window must say so — "does not support steer" is misleading for an
+      // window must say so, "does not support steer" is misleading for an
       // agent whose only problem is being done.
       if (isTerminalProcessState(node.state)) {
-        this.setError(`${node.kind} already finished — nothing to steer.`);
+        this.setError(`${node.kind} already finished: nothing to steer.`);
         return true;
       }
       if (!node.capabilities.steerable || !isAttachableFleetKind(node.kind)) {
@@ -571,14 +571,14 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
   }
 
   /**
-   * The `s` gate — mirrors the i/K capability-gating template
+   * The `s` gate, mirrors the i/K capability-gating template
    * exactly (guard on the live node existing, non-terminal, and the specific
    * capability; consume the key and say so rather than silently no-op-ing).
    */
   private tryOpenSteerDraft(tab: FleetTab): boolean {
     const node = this.findLiveNode(tab.nodeId);
     if (!node || isTerminalProcessState(node.state)) {
-      this.setError(`${node?.kind ?? tab.kind} already finished — nothing to steer.`);
+      this.setError(`${node?.kind ?? tab.kind} already finished: nothing to steer.`);
       return true;
     }
     if (!node.capabilities.steerable) {
@@ -590,7 +590,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     return true;
   }
 
-  /** Dispatch for the open steer composer — mirrors git-panel.ts's handleCommitMessageInput. */
+  /** Dispatch for the open steer composer, mirrors git-panel.ts's handleCommitMessageInput. */
   private handleSteerInput(tab: FleetTab, key: string): boolean {
     if (isPanelSearchCancel(key)) {
       tab.steerDraft = null;
@@ -617,7 +617,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       return true;
     }
     // Ordinary typing AND a pasted multi-line block's line-break characters
-    // (delivered one at a time through the same burst pipeline — see
+    // (delivered one at a time through the same burst pipeline, see
     // isCapturingTextBurst) both flow through appendSteerText, which
     // normalizes \r/\n to a collapsed space instead of corrupting the
     // one-line field or silently dropping the content.
@@ -658,7 +658,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     return renderFleetRowLine(row, width, stopping, blocked, this.steerBadgeForNode(row.node.id), C);
   }
 
-  /** A node's steer badge, looked up via its attached tab (if any) — null when the node has no tab or no active/recent steer. */
+  /** A node's steer badge, looked up via its attached tab (if any), null when the node has no tab or no active/recent steer. */
   private steerBadgeForNode(nodeId: string): SteerBadge | null {
     return this.tabsState.tabs.find((t) => t.nodeId === nodeId)?.steerBadge ?? null;
   }
@@ -686,7 +686,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     const snapshotRows = this.readModel.getSnapshot().rows;
     const liveNode = snapshotRows.find((row) => row.node.id === tab.nodeId)?.node ?? null;
     // The steer composer only ever applies to 'agent' tabs
-    // (wrfc-chain has no conversation loop of its own — see
+    // (wrfc-chain has no conversation loop of its own, see
     // fleet-tabs.ts's FleetAttachableKind doc); the live-node lookup is
     // shared with the isTerminal computation below either way.
     const canSteer = liveNode !== null && !isTerminalProcessState(liveNode.state) && liveNode.capabilities.steerable;
@@ -714,7 +714,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       ));
     } else if (tab.steerBadge && !this.stopTracker.isStopping(tab.nodeId)) {
       // A queued-steer promise ("delivers on its next turn") must not render
-      // while a stop is in flight for this node — there may be no next turn
+      // while a stop is in flight for this node, there may be no next turn
       // (refutation finding 4). The badge reconciles to dropped/consumed once
       // the node's terminal state lands.
       composerLines.push(renderSteerBadgeLine(tab.steerBadge, width, palette, liveNode?.label));
@@ -756,7 +756,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       ...(stripLine ? [{ lines: [stripLine] }] : []),
       { lines: contentLines },
     ];
-    return buildPanelWorkspace(width, height, { title: `Fleet — ${tab.label}`, sections, footerLines, palette });
+    return buildPanelWorkspace(width, height, { title: `Fleet: ${tab.label}`, sections, footerLines, palette });
   }
 
   private renderTreeView(width: number, height: number): Line[] {
@@ -768,7 +768,7 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
       footer.push(...this.renderDetail(selected, width));
     }
 
-    // Capability-gated tree hints — only advertise i/K/p when the selected node
+    // Capability-gated tree hints, only advertise i/K/p when the selected node
     // can actually accept them (most kinds are never interruptible; nothing is
     // killable once terminal), incl. the d2 state-dependent p pause/resume chip.
     // Mirrors the handleInput guards above. See buildFleetTreeHints (fleet-stop.ts).
@@ -777,13 +777,13 @@ export class FleetPanel extends ScrollableListPanel<FleetTreeRow> {
     const blockedCount = this.readModel.getSnapshot().blockedNodeIds.length;
     const hints = buildFleetTreeHints(selected?.node, this.follow, this.tabsState.tabs.length > 0, this.viewMode, blockedCount);
 
-    // Tab strip renders only when tabs exist — omitting it entirely with no
+    // Tab strip renders only when tabs exist, omitting it entirely with no
     // tabs attached keeps the pre-session-tab root-tree rendering byte-identical.
     const stripLine = renderFleetTabStrip(this.tabsState, width);
     const header = stripLine ? [stripLine] : undefined;
 
     return this.renderList(width, height, {
-      title: this.viewMode === 'archived' ? 'Fleet — Archived' : 'Fleet',
+      title: this.viewMode === 'archived' ? 'Fleet: Archived' : 'Fleet',
       header,
       footer,
       hints,

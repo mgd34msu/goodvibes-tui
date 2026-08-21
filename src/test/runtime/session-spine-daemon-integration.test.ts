@@ -3,7 +3,7 @@
  *
  * Acceptance evidence: drives the TUI's SessionSpineClient against a REAL
  * bootDaemon instance (isolated home directory, ephemeral port) over a real
- * HttpTransport — no mocked wire. Proves: register-on-create is visible in
+ * HttpTransport, no mocked wire. Proves: register-on-create is visible in
  * `sessions.list` with kind 'tui' and the right project; heartbeat advances
  * the participant's lastSeenAt; close is honest (status flips to 'closed');
  * and the legacy-fold path imports a fixture store into the same daemon.
@@ -29,7 +29,7 @@ const TOKEN = 'spine-integration-token';
  * machine's numbers: a 2 s poll ceiling and bun's implicit 5 s per-test default,
  * against work that legitimately includes process boot and socket setup. On a
  * loaded host these tests failed with "this test timed out after 5000ms" while
- * the daemon was still coming up perfectly normally — the whole file takes
+ * the daemon was still coming up perfectly normally, the whole file takes
  * ~33 s there, so a 5 s budget for one of its tests was never realistic.
  */
 const WAIT_CEILING_MS = 30_000;
@@ -47,7 +47,7 @@ async function waitFor<T>(
     if (value !== undefined && value !== null) return value;
     const elapsedMs = Date.now() - startedAt;
     if (elapsedMs > timeoutMs) {
-      throw new Error(`waitFor: ${what} never became true — waited ${elapsedMs}ms (ceiling ${timeoutMs}ms)`);
+      throw new Error(`waitFor: ${what} never became true; waited ${elapsedMs}ms (ceiling ${timeoutMs}ms)`);
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
@@ -191,7 +191,7 @@ describe('SessionSpineClient against a real bootDaemon (isolated home, ephemeral
     }, 'folded session legacy-closed-1 stays closed');
     expect(closedRecord?.status).toBe('closed');
 
-    // Idempotent — a second fold call with the marker present folds nothing.
+    // Idempotent, a second fold call with the marker present folds nothing.
     const second = foldLegacySpineStore(client, { storePath, markerPath, project: harness.workingDir });
     expect(second).toEqual({ folded: 0, skipped: true });
     client.dispose();

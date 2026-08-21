@@ -1,5 +1,5 @@
 /**
- * wake-inference.ts — the terminal's inference runtime for the wake engine.
+ * wake-inference.ts, the terminal's inference runtime for the wake engine.
  *
  * The SDK engine never imports an inference runtime; it declares the shape of a
  * session ({@link WakeInferenceSession}) and takes one from the host. This is
@@ -13,7 +13,7 @@
  * `/$bunfs/root/ort-wasm-simd-threaded.mjs`, which is not something bun embeds
  * for a dynamic path import, and session creation fails at runtime with
  * "Cannot find module". So both assets are imported with `with { type: 'file' }`
- * — embedded in the binary, handed to us as a path — written into a directory
+ *, embedded in the binary, handed to us as a path, written into a directory
  * this surface owns, and `ort.env.wasm.wasmPaths` is pointed at that directory.
  * The same code path runs from source, where the imports resolve to the real
  * files in node_modules and the copy is a no-op after the first launch.
@@ -24,7 +24,7 @@
  * rather than trusting a stale extraction from a previous version.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as ort from 'onnxruntime-web/wasm';
 import glueAssetPath from 'onnxruntime-web/ort-wasm-simd-threaded.mjs' with { type: 'file' };
@@ -39,7 +39,7 @@ import { WakeWordEngine } from '@pellux/goodvibes-sdk/platform/voice';
 
 /**
  * The runtime asks for its glue and its wasm by these exact names, relative to
- * `ort.env.wasm.wasmPaths` — so the extracted copies must keep them.
+ * `ort.env.wasm.wasmPaths`, so the extracted copies must keep them.
  */
 const ORT_ASSETS = [
   { source: glueAssetPath, name: 'ort-wasm-simd-threaded.mjs' },
@@ -51,7 +51,7 @@ let configuredAssetDirectory: string | null = null;
 
 /**
  * Copy the onnxruntime-web assets into `directory` and return the value
- * `ort.env.wasm.wasmPaths` wants — a directory prefix WITH its trailing slash,
+ * `ort.env.wasm.wasmPaths` wants, a directory prefix WITH its trailing slash,
  * which the runtime concatenates a file name onto. Without the slash it looks
  * for a sibling of the directory and reports a missing module.
  */
@@ -67,7 +67,18 @@ export function extractOnnxRuntimeAssets(directory: string): string {
       // Absent, or unreadable: either way it gets written below.
     }
     if (existing !== null && existing.equals(bytes)) continue;
-    writeFileSync(target, bytes);
+    // The directory is shared by every TUI process for this user; a plain
+    // write can leave a torn file for a concurrent process's WASM loader.
+    // The SDK's atomicWriteFileSync is string-only, so binary assets get
+    // the same temp-then-rename inline.
+    const temp = `${target}.${process.pid}.tmp`;
+    try {
+      writeFileSync(temp, bytes);
+      renameSync(temp, target);
+    } catch (error) {
+      rmSync(temp, { force: true });
+      throw error;
+    }
   }
   return `${directory}/`;
 }
@@ -138,7 +149,7 @@ export interface WakeEngineFactoryOptions {
   /**
    * The provisioned speech gate, present only when `voice.wake.vadThreshold` asks
    * for one. Absent means the engine scores every frame, which is what the
-   * shipped default of 0 asks for — not a gate that failed to load, because that
+   * shipped default of 0 asks for, not a gate that failed to load, because that
    * case is a startup blocker upstream of here.
    */
   readonly vadPath?: string;
@@ -152,7 +163,7 @@ export interface WakeEngineFactoryOptions {
  * Build the `createEngine` callback the SDK listener drives.
  *
  * The listener calls it on EVERY start including a restart, because a restart
- * exists to recover from a runtime that died — so the sessions are created here
+ * exists to recover from a runtime that died, so the sessions are created here
  * per call rather than captured once.
  */
 export function createWakeEngineFactory(options: WakeEngineFactoryOptions): () => Promise<WakeWordEngine> {

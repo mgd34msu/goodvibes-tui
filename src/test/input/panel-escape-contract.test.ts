@@ -3,14 +3,14 @@
  *
  * Pins the I6 two-stage escape behavior in handlePanelFocusToken:
  *
- *   Stage 1 — active panel gets escape FIRST:
+ *   Stage 1, active panel gets escape FIRST:
  *     panel.handleInput('escape') returns true  → panel consumed it;
  *     focus stays in the panel, render is requested, global escape does not run.
  *
- *   Stage 2 — if panel does not consume escape (returns false or is absent):
+ *   Stage 2, if panel does not consume escape (returns false or is absent):
  *     panelFocused becomes false (global handler acts, user returns to prompt).
  *
- * NOTE: panels receive lowercase 'escape' — the working tree already has
+ * NOTE: panels receive lowercase 'escape', the working tree already has
  * those fixes in src/panels/.
  *
  * All tests are synchronous. No real I/O, no event bus.
@@ -94,7 +94,7 @@ const ESCAPE_TOKEN = {
 // ---------------------------------------------------------------------------
 
 describe('panel-escape-contract: two-stage escape routing', () => {
-  describe('Stage 1 — panel consumes escape (returns true)', () => {
+  describe('Stage 1: panel consumes escape (returns true)', () => {
     test('when panel consumes escape, result.handled is true', () => {
       const panel = makePanel(true);
       const state = buildFocusedState(panel);
@@ -128,7 +128,7 @@ describe('panel-escape-contract: two-stage escape routing', () => {
 
       handlePanelFocusToken(state, ESCAPE_TOKEN);
 
-      // Panel must receive the lowercase string 'escape' — not 'Escape', not '\x1b'
+      // Panel must receive the lowercase string 'escape', not 'Escape', not '\x1b'
       expect(panel.handleInput).toHaveBeenCalledWith('escape');
     });
 
@@ -143,7 +143,7 @@ describe('panel-escape-contract: two-stage escape routing', () => {
     });
   });
 
-  describe('Stage 2 — panel does not consume escape (returns false)', () => {
+  describe('Stage 2: panel does not consume escape (returns false)', () => {
     test('when panel returns false for escape, result.handled is still true (escape is always handled)', () => {
       const panel = makePanel(false);
       const state = buildFocusedState(panel);
@@ -181,7 +181,7 @@ describe('panel-escape-contract: two-stage escape routing', () => {
     });
   });
 
-  describe('Stage 2 — no active panel', () => {
+  describe('Stage 2: no active panel', () => {
     test('when no active panel, escape unfocuses panel (panelFocused false)', () => {
       const state = buildFocusedState(null);
 
@@ -221,9 +221,9 @@ describe('panel-escape-contract: two-stage escape routing', () => {
     });
   });
 
-  describe('Stage 0 — turn active (cancel-first precedence, I6.1)', () => {
+  describe('Stage 0: turn active (cancel-first precedence, I6.1)', () => {
     // FIX 1: while a turn is actively streaming, Escape's first job is
-    // always cancel-turn — a focused panel must never be able to swallow the
+    // always cancel-turn, a focused panel must never be able to swallow the
     // only way to cancel it (an earlier replay finding: panel open + streaming + Esc).
     test('turn active + panel focused + escape: handled true, panelFocused UNCHANGED (stays true)', () => {
       const panel = makePanel(true); // even a panel that WOULD consume escape...

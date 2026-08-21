@@ -15,7 +15,7 @@
  * Reality check (since updated): the TUI's main interactive
  * session DOES route through this engine. The SDK `Orchestrator` runs per-turn
  * passive injection on the evolving primary conversation and records each turn
- * on its own bounded ring, exposed via `Orchestrator.getTurnInjections()` — the
+ * on its own bounded ring, exposed via `Orchestrator.getTurnInjections()`, the
  * main-session counterpart to `AgentRecord.turnInjections` (there is no
  * AgentRecord for the primary conversation). `buildMainSessionTurnInjectionsText`
  * renders that ring for `/recall injections` with no agent id. Spawned agents
@@ -55,18 +55,18 @@ function codeSkipNote(entry: TurnInjectionEntry): string {
 export function formatTurnInjectionEntry(entry: TurnInjectionEntry): string {
   const backendTag = entry.embeddingBackend === 'fallback-lexical' ? ' [lexical fallback]' : '';
   if (entry.injectedIds.length === 0) {
-    // Honest empty state: the engine ran this turn but injected nothing —
+    // Honest empty state: the engine ran this turn but injected nothing,
     // distinct from "the engine never ran" (see buildTurnInjectionsText).
     const reasonText = entry.reason === 'no records cleared relevance floor'
-      ? 'nothing injected this turn — nothing cleared the relevance floor'
-      : `nothing injected this turn — ${entry.reason ?? 'unknown reason'}`;
+      ? 'nothing injected this turn: nothing cleared the relevance floor'
+      : `nothing injected this turn: ${entry.reason ?? 'unknown reason'}`;
     const codeConsidered = entry.codeCandidatesConsidered ? `, code considered ${entry.codeCandidatesConsidered}` : '';
     return `  turn ${entry.turn}: ${reasonText}${backendTag} (considered ${entry.candidatesConsidered}${codeConsidered}, floor ${entry.relevanceFloor})${codeSkipNote(entry)}`;
   }
   const droppedStr = entry.droppedForBudget.length > 0
     ? `, dropped for budget: ${entry.droppedForBudget.join(', ')}`
     : '';
-  // The retrieval query is part of the record's honesty contract — without it
+  // The retrieval query is part of the record's honesty contract, without it
   // an injected line can't be traced back to WHY those ids were retrieved
   // (a replay finding flagged the omission). Truncated to keep the line scannable.
   const queryStr = entry.query ? ` for ${JSON.stringify(truncateQuery(entry.query))}` : '';
@@ -87,7 +87,7 @@ function truncateQuery(query: string): string {
  *
  * An empty `entries` array is deliberately ambiguous about WHY it's empty
  * (flag disabled, no turn with new input has run yet, or every turn's token
- * budget had no headroom) — the SDK does not distinguish these cases in the
+ * budget had no headroom), the SDK does not distinguish these cases in the
  * ring itself, so this renders all three possibilities rather than guessing.
  */
 export function buildTurnInjectionsText(agentId: string, entries: readonly TurnInjectionEntry[]): string {
@@ -95,7 +95,7 @@ export function buildTurnInjectionsText(agentId: string, entries: readonly TurnI
     return (
       `[recall] No per-turn injection records for agent ${agentId} yet. This means one of: ` +
       'passive knowledge injection is disabled, no turn with new input has run yet, or the ' +
-      'token budget had no headroom on every turn so far — there is no record either way.'
+      'token budget had no headroom on every turn so far; there is no record either way.'
     );
   }
   const lines = [`[recall] Per-turn knowledge injections for agent ${agentId} (${entries.length}, most recent first):`];
@@ -114,7 +114,7 @@ export function buildTurnInjectionsText(agentId: string, entries: readonly TurnI
  *
  * As with the agent path, an empty `entries` array is deliberately ambiguous
  * about WHY it's empty (flag disabled, no turn with new input has run yet, or
- * every turn's token budget had no headroom) — the ring does not distinguish
+ * every turn's token budget had no headroom), the ring does not distinguish
  * these, so this renders all three possibilities rather than guessing.
  */
 export function buildMainSessionTurnInjectionsText(entries: readonly TurnInjectionEntry[]): string {
@@ -122,7 +122,7 @@ export function buildMainSessionTurnInjectionsText(entries: readonly TurnInjecti
     return (
       '[recall] No per-turn injection records for the main session yet. This means one of: ' +
       'passive knowledge injection is disabled, no turn with new input has run yet, or the ' +
-      'token budget had no headroom on every turn so far — there is no record either way.'
+      'token budget had no headroom on every turn so far; there is no record either way.'
     );
   }
   const lines = [`[recall] Per-turn knowledge injections for the main session (${entries.length}, most recent first):`];

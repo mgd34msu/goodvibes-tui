@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
-// fleet-spawn.test.ts — the Fleet panel's ACP spawn affordance round-trips
+// fleet-spawn.test.ts, the Fleet panel's ACP spawn affordance round-trips
 // against a mocked daemon, never typing a path:
 //   • begin lists discovered agents (acp.agents.list); none => a quiet, honest
 //     absence, no picker entered.
 //   • pick an agent, then a known directory (the current dir + registered
-//     workspaces — no free-text retyping), then acp.sessions.create hosts it.
+//     workspaces, no free-text retyping), then acp.sessions.create hosts it.
 //   • a structured failure ({binary, stage, message}) renders verbatim, never a
 //     hung row; the created row classifies attention like any other kind.
 // ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ function flush(): Promise<void> {
 
 // ── begin / discovery ─────────────────────────────────────────────────────────
 
-describe('FleetSpawn — discovery', () => {
+describe('FleetSpawn: discovery', () => {
   test('no discovered agents => a quiet honest absence, no picker entered', async () => {
     const { spawn, notes } = mockSpawn({ agents: [] });
     await spawn.begin();
@@ -119,7 +119,7 @@ describe('FleetSpawn — discovery', () => {
 
 // ── pick agent -> pick dir -> create ────────────────────────────────────────────
 
-describe('FleetSpawn — pick a known directory, then host', () => {
+describe('FleetSpawn: pick a known directory, then host', () => {
   test('the current dir leads and is labeled; registered workspaces follow, deduped', async () => {
     const { spawn } = mockSpawn({
       agents: [agent('claude-code', '/usr/bin/claude-code-acp')],
@@ -158,7 +158,7 @@ describe('FleetSpawn — pick a known directory, then host', () => {
 
 // ── failure paths ──────────────────────────────────────────────────────────────
 
-describe('FleetSpawn — honest failures, never a hung row', () => {
+describe('FleetSpawn: honest failures, never a hung row', () => {
   test('a structured spawn failure renders its {binary, stage, message} verbatim', async () => {
     const failure = spawnResult({ state: 'failed', error: { binary: '/usr/bin/claude-code-acp', stage: 'initialize', message: 'handshake timed out' } }, false);
     const { spawn, notes } = mockSpawn({ agents: [agent('claude-code', '/usr/bin/claude-code-acp')], createResult: failure });
@@ -196,7 +196,7 @@ describe('FleetSpawn — honest failures, never a hung row', () => {
 
 // ── read-model: an acp-agent row behaves like any other kind ──────────────────
 
-describe('acp-agent row — kind glyph/label + attention with no special-casing', () => {
+describe('acp-agent row: kind glyph/label + attention with no special-casing', () => {
   function acpNode(overrides: Partial<ProcessNode> = {}): ProcessNode {
     return {
       id: 'acp:h-1', kind: 'acp-agent', label: 'Claude Code', state: 'executing-tool',
@@ -210,7 +210,7 @@ describe('acp-agent row — kind glyph/label + attention with no special-casing'
     expect(isAttachableFleetKind('acp-agent')).toBe(true);
   });
 
-  test('attention rides on the SDK needsAttention projection — no acp-specific branch', () => {
+  test('attention rides on the SDK needsAttention projection; no acp-specific branch', () => {
     const waiting = acpNode({ state: 'awaiting-approval', needsAttention: { reason: 'approval' } });
     expect(fleetNodeAttention(waiting)).toEqual({ reason: 'approval' });
     const working = acpNode();

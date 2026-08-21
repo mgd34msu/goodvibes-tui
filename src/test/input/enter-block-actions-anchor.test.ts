@@ -4,7 +4,7 @@
 // Enter on an empty composer opens the BlockActionsMenu. It used to target a
 // hardcoded lineIndex of 0 (always the conversation's OLDEST block,
 // regardless of what's on screen). Covers: it now resolves via
-// getBlockAnchorLine (the viewport's bottom-most visible line — the block
+// getBlockAnchorLine (the viewport's bottom-most visible line, the block
 // the user is actually looking at), not a fixed line.
 // ---------------------------------------------------------------------------
 
@@ -70,7 +70,7 @@ describe('Enter-on-empty-composer block-actions targeting', () => {
 
     const state = makeState({
       conversationManager,
-      // A long transcript — the viewport-bottom anchor should be far from 0.
+      // A long transcript, the viewport-bottom anchor should be far from 0.
       getBlockAnchorLine: () => 240,
       blockActionsMenu: { open: (block) => { openedBlock = block; } },
     });
@@ -80,7 +80,7 @@ describe('Enter-on-empty-composer block-actions targeting', () => {
     // Widening casts back to the declared union: both `let`s are only ever
     // reassigned inside a nested closure (findNearestBlock / blockActionsMenu.open),
     // and TS's control-flow narrowing doesn't see across that function
-    // boundary — it keeps treating each variable as pinned to its literal
+    // boundary, it keeps treating each variable as pinned to its literal
     // `null` initializer here, so `expected: number`/`BlockMeta` no longer
     // overlaps the (wrongly) narrowed `null` type without this.
     expect(requestedLine as number | null).toBe(240);

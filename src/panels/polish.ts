@@ -162,7 +162,7 @@ export function buildSearchInputLine(
 /**
  * Build a status pill segment (glyph + label) for use in buildPanelLine.
  *
- * Returns StyledPanelSegment[] — spread directly into a buildPanelLine segments
+ * Returns StyledPanelSegment[], spread directly into a buildPanelLine segments
  * array:
  *   buildPanelLine(width, [['  count ', C.label], ...buildStatusPill('bad', '3')])
  *

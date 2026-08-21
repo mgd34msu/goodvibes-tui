@@ -5,11 +5,11 @@
  * InputHandler.openSelection used to write into a singleton SelectionModal
  * plus a single callback slot: a second call while one modal was already
  * showing silently overwrote both, and the pre-empted caller's callback was
- * never invoked — not even with null — so any caller that awaits it (the
+ * never invoked, not even with null, so any caller that awaits it (the
  * `ask()` shape used throughout runtime/recovery-prompt.ts) hung forever.
  *
- * These tests drive the REAL production path — InputHandler.feed() with raw
- * key bytes ('\r' for Enter, '\x1b' for Escape) — so the resolution is
+ * These tests drive the REAL production path, InputHandler.feed() with raw
+ * key bytes ('\r' for Enter, '\x1b' for Escape), so the resolution is
  * exercised through the actual dispatchSelectionAction (select path,
  * handler-modal-routes.ts) and handleEscape (Escape path,
  * handler-modal-stack.ts), not a hand-rolled stand-in for either.
@@ -51,7 +51,7 @@ async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
 }
 
-describe('InputHandler.openSelection — queueing overlapping calls', () => {
+describe('InputHandler.openSelection: queueing overlapping calls', () => {
   test('two overlapping calls: both callbacks resolve, second opens with its own title/items after the first is answered', async () => {
     const input = makeHandler();
     const resultsA: (SelectionResult | null)[] = [];
@@ -123,7 +123,7 @@ describe('InputHandler.openSelection — queueing overlapping calls', () => {
     const overflowResult: (SelectionResult | null)[] = [];
     input.openSelection('Overflow', mkItems('overflow', 1), undefined, (r) => overflowResult.push(r));
 
-    // The overflowing caller is answered immediately and synchronously — never left pending.
+    // The overflowing caller is answered immediately and synchronously, never left pending.
     expect(overflowResult).toEqual([null]);
     // Nothing that was properly queued (or the active modal) has fired.
     expect(firstResults).toHaveLength(0);
@@ -150,7 +150,7 @@ describe('InputHandler.openSelection — queueing overlapping calls', () => {
     // shape of confirmLiveResume in session-resume-liveness-confirm.ts).
     const livenessPromise = ask('Session open elsewhere', mkItems('live', 2));
 
-    // ...while the startup recovery offer is scheduled on a 0ms macrotask —
+    // ...while the startup recovery offer is scheduled on a 0ms macrotask,
     // the exact mechanism in scheduleRecoveryOffer (runtime/recovery-prompt.ts).
     const recoveryPromise = new Promise<string | null>((resolve) => {
       setTimeout(() => {

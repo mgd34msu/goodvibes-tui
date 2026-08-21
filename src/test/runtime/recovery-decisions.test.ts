@@ -1,5 +1,5 @@
 /**
- * recovery-decisions.test.ts — the durable ledger behind "Remove means remove".
+ * recovery-decisions.test.ts, the durable ledger behind "Remove means remove".
  *
  * recovery-prompt.test.ts covers the flow; this file covers the storage on its
  * own: where the file lands, that a decision survives a restart, that the
@@ -44,7 +44,7 @@ describe('where the ledger lives', () => {
       .toBe(join(surface.homeDirectory, '.goodvibes', surface.surfaceRoot, 'recovery-decisions.json'));
   });
 
-  test('home-anchored, NOT project-anchored — one decision covers every project', () => {
+  test('home-anchored, NOT project-anchored: one decision covers every project', () => {
     // The snapshots this defends against include the SDK's legacy shared
     // recovery directory, which is home-anchored and read by the launch of
     // every project. A project-scoped ledger would ask once per project.

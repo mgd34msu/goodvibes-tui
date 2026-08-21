@@ -1,5 +1,5 @@
 /**
- * GC-PERM-011 — Tests for the policy loader with signature validation.
+ * GC-PERM-011, Tests for the policy loader with signature validation.
  *
  * Covers:
  *   - loadPolicyBundle(): unsigned/invalid/valid signature cases
@@ -147,7 +147,7 @@ describe('loadPolicyBundle (managed mode)', () => {
 
   it('rejects when no key is provided in managed mode', () => {
     const bundle = makeSignedBundle('m-5');
-    // Managed mode but no key — status=skipped → rejected
+    // Managed mode but no key, status=skipped → rejected
     const result = loadPolicyBundle(bundle, { managed: true });
     expect(result.ok).toBe(false);
     expect(result.provenance.signatureStatus).toBe('skipped');

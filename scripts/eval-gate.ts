@@ -2,7 +2,7 @@
 /**
  * CI eval gate script.
  *
- * Runs the standing-gate suite set (GATE_SUITES — the all-floors-passing
+ * Runs the standing-gate suite set (GATE_SUITES, the all-floors-passing
  * scenarios the SDK designates for gating, as distinct from BUILTIN_SUITES'
  * branch-exercising scenarios), compares results against the stored
  * baseline, and exits with code 1 if any suite has regressions above
@@ -53,7 +53,7 @@ if (suiteArg && !GATE_SUITES[suiteArg]) {
 // ── CI fail-closed baseline guard ────────────────────────────────────────────
 //
 // In CI (env CI=true), a missing or corrupt baseline is a hard failure.
-// A missing baseline means no prior run set a reference — gating against
+// A missing baseline means no prior run set a reference, gating against
 // nothing is fail-open and meaningless. Generate a baseline locally with:
 //   bun run eval:baseline
 // then commit .goodvibes/eval/baseline.json before running in CI.
@@ -66,7 +66,7 @@ const isCI = process.env['CI'] === 'true';
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 console.log('='.repeat(72));
-console.log(`Eval Gate — running ${suitesToRun.length} suite(s)`);
+console.log(`Eval Gate: running ${suitesToRun.length} suite(s)`);
 console.log(`Baseline: ${baselineFile}`);
 console.log('='.repeat(72));
 
@@ -75,7 +75,7 @@ const baseline = await loadBaseline(baselineFile, projectRoot);
 
 if (!baseline && isCI) {
   console.error(`
-Eval Gate: FAILED — baseline not found at ${baselineFile}.
+Eval Gate: FAILED; baseline not found at ${baselineFile}.
 
 Running without a baseline in CI is fail-open: the gate cannot detect
 regressions if there is no prior reference to compare against.
@@ -129,9 +129,9 @@ if (saveBaseline || !baseline) {
 
 console.log('\n' + '='.repeat(72));
 if (anyGateFailed) {
-  console.error('Eval Gate: FAILED — one or more suites have regressions.');
+  console.error('Eval Gate: FAILED; one or more suites have regressions.');
   process.exit(1);
 } else {
-  console.log('Eval Gate: PASSED — all suites within regression threshold.');
+  console.log('Eval Gate: PASSED; all suites within regression threshold.');
   process.exit(0);
 }

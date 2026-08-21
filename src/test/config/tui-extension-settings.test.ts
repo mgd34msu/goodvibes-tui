@@ -67,7 +67,7 @@ describe('readCheckpointGuardSettings', () => {
   });
 });
 
-// End-to-end wiring — that the user's checkpoints.* values flow through
+// End-to-end wiring, that the user's checkpoints.* values flow through
 // withCheckpointGuardSettings into WorkspaceCheckpointManager and actually
 // change its root-guard behavior. @pellux/goodvibes-sdk 1.6.1's
 // WorkspaceCheckpointManagerOptions now declares these guard keys

@@ -13,7 +13,7 @@
 |    │   SLACK_BOT_TOKEN        tok-slack      slack        scope:admin |       │                    |
 |    │   rotation overdue | blocked · rot overdue/overdue by 30d age 120d ·     │                    |
 |    │   BLOCKED                                                                │                    |
-|    │   Last audit 2023-11-14T22:13:20.000Z — press r to refresh               │                    |
+|    │   Last audit 2023-11-14T22:13:20.000Z: press r to refresh                │                    |
 |    │                                                                          │                    |
 |    │                                                                          │                    |
 |    │                                                                          │                    |

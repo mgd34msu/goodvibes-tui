@@ -1,4 +1,4 @@
-# Reference HTTP Client
+# Reference HTTP client
 
 This is the smallest remote reference consumer for the current GoodVibes operator and peer transports.
 
@@ -10,8 +10,8 @@ It demonstrates:
 
 Required environment:
 
-- `GOODVIBES_BASE_URL` — for example `http://127.0.0.1:39421`
-- `GOODVIBES_TOKEN` — shared bearer token or session token
+- `GOODVIBES_BASE_URL`: for example `http://127.0.0.1:39421`
+- `GOODVIBES_TOKEN`: shared bearer token or session token
 
 Run it with:
 

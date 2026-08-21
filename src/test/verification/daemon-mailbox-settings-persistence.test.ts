@@ -3,9 +3,9 @@
  *
  * `surfaces.email.*` and `surfaces.calendar.*` were read by the daemon's mail
  * and calendar handlers long before they were declared anywhere. The settings
- * modal renders from `CONFIG_SCHEMA`, so the handlers' own error messages —
+ * modal renders from `CONFIG_SCHEMA`, so the handlers' own error messages,
  * "CalDAV is not configured. Set surfaces.calendar.caldavUrl and
- * surfaces.calendar.caldavUser." — named keys the UI that told an operator to
+ * surfaces.calendar.caldavUser.", named keys the UI that told an operator to
  * set them could not display. Declaring the 25 of them fixed that, and grew the
  * settings inventory the verification ledger counts (`total`) with no matching
  * local behavior coverage, pushing `localBehaviorPercent` below its floor.
@@ -13,12 +13,12 @@
  * These tests supply that coverage HONESTLY, to exactly the standard the ledger
  * already uses for a settings key (see device-and-trigger-settings-persistence.test.ts):
  * for every key in DAEMON_MAILBOX_LOCAL_SETTINGS they exercise the real
- * persistence contract end to end — schema default exposure, `set()` write
+ * persistence contract end to end, schema default exposure, `set()` write
  * through the validator to disk, reload into a fresh ConfigManager, read-back
- * equality, and reset-to-default — through the actual ConfigManager, not a mock.
+ * equality, and reset-to-default, through the actual ConfigManager, not a mock.
  *
  * What this claims beyond persistence: all 25 have a LIVE consumer. That is why
- * they were declared at all — the SDK's mail and calendar gateway compositions
+ * they were declared at all, the SDK's mail and calendar gateway compositions
  * resolve every one of them when the daemon serves `email.*` and `calendar.*`.
  * The evidence list beside DAEMON_MAILBOX_LOCAL_SETTINGS records that.
  *
@@ -26,7 +26,7 @@
  * can offer them, but a secret VALUE never lives in config: each resolves
  * through the daemon secret tier by the platform name derivation. The
  * round-trip below therefore stores an ordinary string, which is exactly what
- * the key holds — a reference, not a credential. The write side is enforced in
+ * the key holds, a reference, not a credential. The write side is enforced in
  * src/test/security/daemon-credential-scope.test.ts: all five are in
  * SECRET_CONFIG_KEYS, so an entered value goes to the secret store and only the
  * reference reaches a settings file.
@@ -103,7 +103,7 @@ function freshManager(): { manager: ConfigManager; root: string; configDir: stri
   return { manager, root, configDir };
 }
 
-describe('daemon mailbox settings — the counted list is honest', () => {
+describe('daemon mailbox settings: the counted list is honest', () => {
   test('every counted key is a live CONFIG_SCHEMA key with a declared default', () => {
     for (const key of DAEMON_MAILBOX_LOCAL_SETTINGS) {
       const schema = schemaByKey.get(key);
@@ -112,7 +112,7 @@ describe('daemon mailbox settings — the counted list is honest', () => {
     }
   });
 
-  test('the ledger counts each key exactly once — no overlap with the other counted sets', () => {
+  test('the ledger counts each key exactly once; no overlap with the other counted sets', () => {
     // Double-counting a key would inflate localBehaviorPercent without anyone
     // writing a line of coverage, which is the failure mode the ledger exists
     // to prevent.
@@ -145,7 +145,7 @@ describe('daemon mailbox settings — the counted list is honest', () => {
   });
 });
 
-describe('daemon mailbox settings — default exposure', () => {
+describe('daemon mailbox settings: default exposure', () => {
   let manager: ConfigManager;
 
   beforeEach(() => {
@@ -159,14 +159,14 @@ describe('daemon mailbox settings — default exposure', () => {
     }
   });
 
-  test('no password key defaults to anything but empty — a credential is never a default', () => {
+  test('no password key defaults to anything but empty; a credential is never a default', () => {
     for (const key of DAEMON_MAILBOX_LOCAL_SETTINGS.filter((k) => /password/i.test(k))) {
       expect(schemaByKey.get(key)!.default, `${key} must default to empty`).toBe('');
     }
   });
 });
 
-describe('daemon mailbox settings — write/reload persistence round-trip', () => {
+describe('daemon mailbox settings: write/reload persistence round-trip', () => {
   test('each key persists to disk and reloads into a fresh ConfigManager', () => {
     const { manager, root, configDir } = freshManager();
 
@@ -201,7 +201,7 @@ describe('daemon mailbox settings — write/reload persistence round-trip', () =
   });
 });
 
-describe('daemon mailbox settings — reset restores default', () => {
+describe('daemon mailbox settings: reset restores default', () => {
   test('reset returns each key to its schema default and persists that', () => {
     const { manager, root, configDir } = freshManager();
 

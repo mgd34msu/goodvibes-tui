@@ -1,10 +1,10 @@
 /**
- * operator-rpc.ts — the command layer's handle on the daemon.
+ * operator-rpc.ts, the command layer's handle on the daemon.
  *
  * The resolution itself (is the daemon enabled, what base URL, what bearer)
  * moved to runtime/client/operator-endpoint.ts when the terminal app became a
- * pure client: the runtime seams — approvals, config, credentials, sessions,
- * fleet, tasks, devices, checkpoints — all need the same answer, and two copies
+ * pure client: the runtime seams, approvals, config, credentials, sessions,
+ * fleet, tasks, devices, checkpoints, all need the same answer, and two copies
  * of it is how one call ended up on a DirectTransport while another made a real
  * request. This module keeps the command-context-shaped entry point and
  * re-exports the rest so no command import site had to change.

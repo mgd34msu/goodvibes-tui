@@ -59,7 +59,7 @@ describe('formatVoiceBytes', () => {
   });
 });
 
-describe('voiceStatusLines — populated / provisioned', () => {
+describe('voiceStatusLines: populated / provisioned', () => {
   test('renders installed TTS + STT with no setup offer', () => {
     const status = statusFixture({
       state: 'provisioned',
@@ -76,18 +76,18 @@ describe('voiceStatusLines — populated / provisioned', () => {
   });
 });
 
-describe('voiceStatusLines — empty / unprovisioned with sizes up front', () => {
+describe('voiceStatusLines: empty / unprovisioned with sizes up front', () => {
   test('declares the download size and offers setup', () => {
     const status = statusFixture();
     const text = voiceStatusLines(status).join('\n');
     expect(text).toContain('runtime: not-provisioned');
     expect(text).toContain('tts (piper): not installed');
-    expect(text).toContain('setup download: 86 MB — run /voice setup to install');
+    expect(text).toContain('setup download: 86 MB; run /voice setup to install');
     expect(voiceRuntimeNeedsSetup(status)).toBe(true);
   });
 });
 
-describe('voiceStatusLines — STT pinned but not yet published for this platform', () => {
+describe('voiceStatusLines: STT pinned but not yet published for this platform', () => {
   test('supported+unprovisioned+reason renders the honest not-yet-published line verbatim', () => {
     const reason = 'A pinned whisper bundle exists for linux-arm64 but is not yet hosted. Build it byte-for-byte with scripts/build-whisper-bundle.ts and drop the archive, or wait for a hosting release.';
     const status = statusFixture({
@@ -101,7 +101,7 @@ describe('voiceStatusLines — STT pinned but not yet published for this platfor
   });
 });
 
-describe('voiceStatusLines — unsupported platform (no pin at all)', () => {
+describe('voiceStatusLines: unsupported platform (no pin at all)', () => {
   test('renders unsupported STT and is not counted as pinned-unpublished', () => {
     const status = statusFixture({
       platform: 'darwin-arm64',
@@ -118,7 +118,7 @@ describe('voiceStatusLines — unsupported platform (no pin at all)', () => {
   });
 });
 
-describe('voiceEngineOutcomeLine — honest terminal states', () => {
+describe('voiceEngineOutcomeLine: honest terminal states', () => {
   test('download-failed points at the resumable retry act', () => {
     expect(voiceEngineOutcomeLine('tts (piper)', 'download-failed', 'network error')).toContain('re-run /voice setup to retry');
     expect(voiceEngineOutcomeLine('tts (piper)', 'download-failed', 'network error')).toContain('network error');
@@ -162,7 +162,7 @@ describe('live install progress (installInProgress)', () => {
   });
 });
 
-describe('voiceInstallReceiptLines — final receipt', () => {
+describe('voiceInstallReceiptLines: final receipt', () => {
   test('provisioned receipt shows components, engine states, and configured keys', () => {
     const text = voiceInstallReceiptLines(installFixture()).join('\n');
     expect(text).toContain('result: local voice provisioned');

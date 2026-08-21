@@ -11,14 +11,14 @@
  * These tests supply that coverage HONESTLY, to exactly the standard the ledger
  * already uses for a settings key (see feature-knob-settings-persistence.test.ts):
  * for every key in DEVICE_AND_TRIGGER_LOCAL_SETTINGS they exercise the real
- * persistence contract end to end — schema default exposure, `set()` write
+ * persistence contract end to end, schema default exposure, `set()` write
  * through the validator to disk, reload into a fresh ConfigManager, read-back
- * equality, and reset-to-default — through the actual ConfigManager, not a mock.
+ * equality, and reset-to-default, through the actual ConfigManager, not a mock.
  *
  * What this file covers is persistence and nothing else: that each key is
  * exposed at its schema default, survives `set()` through its own validator to
  * disk, reloads equal, and resets. It deliberately does NOT assert that a key
- * changes what the app does — a test like that belongs where the consuming code
+ * changes what the app does, a test like that belongs where the consuming code
  * is. For the `device.*` keys that is
  * `src/test/verification/device-posture-behavior.test.ts`, which drives this
  * app's composed device posture runtime per key at two values; the per-key
@@ -51,7 +51,7 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
  * comma-separated list of in-range millisecond integers.
  */
 const ALTERNATE_VALUE: Record<string, unknown> = {
-  // device.* — paired-phone posture
+  // device.*, paired-phone posture
   'device.capabilities.allowAlwaysOffer': 'standard-only',
   'device.capabilities.requestTimeoutSeconds': 120,
   'device.location.precision': 'ask-precise',
@@ -63,7 +63,7 @@ const ALTERNATE_VALUE: Record<string, unknown> = {
   'device.grants.maxPerNode': 16,
   'device.grants.auditRetentionDays': 90,
   'device.nodes.maxPaired': 4,
-  // watchers.triggers.* — trigger family supervision
+  // watchers.triggers.*, trigger family supervision
   'watchers.triggers.backoffLadderMs': '10000,60000,600000',
   'watchers.triggers.breakerStrikes': 3,
   'watchers.triggers.defaultCheckIntervalMs': 30000,
@@ -93,7 +93,7 @@ function freshManager(): { manager: ConfigManager; root: string; configDir: stri
   return { manager, root, configDir };
 }
 
-describe('device/trigger settings — inventory integrity', () => {
+describe('device/trigger settings: inventory integrity', () => {
   test('every ledger-counted key exists in CONFIG_SCHEMA with a defined default', () => {
     for (const key of DEVICE_AND_TRIGGER_LOCAL_SETTINGS) {
       const schema = schemaByKey.get(key);
@@ -102,7 +102,7 @@ describe('device/trigger settings — inventory integrity', () => {
     }
   });
 
-  test('the ledger counts each key exactly once — no overlap with the other counted sets', () => {
+  test('the ledger counts each key exactly once; no overlap with the other counted sets', () => {
     // Double-counting a key would inflate localBehaviorPercent without anyone
     // writing a line of coverage, which is the failure mode the ledger exists
     // to prevent.
@@ -133,7 +133,7 @@ describe('device/trigger settings — inventory integrity', () => {
   });
 });
 
-describe('device/trigger settings — default exposure', () => {
+describe('device/trigger settings: default exposure', () => {
   let manager: ConfigManager;
 
   beforeEach(() => {
@@ -148,7 +148,7 @@ describe('device/trigger settings — default exposure', () => {
   });
 });
 
-describe('device/trigger settings — write/reload persistence round-trip', () => {
+describe('device/trigger settings: write/reload persistence round-trip', () => {
   test('each key persists to disk and reloads into a fresh ConfigManager', () => {
     const { manager, root, configDir } = freshManager();
 
@@ -178,7 +178,7 @@ describe('device/trigger settings — write/reload persistence round-trip', () =
   });
 });
 
-describe('device/trigger settings — reset restores default', () => {
+describe('device/trigger settings: reset restores default', () => {
   test('reset returns each key to its schema default and persists that', () => {
     const { manager, root, configDir } = freshManager();
 

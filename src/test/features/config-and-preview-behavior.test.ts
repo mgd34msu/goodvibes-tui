@@ -30,7 +30,7 @@ describe('config diff logic', () => {
   });
 
   it('shows empty diff when all settings are at defaults', () => {
-    // Reset all settings to defaults first — global ~/.goodvibes/tui/settings.json
+    // Reset all settings to defaults first, global ~/.goodvibes/tui/settings.json
     // may override some values on the dev machine, so we reset explicitly.
     cm.reset();
     const schema = cm.getSchema();
@@ -193,7 +193,7 @@ describe('tool preview truncation', () => {
     expect(lines).toHaveLength(3);
     const spinnerLine = lines[1];
     const text = spinnerLine.map(c => c.char).join('');
-    // Human phrasing, e.g. '(first token 0.3s)' — not the raw 'ttft:350ms' form.
+    // Human phrasing, e.g. '(first token 0.3s)', not the raw 'ttft:350ms' form.
     expect(text).toContain('(first token 0.3s)');
   });
 
@@ -242,7 +242,7 @@ describe('tool preview truncation', () => {
     const width = 80;
     // frame=1000 would normally rotate past "Thinking..." (PHRASE_ROTATION_FRAMES=375);
     // with a stall in effect, the rotated phrase must NOT appear at all.
-    // outputTokens > 0: "Stalled" is the MID-STREAM label — pre-first-token
+    // outputTokens > 0: "Stalled" is the MID-STREAM label, pre-first-token
     // silence renders "Waiting for model" instead (an earlier replay fix).
     const lines = UIFactory.createThinkingFragment(
       width, '-', 1000, undefined, undefined, 40, 200, undefined, undefined,
@@ -278,7 +278,7 @@ describe('tool preview truncation', () => {
   });
 
   it('reconnect label takes precedence even before the freeze threshold is crossed', () => {
-    // A reconnect attempt is itself proof the stream is not "thinking" —
+    // A reconnect attempt is itself proof the stream is not "thinking",
     // show it immediately, do not wait for THINKING_STALL_FREEZE_MS.
     const width = 80;
     const lines = UIFactory.createThinkingFragment(
@@ -292,7 +292,7 @@ describe('tool preview truncation', () => {
   it('shows "Waiting for your approval" (no stall/provider framing) when an approval is pending', () => {
     // An approval card is waiting on the USER: the stream is silent because we asked a question,
     // not because the model stalled. Even with a stall clock long past the freeze threshold, the
-    // honest label wins — never "Stalled Ns...".
+    // honest label wins, never "Stalled Ns...".
     const width = 80;
     const lines = UIFactory.createThinkingFragment(
       width, '-', 1000, undefined, undefined, undefined, undefined, undefined, 280,

@@ -1,9 +1,9 @@
 /**
- * theme-mode-config — the appearance/theme-mode preference, TUI-side.
+ * theme-mode-config, the appearance/theme-mode preference, TUI-side.
  *
  * The preference lives at the config key `display.themeMode` (auto | dark |
  * light, default auto), stored under the existing SDK `display` section
- * alongside `display.theme` (the color palette — a separate, independent
+ * alongside `display.theme` (the color palette, a separate, independent
  * concept: theme picks the palette, themeMode picks light/dark appearance).
  *
  * `display.themeMode` is a real CONFIG_SCHEMA entry (SDK 2.0.0+); this module
@@ -28,7 +28,7 @@ export const THEME_MODE_CONFIG_KEY: ConfigKey = 'display.themeMode';
 /**
  * Default when unset: probe the terminal background on startup. Matches the
  * CONFIG_SCHEMA default for display.themeMode (module-private: nothing
- * outside this file needs the default value directly — callers read the
+ * outside this file needs the default value directly, callers read the
  * resolved mode via coerceThemeModeSetting/resolveConfiguredThemeMode).
  */
 const THEME_MODE_DEFAULT: ThemeModeSetting = 'auto';

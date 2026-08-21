@@ -46,7 +46,7 @@ describe('isAttachableFleetKind', () => {
   });
 
   // workstream/phase/work-item are aggregates (workstream,
-  // phase) or delegate-to-their-agent leaves (work-item) — none carry their
+  // phase) or delegate-to-their-agent leaves (work-item), none carry their
   // own transcript, mirroring wrfc-subtask. Users attach the live 'agent'
   // leaf directly; no default change here, verified explicitly per the brief.
   test('workstream/phase/work-item are not attachable', () => {
@@ -173,7 +173,7 @@ describe('switchFleetTab / stepFleetTab / activeFleetTab', () => {
 });
 
 // ---------------------------------------------------------------------------
-// appendSteerText — steer-composer paste normalization. A
+// appendSteerText, steer-composer paste normalization. A
 // pasted multi-line block arrives as literal \r/\n characters, one at a time
 // (see fleet-panel.ts's isCapturingTextBurst contract); this must collapse
 // each line break to a single space rather than corrupting the one-line

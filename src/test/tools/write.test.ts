@@ -566,7 +566,7 @@ describe('write tool', () => {
     });
 
     test('non-.ipynb files bypass notebook validation entirely', async () => {
-      // Invalid JSON that would fail notebook validation — should succeed for .ts
+      // Invalid JSON that would fail notebook validation, should succeed for .ts
       const result = await runWrite(tmpDir, {
         files: [{ path: 'not-a-notebook.ts', content: '{ not json }' }],
       });

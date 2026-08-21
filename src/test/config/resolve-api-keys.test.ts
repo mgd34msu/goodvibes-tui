@@ -1,5 +1,5 @@
 /**
- * G4 — resolveApiKeys integration test
+ * G4, resolveApiKeys integration test
  *
  * Verifies the three-tier resolution: env var → SecretsManager encrypted store → omit.
  * Also verifies the /secrets command wiring via SecretsManager.
@@ -42,7 +42,7 @@ const PROVIDER_ENV_VARS = [
   'HF_API_KEY', 'HUGGINGFACE_API_KEY', 'HF_TOKEN',
   'NVIDIA_API_KEY',
   'LLM7_API_KEY',
-  // github-copilot — the gap that let an ambient GITHUB_TOKEN leak in.
+  // github-copilot, the gap that let an ambient GITHUB_TOKEN leak in.
   'COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'COPILOT_PROXY_API_KEY',
   // Remaining providers in the SDK table.
   'AI_GATEWAY_API_KEY', 'CLOUDFLARE_AI_GATEWAY_API_KEY', 'AZURE_OPENAI_API_KEY',
@@ -113,10 +113,10 @@ function createSecretsManager(root: string, secureProjectFilePath: string): Secr
 describe('resolveApiKeys', () => {
 
   // -------------------------------------------------------------------------
-  // Tier 1 — environment variables win
+  // Tier 1, environment variables win
   // -------------------------------------------------------------------------
 
-  describe('Tier 1 — env var resolution', () => {
+  describe('Tier 1: env var resolution', () => {
     test('resolves openai from OPENAI_API_KEY env var', async () => {
       process.env['OPENAI_API_KEY'] = 'env-openai-key';
       const keys = await resolveWithEmptySecrets();
@@ -187,10 +187,10 @@ describe('resolveApiKeys', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Tier 2 — SecretsManager fallback when env var is absent
+  // Tier 2, SecretsManager fallback when env var is absent
   // -------------------------------------------------------------------------
 
-  describe('Tier 2 — SecretsManager fallback', () => {
+  describe('Tier 2: SecretsManager fallback', () => {
     test('falls back to SecretsManager for openai when env var absent', async () => {
       const tmpDir = makeTmpDir();
       const encPath = join(tmpDir, '.goodvibes', 'tui', 'secrets.enc');
@@ -239,7 +239,7 @@ describe('resolveApiKeys', () => {
   });
 
   // -------------------------------------------------------------------------
-  // SecretsManager API — verify the store used by /secrets command
+  // SecretsManager API, verify the store used by /secrets command
   // -------------------------------------------------------------------------
 
   describe('SecretsManager API used by /secrets command', () => {

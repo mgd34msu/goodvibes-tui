@@ -206,7 +206,7 @@ describe('initial TUI onboarding startup check', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Session lifecycle flags — startup hydration
+// Session lifecycle flags, startup hydration
 // ---------------------------------------------------------------------------
 
 describe('session lifecycle flags at startup', () => {
@@ -248,14 +248,14 @@ describe('session lifecycle flags at startup', () => {
       },
     });
 
-    // The session resume command is dispatched asynchronously — check the call was initiated
+    // The session resume command is dispatched asynchronously, check the call was initiated
     // (The promise is void-chained; the test verifies the dispatch was initiated synchronously)
     expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume' && d.args[1] === 'user-last-session')).toBe(true);
   });
 
   test('--continue with no pointer file does not dispatch session resume', () => {
     const shellPaths = makeSessionShellPaths();
-    // No session persisted — pointer file does not exist
+    // No session persisted, pointer file does not exist
 
     const { dispatched } = runStartupWithCli(shellPaths, {
       flags: {
@@ -291,13 +291,13 @@ describe('session lifecycle flags at startup', () => {
       },
     });
 
-    // Bare --resume resolves the pointer file — must dispatch with the concrete session id, not 'latest'
+    // Bare --resume resolves the pointer file, must dispatch with the concrete session id, not 'latest'
     expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume' && d.args[1] === 'user-bare-resume-session')).toBe(true);
   });
 
   test('bare --resume with no pointer file does not dispatch session resume', () => {
     const shellPaths = makeSessionShellPaths();
-    // No session persisted — pointer file absent
+    // No session persisted, pointer file absent
 
     const { dispatched } = runStartupWithCli(shellPaths, {
       flags: {
@@ -346,7 +346,7 @@ describe('session lifecycle flags at startup', () => {
 });
 
 // ---------------------------------------------------------------------------
-// checkRecoveryForSession pre-resume check — --continue / bare --resume must
+// checkRecoveryForSession pre-resume check, --continue / bare --resume must
 // never silently resume the shorter durable-store copy when the target
 // session also has a crash-recovery snapshot strictly newer than that store
 // (the autosave tail a plain resume would otherwise drop). See
@@ -373,7 +373,7 @@ describe('recovery-aware --continue / bare --resume', () => {
     };
   }
 
-  /** A durable store save, then (after a real gap so mtimes order correctly) a STRICTLY NEWER recovery snapshot for the same session — the exact shape a mid-turn crash leaves behind. */
+  /** A durable store save, then (after a real gap so mtimes order correctly) a STRICTLY NEWER recovery snapshot for the same session, the exact shape a mid-turn crash leaves behind. */
   async function persistSessionThenNewerCrash(shellPaths: ReturnType<typeof makeRecoveryShellPaths>, sessionId: string, tailMessage: string) {
     const surface = makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory);
     void new SessionManager(shellPaths.workingDirectory, { surface });
@@ -420,7 +420,7 @@ describe('recovery-aware --continue / bare --resume', () => {
 
     await chain;
 
-    // No plain store resume dispatched — the snapshot itself was applied.
+    // No plain store resume dispatched, the snapshot itself was applied.
     expect(dispatched.some((d) => d.name === 'session' && d.args[0] === 'resume')).toBe(false);
     // The snapshot's 3 messages (including the unsaved tail) landed in the live conversation.
     expect(recovery.conversation.getMessageCount()).toBe(3);
@@ -460,7 +460,7 @@ describe('recovery-aware --continue / bare --resume', () => {
     expect(existsSync(surface.recoveryFile('crash-continue-decline'))).toBe(true);
   });
 
-  test('--continue with continueRecovery wired but no live snapshot resumes straight from the store — no modal is ever opened', async () => {
+  test('--continue with continueRecovery wired but no live snapshot resumes straight from the store; no modal is ever opened', async () => {
     const shellPaths = makeRecoveryShellPaths();
     const surface = makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory);
     void new SessionManager(shellPaths.workingDirectory, { surface });
@@ -518,7 +518,7 @@ describe('recovery-aware --continue / bare --resume', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Registration self-records — no modal is ever raised for it; it only
+// Registration self-records, no modal is ever raised for it; it only
 // ever fires for an ALREADY-trusted workspace (the owner-boundary rider:
 // self-recording must not widen anything for a workspace that was merely
 // opened read-only, never decided, or explicitly kept restricted).
@@ -570,7 +570,7 @@ describe('registration self-records at startup (no modal, ever)', () => {
       surface: makeTestSurface(shellPaths.workingDirectory, shellPaths.homeDirectory),
       render: () => {},
     });
-    // Fire-and-forget — give the microtask queue a turn to run it.
+    // Fire-and-forget, give the microtask queue a turn to run it.
     await Promise.resolve();
     await Promise.resolve();
 
@@ -619,7 +619,7 @@ describe('registration self-records at startup (no modal, ever)', () => {
     expect(registerCalls).toEqual([]);
   });
 
-  test('no selection/modal surface is ever opened for registration — commandContext.openSelection is never called', async () => {
+  test('no selection/modal surface is ever opened for registration; commandContext.openSelection is never called', async () => {
     const shellPaths = makeShellPaths();
     writeOnboardingCheckMarker(shellPaths, { scope: 'user', source: 'wizard', mode: 'new' });
     const { commandContext } = makeWorkspaceCommandContext({ trusted: true, offerRegister: true });

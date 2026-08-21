@@ -42,7 +42,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
     name: 'health',
     aliases: ['doctor'],
     description: 'Health workspace for startup posture, service readiness, sandbox posture, and provider health',
-    usage: '[report|review|open|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|memory|metrics|continuity|worktrees|maintenance|term|repair [domain]] — bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)',
+    usage: '[report|review|open|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|memory|metrics|continuity|worktrees|maintenance|term|repair [domain]]: bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       const readModels = requireReadModels(ctx);
@@ -54,7 +54,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
 
       if (sub === 'memory') {
         // The MemoryGovernor snapshot (ops.memory.get): tier, budget vs RSS,
-        // per-cache footprints, paused jobs, tripwire — read-only, honest 501
+        // per-cache footprints, paused jobs, tripwire, read-only, honest 501
         // when a daemon predates the governor verb.
         const resolution = createMemoryDiagnosticsGateway({
           configManager: ctx.platform.configManager,
@@ -354,9 +354,9 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       if (sub === 'term') {
         const caps = probeTermCaps(process.stdout as NodeJS.WriteStream);
         const issues: string[] = [];
-        if (caps.capability === 'none') issues.push('terminal reports no color support — UI rendering will be degraded (no ANSI colors)');
-        if (caps.capability === 'basic16') issues.push('terminal limited to 16 ANSI colors — gradient and true-color UI elements will be approximated');
-        if (!caps.syncedOutput) issues.push('DEC Synchronized Output (mode 2026) is disabled — screen-tearing may be visible on slow connections');
+        if (caps.capability === 'none') issues.push('terminal reports no color support; UI rendering will be degraded (no ANSI colors)');
+        if (caps.capability === 'basic16') issues.push('terminal limited to 16 ANSI colors; gradient and true-color UI elements will be approximated');
+        if (!caps.syncedOutput) issues.push('DEC Synchronized Output (mode 2026) is disabled; screen-tearing may be visible on slow connections');
         ctx.print([
           'Health Review: Terminal Capabilities',
           `  color capability: ${caps.capability}`,
@@ -490,13 +490,13 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       ctx.print([
         'Health Review',
         // item 3: /health stays a cross-domain transcript report (it
-        // genuinely spans settings/accounts/auth/sandbox/etc — no single
+        // genuinely spans settings/accounts/auth/sandbox/etc, no single
         // modal owns this data), but the providers domain DOES have one, so
         // point at it honestly. "/provider" (no domain) is a DIFFERENT
-        // command (switch/manage custom providers) — the real front door to
+        // command (switch/manage custom providers), the real front door to
         // the providers modal is /health provider (see sub === 'provider'
         // above), so that is what this hint names.
-        '  see also: the providers modal — /health provider',
+        '  see also: the providers modal; /health provider',
         `  session: ${snapshot.sessionId}`,
         `  setup issues: ${snapshot.issues.length}`,
         `  service issues: ${snapshot.serviceIssues.length}`,

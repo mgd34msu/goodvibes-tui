@@ -1,7 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 
 /**
- * `/editor` — open the current composer draft in the user's $EDITOR / $VISUAL,
+ * `/editor`, open the current composer draft in the user's $EDITOR / $VISUAL,
  * then load the edited text back into the composer. The actual terminal
  * suspend/resume and buffer round-trip are wired in main.ts as the
  * `openComposerEditor` command action; this command is the front door for it.

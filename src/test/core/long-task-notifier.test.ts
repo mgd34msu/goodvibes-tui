@@ -5,7 +5,7 @@
  * - Threshold gating (under / over / exactly at threshold)
  * - Off-state (thresholdSeconds === 0)
  * - Content privacy pin: message never includes conversation text
- * - Platform-absent fallback (notifyCompletion throws — must not propagate)
+ * - Platform-absent fallback (notifyCompletion throws, must not propagate)
  * - Delivery-router path: webhookNotifier.send() called when URLs configured
  * - No notification when webhookNotifier has no URLs
  */
@@ -43,10 +43,10 @@ function makeConfigGet(overrides: Record<string, unknown> = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// maybeNotifyLongTask — threshold gating
+// maybeNotifyLongTask, threshold gating
 // ---------------------------------------------------------------------------
 
-describe('maybeNotifyLongTask — threshold gating', () => {
+describe('maybeNotifyLongTask: threshold gating', () => {
   test('returns false when elapsed < threshold (no notification)', () => {
     const result = maybeNotifyLongTask({
       elapsedMs: 30_000, // 30s
@@ -98,10 +98,10 @@ describe('maybeNotifyLongTask — threshold gating', () => {
 });
 
 // ---------------------------------------------------------------------------
-// maybeNotifyLongTask — off-state
+// maybeNotifyLongTask, off-state
 // ---------------------------------------------------------------------------
 
-describe('maybeNotifyLongTask — off-state', () => {
+describe('maybeNotifyLongTask: off-state', () => {
   test('returns false when thresholdSeconds is 0 (off)', () => {
     const notifier = makeFakeNotifier(['https://ntfy.sh/my-topic']);
     const result = maybeNotifyLongTask({
@@ -126,14 +126,14 @@ describe('maybeNotifyLongTask — off-state', () => {
 });
 
 // ---------------------------------------------------------------------------
-// maybeNotifyLongTask — content privacy pin
+// maybeNotifyLongTask, content privacy pin
 // ---------------------------------------------------------------------------
 
-describe('maybeNotifyLongTask — content privacy pin', () => {
+describe('maybeNotifyLongTask: content privacy pin', () => {
   test('message built by maybeNotifyLongTask contains no conversation content', () => {
     // This test pins the contract: the notifier receives only structural
     // metadata. We verify this by confirming the sent text is derived
-    // solely from kind, status, elapsed, and sessionId — nothing else
+    // solely from kind, status, elapsed, and sessionId, nothing else
     // is passed into maybeNotifyLongTask, making it structurally impossible
     // to leak conversation content.
     //
@@ -161,7 +161,7 @@ describe('maybeNotifyLongTask — content privacy pin', () => {
     expect(sentText.length).toBeGreaterThan(10);
     // Negative assertion: the sentinel conversation text must never appear
     // in the notification. The function receives no message/conversation
-    // parameter, so this is structurally guaranteed — but we pin it literally.
+    // parameter, so this is structurally guaranteed, but we pin it literally.
     expect(sentText).not.toContain(CONVERSATION_SENTINEL);
   });
 
@@ -172,9 +172,9 @@ describe('maybeNotifyLongTask — content privacy pin', () => {
     // correctly locked (an unused-directive error here would mean the type
     // stopped rejecting one of these fields).
     const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
-    // @ts-expect-error — MaybeNotifyLongTaskOptions must not accept a 'message' field
+    // @ts-expect-error, MaybeNotifyLongTaskOptions must not accept a 'message' field
     maybeNotifyLongTask({ elapsedMs: 60_000, status: 'ok', kind: 'turn', sessionId: 's', thresholdSeconds: 60, webhookNotifier: null, message: 'should not compile' });
-    // @ts-expect-error — MaybeNotifyLongTaskOptions must not accept a 'conversation' field
+    // @ts-expect-error, MaybeNotifyLongTaskOptions must not accept a 'conversation' field
     maybeNotifyLongTask({ elapsedMs: 60_000, status: 'ok', kind: 'turn', sessionId: 's', thresholdSeconds: 60, webhookNotifier: null, conversation: { messages: [] } });
     // Dummy reference to notifier so the variable is used and linting does not complain
     void notifier;
@@ -197,10 +197,10 @@ describe('maybeNotifyLongTask — content privacy pin', () => {
 });
 
 // ---------------------------------------------------------------------------
-// maybeNotifyLongTask — platform-absent fallback
+// maybeNotifyLongTask, platform-absent fallback
 // ---------------------------------------------------------------------------
 
-describe('maybeNotifyLongTask — platform-absent fallback', () => {
+describe('maybeNotifyLongTask: platform-absent fallback', () => {
   test('does not throw when desktop notification platform is absent', () => {
     // notifyCompletion is non-throwing by SDK contract. Even if an error
     // occurs inside, maybeNotifyLongTask wraps it in try/catch. Verify
@@ -219,10 +219,10 @@ describe('maybeNotifyLongTask — platform-absent fallback', () => {
 });
 
 // ---------------------------------------------------------------------------
-// maybeNotifyLongTask — delivery via webhookNotifier
+// maybeNotifyLongTask, delivery via webhookNotifier
 // ---------------------------------------------------------------------------
 
-describe('maybeNotifyLongTask — webhook delivery', () => {
+describe('maybeNotifyLongTask: webhook delivery', () => {
   test('calls webhookNotifier.send() when URLs are configured and threshold exceeded', async () => {
     const notifier = makeFakeNotifier(['https://ntfy.sh/my-topic']);
     maybeNotifyLongTask({
@@ -294,10 +294,10 @@ describe('maybeNotifyLongTask — webhook delivery', () => {
 });
 
 // ---------------------------------------------------------------------------
-// maybeNotifyLongTask — focus gating
+// maybeNotifyLongTask, focus gating
 // ---------------------------------------------------------------------------
 
-describe('maybeNotifyLongTask — focus gating', () => {
+describe('maybeNotifyLongTask: focus gating', () => {
   test('fires when unfocused and both focusTracker + configGet are supplied', () => {
     const tracker = new FocusTracker();
     tracker.setFocused(false);

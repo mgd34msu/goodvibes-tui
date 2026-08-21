@@ -105,5 +105,5 @@ runs:
           # shellcheck disable=SC2086
           goodvibes --non-interactive $GV_COMMAND $GV_ARGS
         else
-          echo "No prompt or command provided — install + version only."
+          echo "No prompt or command provided; install + version only."
         fi

@@ -47,7 +47,7 @@ function authSummary(config: ServiceConfig, manager: SubscriptionAccessQuery): s
 
 /**
  * Services config-modal surface (migrated from the `services` panel). Reads the
- * same ServiceInspectionQuery — getAll() is sync but inspect()/testConnection()
+ * same ServiceInspectionQuery, getAll() is sync but inspect()/testConnection()
  * are async, so an inspection cache is refreshed on open / `r` and read
  * synchronously by buildView (mirrors the panel's own refresh contract).
  * Actions map onto their existing behaviours; `s` jumps to the subscription

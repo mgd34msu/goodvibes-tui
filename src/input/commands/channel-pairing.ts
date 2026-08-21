@@ -1,8 +1,8 @@
 /**
- * channel-pairing.ts — guided `/channel pair` flow.
+ * channel-pairing.ts, guided `/channel pair` flow.
  *
  * Adapters and their credential requirements are driven from the SDK's
- * getBuiltinSetupSchema — the same setup-schema source every GoodVibes
+ * getBuiltinSetupSchema, the same setup-schema source every GoodVibes
  * consumer (TUI, webui, agent) reads, not a hand-maintained list here.
  * Secret (masked) credentials are stored the same secure way onboarding
  * stores them, via persistSecretBackedConfigValue (secret manager + a
@@ -25,7 +25,7 @@ import { persistSecretBackedConfigValue } from '../../config/secret-config.ts';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
 
 /**
- * Surfaces pairable through /channel pair — every ChannelSurface except the
+ * Surfaces pairable through /channel pair, every ChannelSurface except the
  * two internal render surfaces ('tui', 'web'), which are not externally
  * paired channels. The `satisfies Record<...>` shape makes this exhaustive:
  * a new ChannelSurface value that isn't listed here fails to compile.
@@ -71,7 +71,7 @@ function fieldConfigured(field: ChannelSetupFieldDescriptor, configManager: Conf
   return fieldValue(field, configManager).length > 0;
 }
 
-/** Credential fields the user must supply — secret (masked) and plain text; booleans/selects are defaulted. */
+/** Credential fields the user must supply, secret (masked) and plain text; booleans/selects are defaulted. */
 function credentialFields(schema: ChannelSetupSchema): ChannelSetupFieldDescriptor[] {
   return schema.fields.filter((field) => field.kind === 'secret' || field.kind === 'string' || field.kind === 'url' || field.kind === 'number');
 }
@@ -87,7 +87,7 @@ function fieldHint(field: ChannelSetupFieldDescriptor, schema: ChannelSetupSchem
 
 function listAdapters(ctx: CommandContext): void {
   const configManager = ctx.platform.configManager;
-  const lines: string[] = ['Channel adapters — pair with /channel pair <surface>:', ''];
+  const lines: string[] = ['Channel adapters: pair with /channel pair <surface>:', ''];
   for (const surface of PAIRABLE_SURFACES) {
     const schema = getBuiltinSetupSchema(surface);
     const creds = credentialFields(schema);
@@ -108,7 +108,7 @@ function renderSurface(schema: ChannelSetupSchema, configManager: ConfigManager)
     const configured = fieldConfigured(field, configManager);
     const kindTag = field.kind === 'secret' ? 'secret' : 'value';
     const status = configured ? 'set' : 'not set';
-    lines.push(`  - ${field.label} (${kindTag}): ${status} — ${fieldHint(field, schema)}`);
+    lines.push(`  - ${field.label} (${kindTag}): ${status}; ${fieldHint(field, schema)}`);
   }
   if (schema.externalSteps.length > 0) {
     lines.push('', 'External setup steps:');
@@ -143,7 +143,7 @@ function promptMissingSecrets(
     ctx.print('[pair] Concealed input is unavailable on this surface; set credentials via /config and re-run verify.');
     return;
   }
-  ctx.print(`[pair] Enter ${field.label} (${field.placeholder || 'value'}) — masked; Enter to store, Esc to stop.`);
+  ctx.print(`[pair] Enter ${field.label} (${field.placeholder || 'value'}): masked; Enter to store, Esc to stop.`);
   ctx.beginConcealedInput({
     label: field.label,
     onSubmit: (value) => {
@@ -171,7 +171,7 @@ function promptMissingSecrets(
 /**
  * Verify a surface: report which declared credentials resolve locally, then
  * perform a REAL round-trip through the daemon (channels.test.send) and
- * report the actual delivered/error outcome — never a fabricated success.
+ * report the actual delivered/error outcome, never a fabricated success.
  */
 async function verifySurface(ctx: CommandContext, schema: ChannelSetupSchema): Promise<void> {
   const configManager = ctx.platform.configManager;
@@ -181,7 +181,7 @@ async function verifySurface(ctx: CommandContext, schema: ChannelSetupSchema): P
   for (const field of creds) {
     const ok = fieldConfigured(field, configManager);
     if (!ok) missing.push(field);
-    lines.push(`  ${ok ? '[ok]  ' : '[fail]'} ${field.label}${ok ? '' : ' — missing'}`);
+    lines.push(`  ${ok ? '[ok]  ' : '[fail]'} ${field.label}${ok ? '' : '; missing'}`);
   }
   lines.push('');
   if (missing.length === 0) {
@@ -203,7 +203,7 @@ async function verifySurface(ctx: CommandContext, schema: ChannelSetupSchema): P
     if (result.delivered) {
       ctx.print(`[verify] delivered:true${result.responseId ? ` (responseId: ${result.responseId})` : ''}${result.address ? ` → ${result.address}` : ''}`);
     } else {
-      ctx.print(`[verify] delivered:false — ${result.error ?? 'the daemon returned no error detail'}`);
+      ctx.print(`[verify] delivered:false; ${result.error ?? 'the daemon returned no error detail'}`);
     }
   } catch (error) {
     ctx.print(`[verify] round-trip request failed: ${describeOperatorRpcError(error)}`);
@@ -240,6 +240,6 @@ export async function runChannelPairing(args: readonly string[], ctx: CommandCon
     ctx.print(`\nNo missing secrets. Verify with: /channel pair ${schema.surface} verify`);
     return;
   }
-  ctx.print(`\nEntering ${missingSecrets.length} secret credential(s) — Esc to stop.`);
+  ctx.print(`\nEntering ${missingSecrets.length} secret credential(s): Esc to stop.`);
   promptMissingSecrets(ctx, schema, missingSecrets, 0);
 }

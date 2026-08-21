@@ -1,5 +1,5 @@
 /**
- * Unit tests for settings-modal-reset — the extracted reset helpers.
+ * Unit tests for settings-modal-reset, the extracted reset helpers.
  *
  * These tests exercise the free functions directly, independent of SettingsModal
  * class state, verifying that the logic is correct when injected via callbacks.
@@ -117,7 +117,7 @@ describe('initiateResetCategory', () => {
     });
     // TS narrows catConfirm to its initializer (null) and doesn't widen back
     // across the closure reassignment inside initiateResetCategory's callback
-    // — the cast reflects the variable's real declared type, not a weaker
+    //, the cast reflects the variable's real declared type, not a weaker
     // assertion (the runtime value is genuinely reassigned by the callback).
     expect(catConfirm as { readonly subject: string } | null).toEqual({ subject: 'display' });
     expect(allConfirm).toBeNull();

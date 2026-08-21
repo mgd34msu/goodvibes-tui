@@ -237,7 +237,7 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
         // download), not through a daemon verb, so this path needs no gateway.
         // Installation already provisions them and a daemon retries at boot;
         // `setup` here is the recovery act, and nothing downloads unless the user
-        // typed it — see wake-provision-runner.ts.
+        // typed it, see wake-provision-runner.ts.
         const wakeSub = (args[1] ?? 'status').toLowerCase();
         const managedRoot = shellPaths.resolveUserPath('voice');
         const runner = {

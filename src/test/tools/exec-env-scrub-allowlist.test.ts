@@ -16,7 +16,7 @@ function parseOutput(output: string | undefined): Record<string, unknown> {
   return JSON.parse(output) as Record<string, unknown>;
 }
 
-describe('exec tool — credentialEnvScrub allowlist wiring', () => {
+describe('exec tool: credentialEnvScrub allowlist wiring', () => {
   let execRoot: string;
   const ALLOWED_NAME = 'GV_TEST_SECRET_TOKEN';
   const UNLISTED_NAME = 'GV_TEST_OTHER_SECRET_TOKEN';

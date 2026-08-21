@@ -67,10 +67,10 @@ describe('classifyDeliveryError', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DeliveryQueue — successful delivery
+// DeliveryQueue, successful delivery
 // ---------------------------------------------------------------------------
 
-describe('DeliveryQueue.enqueue — success', () => {
+describe('DeliveryQueue.enqueue: success', () => {
   test('returns delivered on successful delivery', async () => {
     const queue = new DeliveryQueue({ maxRetries: 0, initialDelayMs: 1, maxDelayMs: 10 });
     const deliver = mock(async () => {});
@@ -92,10 +92,10 @@ describe('DeliveryQueue.enqueue — success', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DeliveryQueue — retry/backoff
+// DeliveryQueue, retry/backoff
 // ---------------------------------------------------------------------------
 
-describe('DeliveryQueue.enqueue — retry/backoff', () => {
+describe('DeliveryQueue.enqueue: retry/backoff', () => {
   test('returns retrying on first retryable failure', async () => {
     const queue = new DeliveryQueue({ maxRetries: 2, initialDelayMs: 50_000, maxDelayMs: 100_000 });
     let calls = 0;
@@ -173,10 +173,10 @@ describe('DeliveryQueue.enqueue — retry/backoff', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DeliveryQueue — dead-letter queue
+// DeliveryQueue, dead-letter queue
 // ---------------------------------------------------------------------------
 
-describe('DeliveryQueue — DLQ management', () => {
+describe('DeliveryQueue: DLQ management', () => {
   test('onDeadLetter listener is called with full entry', async () => {
     const queue = new DeliveryQueue({ maxRetries: 0, initialDelayMs: 1, maxDelayMs: 5 });
     const captured: DeadLetterEntry[] = [];
@@ -249,7 +249,7 @@ describe('DeliveryQueue — DLQ management', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DeliveryQueue — replay
+// DeliveryQueue, replay
 // ---------------------------------------------------------------------------
 
 describe('DeliveryQueue.replay', () => {
@@ -311,10 +311,10 @@ describe('DeliveryQueue.replay', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DeliveryQueue — SLO enforcement flag
+// DeliveryQueue, SLO enforcement flag
 // ---------------------------------------------------------------------------
 
-describe('DeliveryQueue — SLO enforcement', () => {
+describe('DeliveryQueue: SLO enforcement', () => {
   test('sloEnforced=false uses warn-level logging (no throw)', async () => {
     // Just verify no error is thrown and DLQ is populated
     const queue = new DeliveryQueue({
@@ -348,10 +348,10 @@ describe('DeliveryQueue — SLO enforcement', () => {
 });
 
 // ---------------------------------------------------------------------------
-// DeliveryQueue — metrics invariants
+// DeliveryQueue, metrics invariants
 // ---------------------------------------------------------------------------
 
-describe('DeliveryQueue — metrics', () => {
+describe('DeliveryQueue: metrics', () => {
   test('metrics track mixed outcomes correctly', async () => {
     const queue = new DeliveryQueue({ maxRetries: 0, initialDelayMs: 1, maxDelayMs: 5 });
     // 2 successes

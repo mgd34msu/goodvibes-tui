@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
-// PanelConfirmOverlay — arm a confirm from outside, resolve it inside
+// PanelConfirmOverlay, arm a confirm from outside, resolve it inside
 // handleInput().
 //
-// Why this exists: SlashCommand.handler(args, ctx) is a single-shot call —
+// Why this exists: SlashCommand.handler(args, ctx) is a single-shot call,
 // there is no "await next keypress" primitive in the command layer. A command
-// that needs a destructive confirm (e.g. /rewind — checkpoint-runtime.ts) can
+// that needs a destructive confirm (e.g. /rewind, checkpoint-runtime.ts) can
 // only resolve its target, open+focus a panel, and arm a pending confirm;
 // the actual y/n/Enter/Esc handling has to live in that panel's
 // handleInput() loop. This wraps the project's canonical ConfirmState<T>
@@ -24,7 +24,7 @@ export class PanelConfirmOverlay {
   private state: ConfirmState<{ id: string }> | null = null;
   private handlers: PanelConfirmOverlayHandlers | null = null;
 
-  /** @param onChange Called after arm() and after a confirmed/cancelled resolution (not on an absorbed keypress) — wire to the host panel's protected markDirty(). */
+  /** @param onChange Called after arm() and after a confirmed/cancelled resolution (not on an absorbed keypress), wire to the host panel's protected markDirty(). */
   constructor(private readonly onChange: () => void = () => {}) {}
 
   /** Arm a confirm/cancel prompt. Caller's handlers run only from handleInput(), never eagerly. */

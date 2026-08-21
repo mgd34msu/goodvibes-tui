@@ -12,8 +12,8 @@ import { KeybindingsManager } from '../../input/keybindings.ts';
 // Docs + Shortcuts → 'keybindings' config-modal surface (group-B port).
 // A MERGE of the retired DocsPanel (tools/models/shortcuts) and the
 // shortcuts-overlay reference. Three tabs: 'Tools', 'Models', and 'Shortcuts'
-// (the categorized keyboard reference — driven live off keybindingsManager so
-// user overrides show up — followed by an exhaustive 'All Bindings (live)'
+// (the categorized keyboard reference, driven live off keybindingsManager so
+// user overrides show up, followed by an exhaustive 'All Bindings (live)'
 // table). Enter opens the tool-inspector successor ('fleet') or switches the
 // active model, both via the command path (fleet is a panel; /model is a
 // settings mutation). Selection-blind port: the panel's selected tool/model
@@ -114,11 +114,11 @@ class KeybindingsModalSurface implements ConfigModalSurface {
     if (ctx.tabId === 'tools') {
       // item 4: pass the tool name through as a deep-link target.
       // Honest caveat (documented, not a bug to silently paper over): fleet's
-      // ProcessKind set has no 'tool' node — a docs Tools row names a static
+      // ProcessKind set has no 'tool' node, a docs Tools row names a static
       // tool DEFINITION, not a live process, so FleetPanel.receiveDeepLink
       // will not currently find a match and shows its honest "node no longer
       // present" line. The plumbing is still worth wiring now (matches the
-      // work-plan agent/wrfc jumps' shape) — it starts resolving for free the
+      // work-plan agent/wrfc jumps' shape), it starts resolving for free the
       // day fleet grows a per-tool-call node (the retired DocsPanel's own
       // comment already anticipated this: "no filter-by-tool equivalent
       // there yet").
@@ -145,7 +145,7 @@ export function createKeybindingsModalSurface(deps: KeybindingsModalDeps): Confi
 /**
  * Deterministic golden fixture. KeybindingsManager is pointed at a nonexistent
  * config path so it always resolves to DEFAULT_KEYBINDINGS. Tool and model
- * fixtures are frozen literals — no disk, no live registry.
+ * fixtures are frozen literals, no disk, no live registry.
  */
 export function keybindingsModalGoldenSurface(): ConfigModalSurface {
   const keybindingsManager = new KeybindingsManager({ configPath: '/nonexistent/golden-keybindings.json' });

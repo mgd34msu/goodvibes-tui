@@ -1,5 +1,5 @@
 /**
- * renderSessionPickerModal — renders the /sessions picker modal as Line[]
+ * renderSessionPickerModal, renders the /sessions picker modal as Line[]
  * using ModalFactory.
  *
  * Shows a list of saved sessions with:
@@ -9,8 +9,8 @@
  * When the modal was wired with a cross-surface session union
  * (`modal.crossSurfaceView.mode !== 'local'`), an additional read-only
  * "Cross-surface sessions" section is appended, badged kind/status/project
- * (parity with the webui SessionsView) with one of three honest states —
- * true-empty, offline, or stale — never a silently-collapsed list. In
+ * (parity with the webui SessionsView) with one of three honest states,
+ * true-empty, offline, or stale, never a silently-collapsed list. In
  * 'local' mode (no sessionBroker wired, e.g. every pre-existing caller/test)
  * this section is entirely absent and the box sizing is unchanged.
  */
@@ -28,7 +28,7 @@ import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay
 // Cross-surface badge helpers (parity with webui's src/lib/sessions-union.ts)
 // ---------------------------------------------------------------------------
 
-/** Verbatim for unknown/future kinds — never dropped, never guessed. */
+/** Verbatim for unknown/future kinds, never dropped, never guessed. */
 function kindLabel(kind: string): string {
   return kind.trim() || 'unknown';
 }
@@ -44,10 +44,10 @@ function isClosedStatus(status: string): boolean {
 /**
  * Closed sessions carry an optional, honest reason for WHY they
  * closed under `metadata.closeReason` (SDK's `SharedSessionCloseReason`,
- * 'closeReason' key — see `@pellux/goodvibes-sdk` platform/control-plane
+ * 'closeReason' key, see `@pellux/goodvibes-sdk` platform/control-plane
  * session-broker-sessions.ts's `readSessionCloseReason`). `metadata` is an
  * open record so old readers and records from a build that predates this
- * field ignore it safely — read it duck-typed here rather than importing the
+ * field ignore it safely, read it duck-typed here rather than importing the
  * SDK's helper, and tolerate `metadata` itself being absent or malformed.
  */
 function readCloseReason(record: SharedSessionRecord): string | undefined {
@@ -57,7 +57,7 @@ function readCloseReason(record: SharedSessionRecord): string | undefined {
 
 /**
  * A GC sweep closing an idle session ('idle-reaped') auto-reopens on the next
- * heartbeat — it is NOT the same event as a deliberate user/surface close, so
+ * heartbeat, it is NOT the same event as a deliberate user/surface close, so
  * it must never render under the same "closed" badge. Tolerant of
  * records without the field (pre-feature builds, or a deliberate close).
  */
@@ -67,16 +67,16 @@ function isReapedRecord(record: SharedSessionRecord): boolean {
 
 /**
  * UX-lens note: 'reaped' names a mechanism (the idle-session sweep),
- * not a state a first-time reader can guess — the webui pairs its own
+ * not a state a first-time reader can guess, the webui pairs its own
  * 'reaped' badge with a tooltip explaining it
- * (SessionsView.tsx: "Closed by the idle-session sweep — reopens
+ * (SessionsView.tsx: "Closed by the idle-session sweep, reopens
  * automatically on the next activity"). The TUI has no hover/tooltip
  * surface, so the plain-language explanation is rendered as its own short
- * line under the cross-surface list instead — shown ONLY when at least one
+ * line under the cross-surface list instead, shown ONLY when at least one
  * visible row actually carries the badge, so it never adds noise to a list
  * with no reaped rows.
  */
-const REAPED_BADGE_HINT = 'reaped = closed by the idle sweep — reopens on next activity';
+const REAPED_BADGE_HINT = 'reaped = closed by the idle sweep; reopens on next activity';
 
 /** True when at least one of the currently-rendered (post-truncation) cross-surface rows carries the 'reaped' badge. */
 function hasVisibleReapedRow(modal: SessionPickerModal): boolean {
@@ -114,8 +114,8 @@ function hostedRosterNote(roster: SessionPickerModal['hostedRoster']): string | 
  * One hosted row: the id first, then what it is doing, what leaving it would
  * do, and finally its title.
  *
- * The id leads because it is the ACTIONABLE part — the row exists so `/hosted
- * attach <id>` can be typed off it — and a narrow terminal clips the tail. What
+ * The id leads because it is the ACTIONABLE part, the row exists so `/hosted
+ * attach <id>` can be typed off it, and a narrow terminal clips the tail. What
  * gets clipped must therefore be the descriptive end of the line, never the
  * thing the user has to retype.
  */
@@ -140,8 +140,8 @@ function hostedRowLabel(
  *
  * Absent when NOTHING is known: no roster was wired (every pre-existing caller
  * and test), so the box size and content are unchanged for them. The moment the
- * roster has an answer — rows, an empty-but-read list, or a reason it could not
- * read — the section appears, because each of those is a fact worth showing.
+ * roster has an answer, rows, an empty-but-read list, or a reason it could not
+ * read, the section appears, because each of those is a fact worth showing.
  */
 function hostedSectionVisible(modal: SessionPickerModal): boolean {
   const roster = modal.hostedRoster;
@@ -155,7 +155,7 @@ function hostedRowCount(modal: SessionPickerModal): number {
 /**
  * Extra content rows the hosted section needs: separator + header (+note)
  * + rows (+overflow line + the attach hint). Counted for the same reason the
- * cross-surface section counts its own — an uncounted trailing row is silently
+ * cross-surface section counts its own, an uncounted trailing row is silently
  * eaten by modal-factory's tail clip.
  */
 function hostedExtraRows(modal: SessionPickerModal): number {
@@ -170,12 +170,12 @@ function hostedExtraRows(modal: SessionPickerModal): number {
 /**
  * The exact honest note for the current state, or null when the union view
  * needs no caveat (fresh, with rows). Precedence: offline > stale >
- * true-empty — the three designed states, never collapsed into
+ * true-empty, the three designed states, never collapsed into
  * each other (an offline view never silently renders as "no sessions yet").
  */
 function crossSurfaceNote(view: SessionPickerModal['crossSurfaceView'], rowCount: number): string | null {
   if (view.mode === 'local') return null;
-  if (view.offlineNote) return `${view.offlineNote} — showing local sessions only`;
+  if (view.offlineNote) return `${view.offlineNote}: showing local sessions only`;
   if (view.stale) {
     if (view.lastSyncAt === null) return 'Union view may be stale.';
     const ageSeconds = Math.max(0, Math.round((Date.now() - view.lastSyncAt) / 1000));
@@ -192,7 +192,7 @@ function crossSurfaceRowCount(modal: SessionPickerModal): number {
 /**
  * Extra content rows the cross-surface section needs: separator + header
  * (+note) + rows (+the "[showing N of M]" overflow line when the union has
- * more records than MAX_CROSS_SURFACE_ROWS — previously uncounted here, which
+ * more records than MAX_CROSS_SURFACE_ROWS, previously uncounted here, which
  * let modal-factory's tail-clip silently eat that trailing line even though
  * the rest of the budget accounting held; see W3 Finding 1).
  */
@@ -201,7 +201,7 @@ function crossSurfaceExtraRows(modal: SessionPickerModal): number {
   const rows = crossSurfaceRowCount(modal);
   const noteRow = crossSurfaceNote(modal.crossSurfaceView, rows) ? 1 : 0;
   const overflowRow = modal.crossSurfaceSessions.length > MAX_CROSS_SURFACE_ROWS ? 1 : 0;
-  // W4 UX-lens: the plain-language 'reaped' explainer is its own row —
+  // W4 UX-lens: the plain-language 'reaped' explainer is its own row,
   // uncounted here it would be silently eaten by modal-factory's tail-clip
   // exactly the way W3 Finding 1 describes above.
   const reapedHintRow = hasVisibleReapedRow(modal) ? 1 : 0;
@@ -236,7 +236,7 @@ export function renderSessionPickerModal(
 
   // W3 Finding 1: when a cross-surface union section is present, cap the
   // LOCAL list's window to what's left after reserving extraRows for the
-  // union — otherwise the local list expands to fill metrics.contentRows
+  // union, otherwise the local list expands to fill metrics.contentRows
   // (which already includes the union's reservation) and modal-factory's
   // single tail-clip (createModal, targetContentRows) silently drops the
   // union section, or its trailing rows, once the box fills up. In local
@@ -312,7 +312,7 @@ export function renderSessionPickerModal(
     }
   }
 
-  // Cross-surface session union — visible only when a sessionBroker
+  // Cross-surface session union, visible only when a sessionBroker
   // was wired (mode !== 'local'); absent entirely otherwise, so the box size
   // and content of every pre-existing (local-only) caller is unaffected.
   if (modal.crossSurfaceView.mode !== 'local') {
@@ -353,7 +353,7 @@ export function renderSessionPickerModal(
         });
       }
       // W4 UX-lens: only ever rendered when a visible row actually carries
-      // the 'reaped' badge — never speculative noise.
+      // the 'reaped' badge, never speculative noise.
       if (hasVisibleReapedRow(modal)) {
         sections.push({
           type: 'text',
@@ -364,7 +364,7 @@ export function renderSessionPickerModal(
     }
   }
 
-  // Daemon-hosted sessions — conversations whose loop runs in the daemon rather
+  // Daemon-hosted sessions, conversations whose loop runs in the daemon rather
   // than in this terminal. Read-only here: joining one is `/hosted attach <id>`,
   // which opens a live stream this modal has no business owning, so the full id
   // is rendered for the command to be typed straight off the row.

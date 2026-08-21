@@ -1,16 +1,16 @@
 /**
- * `/update` — a real self-update path for binary installs. The
+ * `/update`, a real self-update path for binary installs. The
  * download-verify-swap mechanics are the SDK's canonical update policy
- * module (platform/runtime/self-update — hoisted from this file's
+ * module (platform/runtime/self-update, hoisted from this file's
  * semantics), the same mechanism the daemon's hourly loop and
  * the suite installer follow: one update mechanism everywhere. This file owns
  * only the /update UX: install-kind gating, target selection, and the
  * printed report.
  *
  * Subcommands:
- *   /update [check]           — resolve the latest release tag and report
+ *   /update [check]          , resolve the latest release tag and report
  *                                whether this build is already current.
- *   /update apply              — for a binary install (the curl installer),
+ *   /update apply             , for a binary install (the curl installer),
  *                                download + verify + atomically swap THIS
  *                                app's binary, and refresh the sqlite-vec
  *                                native addon in lockstep so the vector index
@@ -18,9 +18,9 @@
  *                                swap parks the outgoing file at
  *                                `<path>.previous`, so the replaced version is
  *                                always kept. For any other install kind,
- *                                prints the exact command to run instead — it
+ *                                prints the exact command to run instead, it
  *                                never attempts a swap it can't do safely.
- *   /update rollback           — exchange each installed file with its kept
+ *   /update rollback          , exchange each installed file with its kept
  *                                `.previous` counterpart: one command back to
  *                                the version that ran before the last update
  *                                (and, being an exchange, one more command
@@ -30,15 +30,15 @@
  * binary as part of the same release, and this command swapped both. The daemon
  * is its own product now, released from its own repository on its own version
  * line, and it updates itself on an hourly loop. A swap from here would fetch
- * an asset this repository's releases do not publish — and if one ever appeared
+ * an asset this repository's releases do not publish, and if one ever appeared
  * under that name, would overwrite a working daemon with a build from the wrong
  * line. The daemon is a neighbour in the install directory, not cargo.
- *   /update review              — install/subscription/sandbox posture,
+ *   /update review             , install/subscription/sandbox posture,
  *                                unrelated to the update mechanics above.
- *   /update bundle export|inspect <path> — portable posture bundle, as before.
+ *   /update bundle export|inspect <path>, portable posture bundle, as before.
  *
  * The former `/update channel <stable|preview>` subcommand wrote a
- * release.channel config value that nothing downstream ever read — it only
+ * release.channel config value that nothing downstream ever read, it only
  * ever changed what a later `/update review` printed back to you. It has
  * been removed rather than kept decorative; this repo's release process
  * (scripts/release.ts) does not publish separate stable/preview channels,
@@ -94,13 +94,13 @@ async function downloadText(fetchImpl: UpdateFetchLike, url: string): Promise<st
  * to and including the moment BEFORE the first file is written: every fetch on
  * the way there carries the caller's signal, and every await boundary re-checks
  * it. From the first write onward the swap owns the installed files and always
- * runs to completion — a half-applied swap is the one outcome worse than a slow
+ * runs to completion, a half-applied swap is the one outcome worse than a slow
  * one.
  *
  * This record makes that boundary readable from outside the call. The launch
  * updater gives `applyUpdate` a budget and abandons the promise when it runs
  * out, so it cannot learn from the return value which side of the line the work
- * was on — it reads these flags instead, and prints the receipt that is
+ * was on, it reads these flags instead, and prints the receipt that is
  * actually true (see src/cli/launch-auto-update.ts).
  */
 export interface UpdateSwapProgress {
@@ -116,7 +116,7 @@ export function createUpdateSwapProgress(): UpdateSwapProgress {
   return { begun: false, committed: false, targetTag: null };
 }
 
-/** The failure an aborted update ends with — raised only while nothing has been written yet. */
+/** The failure an aborted update ends with, raised only while nothing has been written yet. */
 export const UPDATE_ABORTED_MESSAGE = 'update cancelled before any file was replaced';
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
@@ -127,8 +127,8 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 
 /**
  * The shared UpdateFetchLike init shape predates cancellation, so the signal
- * rides on a widened version of it: the real `fetch` reads it — which is what
- * makes the DOWNLOAD itself cancellable rather than merely abandoned — and a
+ * rides on a widened version of it: the real `fetch` reads it, which is what
+ * makes the DOWNLOAD itself cancellable rather than merely abandoned, and a
  * test stub that ignores the extra field behaves exactly as it did before.
  */
 type AbortableFetchInit = NonNullable<Parameters<UpdateFetchLike>[1]> & { signal?: AbortSignal };
@@ -175,7 +175,7 @@ function trackSwapProgress(io: UpdateFileIo, progress: UpdateSwapProgress): Upda
 }
 
 /**
- * Suffix under which every swap keeps the file it replaced — re-exported
+ * Suffix under which every swap keeps the file it replaced, re-exported
  * from the SDK's canonical update policy module so rollback and swap share
  * one definition everywhere.
  */
@@ -202,7 +202,7 @@ const defaultRunCommand: RunCommand = (command, args) => {
 
 /**
  * Detects, honestly, whether the daemon is currently running as a systemd
- * user service — so the post-update message can tell the user the real
+ * user service, so the post-update message can tell the user the real
  * restart command instead of assuming one. Only Linux/systemd is checked
  * (this repo's PlatformServiceManager also supports launchd on macOS and
  * Scheduled Tasks on Windows, but those aren't restarted with `systemctl`,
@@ -246,7 +246,7 @@ export interface ApplyUpdateOptions {
   /** Injectable filesystem seam (the SDK's UpdateFileIo) so tests observe swaps in memory. */
   readonly io?: UpdateFileIo;
   /**
-   * Cancels the update — for real: it is passed to every fetch in the path and
+   * Cancels the update, for real: it is passed to every fetch in the path and
    * re-checked at every await boundary, so an abort stops the download instead
    * of leaving it running unwatched. Honoured only up to the moment before the
    * swap begins; from the first file write onward it is deliberately ignored
@@ -259,13 +259,13 @@ export interface ApplyUpdateOptions {
 
 /**
  * The real self-update path, delegating the download-verify-swap mechanics
- * to the SDK's canonical update policy module (applyVerifiedUpdate — the
+ * to the SDK's canonical update policy module (applyVerifiedUpdate, the
  * same mechanism the daemon's hourly loop uses). For a binary install:
  * resolve the latest tag, compare to the running version, and if newer,
  * download + checksum-verify EVERY artifact before swapping any one (so a
  * checksum failure never leaves a mismatched pair installed), then
  * atomically swap each in place with the outgoing file kept at
- * `<path>.previous`. For any other install kind, never attempts a swap — it
+ * `<path>.previous`. For any other install kind, never attempts a swap, it
  * prints the exact command for that install method instead.
  */
 export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
@@ -313,7 +313,7 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   // same download-verify-swap pass so /update never leaves a new binary beside a
   // stale addon. It lands at <execDir>/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>,
   // exactly where the SDK's loader resolves it. The manifest entry decides
-  // whether the target release ships it — an entry that IS present makes the
+  // whether the target release ships it, an entry that IS present makes the
   // download and checksum mandatory (a mismatch is fatal, verified before any
   // swap), while an absent entry means the target predates the addon and is
   // skipped rather than blocking an otherwise-valid binary update. On macOS the
@@ -343,7 +343,7 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
   // This is the last point at which the update can be called off. The
   // downloads inside applyVerifiedUpdate are still cancellable (the signal
   // rides on every request), but its swap loop is synchronous and runs to
-  // completion once its first write lands — which is precisely what
+  // completion once its first write lands, which is precisely what
   // `progress.begun` records, and why nothing below this call re-checks the
   // signal.
   throwIfAborted(signal);
@@ -368,8 +368,8 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<void> {
       // Named, not silently omitted: someone who used to see two binaries swap
       // here should read why only one did.
       serviceInfo.managed
-        ? `The daemon updates itself on its own release line — this changed nothing about it (it runs under ${serviceInfo.unitName}.service).`
-        : 'The daemon updates itself on its own release line — this changed nothing about it.',
+        ? `The daemon updates itself on its own release line; this changed nothing about it (it runs under ${serviceInfo.unitName}.service).`
+        : 'The daemon updates itself on its own release line; this changed nothing about it.',
     ].join('\n'),
   );
 }
@@ -390,7 +390,7 @@ export interface RollbackUpdateOptions {
  * delegating the exchange mechanics to the SDK's rollbackKeptPrevious (the
  * same module the swap uses): every installed file this command owns (the app
  * binary and the vector addon) that has a kept `.previous` counterpart is
- * EXCHANGED with it — the previous version becomes live, and the version being rolled
+ * EXCHANGED with it, the previous version becomes live, and the version being rolled
  * back is itself kept at `.previous`, so a second `/update rollback` rolls
  * forward again. Files without a kept counterpart are reported and left
  * untouched; nothing is downloaded.
@@ -434,8 +434,8 @@ export function rollbackUpdate(options: RollbackUpdateOptions): void {
       '',
       'Restart goodvibes to run the restored version.',
       serviceInfo.managed
-        ? `The daemon was not rolled back — it updates itself on its own release line (it runs under ${serviceInfo.unitName}.service).`
-        : 'The daemon was not rolled back — it updates itself on its own release line.',
+        ? `The daemon was not rolled back; it updates itself on its own release line (it runs under ${serviceInfo.unitName}.service).`
+        : 'The daemon was not rolled back; it updates itself on its own release line.',
     ].join('\n'),
   );
 }

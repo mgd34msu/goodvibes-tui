@@ -162,7 +162,7 @@ export function buildProvidersStep(controller: OnboardingWizardControllerLike): 
     );
     const signInPending = subscription.signInPending;
     // Provider-agnostic key capture: one field per provider the registry knows
-    // accepts an API key (derived from registration truth — never a hardcoded
+    // accepts an API key (derived from registration truth, never a hardcoded
     // vendor list). No provider is named as the only option.
     const keyTargets = deriveProviderKeyCaptureTargets(controller.runtimeSnapshot?.providerAccounts?.providers);
     const configuredKeyCount = keyTargets.filter((target) => target.configured).length;
@@ -614,7 +614,7 @@ export function buildNetworkStep(controller: OnboardingWizardControllerLike): On
     if (controlPlaneRemote || listenerEnabled || browserEnabled) { // TLS warn + CORS notice.
       const cpOff = controlPlaneRemote && String(controller.runtimeSnapshot?.config.controlPlane?.tls?.mode ?? 'off') === 'off';
       const hlOff = listenerEnabled && String(controller.runtimeSnapshot?.config.httpListener?.tls?.mode ?? 'off') === 'off';
-      if (cpOff || hlOff) { const a = [cpOff ? 'control plane' : '', hlOff ? 'HTTP listener' : ''].filter(Boolean).join(' and '); fields.push({ kind: 'status', id: 'network.tls-warn', label: `TLS off — ${a} transmits plaintext`, defaultValue: 'Warning', hint: `The ${a} is network-reachable but TLS is off. Traffic travels in plaintext. Enable TLS or use a terminating reverse proxy.` }); }
+      if (cpOff || hlOff) { const a = [cpOff ? 'control plane' : '', hlOff ? 'HTTP listener' : ''].filter(Boolean).join(' and '); fields.push({ kind: 'status', id: 'network.tls-warn', label: `TLS off: ${a} transmits plaintext`, defaultValue: 'Warning', hint: `The ${a} is network-reachable but TLS is off. Traffic travels in plaintext. Enable TLS or use a terminating reverse proxy.` }); }
       if (listenerEnabled) { fields.push({ kind: 'status', id: 'network.cors-note', label: 'Browser CORS is off by default', defaultValue: 'Info', hint: 'The webhook/control-plane HTTP listener honors controlPlane.cors.enabled and controlPlane.cors.allowedOrigins. Set both from Settings > Control Plane (or /config controlPlane) to allow browser origins, then restart the daemon. CORS stays off until you enable it.' }); }
     }
     return {

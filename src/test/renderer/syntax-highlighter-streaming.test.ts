@@ -55,7 +55,7 @@ describe('SyntaxHighlighter streaming gate', () => {
     expect(internals(hl).pending.size).toBe(1);
   });
 
-  it('default isStreaming=false: backward-compatible — schedules parse on first call', () => {
+  it('default isStreaming=false: backward-compatible; schedules parse on first call', () => {
     const hl = new SyntaxHighlighter();
     hl.highlight('let y = 2;', 'javascript');
     expect(internals(hl).pending.size).toBe(1);
@@ -66,7 +66,7 @@ describe('SyntaxHighlighter streaming gate', () => {
     const code = 'console.log(42);';
 
     // Pre-populate the cache as if a parse completed
-    // Key format: langId:hash — we need the same key highlight() would compute.
+    // Key format: langId:hash, we need the same key highlight() would compute.
     // Trigger a non-streaming call to add the key to pending, then manually
     // inject the result into cache and clear pending to simulate parse completion.
     hl.highlight(code, 'js', false);
@@ -90,7 +90,7 @@ describe('SyntaxHighlighter streaming gate', () => {
     const hl = new SyntaxHighlighter();
     expect(hl.highlight('x = 1', 'ruby', true)).toBeNull();
     expect(hl.highlight('x = 1', 'ruby', false)).toBeNull();
-    // Unsupported language exits before scheduling — pending must stay empty
+    // Unsupported language exits before scheduling, pending must stay empty
     expect(internals(hl).pending.size).toBe(0);
   });
 

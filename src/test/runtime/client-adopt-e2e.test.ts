@@ -1,12 +1,12 @@
 /**
- * client-adopt-e2e.test.ts — this app's client seams against a REAL daemon.
+ * client-adopt-e2e.test.ts, this app's client seams against a REAL daemon.
  *
  * ── Why a real daemon and not a mock ──────────────────────────────────────
  *
  * Every other test in this repository can now only prove that this process
  * does NOT answer a verb. That is the correct claim for a client, and it is
  * also a claim that would keep passing if the wire calls this app makes were
- * wrong in every detail — wrong verb id, wrong parameter names, wrong shape
+ * wrong in every detail, wrong verb id, wrong parameter names, wrong shape
  * read back off the response. A mock gateway that answers whatever it is asked
  * proves the same nothing.
  *
@@ -21,7 +21,7 @@
  * directory, and an ephemeral high port. It never touches `~/.goodvibes`, the
  * owner's live daemon, or port 3421. The token it mints lives in the throwaway
  * home and is read from there, which is also the loopback file-token bootstrap
- * this app uses in production — so the auth path is exercised rather than
+ * this app uses in production, so the auth path is exercised rather than
  * bypassed.
  *
  * ── When it skips, and why that is honest ─────────────────────────────────
@@ -80,7 +80,7 @@ const daemonLog: string[] = [];
 /**
  * A minimal OpenAI-compatible server: the models listing plus one completion.
  *
- * It answers as a STREAM when asked to, which is not a nicety — a hosted turn
+ * It answers as a STREAM when asked to, which is not a nicety, a hosted turn
  * runs the ordinary orchestrator, which streams, and a provider that answers a
  * streaming request with a plain JSON body errors the turn and gets dropped from
  * the daemon's routable models. (Observed exactly that way while writing this:
@@ -160,7 +160,7 @@ function resolveDaemonBinary(): string | null {
   // installer places, so it is what this drives.
   // The release artifact carries the os-arch suffix `resolveArtifactNames`
   // produces, which is what a plain `bun run build` in the daemon repo leaves
-  // in dist/ — looked for by that name too, so a developer who just built the
+  // in dist/, looked for by that name too, so a developer who just built the
   // daemon does not also have to set an env var to run this suite.
   const platformSuffix: Record<string, string> = {
     'linux-x64': 'linux-x64', 'linux-arm64': 'linux-arm64',
@@ -200,8 +200,8 @@ function findConversationPart(value: unknown): Record<string, unknown> | null {
 /**
  * Read a list off a response that may be the array itself or a one-key wrapper.
  *
- * Both shapes are real in this contract — `sessions.list` answers bare, the
- * approval action verbs wrap — and a caller that assumes one gets an empty list
+ * Both shapes are real in this contract, `sessions.list` answers bare, the
+ * approval action verbs wrap, and a caller that assumes one gets an empty list
  * from the other with no error at all. Naming the key here means a shape change
  * shows up as a failing assertion rather than as silence.
  */
@@ -228,7 +228,7 @@ async function bootIsolatedDaemon(binary: string): Promise<BootedDaemon> {
   mkdirSync(workingDir, { recursive: true });
   mkdirSync(daemonHome, { recursive: true });
   // A hosted turn calls a REAL model, so the daemon needs a routable provider
-  // before it boots — this is the daemon repo's own proof-script vocabulary
+  // before it boots, this is the daemon repo's own proof-script vocabulary
   // (scripts/hosted-session-proof.ts): a discovered-provider record pointing at
   // a local OpenAI-compatible stub, read at boot and registered.
   const surfaceDir = join(home, '.goodvibes', GOODVIBES_TUI_SURFACE_ROOT);
@@ -288,7 +288,7 @@ const binary = resolveDaemonBinary();
 // vanishes is a suite nobody notices has stopped covering anything.
 if (!binary) {
   describe('client seams against a real daemon', () => {
-    test('SKIPPED — no goodvibes-daemon binary found; set GOODVIBES_DAEMON_E2E_BINARY', () => {
+    test('SKIPPED: no goodvibes-daemon binary found; set GOODVIBES_DAEMON_E2E_BINARY', () => {
       expect(binary).toBeNull();
     });
   });
@@ -307,7 +307,7 @@ if (!binary) {
       // THE PRODUCT'S OWN SEAM, not a hand-rolled client. `createDaemonVerbCaller`
       // is what every retargeted seam calls through, so what this suite exercises
       // is the base-URL derivation, the loopback token read, the operator client
-      // construction and the ws-only fallback the product actually ships — not a
+      // construction and the ws-only fallback the product actually ships, not a
       // parallel implementation that could be right while the product is wrong.
       const configManager = new ConfigManager({
         surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT,
@@ -362,7 +362,7 @@ if (!binary) {
       });
 
       expect(raised.approval?.id).toBeTruthy();
-      // The verb does not park the request across a person's attention span —
+      // The verb does not park the request across a person's attention span,
       // it hands back the PENDING record and the decision arrives separately.
       expect(raised.decided).toBe(false);
       const approvalId = raised.approval?.id as string;
@@ -375,7 +375,7 @@ if (!binary) {
       });
       expect(decided?.approval?.status).toBe('approved');
 
-      // And the daemon's own list is what says so — the parity contract the
+      // And the daemon's own list is what says so, the parity contract the
       // client raiser depends on when it reads a decision made elsewhere.
       const rows = readList<{ id: string; status: string }>(
         await verbs.invoke('approvals.list', { includeResolved: true }), 'approvals');
@@ -396,7 +396,7 @@ if (!binary) {
       // The verb takes the CONFIG key, not a store key, and does the whole
       // sequence: derive the store name, write, read back and compare, then
       // replace the config value with its reference. That ordering is why this
-      // is one call rather than a config write plus a secret write from here —
+      // is one call rather than a config write plus a secret write from here,
       // the two halves must not be separable across a process boundary.
       const credentials = createDaemonCredentialsClient(verbs);
       const configKey = 'surfaces.telegram.botToken';
@@ -417,7 +417,7 @@ if (!binary) {
     test('S11 tasks: the union reader reaches the daemon and keeps the local half separable', async () => {
       // Driven through the product's own union client, so what is exercised is
       // the verb id, the wrapper key the tasks array actually arrives under,
-      // and the local-wins dedupe — not a hand-rolled fetch that could be right
+      // and the local-wins dedupe, not a hand-rolled fetch that could be right
       // while the product is wrong.
       const localOnly = { id: 'local-only', kind: 'agent', title: 'this terminal', status: 'running',
         owner: 'tui', cancellable: true, childTaskIds: [], queuedAt: Date.now() } as never;
@@ -492,7 +492,7 @@ if (!binary) {
       });
       const payload = JSON.parse(String(result.output ?? '{}')) as Record<string, unknown>;
       // With nothing paired the tool refuses before the round trip, naming the
-      // absent phone — which is the honest answer and not an invented refusal.
+      // absent phone, which is the honest answer and not an invented refusal.
       expect(String(payload['error'] ?? payload['detail'] ?? '')).not.toBe('');
     });
 
@@ -500,7 +500,7 @@ if (!binary) {
       const listed = await createDevicesClient(verbs).listArtifacts({ limit: 5 });
       expect(listed.artifacts).toEqual([]);
       // The retention window is the daemon's policy, reported rather than
-      // guessed — a zero here would mean the verb did not answer at all.
+      // guessed, a zero here would mean the verb did not answer at all.
       expect(listed.retentionHours).toBeGreaterThan(0);
     });
 
@@ -510,7 +510,7 @@ if (!binary) {
         verbs,
         // Stands in for this process's conversation with a known message count,
         // which is what makes the daemon's answer checkable.
-        // Only preview/rewind are RewindConversationPort's members — the host
+        // Only preview/rewind are RewindConversationPort's members, the host
         // never calls restoreBefore/restoreAfter (the TUI's own /undo-/redo
         // accessors), so this stand-in stub carries only what it is asked for.
         port: {
@@ -524,7 +524,7 @@ if (!binary) {
 
       // Before the offer: the daemon holds no conversation for this session and
       // must say so rather than answering zero. This is the exact regression the
-      // surface-hosted contract exists to close — the old behaviour returned a
+      // surface-hosted contract exists to close, the old behaviour returned a
       // confident 0 here, indistinguishable from a real one.
       const beforeOffer = await verbs.invoke<Record<string, unknown>>('rewind.plan', {
         sessionId: hostedSession, scope: 'conversation',
@@ -592,7 +592,7 @@ if (!binary) {
         killPolicySessionId = record.id;
 
         expect(record.status).toBe('idle');
-        // The DAEMON's answer about what leaving would do — not this client's
+        // The DAEMON's answer about what leaving would do, not this client's
         // memory of a setting it wrote a moment ago.
         expect(record.effectiveDetachPolicy).toBe('kill');
         expect(record.detachPolicy).toBeNull();
@@ -619,7 +619,7 @@ if (!binary) {
         const client = createHostedSessionsClient(verbs);
         const feed = new HostedSessionFeed();
 
-        // The product's own subscription — the same one `/hosted attach` opens,
+        // The product's own subscription, the same one `/hosted attach` opens,
         // narrowed to turn/tools/session and filtered on this session id.
         const subscription = await watchHostedSession({
           baseUrl: daemon.baseUrl,
@@ -631,7 +631,7 @@ if (!binary) {
         expect(subscription).not.toBeNull();
         feed.attach((await client.attach(killPolicySessionId)).session, []);
 
-        // `sessions.steer` — the ORDINARY verb, resolving a hosted id.
+        // `sessions.steer`, the ORDINARY verb, resolving a hosted id.
         await client.steer(killPolicySessionId, 'say something for the record');
 
         expect(await waitFor(() => stubCalls > callsBefore), daemonLog.join('').slice(-2000)).toBe(true);
@@ -719,8 +719,8 @@ if (!binary) {
       });
 
       test('an approval raised BY the hosted run arrives on the SSE channel the raiser now subscribes to', async () => {
-        // The subscriber is the product's own seam — the one wired into
-        // createClientApprovalRaiser in runtime/services.ts — so what this
+        // The subscriber is the product's own seam, the one wired into
+        // createClientApprovalRaiser in runtime/services.ts, so what this
         // exercises is the base-URL derivation, the token read and the
         // permissions-domain narrowing that ship, not a hand-rolled stream.
         const configManager = new ConfigManager({
@@ -740,7 +740,7 @@ if (!binary) {
 
         // Now make the hosted run ASK. A tool call in a workspace whose trust is
         // still undecided raises the trust question as an ordinary approval
-        // record — the daemon has no screen, so asking IS publishing on this
+        // record, the daemon has no screen, so asking IS publishing on this
         // channel. Nothing else in this suite has decided this workspace.
         stubNextReply = { toolCall: { name: 'exec', args: { commands: ['echo hosted'] } } };
         await createHostedSessionsClient(verbs).steer(survivorSessionId, 'run a command for me');
@@ -749,7 +749,7 @@ if (!binary) {
         // Pending is what a raise publishes; a decision would publish again.
         expect(seen[0]).toBe('pending');
 
-        // The daemon's own list agrees — the record is real, not a frame this
+        // The daemon's own list agrees, the record is real, not a frame this
         // process invented.
         const rows = readList<{ status: string }>(
           await verbs.invoke('approvals.list', { includeResolved: true }), 'approvals');
@@ -763,7 +763,7 @@ if (!binary) {
         // The exit path, driven exactly as bootstrap's shutdown drives it. A
         // terminal that exits WITHOUT this leaves a kill-policy session alive
         // and attached to a process that is gone, which is the familiar
-        // behavior silently changing — the thing the owner's default exists to
+        // behavior silently changing, the thing the owner's default exists to
         // prevent.
         await createDaemonConfigClient(verbs).set('hostedSessions.detachPolicy', 'kill');
         const client = createHostedSessionsClient(verbs);

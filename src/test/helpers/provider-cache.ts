@@ -46,7 +46,7 @@ export function writeModelCatalogCache(models: CatalogModel[], cacheDir: string,
   // added `inputModalities` (the models.dev `modalities.input` list, which
   // decides `multimodal` per model rather than by vendor); version 3 before it
   // added `reasoningOptions`. An older envelope is discarded as stale, which
-  // reads here as an empty catalog rather than as a parse error — which is
+  // reads here as an empty catalog rather than as a parse error, which is
   // exactly how a stale version number in this helper shows up: every
   // catalog-backed assertion in the suite silently sees zero models.
   const payload = { version: 4 as const, fetchedAt, ttlMs, models };

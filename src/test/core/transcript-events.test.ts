@@ -42,7 +42,7 @@ describe('transcript event index', () => {
     expect(conversation.nextTranscriptEventLine(0, 'diagnostic_notice')).toBe(-1);
   });
 
-  test('messageLineRegistry uses absolute index — transcript navigation works after clearDisplay', () => {
+  test('messageLineRegistry uses absolute index: transcript navigation works after clearDisplay', () => {
     // Regression for finding #4: with the bug, messageLineRegistry was keyed by
     // slice-relative index (msgIdx) but read by absolute index (event.messageIndex),
     // so nextTranscriptEventLine returned -1 after /clear.
@@ -69,7 +69,7 @@ describe('transcript event index', () => {
     });
     conversation.addToolResults([{ callId: 'post-call', success: true, output: 'match' }]);
 
-    // Render — this is where the registry gets populated.
+    // Render, this is where the registry gets populated.
     conversation.flushHistory();
 
     // With the bug: messageLineRegistry[3..5] are undefined → navigation returns -1.
@@ -83,7 +83,7 @@ describe('transcript event index', () => {
   test('rows hidden by a collapsed assistant turn resolve navigation to the turn header, not past it to the next message', () => {
     // Regression: a folded (non-owning) group member renders zero lines while
     // its group stays collapsed, so its messageLineRegistry entry used to be
-    // left at whatever position the buffer happened to be at afterward — the
+    // left at whatever position the buffer happened to be at afterward, the
     // position the FOLLOWING message's content starts at, not this member's
     // own. 'tool_result' navigation from the group then skipped straight past
     // it into the next message instead of landing on the group.
@@ -114,7 +114,7 @@ describe('transcript event index', () => {
     expect(trailingUserLine).not.toBe(groupBlock!.startLine);
 
     // Both tool-result events resolve to the SAME turn header line while the
-    // turn is collapsed — neither skips ahead to the trailing user message.
+    // turn is collapsed, neither skips ahead to the trailing user message.
     const first = conversation.nextTranscriptEventLine(-1, 'tool_result');
     expect(first).toBe(groupBlock!.startLine);
     const second = conversation.nextTranscriptEventLine(first, 'tool_result');

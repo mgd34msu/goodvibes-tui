@@ -21,7 +21,7 @@ type ModelPickerRouteState = {
 
 /**
  * The user's REQUESTED reasoning level for this session, or undefined when the
- * command context is not attached. Read from config through the shared helper —
+ * command context is not attached. Read from config through the shared helper,
  * never from `session.runtime.reasoningEffort`, which holds the EFFECTIVE level
  * for whichever model is serving and would re-seed a resolution with an already
  * snapped-down value.
@@ -36,7 +36,7 @@ function readRequestedEffort(state: ModelPickerRouteState): string | undefined {
  * The level the effort step should open on for a model about to be selected:
  * the requested level SNAPPED to that model. Opening on the raw requested level
  * would miss the list entirely whenever the target model caps lower, and
- * showEffortPicker falls back to index 0 — landing the cursor on the LOWEST
+ * showEffortPicker falls back to index 0, landing the cursor on the LOWEST
  * level rather than on what pressing Enter would actually give you.
  */
 function effortStepPreselect(state: ModelPickerRouteState, model: { id: string; provider?: string; displayName?: string }): string {
@@ -52,7 +52,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
       // Search now starts focused by default (see
       // ModelPickerModal.openAllModels() doc comment). Escape with an empty
       // query used to only blurSearch() here, leaving the picker open and
-      // requiring a SECOND Escape to actually close it — confusing on a
+      // requiring a SECOND Escape to actually close it, confusing on a
       // freshly-opened, untouched picker where there is nothing to "clear".
       // Clearing a non-empty query is still a distinct first Escape (whether
       // or not search is focused); an empty query falls through to the same
@@ -92,9 +92,9 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
           // even while a model that caps lower is serving.
           const currentEffort = readRequestedEffort(state) ?? 'medium';
           // Whether an effort step appears at all is now this model's own
-          // resolved spec: a model with no configurable reasoning level — or
+          // resolved spec: a model with no configurable reasoning level, or
           // one whose levels are only a labelled best guess the adapters will
-          // discard — skips straight to commit instead of showing a list it
+          // discard, skips straight to commit instead of showing a list it
           // does not honour.
           if (state.modelPicker.target === 'main' && offersConfigurableEffort(toEffortModel(selected))) {
             state.modelPicker.showEffortPicker(selected, effortStepPreselect(state, selected));
@@ -152,7 +152,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
           const rawInput = state.modelPicker.contextCapQuery.trim();
           const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
           if (parsedCap !== null && (parsedCap <= 0 || parsedCap > 10_000_000)) {
-            // Non-empty but out of valid range — surface notice; keep picker open for correction.
+            // Non-empty but out of valid range, surface notice; keep picker open for correction.
             state.modelPicker.contextCapError = 'Context cap must be 1–10,000,000';
           } else {
             state.modelPicker.contextCapError = null;
@@ -231,7 +231,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
     if (state.modelPicker.mode === 'contextCap') {
       if (token.value.length === 1) state.modelPicker.appendContextCapChar(token.value);
     } else if ((state.modelPicker.mode === 'model' || state.modelPicker.mode === 'provider') && state.modelPicker.searchFocused) {
-      // When search is focused every printable char — including space — goes to the query.
+      // When search is focused every printable char, including space, goes to the query.
       // The space=context-cap shortcut remains active only in the non-search branch below.
       const ch = token.value;
       if (ch.length === 1 && ch >= ' ') state.modelPicker.appendChar(ch);

@@ -101,14 +101,14 @@ describe('wireShellUiOpeners', () => {
       getPinned: async () => [],
       render,
       // wireShellUiOpeners overwrites .requestTrustDecision with the real
-      // implementation below — this placeholder just needs to be a valid ref shape.
+      // implementation below, this placeholder just needs to be a valid ref shape.
       trustPromptRef: (trustPromptRef = { requestTrustDecision: async () => 'restricted' as const }),
     });
   });
 
   // Trust-at-consequence-time: wireShellUiOpeners patches trustPromptRef with
   // the real modal-driving implementation. Registration self-records here too
-  // when the answer is 'trusted' — never for 'restricted'.
+  // when the answer is 'trusted', never for 'restricted'.
   describe('trustPromptRef.requestTrustDecision', () => {
     test('opens a trust-only selection (two items: trusted, restricted)', () => {
       void trustPromptRef.requestTrustDecision();
@@ -161,7 +161,7 @@ describe('wireShellUiOpeners', () => {
 
   // (the purge): 'panel-list' (a picker PANEL) was DELETE-disposition.
   // openPanelPicker now opens a selection MODAL built from the live
-  // registry instead of force-opening a specific panel — see
+  // registry instead of force-opening a specific panel, see
   // shell/ui-openers.ts.
   test('openPanelPicker opens a selection modal built from the live registry when nothing is open', () => {
     (commandContext.openPanelPicker as () => void)();
@@ -213,7 +213,7 @@ describe('wireShellUiOpeners', () => {
   });
 
   // item 1a: showPanel is exclusively called from the command path
-  // (/panel open, /tasks, /routes, ...) — it now opens/shows the panel but
+  // (/panel open, /tasks, /routes, ...), it now opens/shows the panel but
   // leaves keyboard focus in the composer by default ("the user is
   // mid-command-flow"). A caller that explicitly opts in with { focus: true }
   // still gets focusPanels() called.
@@ -226,7 +226,7 @@ describe('wireShellUiOpeners', () => {
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(true);
   });
 
-  test('showPanel(id, pane, target, { focus: true }) still grabs focus — the escape hatch', () => {
+  test('showPanel(id, pane, target, { focus: true }) still grabs focus; the escape hatch', () => {
     (commandContext.showPanel as (panelId: string, pane?: 'top' | 'bottom', target?: unknown, opts?: { focus?: boolean }) => void)(
       'tasks', undefined, undefined, { focus: true },
     );
@@ -242,7 +242,7 @@ describe('wireShellUiOpeners', () => {
 
   // (the purge): openModal resolves the name to a registered config-modal
   // surface (PanelManager.getModalSurface). With no surface registered it must
-  // stay a safe, honest no-op — an explanatory print, not a throw or a blank
+  // stay a safe, honest no-op, an explanatory print, not a throw or a blank
   // modal. The same callback is injected into PanelManager for redirect hits.
   test('openModal is wired onto both CommandContext and PanelManager, and is safe with no real modal registered', () => {
     expect(panelManager.setOpenModalCallback).toHaveBeenCalledWith(commandContext.openModal);
@@ -254,7 +254,7 @@ describe('wireShellUiOpeners', () => {
 
   // W6 review (finding 3): the retired 'sessions' front door redirects to the
   // NATIVE session-picker modal ('sessionPicker'), which is NOT a
-  // ConfigModalSurface — getModalSurface can never find it, so before the fix
+  // ConfigModalSurface, getModalSurface can never find it, so before the fix
   // the openModal callback printed "'sessionPicker' is not available yet in
   // this build." A small native-modal dispatch, consulted before
   // getModalSurface, now routes it to the real opener.
@@ -264,8 +264,8 @@ describe('wireShellUiOpeners', () => {
     (commandContext.openModal as (name: string) => void)('sessionPicker');
     expect(open).toHaveBeenCalledTimes(1);
     expect(input.modalOpened).toHaveBeenCalledWith('sessionPicker');
-    // The native dispatch is consulted BEFORE getModalSurface — which never
-    // sees 'sessionPicker' — and the old "not available yet" lie is gone.
+    // The native dispatch is consulted BEFORE getModalSurface, which never
+    // sees 'sessionPicker', and the old "not available yet" lie is gone.
     expect(panelManager.getModalSurface).not.toHaveBeenCalledWith('sessionPicker');
     expect(commandContext.print).not.toHaveBeenCalledWith("'sessionPicker' is not available yet in this build.");
   });
@@ -285,7 +285,7 @@ describe('wireShellUiOpeners', () => {
     expect(open).toHaveBeenCalledTimes(1);
     expect(commandContext.print).not.toHaveBeenCalledWith("'sessionPicker' is not available yet in this build.");
     // reopenPanelsFromReturnContext skips redirects via getModalRedirect and
-    // notes them honestly instead of opening a phantom panel — assert that hook
+    // notes them honestly instead of opening a phantom panel, assert that hook
     // still resolves 'sessions' -> the picker modal name.
     expect(realPm.getModalRedirect('sessions')).toBe('sessionPicker');
   });
@@ -393,7 +393,7 @@ describe('wireShellUiOpeners', () => {
     });
   });
 
-  // providerRegistry.getSelectableModels()/listModels() are catalog-driven —
+  // providerRegistry.getSelectableModels()/listModels() are catalog-driven,
   // they include every provider id present in the fetched pricing catalog (e.g.
   // 'google', from Gemini catalog entries) regardless of whether that provider
   // id was ever handed to providerRegistry.register()/registerRuntimeProvider().
@@ -415,7 +415,7 @@ describe('wireShellUiOpeners', () => {
         providerRegistry: {
           getSelectableModels: () => [registeredModel, unregisteredModel],
           listModels: () => [registeredModel, unregisteredModel],
-          // Only 'gemini' was ever registered; 'google' is catalog-only —
+          // Only 'gemini' was ever registered; 'google' is catalog-only,
           // proves the mismatch this test guards against.
           has: (id: string) => id === 'gemini',
         } as never,

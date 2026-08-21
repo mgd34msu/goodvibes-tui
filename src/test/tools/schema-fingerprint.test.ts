@@ -22,10 +22,10 @@ import {
 } from '@pellux/goodvibes-sdk/platform/tools';
 
 // ---------------------------------------------------------------------------
-// computeSchemaFingerprintSync — stability
+// computeSchemaFingerprintSync, stability
 // ---------------------------------------------------------------------------
 
-describe('computeSchemaFingerprintSync — stability', () => {
+describe('computeSchemaFingerprintSync: stability', () => {
   it('produces the same fingerprint for the same key set', () => {
     const resultA = { files: ['a.ts', 'b.ts'], count: 2 };
     const resultB = { files: ['x.ts'], count: 1 };
@@ -83,10 +83,10 @@ describe('computeSchemaFingerprintSync — stability', () => {
 });
 
 // ---------------------------------------------------------------------------
-// computeSchemaFingerprint (async) — stability
+// computeSchemaFingerprint (async), stability
 // ---------------------------------------------------------------------------
 
-describe('computeSchemaFingerprint (async) — stability', () => {
+describe('computeSchemaFingerprint (async): stability', () => {
   it('produces the same fingerprint for the same key set', async () => {
     const a = { files: ['a.ts'], count: 1 };
     const b = { files: ['z.ts'], count: 99 };
@@ -112,10 +112,10 @@ describe('computeSchemaFingerprint (async) — stability', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getSchemaShapeId — canonical IDs
+// getSchemaShapeId, canonical IDs
 // ---------------------------------------------------------------------------
 
-describe('getSchemaShapeId — canonical shape IDs', () => {
+describe('getSchemaShapeId: canonical shape IDs', () => {
   it('returns correct ID for find:files', () => {
     expect(getSchemaShapeId('find', 'files')).toBe('find.files.v1');
   });
@@ -141,10 +141,10 @@ describe('getSchemaShapeId — canonical shape IDs', () => {
 });
 
 // ---------------------------------------------------------------------------
-// appendSchemaFingerprint — feature flag off (default)
+// appendSchemaFingerprint, feature flag off (default)
 // ---------------------------------------------------------------------------
 
-describe('appendSchemaFingerprint — flag disabled (default)', () => {
+describe('appendSchemaFingerprint: flag disabled (default)', () => {
   it('returns the original object unchanged when flag is disabled', () => {
     const original = { files: ['a.ts'], count: 1 };
     const featureFlags = createFeatureFlagManager();
@@ -164,10 +164,10 @@ describe('appendSchemaFingerprint — flag disabled (default)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// appendSchemaFingerprint — feature flag on (mocked)
+// appendSchemaFingerprint, feature flag on (mocked)
 // ---------------------------------------------------------------------------
 
-describe('appendSchemaFingerprint — flag enabled (mocked)', () => {
+describe('appendSchemaFingerprint: flag enabled (mocked)', () => {
   it('appendSchemaFingerprint injects _meta with correct fields when flag is enabled', () => {
     const result = { files: ['a.ts'], count: 1 };
     const featureFlags = createFeatureFlagManager();
@@ -234,7 +234,7 @@ describe('mode-level fingerprint stability (same mode/input class)', () => {
   ];
 
   for (const { tool, mode, sampleResult } of modes) {
-    it(`${tool}:${mode} — same schema produces same fingerprint across invocations`, () => {
+    it(`${tool}:${mode}; same schema produces same fingerprint across invocations`, () => {
       const fp1 = computeSchemaFingerprintSync(sampleResult);
       // Simulate second invocation with different values but same keys
       const secondResult = Object.fromEntries(

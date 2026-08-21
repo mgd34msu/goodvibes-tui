@@ -11,7 +11,7 @@ import { lineToString } from '../setup.ts';
 // Compaction-continuation folding. The compactor injects a user-ROLE message
 // (handoff header + full re-injected instruction block) after every automatic
 // compaction. Rendered in full it repeats a multi-kilobyte instruction wall
-// every few messages in a long session — it must fold to a header + preview
+// every few messages in a long session, it must fold to a header + preview
 // line by default, with the payload reachable via the normal expand toggle.
 // ---------------------------------------------------------------------------
 

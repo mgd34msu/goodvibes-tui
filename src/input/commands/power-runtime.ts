@@ -2,20 +2,20 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { powerStatusLines } from '../../core/power-status.ts';
 
 // ---------------------------------------------------------------------------
-// /power — host sleep ownership (the ops/status idiom surface for power.*).
+// /power, host sleep ownership (the ops/status idiom surface for power.*).
 //
-// Shows the honest account of sleep ownership — the "sleep disabled" chip
+// Shows the honest account of sleep ownership, the "sleep disabled" chip
 // meaning, each "held because X" work-inhibition reason, and the lid-split note
 // rendered VERBATIM when the OS could block idle-sleep but not lid-close
-// suspend — and toggles the daemon-held keep-awake switch. Owner ruling: the
+// suspend, and toggles the daemon-held keep-awake switch. Owner ruling: the
 // always-visible chip IS the safety mechanism, so there is no timer and no
-// AC-only option — keep-awake is exactly one on/off toggle.
+// AC-only option, keep-awake is exactly one on/off toggle.
 // ---------------------------------------------------------------------------
 
 export function registerPowerRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'power',
-    description: 'Host sleep ownership — show status and toggle keep-awake',
+    description: 'Host sleep ownership: show status and toggle keep-awake',
     usage: '[status | on | off | toggle]',
     argsHint: '[status|on|off|toggle]',
     async handler(args, ctx) {
@@ -43,7 +43,7 @@ export function registerPowerRuntimeCommands(registry: CommandRegistry): void {
         const current = ctx.getPowerState().keepAwake;
         const next = sub === 'on' ? true : sub === 'off' ? false : !current;
         const state = await ctx.setKeepAwake(next);
-        const lines = [state.keepAwake ? 'Keep-awake ON — this host will not idle-sleep.' : 'Keep-awake OFF.'];
+        const lines = [state.keepAwake ? 'Keep-awake ON: this host will not idle-sleep.' : 'Keep-awake OFF.'];
         // Surface the honest lid-split note verbatim if the SDK served one.
         if (state.note) lines.push(`  ${state.note}`);
         ctx.print(lines.join('\n'));

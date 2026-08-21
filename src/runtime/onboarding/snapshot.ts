@@ -402,7 +402,7 @@ export async function collectOnboardingSnapshot(
       snapshot: authSnapshotResult.value,
     },
     bindSettings: {
-      // danger.daemon (since removed — see docs/decisions/2026-07-05-daemon-by-default.md)
+      // danger.daemon (since removed, see docs/decisions/2026-07-05-daemon-by-default.md)
       // used to gate the earlier opt-in daemon posture; this site read it RAW
       // (not through resolveDaemonEnabled) so the wizard's network-mode
       // classification tracked "did the user explicitly request the legacy
@@ -412,7 +412,7 @@ export async function collectOnboardingSnapshot(
       // already evaluated this to `false` (unset, or an explicit `danger.daemon:
       // false` both did); the alias's removal migration preserves the one case
       // that changes real daemon behavior (explicit `false` -> `daemon.enabled:
-      // false`) but does not resurrect a signal for "explicitly true" — that path
+      // false`) but does not resurrect a signal for "explicitly true", that path
       // was always a no-op for actual daemon operation. With the alias gone there
       // is no signal left to read, so this is pinned at its steady-state value.
       daemonEnabled: false,

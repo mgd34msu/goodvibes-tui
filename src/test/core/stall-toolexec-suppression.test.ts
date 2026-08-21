@@ -6,7 +6,7 @@
  *   - metrics.lastDeltaAtMs is set only on STREAM_START/STREAM_DELTA. It is
  *     NOT touched while a tool executes, so "ms since last byte" keeps
  *     growing for the whole duration of a tool call even though the model
- *     isn't producing tokens then — a tool call in progress is not a stall.
+ *     isn't producing tokens then, a tool call in progress is not a stall.
  *   - The render call site in main.ts gates UIFactory.computeStallInfo on
  *     `metrics.activeToolName === undefined`, so no stall info is computed at
  *     all while a tool is actively executing, no matter how long
@@ -18,9 +18,9 @@
  *
  * Unlike the hand-fed-synthetic-values coverage in ui-factory tests (which
  * calls UIFactory.computeStallInfo directly with literal numbers), this test
- * wires the REAL wireStreamEventMetrics against real event buses — so
+ * wires the REAL wireStreamEventMetrics against real event buses, so
  * metrics.lastDeltaAtMs / activeToolName are produced by the real event
- * handlers — and then calls the REAL, exported UIFactory.computeRenderStallInfo,
+ * handlers, and then calls the REAL, exported UIFactory.computeRenderStallInfo,
  * the exact same function main.ts's render loop calls at its call site. It
  * exercises the full metrics-production -> gating -> stall-computation path
  * together, which is the path the false positive actually lived in, and a
@@ -108,7 +108,7 @@ function makeOptions(turns: ReturnType<typeof makeBus>, tools: ReturnType<typeof
 
 // computeRenderStallInfo below is the REAL production function (defined in
 // ui-factory.ts) that main.ts's render loop calls at its stallInfo call
-// site — not a re-implementation. Calling it directly here means a
+// site, not a re-implementation. Calling it directly here means a
 // regression to the gate itself is caught, not just a regression to the
 // metrics it consumes.
 const computeRenderStallInfo = UIFactory.computeRenderStallInfo.bind(UIFactory);
@@ -142,7 +142,7 @@ describe('stall indicator vs. tool execution (integration path)', () => {
       const stallInfoDuringTool = computeRenderStallInfo(metrics, mockNow);
       expect(stallInfoDuringTool).toBeUndefined();
 
-      // Tool completes — lastDeltaAtMs must reset to "now" so the post-tool
+      // Tool completes, lastDeltaAtMs must reset to "now" so the post-tool
       // silence window starts fresh instead of instantly reading as a
       // multi-second stall the moment the tool finishes.
       tools.emit('TOOL_SUCCEEDED');
@@ -194,7 +194,7 @@ describe('stall indicator vs. tool execution (integration path)', () => {
     Date.now = () => mockNow;
     try {
       // Turn starts; the provider goes silent before the first token and no
-      // tool ever runs (the honest stall case the wave added — must NOT be
+      // tool ever runs (the honest stall case the wave added, must NOT be
       // suppressed).
       turns.emit('STREAM_START');
       mockNow += THINKING_STALL_FREEZE_MS + 1_000; // 3.5s of silence, no delta, no tool

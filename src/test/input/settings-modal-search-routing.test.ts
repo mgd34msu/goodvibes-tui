@@ -190,7 +190,7 @@ describe('settings modal search routing integration', () => {
   test('Enter on a search result selects (activates) that setting', () => {
     const state = makeState();
     handleSettingsModalToken(state, { type: 'text', value: '/' });
-    // Search for 'stream' — known boolean setting
+    // Search for 'stream', known boolean setting
     for (const ch of 'stream') {
       handleSettingsModalToken(state, { type: 'text', value: ch });
     }
@@ -199,7 +199,7 @@ describe('settings modal search routing integration', () => {
     const firstResult = modal.searchResults[0];
     expect(firstResult).toBeDefined();
     expect(firstResult!.setting.key).toBe('display.stream');
-    // Press Enter — boolean settings toggle on activateSelected
+    // Press Enter, boolean settings toggle on activateSelected
     const before = modal.getSelected()?.currentValue;
     handleSettingsModalToken(state, { type: 'key', name: 'enter', logicalName: 'enter', ctrl: false, shift: false, meta: false });
     const after = modal.getSelected()?.currentValue;
@@ -214,7 +214,7 @@ describe('settings modal search routing integration', () => {
   });
 
   test('edit-mode keystroke routing: chars after Enter on string/number search result go to editBuffer not searchQuery', () => {
-    // Find a plain string setting via search — provider.systemPromptFile is a non-secret,
+    // Find a plain string setting via search, provider.systemPromptFile is a non-secret,
     // non-picker string setting that reliably enters inline edit mode on Enter.
     // Type a char after Enter and verify it goes to editBuffer, NOT searchQuery.
     const state = makeState();
@@ -234,11 +234,11 @@ describe('settings modal search routing integration', () => {
     modal.selectedIndex = resultIdx;
     // Record query before Enter
     const queryBefore = modal.searchQuery;
-    // Press Enter — must enter inline editingMode for the string setting
+    // Press Enter, must enter inline editingMode for the string setting
     handleSettingsModalToken(state, { type: 'key', name: 'enter', logicalName: 'enter', ctrl: false, shift: false, meta: false });
     // editingMode must be true now
     expect(modal.editingMode).toBe(true);
-    // Type a char — it MUST go to editBuffer, NOT append to searchQuery
+    // Type a char, it MUST go to editBuffer, NOT append to searchQuery
     handleSettingsModalToken(state, { type: 'text', value: 'X' });
     expect(modal.editBuffer).toContain('X');
     // searchQuery must remain unchanged
@@ -254,7 +254,7 @@ describe('settings modal search routing integration', () => {
     // Record current category before nav
     const catBefore = modal.categoryIndex;
     const selBefore = modal.selectedIndex;
-    // Down should be a no-op — categoryIndex must NOT change
+    // Down should be a no-op, categoryIndex must NOT change
     handleSettingsModalToken(state, { type: 'key', name: 'down', logicalName: 'down', ctrl: false, shift: false, meta: false });
     expect(modal.categoryIndex).toBe(catBefore);
     expect(modal.selectedIndex).toBe(selBefore);

@@ -1,17 +1,17 @@
 /**
- * broker-approval-card — render a broker-originated approval ask as a real
+ * broker-approval-card, render a broker-originated approval ask as a real
  * TUI approval card.
  *
  * The approval broker publishes every ask (local runtime asks, plus
  * broker-originated ones like the CI fix-session offer). Local asks carry a
  * `localPrompt` that opens their own card; broker-originated asks do not, so
- * before this they were invisible in the TUI — the ask sat pending with no
+ * before this they were invisible in the TUI, the ask sat pending with no
  * surface. This helper opens a card straight from broker state for those.
  *
  * A local ask's own prompt is opened by the broker immediately AFTER it
  * publishes (see ApprovalBroker.requestApproval), so the open here is deferred
  * one microtask and re-checks: if a card (the local one, or another broker
- * card) is already up, it does nothing — only a genuinely unhandled ask surfaces.
+ * card) is already up, it does nothing, only a genuinely unhandled ask surfaces.
  * The card's resolve answers the broker directly via resolveApproval, so a TUI
  * decision on a broker-originated ask reaches every waiter on that record.
  */
@@ -21,7 +21,7 @@ import type { ApprovalRequesterLookup } from './hunk-selection.ts';
 import type { PendingPermissionState } from '../shell/blocking-input.ts';
 import type { PermissionPromptRequest, RememberTier } from '@pellux/goodvibes-sdk/platform/permissions';
 
-/** The broker seam this helper answers through — a subset of ApprovalBroker. */
+/** The broker seam this helper answers through, a subset of ApprovalBroker. */
 export interface BrokerApprovalCardBroker extends ApprovalRequesterLookup {
   getApproval(approvalId: string): { readonly status: string; readonly request: PermissionPromptRequest } | null;
   resolveApproval(
@@ -46,7 +46,7 @@ export interface BrokerApprovalChangeParams {
     readonly request: PermissionPromptRequest;
     /** The REAL attachable session id once an ACCEPTED ask (e.g. a ci:fix-session offer) has spawned its session. */
     readonly fixSessionId?: string | undefined;
-    /** The honest failure when an accepted ask's spawn did NOT produce an attachable session — mutually exclusive with fixSessionId. */
+    /** The honest failure when an accepted ask's spawn did NOT produce an attachable session, mutually exclusive with fixSessionId. */
     readonly fixSessionError?: string | undefined;
   };
   readonly getPending: () => PendingPermissionState | null;
@@ -55,7 +55,7 @@ export interface BrokerApprovalChangeParams {
   readonly render: () => void;
   /**
    * Fired when a record carries the id of a session an accepted ask spawned
-   * (the CI fix-session). The surface that accepted — attached now — turns this
+   * (the CI fix-session). The surface that accepted, attached now, turns this
    * into a jump/attach affordance. Called each time the field is seen; the
    * caller de-duplicates by id.
    */
@@ -74,7 +74,7 @@ export interface BrokerApprovalChangeParams {
 const isActiveStatus = (status: string): boolean => status === 'pending' || status === 'claimed';
 
 export interface FixSessionAffordanceDeps {
-  /** Announce the ready fix session as one actionable line — never a retype instruction. */
+  /** Announce the ready fix session as one actionable line, never a retype instruction. */
   readonly notify: (message: string) => void;
   /** Arm the one-key jump with the spawned session id; the surface consumes it on the jump key. */
   readonly arm: (fixSessionId: string) => void;
@@ -83,7 +83,7 @@ export interface FixSessionAffordanceDeps {
 /**
  * Build the one-key jump/attach affordance for a spawned fix-session: the first
  * time a given session id is seen it ARMS the jump (the surface attaches on the
- * jump key — the machine does the resume, the user never retypes an id) and
+ * jump key, the machine does the resume, the user never retypes an id) and
  * surfaces a one-line actionable notice. Repeats are no-ops (de-duplicated by
  * id), so the live record update and the listApprovals refresh path can both
  * feed it safely.
@@ -94,7 +94,7 @@ export function buildFixSessionAffordance(deps: FixSessionAffordanceDeps): (fixS
     if (seen.has(fixSessionId)) return;
     seen.add(fixSessionId);
     deps.arm(fixSessionId);
-    deps.notify('[CI] Fix session ready — press j to jump to it.');
+    deps.notify('[CI] Fix session ready: press j to jump to it.');
   };
 }
 
@@ -116,7 +116,7 @@ export function buildFixSessionErrorNotice(notify: (message: string) => void): (
 export interface FixSessionAttachKeyDeps {
   /** The armed fix-session id (the surface clears the arm before calling this). */
   readonly armedFixSessionId: string;
-  /** Attach/jump to the fix session — runs the resume so the user never retypes an id. */
+  /** Attach/jump to the fix session, runs the resume so the user never retypes an id. */
   readonly attach: (fixSessionId: string) => void;
   readonly render: () => void;
 }
@@ -163,8 +163,8 @@ export function handleBrokerApprovalChange(params: BrokerApprovalChangeParams): 
   const active = isActiveStatus(approval.status);
 
   // An accepted ask that spawned a session (the CI fix-session) publishes its
-  // REAL session id as a record update — the live in-process handle to jump to
-  // it — or, when the spawn failed, an honest error instead of a dead id
+  // REAL session id as a record update, the live in-process handle to jump to
+  // it, or, when the spawn failed, an honest error instead of a dead id
   // (mutually exclusive). Both arrive after the card has resolved and cleared,
   // so surface them independently of the card lifecycle below.
   if (approval.fixSessionId) params.onFixSessionStarted?.(approval.fixSessionId);
@@ -172,7 +172,7 @@ export function handleBrokerApprovalChange(params: BrokerApprovalChangeParams): 
 
   const pending = getPending();
   if (pending && pending.callId === approval.callId) {
-    // This is the card already on screen — clear it once its approval resolves.
+    // This is the card already on screen, clear it once its approval resolves.
     if (!active) { setPending(null); render(); }
     return;
   }

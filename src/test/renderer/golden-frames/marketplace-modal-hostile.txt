@@ -4,7 +4,7 @@
 |    │   plugin, skill,      |
 |    │   hook-pack, and      |
 |    │   policy-pack         |
-|    │   catalog — not a     |
+|    │   catalog; not a      |
 |    │   remote store.       |
 |    │   It’s empty because  |
 |    │   nothing has been    |

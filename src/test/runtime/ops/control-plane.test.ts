@@ -1,5 +1,5 @@
 /**
- * OpsControlPlane — unit tests.
+ * OpsControlPlane, unit tests.
  *
  * Covers:
  * - cancelTask: success, rejected (non-cancellable, wrong state)

@@ -79,7 +79,7 @@ function makeRegistry(): MemoryRegistry {
       if (patch.summary !== undefined) record.summary = patch.summary;
       if (patch.detail !== undefined) record.detail = patch.detail;
       if (patch.tags !== undefined) record.tags = patch.tags;
-      // null clears the bound, a number sets it, omitted leaves it unchanged —
+      // null clears the bound, a number sets it, omitted leaves it unchanged,
       // mirrors the real MemoryUpdatePatch/registry semantics.
       if (patch.validFrom !== undefined) record.validFrom = patch.validFrom === null ? undefined : patch.validFrom;
       if (patch.validUntil !== undefined) record.validUntil = patch.validUntil === null ? undefined : patch.validUntil;
@@ -196,7 +196,7 @@ describe('/recall files (memory file projection surface)', () => {
     expect(text).toContain('mem-1 [update]');
     expect(text).toContain('Nothing has been applied');
 
-    // Store must be untouched — review never writes.
+    // Store must be untouched, review never writes.
     const record = registry.get('mem-1') as unknown as FakeRecord;
     expect(record.summary).toBe('Ship dark flags before the review pass.');
   });

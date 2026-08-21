@@ -21,11 +21,11 @@ export type OrchestratorCoreServicesSource = Pick<
  * The single source of truth for the `Orchestrator.setCoreServices()` payload
  * fields shared by BOTH call sites (runtime/bootstrap.ts and main.ts). Each
  * site spreads this and adds its own site-specific extras (bootstrap:
- * cacheHitTracker; main: favoritesStore) — setCoreServices() merges, so the
+ * cacheHitTracker; main: favoritesStore), setCoreServices() merges, so the
  * later main.ts call only overlays, never erases.
  *
  * BLOCKER regression guard: `memoryRegistry` here is what turns
- * on per-turn passive knowledge injection for the MAIN interactive session —
+ * on per-turn passive knowledge injection for the MAIN interactive session,
  * the SDK turn loop hard-gates on `coreServices.memoryRegistry` (undefined is
  * a silent no-op: Orchestrator.getTurnInjections() stays empty forever and
  * `/recall injections` renders a misleading empty state). Both call sites once
@@ -35,12 +35,12 @@ export type OrchestratorCoreServicesSource = Pick<
  *
  * SDK 1.2.0 FULL DETACH: the SDK's turn loop reads `memoryRegistry.getAll()`
  * SYNCHRONOUSLY (`TurnKnowledgeRegistrySource`), but the memory spine's wire
- * reads are asynchronous — a sync function cannot await the wire. Per
+ * reads are asynchronous, a sync function cannot await the wire. Per
  * docs/decisions/2026-07-06-memory-wire-full-detach.md (SDK repo) this is
  * satisfied by the spine's freshness-stamped recall snapshot instead of the
  * raw local `memoryRegistry`: `getAll()` reads `memorySpine.recallSnapshot()`,
  * which returns whatever the last `refreshRecallSnapshot()` (an async
- * pre-turn hook — see the `handleUserInput` call sites) captured, honestly
+ * pre-turn hook, see the `handleUserInput` call sites) captured, honestly
  * empty/stale until refreshed. This is what lets per-turn knowledge injection
  * detach from the local store file when a daemon is adopted, instead of
  * always reading the (possibly divergent) local registry regardless of mode.
@@ -75,7 +75,7 @@ export function buildSharedOrchestratorCoreServices(input: {
  * the CURRENT route (wire when adopted, local otherwise) so the synchronous
  * per-turn knowledge injection (`memoryRegistry.getAll()` above) reads
  * up-to-date records instead of whatever the previous refresh captured.
- * Failures are swallowed — an honest stale/empty snapshot (with its own
+ * Failures are swallowed, an honest stale/empty snapshot (with its own
  * degradation note, surfaced via `recallSnapshot().note`) is preferable to
  * blocking the user's turn on a memory-read failure.
  */

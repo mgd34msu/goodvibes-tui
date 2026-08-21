@@ -29,7 +29,7 @@ interface Span {
 const DEFAULT_FG = '252';
 
 /**
- * Inline copy of spansToLines — kept in sync with the source.
+ * Inline copy of spansToLines, kept in sync with the source.
  * Tests here document and guard the expected behaviour.
  */
 function spansToLines(spans: Span[], codeLines: string[]): HighlightedLine[] {
@@ -147,7 +147,7 @@ describe('spansToLines', () => {
     const spans: Span[] = [
       // First span covers 'hello world' (cols 0-11)
       { startRow: 0, startCol: 0, endRow: 0, endCol: 11, text: 'hello world', fg: '#00ff88' },
-      // Overlapping span tries to cover 'world' (cols 6-11) — should be skipped
+      // Overlapping span tries to cover 'world' (cols 6-11), should be skipped
       { startRow: 0, startCol: 6, endRow: 0, endCol: 11, text: 'world', fg: '#d000ff' },
     ];
     const result = spansToLines(spans, codeLines);
@@ -157,7 +157,7 @@ describe('spansToLines', () => {
     expect(result[0][0]).toEqual({ text: 'hello world', fg: '#00ff88' });
   });
 
-  it('overlap guard fires BEFORE gap emission — no corrupt gap token', () => {
+  it('overlap guard fires BEFORE gap emission; no corrupt gap token', () => {
     // This is the exact regression test for the bug fixed in this PR.
     // linePositions[row] = 10 (advanced past startCol=6 by a prior span)
     // Without the fix: gap text codeLines[row].slice(10, 6) = '' is computed first.
@@ -167,7 +167,7 @@ describe('spansToLines', () => {
     const spans: Span[] = [
       // Span 1 advances position to col 10
       { startRow: 0, startCol: 0, endRow: 0, endCol: 10, text: 'aaaaaaaaaa', fg: '#00ffff' },
-      // Span 2 starts at col 6, which is behind the current position (10) — overlap
+      // Span 2 starts at col 6, which is behind the current position (10), overlap
       { startRow: 0, startCol: 6, endRow: 0, endCol: 10, text: 'aaaa', fg: '#d000ff' },
       // Span 3 is valid: starts at 11
       { startRow: 0, startCol: 11, endRow: 0, endCol: 15, text: 'bbbb', fg: '#ffcc00' },
@@ -189,17 +189,17 @@ describe('spansToLines', () => {
     const spans: Span[] = [
       // Span 1: multi-line, advances line 0 to col 5, line 1 to col 3
       { startRow: 0, startCol: 0, endRow: 1, endCol: 3, text: 'hello\nfoo', fg: '#00ff88' },
-      // Span 2: overlaps — starts at line 0 col 2 (behind pos 5) — should be skipped entirely
+      // Span 2: overlaps, starts at line 0 col 2 (behind pos 5), should be skipped entirely
       { startRow: 0, startCol: 2, endRow: 1, endCol: 5, text: 'llo\nfoo b', fg: '#d000ff' },
-      // Span 3: valid — starts at line 1 col 4 (past pos 3)
+      // Span 3: valid, starts at line 1 col 4 (past pos 3)
       { startRow: 1, startCol: 4, endRow: 1, endCol: 7, text: 'bar', fg: '#ffcc00' },
     ];
     const result = spansToLines(spans, codeLines);
     // Line 0: span 1 consumes entire line (col 0 to codeLines[0].length=11)
-    // Span 2 starts at col 2 on line 0, but linePositions[0] is already 11 — skipped
+    // Span 2 starts at col 2 on line 0, but linePositions[0] is already 11, skipped
     expect(result[0][0]).toEqual({ text: 'hello world', fg: '#00ff88' });
     expect(result[0]).toHaveLength(1);
-    // Line 1: span 1 covers col 0-3 ('foo'), span 2 starts at col 2 but pos=3 > 2 — skipped
+    // Line 1: span 1 covers col 0-3 ('foo'), span 2 starts at col 2 but pos=3 > 2, skipped
     // span 3 starts at col 4: gap ' ' (3-4), then 'bar' (4-7), then ' baz' trailing
     expect(result[1][0]).toEqual({ text: 'foo', fg: '#00ff88' });
     expect(result[1][1]).toEqual({ text: ' ', fg: DEFAULT_FG });

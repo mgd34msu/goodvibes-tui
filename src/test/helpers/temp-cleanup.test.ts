@@ -7,7 +7,7 @@
  * do not inspect the hook, because inspecting the hook is exactly what let the
  * previous cleanup ship broken: it was a `process.on('exit')` handler, `bun test`
  * never fires those, and the old test "proving" it worked ran the code under
- * `bun --eval` — `bun run` semantics, where exit handlers DO fire. It passed for
+ * `bun --eval`, `bun run` semantics, where exit handlers DO fire. It passed for
  * years while every green run leaked.
  *
  * Every positive assertion below is paired with a negative one that makes the
@@ -20,7 +20,7 @@ import { dirname, join, resolve } from 'node:path';
 import { createTempDirRegistry, drainTempDirsUntilSettled } from './temp-registry.ts';
 import { makeProjectTempDir } from './project-temp.ts';
 
-/** Repo root — this file is src/test/helpers/, so three levels up. */
+/** Repo root, this file is src/test/helpers/, so three levels up. */
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..');
 
 /**
@@ -29,7 +29,7 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..');
  * Not `tmpdir()`: this file is the test for the mechanism that stops scratch
  * from landing in the real OS temp dir, so it is the last file that should put
  * scratch there itself. The fixture SOURCES below still call `tmpdir()` on
- * purpose — that is the behaviour under test, and inside the spawned child the
+ * purpose, that is the behaviour under test, and inside the spawned child the
  * preload has already repointed it at a contained root.
  *
  * The registry cases below build their own registries and must not add entries
@@ -90,7 +90,7 @@ function writeFixture(dir: string, name: string, source: string): string {
 
 // Each case builds its OWN registry via createTempDirRegistry(). Draining the
 // process-wide one here would empty it before the preload's afterAll ran, and
-// this file's own temp directories would then leak — the very defect under test.
+// this file's own temp directories would then leak, the very defect under test.
 describe('temp-registry', () => {
   test('cleanup removes what was registered and reports it', () => {
     const registry = createTempDirRegistry();
@@ -161,7 +161,7 @@ describe('drainTempDirsUntilSettled', () => {
 
   test('keeps going while a directory is recreated behind it', async () => {
     // The whole reason the loop exists. Without the extra passes the count this
-    // suite reports would be "removed" while the directory was back on disk —
+    // suite reports would be "removed" while the directory was back on disk,
     // which is what a single-pass drain measured on 4 of 314 real test files.
     const registry = createTempDirRegistry();
     const dir = registry.register(specDir('gv-drain-flapping'));
@@ -236,7 +236,7 @@ test('the directory exists while the test runs', () => {
     expect(existsSync(created!)).toBe(false);
   });
 
-  test('a directory created WITHOUT registering survives — the measurement can fail', () => {
+  test('a directory created WITHOUT registering survives; the measurement can fail', () => {
     // Proof the assertion above is not vacuous: the same spawn-and-count harness,
     // pointed at a fixture that skips registration, reports the directory still
     // present. If this ever started passing "cleaned", the positive test would

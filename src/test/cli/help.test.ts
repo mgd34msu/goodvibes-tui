@@ -8,7 +8,7 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 describe('CLI help/version', () => {
   test('does not report the consuming project npm_package_version', () => {
     const previous = process.env.npm_package_version;
-    // Sentinel that can never equal the real build version — the original
+    // Sentinel that can never equal the real build version, the original
     // test used '1.0.0', which collided with reality at the v1.0.0 release
     // and failed the release validate job.
     const sentinel = '99.99.99-npm-env-sentinel';
@@ -37,7 +37,7 @@ describe('CLI help/version', () => {
 });
 
 describe('daemon startup banner', () => {
-  // A sentinel version that can never equal the live build — the banner must
+  // A sentinel version that can never equal the live build, the banner must
   // render exactly what it is handed, so the daemon's bare-launch path shows
   // the resolved version (not a placeholder) and its actual home/host/port.
   const SENTINEL = '42.42.42-daemon-banner-sentinel';
@@ -49,7 +49,7 @@ describe('daemon startup banner', () => {
       port: 3421,
     });
     expect(line).toBe(
-      'goodvibes-daemon 42.42.42-daemon-banner-sentinel starting — ' +
+      'goodvibes-daemon 42.42.42-daemon-banner-sentinel starting: ' +
         'home=/home/mike host=127.0.0.1 port=3421 ' +
         '(manage as a service: goodvibes-daemon install-service)',
     );
@@ -59,24 +59,24 @@ describe('daemon startup banner', () => {
     const line = renderDaemonStartupBanner(SENTINEL, { homeDir: '/h', host: '127.0.0.1', port: 8080 });
     expect(line).toContain('install-service');
     expect(line).toContain('42.42.42-daemon-banner-sentinel');
-    // The version segment is exactly the sentinel — never a 0.0.0 placeholder.
+    // The version segment is exactly the sentinel, never a 0.0.0 placeholder.
     expect(line).toContain('goodvibes-daemon 42.42.42-daemon-banner-sentinel starting');
   });
 });
 
 /**
- * The banner's host/port come from resolveRuntimeEndpointBinding — the SAME
+ * The banner's host/port come from resolveRuntimeEndpointBinding, the SAME
  * hostMode-aware resolution the SDK bind path (resolveHostBinding) uses. These
  * tests mirror the verifier's empirical probes: each case pins that what the
  * banner would display matches what the daemon actually binds.
  */
-describe('daemon startup banner — binding honesty (mirrors the SDK bind path)', () => {
+describe('daemon startup banner: binding honesty (mirrors the SDK bind path)', () => {
   function fakeConfig(values: Record<string, unknown>): Pick<ConfigManager, 'get'> {
     // Cast through unknown: the SDK's ConfigValue mapped type has grown into a
     // very large discriminated union, and asking the compiler to structurally
     // compare a generic `<K extends ConfigKey>(key: K) => ConfigValue<K>`
     // signature against ConfigManager['get'] here hits TS's "excessive stack
-    // depth" recursion limit (TS2321) — a compiler limitation, not a real type
+    // depth" recursion limit (TS2321), a compiler limitation, not a real type
     // mismatch (this is the exact same generic signature ConfigManager.get
     // itself declares).
     const get = (key: string): unknown => values[key];
@@ -115,7 +115,7 @@ describe('daemon startup banner — binding honesty (mirrors the SDK bind path)'
     expect(binding.host).toBe('192.168.1.50');
   });
 
-  test('port 0 falls back to 3421 exactly like the bind path — the banner never says port=0', () => {
+  test('port 0 falls back to 3421 exactly like the bind path; the banner never says port=0', () => {
     // Verifier probe: controlPlane.port: 0 → daemon serves 3421, old banner said port=0.
     const binding = resolveRuntimeEndpointBinding(
       fakeConfig({ 'controlPlane.port': 0 }),
@@ -124,7 +124,7 @@ describe('daemon startup banner — binding honesty (mirrors the SDK bind path)'
     expect(binding.port).toBe(3421);
   });
 
-  test('a non-numeric port falls back to 3421 exactly like the bind path — the banner never says port=NaN', () => {
+  test('a non-numeric port falls back to 3421 exactly like the bind path; the banner never says port=NaN', () => {
     // Verifier probe: controlPlane.port: "abc" → daemon serves 3421, old banner said port=NaN.
     const binding = resolveRuntimeEndpointBinding(
       fakeConfig({ 'controlPlane.port': 'abc' }),
@@ -133,12 +133,12 @@ describe('daemon startup banner — binding honesty (mirrors the SDK bind path)'
     expect(binding.port).toBe(3421);
   });
 
-  test("unrecognized hostMode strings ('LAN', 'Network', '') are flagged recognized:false — the SDK bind path has no default case for them and the daemon cannot bind", () => {
+  test("unrecognized hostMode strings ('LAN', 'Network', '') are flagged recognized:false; the SDK bind path has no default case for them and the daemon cannot bind", () => {
     // Pins the verifier's fixture: the SDK's resolveHostBinding is a switch
     // with NO default case, so these values yield an undefined binding and the
     // daemon throws in its constructor. The display resolver must not present
     // its loopback fallback as a definite binding for a config the SDK cannot
-    // bind at all — recognized:false is the signal callers warn on.
+    // bind at all, recognized:false is the signal callers warn on.
     for (const badMode of ['LAN', 'Network', '', 'local ']) {
       const binding = resolveRuntimeEndpointBinding(
         fakeConfig({ 'controlPlane.hostMode': badMode, 'controlPlane.port': 3421 }),
@@ -155,19 +155,19 @@ describe('daemon startup banner — binding honesty (mirrors the SDK bind path)'
       );
       expect(binding.recognized).toBe(true);
     }
-    // Unset hostMode defaults to 'local' — recognized, exactly like the SDK's
+    // Unset hostMode defaults to 'local', recognized, exactly like the SDK's
     // own `?? 'local'`.
     expect(resolveRuntimeEndpointBinding(fakeConfig({}), 'controlPlane').recognized).toBe(true);
   });
 
   test("web port is the SDK's resolveWebPort, called rather than copied", () => {
-    // This used to assert the copy's semantics — a bare `Number(raw ?? 3423)`,
-    // so a stored 0 displayed as 0 and a non-numeric value as NaN — because
+    // This used to assert the copy's semantics, a bare `Number(raw ?? 3423)`,
+    // so a stored 0 displayed as 0 and a non-numeric value as NaN, because
     // that was what the SDK's web machinery did and a display must not
     // disagree with the machinery. The SDK closed that gap: resolveWebBinding
     // validates, and surface announcements, channel account links and
     // tailscale-serve all anchor to it. So the assertion is the same one it
-    // always was — agreement — against the function itself rather than against
+    // always was, agreement, against the function itself rather than against
     // a transcription of what it used to do.
     for (const stored of [0, 'abc', 8080, undefined]) {
       expect(resolveRuntimeEndpointBinding(fakeConfig(stored === undefined ? {} : { 'web.port': stored }), 'web').port)

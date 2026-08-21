@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// conversation-rewind-port.ts — the TUI's ConversationManager as the SDK unified
+// conversation-rewind-port.ts, the TUI's ConversationManager as the SDK unified
 // rewind service's RewindConversationPort.
 //
 // The SDK's UnifiedRewindService (platform/rewind) joins files rewind (workspace
@@ -8,11 +8,11 @@
 // messages would truncate to a recorded turn boundary, and rewind() performs the
 // truncation and captures the pre-/post-truncation snapshots so the reversal can
 // be undone and re-applied. The truncation boundary is the message count recorded
-// for the anchor's turnId at TURN_COMPLETED (rewind-turn-anchors.ts) — the same
+// for the anchor's turnId at TURN_COMPLETED (rewind-turn-anchors.ts), the same
 // join key files rewind uses against the workspace checkpoint.
 //
 // This module is the single implementation of that port for the TUI, and it has
-// two consumers again — but the second one reaches it differently now.
+// two consumers again, but the second one reaches it differently now.
 //
 // It used to be the composed daemon's own rewind.plan/apply verbs, resolving a
 // conversation out of the registry below because the daemon was this process.
@@ -48,7 +48,7 @@ export interface ConversationRewindPort extends RewindConversationPort {
   restoreAfter(undoSnapshotId: string): boolean;
 }
 
-/** One truncation's captured state — the target conversation and its snapshots. */
+/** One truncation's captured state, the target conversation and its snapshots. */
 interface SnapshotPair {
   readonly conv: ConversationManager;
   readonly before: ConversationJson;
@@ -57,7 +57,7 @@ interface SnapshotPair {
 
 /**
  * Build a conversation rewind port. `resolveConversation` maps an anchor's
- * sessionId to the live ConversationManager — for the single-session /rewind
+ * sessionId to the live ConversationManager, for the single-session /rewind
  * command it returns the one bound conversation; for the daemon it looks the
  * session up in the live registry. A null resolution means no live conversation
  * for that session, reported as "nothing to drop" rather than a fabricated count.
@@ -116,7 +116,7 @@ export function createConversationRewindPort(
 //
 // This process's conversations, by session id. Two readers now: the local
 // /rewind command, and the host loop that answers the DAEMON's questions about
-// a session this surface is running (the SDK's client/conversation-rewind-host.ts) —
+// a session this surface is running (the SDK's client/conversation-rewind-host.ts),
 // which is what makes conversation rewind work from any surface again, since
 // only the process holding the messages can count or drop them.
 // ---------------------------------------------------------------------------

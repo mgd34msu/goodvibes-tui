@@ -114,7 +114,7 @@ describe('command runner', () => {
       };
       const result = await run(hook, makeEvent());
       expect(result.ok).toBe(false);
-      // Process is killed on timeout — exits with non-zero signal code (e.g. 143)
+      // Process is killed on timeout, exits with non-zero signal code (e.g. 143)
       expect(result.error).toBeTruthy();
     }, 10000);
   });

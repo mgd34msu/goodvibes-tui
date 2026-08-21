@@ -1,5 +1,5 @@
 /**
- * terminal-escapes — the raw control sequences main.ts writes to enter/leave the
+ * terminal-escapes, the raw control sequences main.ts writes to enter/leave the
  * TUI's terminal mode (alt screen, mouse, cursor, keyboard-extension, paste, and
  * focus reporting). Extracted from main.ts as plain constants so the entry file
  * stays within the source-file line-count gate; behaviour is unchanged.

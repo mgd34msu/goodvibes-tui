@@ -1,9 +1,9 @@
 /**
- * approval-alert — fires an unfocused-user alert the moment a tool call
+ * approval-alert, fires an unfocused-user alert the moment a tool call
  * becomes a real, user-blocking permission prompt.
  *
  * Anchor: `PERMISSION_REQUESTED` (SDK events/permissions.ts) is the wrong
- * signal — it fires for every policy-evaluation step, including ones
+ * signal, it fires for every policy-evaluation step, including ones
  * auto-resolved by allow-lists/yolo-mode in milliseconds. The only place a
  * request becomes an actual user-facing prompt is where main.ts assigns
  * `permissionPromptRef.requestPermission`. There is no `permissions` feed on
@@ -14,7 +14,7 @@
  * wrapped promise settles) so it reflects "a prompt just appeared", not
  * "a prompt was just resolved".
  *
- * PRIVACY: message content is tool name + permission category only — no
+ * PRIVACY: message content is tool name + permission category only, no
  * args, no file contents, no command strings (mirrors long-task-notifier's
  * privacy guarantee).
  */
@@ -43,7 +43,7 @@ export interface ApprovalAlertDeps {
  * Wrap a PermissionRequestHandler so every call also fires an unfocused-user
  * alert (subject to the behavior.notifyOnApprovalPending / notifyOnlyWhenUnfocused
  * gates). The wrapped handler's behavior (what it resolves to) is completely
- * unchanged — this only adds a side effect at call time.
+ * unchanged, this only adds a side effect at call time.
  */
 export function wrapRequestPermissionWithAlert(
   original: PermissionRequestHandler,
@@ -65,7 +65,7 @@ function fireApprovalAlert(request: PermissionPromptRequest, deps: ApprovalAlert
 
   if (!shouldFireAlert(deps.focusTracker, deps.configGet, 'behavior.notifyOnApprovalPending')) return;
 
-  const title = 'GoodVibes — approval needed';
+  const title = 'GoodVibes: approval needed';
 
   try {
     notifyCompletion(title, message, FORCE_NOTIFY_DURATION_MS);

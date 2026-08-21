@@ -1,10 +1,10 @@
 /**
  * A workstream's desktop notification names the outcome, not the chain.
  *
- * These three notifications used to read `GoodVibes — WRFC chain failed` /
+ * These three notifications used to read `GoodVibes, WRFC chain failed` /
  * `chain 7f3a91c02b4e failed: review rejected`. A notification is a message to
  * a person, so it carries neither the internal name for the machinery nor a
- * register id — plain language only.
+ * register id, plain language only.
  */
 import { describe, expect, test } from 'bun:test';
 import { workstreamFailureNotification } from '@/core/workstream-notification.ts';
@@ -15,7 +15,7 @@ describe('a workstream notification carries no identifier', () => {
   const cases = [
     { name: 'an ordinary failure', payload: { reason: 'review rejected', failureKind: 'other' as const } },
     { name: 'a transport failure', payload: { reason: 'ECONNRESET', failureKind: 'transport' as const } },
-    { name: 'an operator cancellation', payload: { reason: 'operator cancellation — 2 files already modified on disk', failureKind: 'cancelled' as const } },
+    { name: 'an operator cancellation', payload: { reason: 'operator cancellation: 2 files already modified on disk', failureKind: 'cancelled' as const } },
     { name: 'a spent turn budget', payload: { reason: 'agent reached the turn limit of 50', failureKind: 'max_turns' as const, turnLimit: 50, turnLimitSource: 'default' as const } },
     { name: 'an unclassified failure', payload: { reason: 'the gates never went green' } },
   ];
@@ -38,7 +38,7 @@ describe('a workstream notification carries no identifier', () => {
 describe('the notification still says what happened', () => {
   test('an operator cancellation is narrated as cancelled, not as a failure', () => {
     const { title, body } = workstreamFailureNotification({
-      reason: 'operator cancellation — 2 files already modified on disk',
+      reason: 'operator cancellation: 2 files already modified on disk',
       failureKind: 'cancelled',
     });
     expect(title).toContain('cancelled');

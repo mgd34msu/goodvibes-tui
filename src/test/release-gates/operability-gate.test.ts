@@ -1,5 +1,5 @@
 /**
- * Operability Gate — Release Gate 4
+ * Operability Gate, Release Gate 4
  *
  * Verifies that:
  * - Every high-severity diagnostic has at least one remediation action

@@ -4,7 +4,7 @@ import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platfo
 import { RELAY_STATE_NOT_READABLE_HERE } from '../../runtime/relay-reachability-bridge.ts';
 
 /**
- * Register the /relay command — the relay's configuration, its reachability
+ * Register the /relay command, the relay's configuration, its reachability
  * state, and a QR-encodable pairing payload for the SDK's outbound
  * zero-knowledge relay (relay.* settings, gated by the `relay-connect` feature
  * flag).
@@ -12,7 +12,7 @@ import { RELAY_STATE_NOT_READABLE_HERE } from '../../runtime/relay-reachability-
  * The CONFIGURATION half is read here, from this terminal's own config. The
  * LIVE half is not: registration state and pairing live in the running daemon's
  * memory (`DaemonServer.getRelayReachability()`), and no verb exposes either to
- * a client — so both read 'unavailable' with the reason said out loud rather
+ * a client, so both read 'unavailable' with the reason said out loud rather
  * than a state this terminal is in no position to know. See
  * relay-reachability-bridge.ts.
  */
@@ -43,20 +43,20 @@ async function renderStatus(ctx: CommandContext): Promise<void> {
   const state = live === 'registered' || live === 'disabled' || live === 'unavailable' ? live : 'offline';
   ctx.print([
     `Relay: ${state}`,
-    `  rendezvous id: ${cfg.rendezvousId || '(not yet minted — start the daemon to generate one)'}`,
+    `  rendezvous id: ${cfg.rendezvousId || '(not yet minted; start the daemon to generate one)'}`,
     `  url: ${cfg.url || '(not set)'}`,
     `  label: ${cfg.label || '(not set)'}`,
     state === 'unavailable'
       ? `  ${RELAY_STATE_NOT_READABLE_HERE}`
       : `  live connection state: ${live}`,
-    '  The relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
+    '  The relay operator sees only ciphertext and connection metadata; self-host your own relay for full control.',
   ].join('\n'));
 }
 
 async function renderPair(ctx: CommandContext): Promise<void> {
   const cfg = relayConfigured(ctx);
   if (!cfg.enabled || !cfg.flagOn) {
-    ctx.print('Relay is disabled — turn on relay.enabled in /config relay first.');
+    ctx.print('Relay is disabled: turn on relay.enabled in /config relay first.');
     return;
   }
   const externalServices = ctx.platform.externalServices;

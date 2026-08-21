@@ -18,13 +18,13 @@ export function registerConfigCommand(registry: CommandRegistry): void {
     argsHint: '[category|key] | set <key> <value>',
     async handler(args, ctx) {
       // An earlier replay fix: `/config set <key> <value>` used to fall through to
-      // the workspace with the assignment silently ignored — the dishonest-
+      // the workspace with the assignment silently ignored, the dishonest-
       // fallthrough class. `set` is now a real verb.
       if (args[0] === 'set') {
         const key = args[1];
         const value = args.slice(2).join(' ');
         if (!key || value === '') {
-          ctx.print('Usage: /config set <key> <value> — e.g. /config set display.themeMode light');
+          ctx.print('Usage: /config set <key> <value>; e.g. /config set display.themeMode light');
           return;
         }
         // A credential key must never take the generic path below: setDynamic
@@ -72,9 +72,9 @@ export function registerConfigCommand(registry: CommandRegistry): void {
  * writing it into a config file: the value goes to the secret store and the
  * config key keeps only a `goodvibes://secrets/...` reference to it.
  *
- * The entered value is never echoed. The transcript is a diagnostic surface —
+ * The entered value is never echoed. The transcript is a diagnostic surface,
  * it is scrolled back through, copied into support threads and captured in
- * screen recordings — so it gets the reference and the store key, never the
+ * screen recordings, so it gets the reference and the store key, never the
  * secret.
  *
  * With no secret manager in this runtime there is nowhere safe to put it, and
@@ -89,7 +89,7 @@ async function handleSecretConfigSet(
   const secretsManager = ctx.platform?.secretsManager;
   if (!secretsManager) {
     ctx.print(
-      `${key} holds a credential, and this runtime has no secret store to put it in — `
+      `${key} holds a credential, and this runtime has no secret store to put it in; `
       + `refusing rather than writing it in cleartext into a config file.\n`
       + `  Store it with: /secrets set ${secretKey} <value>`,
     );
@@ -105,7 +105,7 @@ async function handleSecretConfigSet(
     const scope = defaultSecretBackedScope(key);
     ctx.print(
       `Set ${key}: stored in the ${scope} secret tier as ${secretKey} (value hidden).\n`
-      + `  ${key} now holds the reference ${configValue} — the value itself is never written to a config file.`
+      + `  ${key} now holds the reference ${configValue}; the value itself is never written to a config file.`
       + (scope === 'daemon'
         ? '\n  The daemon reads that tier, so this keeps working with this client closed.'
         : ''),

@@ -43,7 +43,7 @@ export interface LocalStreamingAudioPlayerOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly spawnProcess?: SpawnProcessFactory;
   /**
-   * Injected player command — the test seam companion to `spawnProcess`.
+   * Injected player command, the test seam companion to `spawnProcess`.
    * When set, the constructor uses it verbatim instead of scanning PATH, so
    * deterministic fake-sink tests never depend on mpv/ffplay being installed
    * on the machine running them. Pass null to model "no player found".
@@ -101,7 +101,7 @@ export class LocalStreamingAudioPlayer implements StreamingAudioPlayer {
       }
 
       // An intentional interrupt (turn cancel / quit chord / /tts stop) has
-      // already torn the process down via `abort` and must cut immediately —
+      // already torn the process down via `abort` and must cut immediately,
       // do not wait on a graceful drain. A natural end-of-speech, by contrast,
       // closes stdin and waits for the sink to play out every buffered sample
       // so the tail of the response is never truncated.
@@ -163,7 +163,7 @@ export function resolveStreamingAudioPlayerCommand(env: NodeJS.ProcessEnv = proc
 }
 
 // ffplay -autoexit quits as soon as its input ends, before the audio output
-// buffer has drained — that clips the tail of the response. `apad` appends a
+// buffer has drained, that clips the tail of the response. `apad` appends a
 // short run of silence so the real audio is fully played out and only the
 // trailing silence gets trimmed.
 const FFPLAY_APAD = ['-af', 'apad=pad_dur=0.3'] as const;
@@ -177,7 +177,7 @@ function buildPlayerArgs(command: StreamingAudioPlayerCommand, format?: string):
 }
 
 /**
- * awaitReady — resolves once the spawned player has actually started (its
+ * awaitReady, resolves once the spawned player has actually started (its
  * 'spawn' event), rejects if it fails to start ('error'), and resolves early
  * if the caller aborts during startup so an intentional interrupt is never
  * blocked. This is the readiness gate that keeps the first audio byte from

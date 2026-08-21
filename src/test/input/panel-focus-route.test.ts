@@ -252,9 +252,9 @@ describe('handlePanelFocusToken', () => {
     expect(result.panelFocused).toBe(true);
   });
 
-  // item 1d: '/' is a new, explicit transfer verb — consistent with the
+  // item 1d: '/' is a new, explicit transfer verb, consistent with the
   // Invariant (focus only ever moves on an explicit verb, never
-  // implicitly) — that returns focus to the composer AND lets the '/' land
+  // implicitly), that returns focus to the composer AND lets the '/' land
   // there to start a command, from any focused panel that isn't itself
   // capturing free text.
   describe("'/' explicit transfer verb (item 1d)", () => {
@@ -276,7 +276,7 @@ describe('handlePanelFocusToken', () => {
       expect(result.panelFocused).toBe(false);  // focus already flipped back here
     });
 
-    test("a panel that captures free text (isCapturingTextBurst) keeps '/' for itself — capture wins", () => {
+    test("a panel that captures free text (isCapturingTextBurst) keeps '/' for itself; capture wins", () => {
       const received: string[] = [];
       const state = buildState({
         panelFocused: true,
@@ -305,7 +305,7 @@ describe('handlePanelFocusToken', () => {
     // duplicated here but are consumed earlier by handleGlobalShortcutToken, so
     // the copies were unreachable and have been removed. A ctrl-combo that this
     // route does not own must fall through (handled:false) so the global handler
-    // can act — and it must NOT close panels or flip focus from here.
+    // can act, and it must NOT close panels or flip focus from here.
     const closed: string[] = [];
     const state = buildState({
       panelFocused: true,
@@ -336,10 +336,10 @@ describe('handlePanelFocusToken', () => {
 });
 
 // ---------------------------------------------------------------------------
-// item 5 — paste flood guard (rate-based; see panel-paste-flood-guard.ts)
+// item 5, paste flood guard (rate-based; see panel-paste-flood-guard.ts)
 // ---------------------------------------------------------------------------
 
-describe('handlePanelFocusToken — paste flood guard (item 5)', () => {
+describe('handlePanelFocusToken: paste flood guard (item 5)', () => {
   function panelManagerWithHandler(received: string[], overrides: { isCapturingTextBurst?: () => boolean } = {}) {
     return {
       isVisible: () => true,
@@ -376,7 +376,7 @@ describe('handlePanelFocusToken — paste flood guard (item 5)', () => {
     expect(result!.panelFocused).toBe(true); // never flipped to the composer
   });
 
-  test('6 rapid keys (under the threshold) all dispatch — human typing is unaffected', () => {
+  test('6 rapid keys (under the threshold) all dispatch; human typing is unaffected', () => {
     const received: string[] = [];
     const hints: string[] = [];
     const burstGuard = { timestamps: [], suspended: false, hintShown: false };
@@ -414,7 +414,7 @@ describe('handlePanelFocusToken — paste flood guard (item 5)', () => {
     expect(hints).toEqual([]);
   });
 
-  test('composer-focused tokens (panelFocused=false) bypass this route entirely, regardless of burst rate — the composer path is untouched', () => {
+  test('composer-focused tokens (panelFocused=false) bypass this route entirely, regardless of burst rate; the composer path is untouched', () => {
     const burstGuard = { timestamps: [], suspended: false, hintShown: false };
     const state = buildState({ panelFocused: false, isPasteToken: false, burstGuard });
     const t0 = 4_000_000;

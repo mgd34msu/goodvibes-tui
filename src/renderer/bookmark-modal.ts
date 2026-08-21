@@ -1,5 +1,5 @@
 /**
- * renderBookmarkModal — renders the /bookmarks modal as Line[] using ModalFactory.
+ * renderBookmarkModal, renders the /bookmarks modal as Line[] using ModalFactory.
  *
  * Shows a list of bookmarked blocks with:
  *   - label (block type + excerpt)

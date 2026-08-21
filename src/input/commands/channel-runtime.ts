@@ -231,7 +231,7 @@ export function registerChannelRuntimeCommands(registry: CommandRegistry): void 
       if (sub === 'policy') {
         const configManager = ctx.platform.configManager;
         // Channel policy is persisted by ChannelPolicyManager in
-        // .goodvibes/tui/channels/policies.json — surface via configManager
+        // .goodvibes/tui/channels/policies.json, surface via configManager
         // category (runtime-accessible without a daemon round-trip).
         const surfaces = [
           'slack', 'discord', 'ntfy', 'webhook', 'homeassistant',

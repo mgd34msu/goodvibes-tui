@@ -1,5 +1,5 @@
 /**
- * Runtime store — Zustand vanilla store for goodvibes-tui.
+ * Runtime store, Zustand vanilla store for goodvibes-tui.
  *
  * Uses `createStore` from `zustand/vanilla` (NOT the React `create` hook)
  * because goodvibes-tui is a terminal app with no React renderer.

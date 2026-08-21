@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// operator-rpc.test.ts — getOperatorRpc honest-unavailable path + error rendering
+// operator-rpc.test.ts, getOperatorRpc honest-unavailable path + error rendering
 //
 // Only the "daemon disabled" branch is exercised against a real ConfigManager
 // (default daemon.enabled is false, so no daemon/network mock is needed to
 // reach it). The happy path (daemon.enabled=true, live HTTP round-trip) is
 // exercised indirectly by the per-command tests via their own usage/guard
-// branches — standing up a real daemon here would duplicate daemon/server
+// branches, standing up a real daemon here would duplicate daemon/server
 // tests rather than test this module's own logic.
 // ---------------------------------------------------------------------------
 import { describe, expect, test, afterEach } from 'bun:test';

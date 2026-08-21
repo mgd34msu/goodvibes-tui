@@ -5,7 +5,7 @@ import type { MemorySearchFilter } from '@pellux/goodvibes-sdk/platform/state';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope, temporalStatusLabel } from './recall-shared.ts';
 
 /**
- * The local, host-only `MemoryApi` — kept for `/recall explain` and `/recall
+ * The local, host-only `MemoryApi`, kept for `/recall explain` and `/recall
  * vector` only. Both are ruled explicitly out of the wire catalog in
  * docs/decisions/2026-07-06-memory-wire-full-detach.md (SDK repo): `explain`
  * is a client-side projection over whatever read surface is active, not a
@@ -24,7 +24,7 @@ export function getMemoryApi(context: CommandContext): MemoryApi | null {
 }
 
 /**
- * The cross-surface memory spine client — routes local when offline/embedded,
+ * The cross-surface memory spine client, routes local when offline/embedded,
  * over the wire when a daemon has been adopted, never both. `/recall`'s
  * browse/link/queue/export/import subcommands use this so they never read a
  * divergent local copy while a daemon owns the canonical store.
@@ -196,7 +196,7 @@ export async function handleRecallLink(args: string[], context: CommandContext):
   }
   const link = await memory.link(fromId, toId, relation);
   if (!link) {
-    context.print('[recall] Link failed — check that both IDs exist.');
+    context.print('[recall] Link failed: check that both IDs exist.');
     return;
   }
   context.print(`[recall] Linked: ${fromId} -> ${toId} [${relation}]`);

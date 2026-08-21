@@ -8,17 +8,17 @@
  * Charter: when the owning surface is LIVE (heartbeating within the daemon's
  * SURFACE_ROUTE_FRESHNESS window), a steer is DELIVERED to that surface rather
  * than spawning a daemon-side executor (which would fail on the daemon's empty
- * model registry). The daemon already does its half — `sessions.steer` /
+ * model registry). The daemon already does its half, `sessions.steer` /
  * `sessions.followUp` to a surface-managed session with a fresh participant
  * QUEUES the input for the surface (mode 'queued-for-surface') instead of
  * spawning. This poller is the surface completing that contract:
  *
  *   1. poll `sessions.inputs.list` for QUEUED inputs on ITS OWN sessionId
  *      (the query is scoped by sessionId, so a steer for another session can
- *      never land here — the per-session isolation the concurrent-sessions
+ *      never land here, the per-session isolation the concurrent-sessions
  *      charter requires);
  *   2. hand each steer/follow-up to `onSteer` (the surface-side injection into
- *      the TUI's turn machinery — narrate "steer received from <surface>" and
+ *      the TUI's turn machinery, narrate "steer received from <surface>" and
  *      fire the next-turn boundary), skipping the TUI's own submissions;
  *   3. acknowledge on the wire via `sessions.inputs.deliver` (queued → delivered)
  *      so every surface sees delivery truth live and the input is not re-picked.
@@ -26,7 +26,7 @@
  * Discipline (mirrors SessionSpineClient): every wire call is best-effort and
  * never throws into the render/keystroke path; a failed poll leaves the cursor
  * where it was so the input is retried on the next tick (deliver is the only
- * de-dup — an input already advanced past 'queued' is not returned again).
+ * de-dup, an input already advanced past 'queued' is not returned again).
  */
 
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -35,7 +35,7 @@ import type {
   SharedSessionInputRecord,
 } from '@pellux/goodvibes-sdk/platform/control-plane';
 
-/** The TUI's own participant surfaceId — inputs it authored are never re-injected. */
+/** The TUI's own participant surfaceId, inputs it authored are never re-injected. */
 export const TUI_SURFACE_ID = 'surface:tui';
 
 /** The narrow inbound wire surface this poller needs. Structurally satisfied by
@@ -75,7 +75,7 @@ export interface SessionInboundInputPollerOptions {
   readonly intervalMs?: number;
   readonly now?: () => number;
   readonly log?: InboundLogger;
-  /** The poller's own surfaceId — inputs it authored are skipped (default TUI). */
+  /** The poller's own surfaceId, inputs it authored are skipped (default TUI). */
   readonly ownSurfaceId?: string;
 }
 
@@ -92,7 +92,7 @@ export class SessionInboundInputPoller {
   private client: SpineInboundInputsClient | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private polling = false;
-  /** Exclusive createdAt cursor, per session — a session swap resets it. */
+  /** Exclusive createdAt cursor, per session, a session swap resets it. */
   private cursor = 0;
   private cursorSessionId: string | null = null;
 
@@ -120,7 +120,7 @@ export class SessionInboundInputPoller {
       this.timer = setInterval(() => { void this.pollOnce(); }, this.intervalMs);
       this.timer.unref?.();
     }
-    this.log.info('session inbound-input poller activated — collecting queued steers for this surface', {});
+    this.log.info('session inbound-input poller activated: collecting queued steers for this surface', {});
   }
 
   /** Detach the backend and stop polling (daemon mode resolved to non-external, or lost). */
@@ -185,9 +185,9 @@ export class SessionInboundInputPoller {
         try {
           this.onSteer(steer);
         } catch (error) {
-          // A failing injection must not wedge the poll loop or drop the ack —
+          // A failing injection must not wedge the poll loop or drop the ack,
           // narrate-and-continue; the input is still acked so it is not re-picked.
-          this.log.debug('session inbound steer injection threw — continuing', {
+          this.log.debug('session inbound steer injection threw; continuing', {
             error: error instanceof Error ? error.message : String(error),
           });
         }
@@ -196,14 +196,14 @@ export class SessionInboundInputPoller {
           await client.deliverInput(sessionId, input.id, { consumed: false });
           delivered += 1;
         } catch (error) {
-          this.log.debug('session inbound deliver ack failed — will retry', {
+          this.log.debug('session inbound deliver ack failed; will retry', {
             error: error instanceof Error ? error.message : String(error),
           });
         }
       }
     } catch (error) {
       // Poll failed entirely (daemon gone, transient): keep the cursor, retry next tick.
-      this.log.debug('session inbound-input poll failed — retry next tick', {
+      this.log.debug('session inbound-input poll failed: retry next tick', {
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {

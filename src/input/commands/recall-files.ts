@@ -1,14 +1,14 @@
 /**
- * recall-files.ts — `/recall files sync|review|apply`, the git-backed markdown
+ * recall-files.ts, `/recall files sync|review|apply`, the git-backed markdown
  * projection surface for standing (project/team-scope) memory records.
  *
  * Round-trip:
- *   sync   — project store records to `<dir>/<id>.md`, git-commit the directory
+ *   sync  , project store records to `<dir>/<id>.md`, git-commit the directory
  *            when it sits inside a repo. Read-only against the store.
- *   review — diff the on-disk projection against the current store and print
+ *   review, diff the on-disk projection against the current store and print
  *            the resulting proposals (a file edit -> 'update', a deleted file
- *            for an in-scope record -> 'delete'). PURE — no store writes.
- *   apply  — re-diff fresh, then mutate the store ONLY for the proposal ids
+ *            for an in-scope record -> 'delete'). PURE, no store writes.
+ *   apply , re-diff fresh, then mutate the store ONLY for the proposal ids
  *            the caller explicitly names (or --all), through the memory spine
  *            client's own update/delete. Never a silent write.
  *
@@ -17,14 +17,14 @@
  * snapshot from an earlier `review` call.
  *
  * Routes through `getMemorySpine` (not the host-only `knowledgeApi.memory`)
- * per the SDK's memory-wire-full-detach decision — same as every other
+ * per the SDK's memory-wire-full-detach decision, same as every other
  * mutating `/recall` subcommand, so this fully detaches from the local store
  * file when a daemon has been adopted.
  *
  * The memory spine's wire `MemoryUpdatePatch` (SDK platform/runtime/memory-spine)
- * now carries validFrom/validUntil alongside scope/summary/detail/tags — a
+ * now carries validFrom/validUntil alongside scope/summary/detail/tags, a
  * number sets the bound, `null` clears it, and an omitted field leaves it
- * unchanged — so a proposal whose `desired` changes ONLY the temporal window
+ * unchanged, so a proposal whose `desired` changes ONLY the temporal window
  * applies for real over the wire, the same as any other field change.
  */
 import { existsSync } from 'node:fs';
@@ -61,7 +61,7 @@ export async function handleRecallFilesSync(args: string[], context: CommandCont
 
   try {
     // The SDK's ownership gate commits only to a repository whose toplevel IS
-    // the projection directory (initializing one there when needed) — never
+    // the projection directory (initializing one there when needed), never
     // to a checkout the directory merely sits inside.
     const report = projectMemoryToFiles(records, dir, { git: createSyncGitSeam() });
     context.print(`[recall] Projected ${report.written.length} record(s) to ${report.dir}`);
@@ -102,7 +102,7 @@ export async function handleRecallFilesReview(args: string[], context: CommandCo
   if (proposals === null) return;
 
   if (proposals.length === 0) {
-    context.print(`[recall] No changes — ${dir} matches the store.`);
+    context.print(`[recall] No changes: ${dir} matches the store.`);
     return;
   }
   context.print(`[recall] ${proposals.length} proposal(s) from ${dir}:`);
@@ -116,7 +116,7 @@ export async function handleRecallFilesApply(args: string[], context: CommandCon
 
   const applyAll = args.includes('--all') || args.includes('all');
   const ids = new Set(args.filter((a) => a !== '--all' && a !== 'all' && a !== '--dir' && !a.startsWith('.') && !a.startsWith('/')));
-  // --dir's value (the token right after it) is not a proposal id — drop it.
+  // --dir's value (the token right after it) is not a proposal id, drop it.
   const dirIdx = args.indexOf('--dir');
   if (dirIdx !== -1 && args[dirIdx + 1]) ids.delete(args[dirIdx + 1]!);
 
@@ -178,5 +178,5 @@ export async function handleRecallFilesApply(args: string[], context: CommandCon
 
   context.print(`[recall] Applied ${applied.length}, skipped ${skipped.length}, failed ${failed.length}.`);
   for (const proposal of applied) context.print(`  applied  ${proposal.id} [${proposal.kind}]`);
-  for (const { proposal, reason } of failed) context.print(`  failed   ${proposal.id} [${proposal.kind}] — ${reason}`);
+  for (const { proposal, reason } of failed) context.print(`  failed   ${proposal.id} [${proposal.kind}]: ${reason}`);
 }

@@ -12,8 +12,8 @@ both. The shared file `~/.goodvibes/goodvibes.json` is reserved for future
 cross-app state; TUI settings do not live there.
 
 Most settings live under the schema owned by the platform config system and
-are editable live from the fullscreen `/config` workspace or `/settings` — see
-[Key Settings](#key-settings) below for the full table. This page also
+are editable live from the fullscreen `/config` workspace or `/settings`. See
+[Key settings](#key-settings) below for the full table. This page also
 documents the additional TUI-owned namespaces you can add by hand to your
 settings file (further down): these are read directly from the settings file,
 and a missing or malformed value falls back to the built-in default rather
@@ -29,7 +29,7 @@ Related storage paths:
 - REPL history: `.goodvibes/tui/repl-history.json`
 - schedules: `.goodvibes/tui/schedules.json`
 
-## Key Settings
+## Key settings
 
 These settings live in the platform-owned config schema, not in the
 TUI-extension namespaces documented further down this page. Edit them from the
@@ -70,7 +70,7 @@ for reference.
 | `web.port` | `3423` | Web/browser surface port |
 | `orchestration.recursionEnabled` | `false` | Allow recursive agent orchestration under bounded policy controls |
 | `orchestration.maxDepth` | `0` | Maximum recursive orchestration depth: `0` disables, higher values (up to `5`) allow deeper bounded recursion |
-| `daemon.enabled` | `true` | Whether this client adopts a running daemon at all — it does not start one itself; see [deployment-and-services.md](deployment-and-services.md) |
+| `daemon.enabled` | `true` | Whether this client adopts a running daemon at all. It does not start one itself; see [deployment-and-services.md](deployment-and-services.md) |
 | `danger.httpListener` | `false` | Enable HTTP webhook listener |
 | `tools.autoHeal` | `false` | Auto-fix syntax errors on write/edit |
 | `tools.hooksFile` | `hooks.json` | Hook configuration file name |
@@ -81,20 +81,20 @@ for reference.
 | `helper.globalProvider` | `` | Helper model provider (e.g., `ollama`) |
 | `helper.globalModel` | `` | Helper model ID (e.g., `llama3.2:3b`) |
 
-## Permission Modes
+## Permission modes
 
 `permissions.mode` takes five values:
 
-- **`prompt`** (default, shown as `normal`) — auto-approve reads, ask before write, edit, exec, fetch, agent, workflow, and MCP calls
-- **`accept-edits`** — file write and edit tools auto-approve; exec and the other risky classes still ask
-- **`plan`** — read-only tools are allowed and every mutating or exec tool is refused with a structured plan-mode denial
-- **`allow-all`** (shown as `auto`) — never prompt, allow everything
-- **`custom`** — per-tool overrides using `permissions.tools.<name>` keys
+- **`prompt`** (default, shown as `normal`): auto-approve reads, ask before write, edit, exec, fetch, agent, workflow, and MCP calls
+- **`accept-edits`**: file write and edit tools auto-approve; exec and the other risky classes still ask
+- **`plan`**: read-only tools are allowed and every mutating or exec tool is refused with a structured plan-mode denial
+- **`allow-all`** (shown as `auto`): never prompt, allow everything
+- **`custom`**: per-tool overrides using `permissions.tools.<name>` keys
 
 Per-tool values: `allow`, `prompt`, `deny`.
 
-`Shift+Tab` cycles the four session postures in order — `normal` → `accept-edits`
-→ `plan` → `auto` → `normal` — and `/plan` toggles plan mode directly. `custom`
+`Shift+Tab` cycles the four session postures in order: `normal` → `accept-edits`
+→ `plan` → `auto` → `normal`. `/plan` toggles plan mode directly. `custom`
 is a per-rule policy rather than a session posture, so it is left out of the
 cycle; cycling from `custom` starts again at `normal`.
 
@@ -109,7 +109,7 @@ the OS service where supported. On Linux this installs/enables, disables, or
 rewrites the user `systemd` service so the daemon state matches the setting
 instead of only changing JSON.
 
-## Policy, Permissions, And Trust
+## Policy, permissions, and trust
 
 The permission system is more than a prompt toggle. The runtime includes:
 
@@ -131,7 +131,7 @@ The adjacent trust layer covers:
 The result is that approvals, policy rollout, trust posture, and plugin
 degradation are inspectable product behavior.
 
-## `checkpoints.*` — workspace checkpoint root guard
+## `checkpoints.*`: workspace checkpoint root guard
 
 The workspace checkpoint manager takes whole-workspace snapshots at turn and
 agent boundaries so a session can rewind. These keys tune the root guard that
@@ -162,12 +162,12 @@ Example (`.goodvibes/tui/settings.json`):
 > build whose checkpoint manager exposes them. On an older pinned build the
 > keys are read and validated but ignored by the manager until it is upgraded.
 
-## `statusline.*` — scriptable status line
+## `statusline.*`: scriptable status line
 
 Point `statusline.command` at any command and its output renders as a dim line
 in the status area (just above the prompt). The command runs as a POSIX shell
 command (`/bin/sh -c <command>`) in your working directory at each turn
-boundary — when a turn completes, errors, or is cancelled — and once at
+boundary, when a turn completes, errors, or is cancelled, and once at
 startup.
 
 | Key | Type | Default | Meaning |
@@ -179,7 +179,7 @@ Behavior notes:
 
 - Only the **first line** of stdout is used. ANSI colors and control characters
   are stripped; the result is trimmed and capped at 512 characters.
-- Each run is bounded by the timeout, and runs never overlap — refreshes that
+- Each run is bounded by the timeout, and runs never overlap. Refreshes that
   arrive while a run is in flight coalesce into a single trailing run, so a slow
   command cannot stall the UI or pile up.
 - If the command exits non-zero, times out, or fails to start, the line is
@@ -196,7 +196,7 @@ Example (`.goodvibes/tui/settings.json`):
 }
 ```
 
-## `behavior.*` — TUI-local notification keys
+## `behavior.*`: TUI-local notification keys
 
 These two keys are read directly by the TUI's notifier modules rather than by
 the platform schema, so they do not appear in the Key Settings table above.
@@ -205,14 +205,14 @@ behavior group alongside the schema-owned keys.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `behavior.notifyAfterSeconds` | number | `60` | Seconds a turn must run before a push notification fires; `0` turns it off. Delivers to the desktop (`notify-send` / `osascript`) and to any configured ntfy/webhook URLs. Notification text is metadata only — task kind, elapsed time, ok/fail, session id — never conversation content. |
+| `behavior.notifyAfterSeconds` | number | `60` | Seconds a turn must run before a push notification fires; `0` turns it off. Delivers to the desktop (`notify-send` / `osascript`) and to any configured ntfy/webhook URLs. Notification text is metadata only: task kind, elapsed time, ok/fail, session id. Never conversation content. |
 | `behavior.notifyOnlyWhenUnfocused` | boolean | `true` | Master gate over every alert class: alerts fire only when the terminal is unfocused, or when focus state was never observed. Set `false` to fire regardless of focus. |
 
-## `session.*` — session behavior
+## `session.*`: session behavior
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `session.autoTitle` | boolean | `false` | Auto-title an untitled session using the configured tool/helper (weak/fast) model after the first turn completes. Off by default because it spends a small model call. Only ever sets a system title — a title you set yourself is never overwritten — and it runs at most once per session. Requires the tool LLM to be configured (`/config` → tools). |
+| `session.autoTitle` | boolean | `false` | Auto-title an untitled session using the configured tool/helper (weak/fast) model after the first turn completes. Off by default because it spends a small model call. Only ever sets a system title (a title you set yourself is never overwritten), and it runs at most once per session. Requires the tool LLM to be configured (`/config` → tools). |
 
 ```json
 {
@@ -220,7 +220,7 @@ behavior group alongside the schema-owned keys.
 }
 ```
 
-## `update.*` — launch-time self-update
+## `update.*`: launch-time self-update
 
 Binary installs (the `curl … | sh` installer) check for a newer release at
 every TUI launch and, when one exists, install it through the same

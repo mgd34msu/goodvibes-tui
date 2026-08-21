@@ -3,7 +3,7 @@
  *
  * How `/profile` puts the owner profile on screen. Every function here is pure:
  * it takes a checked response (profile-types.ts) and returns a string. Nothing
- * in this file reads a file, opens a connection, or writes to a log — which is
+ * in this file reads a file, opens a connection, or writes to a log, which is
  * what makes the containment rule in docs/owner-profile.md §10/§11.3 testable
  * rather than a claim: a profile value can only leave through the string these
  * functions return, and the only thing that consumes that string is `ctx.print`.
@@ -17,7 +17,7 @@
  * Two rules the renderers hold to:
  *
  *   - **A write never echoes the value.** `renderProfileWriteResult` prints the
- *     daemon's own one-line disclosure ("Noted — saved your office address to
+ *     daemon's own one-line disclosure ("Noted, saved your office address to
  *     your profile.") and the field names that changed. The value the owner just
  *     set is deliberately absent: repeating it puts a closed-tier string into the
  *     transcript for no benefit (§8.2).
@@ -53,7 +53,7 @@ export function describeProfileState(state: ProfileStateView): string | null {
     return `Your profile could not be read: ${state.reason ?? 'no reason given'}\n  file: ${state.path}`;
   }
   if (state.exists === false) {
-    return `Your profile is empty — nothing has been recorded yet.\n  file: ${state.path}`;
+    return `Your profile is empty: nothing has been recorded yet.\n  file: ${state.path}`;
   }
   return null;
 }
@@ -66,7 +66,7 @@ function padTo(text: string, width: number): string {
  * One field row: the label as written in the file, the value, and the field id
  * so `/profile where <id>` and `/profile forget <id>` are copy-pasteable.
  *
- * An invalid value is shown verbatim with its reason rather than hidden — the
+ * An invalid value is shown verbatim with its reason rather than hidden, the
  * owner typed it, and a parser that disliked it is not grounds for pretending it
  * is not there (§4.3).
  */
@@ -88,7 +88,7 @@ function renderSection(section: ProfileSectionView): string {
 }
 
 /**
- * "What do you know about me?" — the whole document, by section, in the order
+ * "What do you know about me?", the whole document, by section, in the order
  * the file has it. Sections the owner added himself render exactly like the
  * canonical ones, because his headings are as real as the built-in ones (§4.5).
  */
@@ -120,7 +120,7 @@ function renderProvenanceDetail(provenance: ProfileProvenanceView, indent: strin
 }
 
 /**
- * "Where did you get that?" — the surface, the date and the owner's verbatim
+ * "Where did you get that?", the surface, the date and the owner's verbatim
  * words, plus every superseded predecessor still retained as a history comment.
  *
  * A field with no suffix reports that he wrote it by hand. That is the honest
@@ -135,9 +135,9 @@ export function renderProfileProvenance(report: ProfileProvenanceReportView): st
   }
 
   if (!report.present) {
-    lines.push('  not currently recorded — only superseded history remains:');
+    lines.push('  not currently recorded: only superseded history remains:');
   } else if (report.handEdited) {
-    lines.push('  no provenance recorded — you wrote or edited this line by hand.');
+    lines.push('  no provenance recorded: you wrote or edited this line by hand.');
   } else if (report.provenance) {
     lines.push(...renderProvenanceDetail(report.provenance, '  '));
   } else {
@@ -149,7 +149,7 @@ export function renderProfileProvenance(report: ProfileProvenanceReportView): st
     for (const previous of report.superseded) {
       lines.push(`    ${previous.value}   (replaced ${previous.supersededOn})`);
       if (previous.provenance) lines.push(...renderProvenanceDetail(previous.provenance, '      '));
-      else lines.push('      no provenance recorded — hand-written.');
+      else lines.push('      no provenance recorded: hand-written.');
     }
   }
   return lines.join('\n');
@@ -167,7 +167,7 @@ function renderChangeNames(result: ProfileWriteResultView): string[] {
 /**
  * What a write actually did.
  *
- * `ok: false` prints the daemon's reason and nothing else — no "done", no
+ * `ok: false` prints the daemon's reason and nothing else, no "done", no
  * change list, no disclosure. That covers the case §9.2 names explicitly:
  * forgetting something that was not there reports that it was not there.
  *
@@ -180,7 +180,7 @@ export function renderProfileWriteResult(result: ProfileWriteResultView): string
     return `${PROFILE_TAG} ${result.reason ?? 'the write was refused, and the daemon gave no reason.'}`;
   }
   if (result.changes.length === 0) {
-    return `${PROFILE_TAG} nothing changed${result.reason ? ` — ${result.reason}` : '.'}`;
+    return `${PROFILE_TAG} nothing changed${result.reason ? `: ${result.reason}` : '.'}`;
   }
   const disclosure = result.disclosure.trim();
   const lines = [disclosure.length > 0 ? `${PROFILE_TAG} ${disclosure}` : `${PROFILE_TAG} done.`];
@@ -214,7 +214,7 @@ export function renderProfileStatus(state: ProfileStateView): string {
   if (invalid.length === 0) {
     lines.push('  fields that did not validate: none');
   } else {
-    lines.push(`  fields that did not validate (${invalid.length}) — the value is kept as you typed it:`);
+    lines.push(`  fields that did not validate (${invalid.length}): the value is kept as you typed it:`);
     for (const entry of invalid) lines.push(`    ${entry.fieldId}: ${entry.reason}`);
   }
   return lines.join('\n');
@@ -224,7 +224,7 @@ export function renderProfileStatus(state: ProfileStateView): string {
  * Every field id present in the document, paired with the label written on its
  * line. Used to resolve `/profile where shipping address` to
  * `commerce.shippingAddress` without keeping a copy of the SDK's field registry
- * here — the mapping comes from the live response, so it cannot drift.
+ * here, the mapping comes from the live response, so it cannot drift.
  */
 export function collectFieldLabels(document: ProfileDocumentView): ReadonlyMap<string, string[]> {
   const byLabel = new Map<string, string[]>();

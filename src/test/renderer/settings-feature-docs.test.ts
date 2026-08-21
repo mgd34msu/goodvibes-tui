@@ -1,15 +1,15 @@
 /**
- * In-product feature documentation — render tests.
+ * In-product feature documentation, render tests.
  *
  * The settings workspace must answer "what does this feature do" at every
  * feature row without leaving the product: under the cursor, the FULL
  * behavior description and the feature's real option shape render from the
  * SDK's FEATURE_SETTINGS schema. Long documentation SCROLLS (PgUp/PgDn) with
- * honest more-above/below markers — it is never clipped.
+ * honest more-above/below markers, it is never clipped.
  *
  * These tests render real frames at 80×24 and at 60 columns, reconstruct the
  * documentation pane's complete text by scrolling through it, and assert the
- * COMPLETE description string for every one of the features — full-string
+ * COMPLETE description string for every one of the features, full-string
  * assertions, never prefixes.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -38,14 +38,14 @@ function normalize(text: string): string {
 /**
  * Whitespace-free comparison space: the pane wraps long atomic tokens
  * (settings keys at 60 columns) mid-token, so full-string containment is
- * asserted with all whitespace removed — the complete text must be present,
+ * asserted with all whitespace removed, the complete text must be present,
  * wrap positions are presentation.
  */
 function squash(text: string): string {
   return text.replace(/\s+/g, '');
 }
 
-describe('settings workspace — in-product feature documentation', () => {
+describe('settings workspace: in-product feature documentation', () => {
   let tmpDir: string;
   let cm: ConfigManager;
   let ffm: FeatureFlagManager;
@@ -108,9 +108,9 @@ describe('settings workspace — in-product feature documentation', () => {
     for (let guard = 0; guard < 100; guard += 1) {
       modal.contextScroll = requested;
       const rows = paneRows(renderSettingsModal(modal, width, HEIGHT), width);
-      const aboveMatch = rows[0]?.match(/^\S+ (\d+) more line\(s\) above — PgUp$/);
+      const aboveMatch = rows[0]?.match(/^\S+ (\d+) more line\(s\) above; PgUp$/);
       const offset = aboveMatch ? Number(aboveMatch[1]) : 0;
-      const hasBelow = /more line\(s\) below — PgDn$/.test(rows[rows.length - 1] ?? '');
+      const hasBelow = /more line\(s\) below; PgDn$/.test(rows[rows.length - 1] ?? '');
       rows.forEach((row, r) => {
         if (r === 0 && aboveMatch) return;
         if (r === rows.length - 1 && hasBelow) return;
@@ -182,9 +182,9 @@ describe('settings workspace — in-product feature documentation', () => {
     // A capability whose platform half ships but whose surface half does not reads
     // as disabled even with its settings key set to true, and the written reason
     // for that MUST render, or the user sees a switch that flipped and a state
-    // that did not, with no explanation. The set is empty today — wake-word
+    // that did not, with no explanation. The set is empty today, wake-word
     // detection was the last such capability and lost the marker when this
-    // terminal started capturing audio — and the loop is what keeps the rule in
+    // terminal started capturing audio, and the loop is what keeps the rule in
     // force for the next one.
     const inoperable = FEATURE_SETTINGS.filter((candidate) => candidate.operable === false);
     for (const feature of inoperable) {

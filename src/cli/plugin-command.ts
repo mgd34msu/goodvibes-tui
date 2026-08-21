@@ -8,13 +8,13 @@ import type { CliCommandOutput, CliCommandRuntime } from '@pellux/goodvibes-term
 import { handlePluginBundlesCommand } from './plugin-bundles-command.ts';
 
 // ---------------------------------------------------------------------------
-// `goodvibes plugin init` / `plugin validate` — scaffold and check plugins
+// `goodvibes plugin init` / `plugin validate`, scaffold and check plugins
 // against the SAME classic loader the running TUI uses (PluginManager wraps
 // discoverPlugins from @pellux/goodvibes-sdk/platform/plugins). The pass/fail
 // verdict is the real loader's acceptance: we run discoverPlugins against the
 // target directory (isolated from the operator's own plugin folders) and check
 // whether it accepts the directory. Reasons for a rejected manifest are sourced
-// from the SDK's validateManifestV2 (string|null) plus observable file facts —
+// from the SDK's validateManifestV2 (string|null) plus observable file facts,
 // no second manifest schema is defined here.
 // ---------------------------------------------------------------------------
 
@@ -57,7 +57,7 @@ function validatePluginDirectory(dirPath: string): PluginValidation {
     };
   }
 
-  // Rejected — explain why, delegating field checks to the SDK validator.
+  // Rejected, explain why, delegating field checks to the SDK validator.
   const reasons: string[] = [];
   if (!existsSync(manifestPath)) {
     reasons.push('manifest.json not found in the plugin directory.');
@@ -67,14 +67,14 @@ function validatePluginDirectory(dirPath: string): PluginValidation {
   try {
     manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
   } catch (error) {
-    reasons.push(`manifest.json is not valid JSON — ${summarizeError(error)}`);
+    reasons.push(`manifest.json is not valid JSON; ${summarizeError(error)}`);
     return { ok: false, path: resolved, reasons };
   }
   const fieldReason = validateManifestV2(manifest);
   if (fieldReason) {
     reasons.push(fieldReason);
   } else {
-    reasons.push('the plugin loader did not accept this directory — if "main" is set it must be a relative path.');
+    reasons.push('the plugin loader did not accept this directory; if "main" is set it must be a relative path.');
   }
   return { ok: false, path: resolved, reasons };
 }
@@ -85,7 +85,7 @@ function renderValidation(result: PluginValidation, json: boolean): CliCommandOu
   }
   const lines = ['GoodVibes plugin validation', `  path: ${result.path}`];
   if (result.ok) {
-    lines.push(`  PASS  ${result.manifestName} v${result.manifestVersion} — the plugin loader accepts this directory.`);
+    lines.push(`  PASS  ${result.manifestName} v${result.manifestVersion}: the plugin loader accepts this directory.`);
   } else {
     lines.push('  FAIL  the plugin loader rejects this directory:');
     for (const reason of result.reasons) lines.push(`    - ${reason}`);
@@ -135,7 +135,7 @@ function handlePluginInit(runtime: CliCommandRuntime): CliCommandOutput {
     return {
       output: json
         ? JSON.stringify({ ok: false, path: targetDir, reason: summarizeError(error) }, null, 2)
-        : `Failed to scaffold plugin at ${targetDir} — ${summarizeError(error)}`,
+        : `Failed to scaffold plugin at ${targetDir}; ${summarizeError(error)}`,
       exitCode: 1,
     };
   }
@@ -152,8 +152,8 @@ function handlePluginInit(runtime: CliCommandRuntime): CliCommandOutput {
     `Scaffolded plugin "${name}" at ${targetDir}`,
     '  created: manifest.json, index.js',
     validation.ok
-      ? '  validation: PASS — the plugin loader accepts this directory.'
-      : `  validation: FAIL — ${validation.reasons.join('; ')}`,
+      ? '  validation: PASS; the plugin loader accepts this directory.'
+      : `  validation: FAIL; ${validation.reasons.join('; ')}`,
     `  next: run "goodvibes plugin validate ${targetDir}" or restart the TUI to load it.`,
   ];
   return { output: lines.join('\n'), exitCode: validation.ok ? 0 : 1 };

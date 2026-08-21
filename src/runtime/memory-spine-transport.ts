@@ -18,9 +18,9 @@
  * to a divergent local copy.
  *
  * The SDK's `rest-transport.ts` (`platform/runtime/memory-spine`) adopted
- * this file's version as the superset — same routes,
+ * this file's version as the superset, same routes,
  * same discriminator functions, same honesty contract, same transport-http
- * primitives — so this file now just delegates. `MemorySpineWireOptions`
+ * primitives, so this file now just delegates. `MemorySpineWireOptions`
  * (`{baseUrl, authToken, fetchImpl?}`) is the same shape the SDK's
  * `MemorySpineRestTransportOptions` takes, so there is nothing to adapt: this
  * export is a direct pass-through, kept as this file's own named symbol only
@@ -30,7 +30,7 @@
  * Retired in the same hoist: `syncMemorySpineToHostStatus` and
  * `MemorySpineActiveRef`. Memory-spine activation is now folded into the
  * SDK's `createSpineAdoptionSync` (see `src/runtime/client/spine-adoption.ts`)
- * — `spine-adoption.ts` supplies `memoryTransport` in the connect bundle
+ *, `spine-adoption.ts` supplies `memoryTransport` in the connect bundle
  * instead of calling a separate sync function on the daemon-status signal.
  * Confirmed zero non-test callers remained (only
  * `src/test/runtime/memory-spine-daemon-integration.test.ts` still exercised

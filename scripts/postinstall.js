@@ -66,7 +66,7 @@ async function downloadText(url) {
  *
  * The daemon binary is NOT here any more. The daemon is its own product with
  * its own npm package (`goodvibes-daemon`), which this package declares as a
- * dependency — so an npm install still brings the whole suite, and the daemon's
+ * dependency, so an npm install still brings the whole suite, and the daemon's
  * own postinstall places the daemon's own binary. Two packages each placing
  * a copy of `goodvibes-daemon` is exactly how a machine ends up with two.
  */
@@ -234,7 +234,7 @@ function deployBundledFiles() {
  * Put the wake-word model on the machine as part of installing.
  *
  * Everything needed to detect "hey goodvibes" already shipped, and provisioning
- * was reachable only by typing `/voice wake setup` — so the ordinary outcome of
+ * was reachable only by typing `/voice wake setup`, so the ordinary outcome of
  * installing was a wake word that could not start. The pins (URLs, byte counts,
  * checksums) live in the SDK's wake-word manifest and stay there; this calls the
  * SDK's install policy, which:
@@ -252,7 +252,7 @@ function deployBundledFiles() {
  * It honours the same skip switches as the binary install (`--no-download`,
  * GOODVIBES_SKIP_BINARY_DOWNLOAD) plus its own
  * GOODVIBES_SKIP_WAKE_MODEL_DOWNLOAD, and it stays out of a source checkout for
- * the same reason the binary install does — a repo clone is a development tree,
+ * the same reason the binary install does, a repo clone is a development tree,
  * not an installation.
  */
 async function installWakeWordModel() {

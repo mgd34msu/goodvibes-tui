@@ -1,5 +1,5 @@
 /**
- * Unit tests for SettingsModal — network category (controlPlane / httpListener).
+ * Unit tests for SettingsModal, network category (controlPlane / httpListener).
  *
  * Covers:
  *   - Network tab populated with controlPlane.* and httpListener.* entries
@@ -48,7 +48,7 @@ const emptyMcpRegistry: McpRegistry = {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('SettingsModal — network category', () => {
+describe('SettingsModal: network category', () => {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
   let tmpDir: string;

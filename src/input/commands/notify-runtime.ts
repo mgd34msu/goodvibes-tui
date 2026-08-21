@@ -73,7 +73,7 @@ export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
         ctx.print(`Testing ${urls.length} webhook${urls.length !== 1 ? 's' : ''}...`);
         notifier.setUrls(urls);
         const results = await notifier.test();
-        ctx.print(results.map((r) => r.ok ? `  [ok] ${r.url}` : `  [fail] ${r.url} — ${r.error ?? 'unknown error'}`).join('\n'));
+        ctx.print(results.map((r) => r.ok ? `  [ok] ${r.url}` : `  [fail] ${r.url}: ${r.error ?? 'unknown error'}`).join('\n'));
         return;
       }
 

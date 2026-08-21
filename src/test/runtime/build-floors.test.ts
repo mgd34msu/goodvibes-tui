@@ -1,5 +1,5 @@
 /**
- * build-floors.test.ts — the two build floors this terminal and the daemon hold
+ * build-floors.test.ts, the two build floors this terminal and the daemon hold
  * against each other.
  *
  * Forward (the daemon's floor on this client): a daemon that announces a floor
@@ -11,7 +11,7 @@
  * the sentence is not repeated on every reconnect against the same old daemon.
  *
  * The comparison itself is the SDK's; what is pinned here is this process's own
- * state — the latch, the buffered-until-attached notice, and the announce-once.
+ * state, the latch, the buffered-until-attached notice, and the announce-once.
  */
 import { describe, expect, test } from 'bun:test';
 import {

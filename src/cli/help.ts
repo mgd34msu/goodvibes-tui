@@ -7,7 +7,7 @@ function readJsonVersion(path: string): string | null {
   try {
     if (!existsSync(path)) return null;
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as { name?: unknown; version?: unknown };
-    // Only trust OUR package.json — a compiled single-file binary can resolve
+    // Only trust OUR package.json, a compiled single-file binary can resolve
     // this path to a different package.json (a bundled dependency's) that
     // reports a placeholder like "0.0.0". Fall through to the baked VERSION in
     // that case rather than rendering a stray version in `--version`/banners.
@@ -30,7 +30,7 @@ export function renderGoodVibesVersion(binary = 'goodvibes'): string {
 
 /**
  * Honest one-line startup identity for the daemon binary, emitted right as it
- * begins serving — including on a bare (no-arg) systemd launch. It states the
+ * begins serving, including on a bare (no-arg) systemd launch. It states the
  * RESOLVED version (never a placeholder), the home/host/port it actually bound,
  * and points at the real service-setup command. This replaces the field
  * behavior where a bare launch showed a wrong "v0.0.0" banner and gave an
@@ -44,7 +44,7 @@ export function renderDaemonStartupBanner(
   binary = 'goodvibes-daemon',
 ): string {
   return (
-    `${binary} ${version} starting — ` +
+    `${binary} ${version} starting: ` +
     `home=${binding.homeDir} host=${binding.host} port=${binding.port} ` +
     `(manage as a service: ${binary} install-service)`
   );
@@ -257,12 +257,12 @@ const COMMAND_HELP: Record<string, CommandHelp> = {
   },
   hooks: {
     usage: ['hooks validate'],
-    summary: 'Validate the configured hooks.json against the hook loader schema — per-hook pass/fail with plain reasons, nonzero exit if any hook is invalid.',
+    summary: 'Validate the configured hooks.json against the hook loader schema; per-hook pass/fail with plain reasons, nonzero exit if any hook is invalid.',
     examples: ['hooks validate', 'hooks validate --json'],
   },
   plugin: {
     usage: ['plugin init <name> [directory]', 'plugin validate <path>', 'plugin bundles browse <index-url-or-file>', 'plugin bundles install <ref> --sha256 <pin>', 'plugin bundles list'],
-    summary: 'Scaffold a minimal valid plugin (manifest.json + entry file), validate a plugin directory against the plugin loader checks, or browse/install/list SHA-256-pinned capability bundles from a governed marketplace index. Bundle installs are never unpinned — a missing or mismatched --sha256 is refused, not overridable.',
+    summary: 'Scaffold a minimal valid plugin (manifest.json + entry file), validate a plugin directory against the plugin loader checks, or browse/install/list SHA-256-pinned capability bundles from a governed marketplace index. Bundle installs are never unpinned; a missing or mismatched --sha256 is refused, not overridable.',
     examples: ['plugin init my-plugin', 'plugin validate .goodvibes/plugins/my-plugin', 'plugin bundles browse ./marketplace-index.json', 'plugin bundles install ./bundle.json --sha256 <64-hex> --yes'],
   },
 };
@@ -340,7 +340,7 @@ export function renderGoodVibesDaemonHelp(binary = 'goodvibes-daemon'): string {
     '  service-status                 Show whether the daemon service is installed / enabled / active',
     '  migrate-service                Guided migration from an install-script goodvibes-daemon.service unit; prints a plan',
     '                                 unless run with -y/--yes (never auto-migrates)',
-    '  send [message]                 Send a message to one of your configured channels — Telegram, ntfy,',
+    '  send [message]                 Send a message to one of your configured channels: Telegram, ntfy,',
     '                                 Discord, Slack, Google Chat, Signal, WhatsApp, iMessage, Teams,',
     '                                 BlueBubbles, Mattermost, Matrix or a webhook. Takes the message as',
     '                                 an argument or on stdin, so it composes with other tooling.',

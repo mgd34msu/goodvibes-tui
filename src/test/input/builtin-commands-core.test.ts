@@ -22,7 +22,7 @@ describe('input/registerBuiltinCommands shell core extraction', () => {
   });
 });
 
-describe('/help — generated live from the command registry', () => {
+describe('/help: generated live from the command registry', () => {
   function fullRegistry(): CommandRegistry {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
@@ -46,7 +46,7 @@ describe('/help — generated live from the command registry', () => {
     expect(captured).not.toBeNull();
     const { items } = captured!;
     const registered = registry.getAll();
-    // Complete: one row per registered command — no hand-maintained subset.
+    // Complete: one row per registered command, no hand-maintained subset.
     expect(items).toHaveLength(registered.length);
     expect(new Set(items.map((item) => item.id))).toEqual(new Set(registered.map((cmd) => cmd.name)));
     for (const item of items) {

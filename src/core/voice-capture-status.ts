@@ -1,5 +1,5 @@
 /**
- * voice-capture-status.ts — what the shell shows while a microphone is open.
+ * voice-capture-status.ts, what the shell shows while a microphone is open.
  *
  * A capture indicator is not decoration. Two of the three states here exist
  * because the alternative is a user who cannot tell whether their microphone is
@@ -41,7 +41,7 @@ export interface VoiceCaptureIndicatorState {
    * one keypress ago and is owed the confirmation.
    */
   readonly indicator: 'off' | 'statusline' | 'banner';
-  /** Extra words for the row — a restart delay, a latch reason, an elapsed time. */
+  /** Extra words for the row, a restart delay, a latch reason, an elapsed time. */
   readonly detail?: string | undefined;
 }
 

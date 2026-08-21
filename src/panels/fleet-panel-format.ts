@@ -29,7 +29,7 @@ import { renderPoolSummary, type WorkstreamGraphSnapshot } from './workstream-gr
 // left over after the fixed columns + gaps; on hostile (narrow) widths the
 // trailing columns simply clip (buildAlignedRow/buildSelectablePanelLine stop
 // writing once a cell would overflow the row) rather than throwing or
-// wrapping — the tree stays readable, just denser.
+// wrapping, the tree stays readable, just denser.
 const KIND_W = 8;
 const ELAPSED_W = 7;
 const TOKENS_W = 7;
@@ -67,7 +67,7 @@ export function formatFleetTokens(usage: ProcessUsage | undefined): string {
   return total >= 1000 ? `${(total / 1000).toFixed(1)}k` : String(total);
 }
 
-/** Honest cost display: never a fabricated $0.00 — 'unpriced' when costState says so. */
+/** Honest cost display: never a fabricated $0.00, 'unpriced' when costState says so. */
 export function formatFleetCost(costUsd: number | null | undefined, costState: ProcessCostState): string {
   if (!hasFleetCost(costUsd, costState)) return 'unpriced';
   const formatted = formatAgentCost(costUsd as number);
@@ -92,7 +92,7 @@ export function renderFleetRowLine(
   const C = palette;
   const node = row.node;
   // Observed foreign agents render as their own visibility row (no cost/steer
-  // columns, no stop marker) — see fleet-observed-render.ts.
+  // columns, no stop marker), see fleet-observed-render.ts.
   if (isObservedExternalNode(node)) return renderObservedRowLine(node, width, palette);
   const disp = fleetStateDisplay(node.state, stopping, blocked);
   const color = toneColor(disp.tone, C);
@@ -104,7 +104,7 @@ export function renderFleetRowLine(
   const label = `${row.treePrefix}${node.label}${attemptBadge}`;
   // Activity column doubles as the badge slot, in priority order:
   //   stopping > waiting-on-human text ('blocked on you' / 'needs your input')
-  //   > the read-model HEADLINE (derived from task/phase identity only —
+  //   > the read-model HEADLINE (derived from task/phase identity only,
   //   replaced in place, never a scrolling feed) with the stall marker
   //   ('quiet Nm') appended when the node has gone observably silent.
   // Nodes without a headline fall back to the live currentActivity text.
@@ -155,14 +155,14 @@ export function renderFleetRowLine(
  * The selected-node detail block under the fleet tree. Pure (extracted from
  * FleetPanel.renderDetail to hold that file under the 800-line architecture
  * cap). `stopping`/`blocked` are display-only overrides the caller derives from
- * the stop tracker + node state — mirror the tree row exactly so the literal
+ * the stop tracker + node state, mirror the tree row exactly so the literal
  * 'state' text never claims a past-tense outcome mid-write, and a
  * blocked-on-user node reads 'blocked on you' here too.
  */
 /**
  * The reviewer's acceptance checklist + verdict, from the fleet node's served
  * `review` field (ProcessReviewSummary, rides fleet.snapshot/list). Rendered
- * only when a review has completed — never an empty shell. Each item shows
+ * only when a review has completed, never an empty shell. Each item shows
  * whether it was verified, the evidence, and (when present) how it was
  * exercised, matching what the webui's review detail surfaces.
  */
@@ -180,8 +180,8 @@ export function renderReviewLines(review: ProcessReviewSummary, width: number, p
     ]),
   ];
   if (review.checklist.length === 0) {
-    // Empty checklist is itself a gate failure — say so honestly, don't hide it.
-    lines.push(buildPanelLine(width, [['   ', C.dim], ['(the reviewer emitted no acceptance checklist — a gate failure)', failTone]]));
+    // Empty checklist is itself a gate failure, say so honestly, don't hide it.
+    lines.push(buildPanelLine(width, [['   ', C.dim], ['(the reviewer emitted no acceptance checklist; a gate failure)', failTone]]));
     return lines;
   }
   for (const it of review.checklist) {
@@ -209,7 +209,7 @@ export function renderReviewLines(review: ProcessReviewSummary, width: number, p
 /**
  * The task graph's edges + elastic-pool posture for a workstream row, rendered
  * IN the fleet detail (the tree shows nodes; edges/pool used to be reachable
- * only via /graph — /graph still works). Fetched lazily and cached by fleet-acts;
+ * only via /graph, /graph still works). Fetched lazily and cached by fleet-acts;
  * rendered only once a snapshot is in hand. An empty graph states so honestly.
  */
 export function renderGraphPostureLines(graph: WorkstreamGraphSnapshot, width: number, palette: PanelPalette = DEFAULT_PANEL_PALETTE): Line[] {
@@ -244,7 +244,7 @@ export function renderFleetDetailLines(
 ): Line[] {
   const C = palette;
   // Observed foreign agents drill into their own detail (facts + steer-or-reason,
-  // never a stop) — see fleet-observed-render.ts. The drill-in steer draft (when
+  // never a stop), see fleet-observed-render.ts. The drill-in steer draft (when
   // the composer is open on this row) renders an input line in that detail.
   if (isObservedExternalNode(node)) return renderObservedDetailLines(node, width, palette, observedSteerDraft);
   const disp = fleetStateDisplay(node.state, stopping, blocked);
@@ -277,7 +277,7 @@ export function renderFleetDetailLines(
     [formatFleetCost(node.costUsd, node.costState), C.value],
   ]);
   // The headline (task/phase identity, replaced in place) gets its own row
-  // when present, with the stall marker appended — the detail block mirrors
+  // when present, with the stall marker appended, the detail block mirrors
   // exactly what the tree row's steady slot shows.
   const stallMarker = fleetStallMarker(node);
   const headlineText = node.headline
@@ -300,12 +300,12 @@ export function renderFleetDetailLines(
   const line4 = buildPanelLine(width, [[' approvals ', C.label], ['—', C.dim]]);
   const isolationDetail = node.kind === 'work-item' ? formatWorkItemIsolationDetailFromRaw(node.raw) : null;
   // A merge-conflict row shows its STRUCTURED conflicting-path list, wrapped so a
-  // long path is fully readable — never clipped (STEP 4: the conflict row acts,
+  // long path is fully readable, never clipped (STEP 4: the conflict row acts,
   // and the operator sees exactly which files need resolving before pressing Enter).
   const conflictFiles = node.kind === 'work-item' ? conflictFilesFromRaw(node.raw) : null;
   const conflictLines: Line[] = conflictFiles
     ? [
-      buildPanelLine(width, [[' conflicts ', C.label], [`${conflictFiles.length} file(s) — press Enter to resolve`, C.warn ?? DEFAULT_PANEL_PALETTE.warn]]),
+      buildPanelLine(width, [[' conflicts ', C.label], [`${conflictFiles.length} file(s): press Enter to resolve`, C.warn ?? DEFAULT_PANEL_PALETTE.warn]]),
       // Prefix is 3 spaces of indent + a 2-col bullet/continuation marker, so
       // wrap the path at width-5 to keep the composed line within `width`
       // (a hard-wrapped long path is fully readable, never clipped).
@@ -317,7 +317,7 @@ export function renderFleetDetailLines(
     ]
     : [];
   // The reviewer's acceptance checklist + verdict, when a review has completed
-  // (served on node.review; absent before any review — never an empty shell).
+  // (served on node.review; absent before any review, never an empty shell).
   const reviewLines = node.review ? renderReviewLines(node.review, width, C) : [];
   // The task graph's edges/pool posture for a workstream row (fetched + cached
   // by fleet-acts); rendered in-panel under the chain, /graph still available.

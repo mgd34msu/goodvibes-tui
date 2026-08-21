@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// acp-runtime.ts — the scripted path for hosting third-party coding agents,
+// acp-runtime.ts, the scripted path for hosting third-party coding agents,
 // over the SAME verbs the Fleet panel's spawn affordance drives (acp.agents.list
 // / acp.sessions.create). `/agents list` shows what the daemon discovered
 // (read-only, quiet when none); `/agents host <agentId> [dir]` spawns one as a
 // long-lived daemon session that shows up as an acp-agent fleet row. A working
 // directory defaults to the current one; a known workspace root can be named
-// instead — but no path is ever required beyond what the operator already has.
+// instead, but no path is ever required beyond what the operator already has.
 //
 // A structured spawn failure ({binary, stage, message}) is printed verbatim,
 // never left as a hung row: the daemon bounds the handshake and returns a
@@ -37,7 +37,7 @@ export function registerAcpRuntimeCommands(registry: CommandRegistry): void {
           }
           ctx.print([
             'Discovered ACP agents (host with /agents host <id> [directory]):',
-            ...agents.map((a) => `  ${a.id} — ${a.title}  (${a.binaryPath})`),
+            ...agents.map((a) => `  ${a.id}: ${a.title}  (${a.binaryPath})`),
           ].join('\n'));
         } catch (error) {
           ctx.print(`[agents list] ${describeOperatorRpcError(error)}`);
@@ -55,11 +55,11 @@ export function registerAcpRuntimeCommands(registry: CommandRegistry): void {
         try {
           const { hosted, started } = await rpc.sdk.operator.invoke('acp.sessions.create', { agentId, cwd });
           if (hosted.error) {
-            // Structured failure, verbatim — never a hung row.
-            ctx.print(`[agents host] Could not host ${hosted.title || agentId}: ${hosted.error.stage} stage failed for ${hosted.error.binary} — ${hosted.error.message}`);
+            // Structured failure, verbatim, never a hung row.
+            ctx.print(`[agents host] Could not host ${hosted.title || agentId}: ${hosted.error.stage} stage failed for ${hosted.error.binary}; ${hosted.error.message}`);
             return;
           }
-          ctx.print(`[agents host] Hosting ${hosted.title || agentId} in ${cwd}${started ? '' : ' (queued)'} — it appears as an acp-agent row in the fleet; steer and stop it like any agent.`);
+          ctx.print(`[agents host] Hosting ${hosted.title || agentId} in ${cwd}${started ? '' : ' (queued)'}; it appears as an acp-agent row in the fleet; steer and stop it like any agent.`);
         } catch (error) {
           ctx.print(`[agents host] ${describeOperatorRpcError(error)}`);
         }

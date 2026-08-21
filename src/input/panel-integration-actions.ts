@@ -3,11 +3,11 @@ import type { Panel } from '../panels/types.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 
 // (the purge): every instanceof-routed branch this file used to carry
-// (FileExplorerPanel/FilePreviewPanel/SymbolOutlinePanel — DELETE;
-// ApprovalPanel/TasksPanel/OrchestrationPanel/AgentInspectorPanel —
+// (FileExplorerPanel/FilePreviewPanel/SymbolOutlinePanel, DELETE;
+// ApprovalPanel/TasksPanel/OrchestrationPanel/AgentInspectorPanel,
 // RETIRE-INTO-FLEET) targeted a panel class that no longer exists. Panels
 // migrated onto the formal `Panel.handlePanelIntegrationAction` hook (the
-// preferred seam — see the comment below) are unaffected; this function now
+// preferred seam, see the comment below) are unaffected; this function now
 // only provides that passthrough. See
 // .goodvibes/audit/2026-07-04-wave6-briefs.json for the disposition
 // map.

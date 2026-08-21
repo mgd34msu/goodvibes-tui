@@ -1,5 +1,5 @@
 /**
- * BookmarkModal — state management for the /bookmarks command modal.
+ * BookmarkModal, state management for the /bookmarks command modal.
  *
  * Lists bookmarks from BookmarkManager and tracks UI state:
  * selected index, scroll offset, and pending action.

@@ -1,5 +1,5 @@
 /**
- * conversation-compaction-render.ts — folds a compaction-continuation user
+ * conversation-compaction-render.ts, folds a compaction-continuation user
  * message (the instruction block the compactor re-injects after an automatic
  * compaction) to one header + preview line.
  *
@@ -16,7 +16,7 @@ import type { BlockMeta } from './conversation-types.ts';
 
 /**
  * The slice of the render context this module needs, declared structurally
- * rather than imported from conversation-rendering.ts — that import would form
+ * rather than imported from conversation-rendering.ts, that import would form
  * a 2-file cycle the architecture check rejects, and this module only ever
  * touches these three fields.
  */
@@ -62,7 +62,7 @@ export function renderCompactionContinuationMessage(
 
   if (isCollapsed) {
     // One row. This used to be the header PLUS a framed fragment holding a
-    // single static sentence — three rows of chrome to say what the label and
+    // single static sentence, three rows of chrome to say what the label and
     // the badge already said. The distinguishing half of that sentence folds
     // onto the header instead.
     context.history.addLine(renderConversationFoldedRow(

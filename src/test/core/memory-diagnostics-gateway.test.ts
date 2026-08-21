@@ -46,7 +46,7 @@ describe('classifyMemoryDiagnosticsError', () => {
   });
 });
 
-describe('renderMemoryDiagnostics — mocked daemon (injected resolution)', () => {
+describe('renderMemoryDiagnostics: mocked daemon (injected resolution)', () => {
   test('available renders the governor snapshot rows', async () => {
     const out = await renderMemoryDiagnostics(readyResolution());
     expect(out).toContain('Health Review: Memory');
@@ -68,7 +68,7 @@ describe('renderMemoryDiagnostics — mocked daemon (injected resolution)', () =
   });
 });
 
-describe('createMemoryDiagnosticsGateway — resolution', () => {
+describe('createMemoryDiagnosticsGateway: resolution', () => {
   test('refuses honestly when the daemon is disabled', () => {
     const resolution = createMemoryDiagnosticsGateway({
       configManager: { get: (k: string) => (k === 'daemon.enabled' ? false : undefined) } as never,
@@ -133,7 +133,7 @@ function makeCtx(configGet?: (key: string) => unknown): CommandContext & { print
   } as unknown as CommandContext & { printed: string[] };
 }
 
-describe('/health memory — command wire', () => {
+describe('/health memory: command wire', () => {
   test('honestly reports the daemon disabled rather than fabricating a snapshot', async () => {
     const registry = new CommandRegistry();
     registerHealthRuntimeCommands(registry);

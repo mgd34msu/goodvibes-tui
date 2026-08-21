@@ -1,5 +1,5 @@
 /**
- * Plan integration tests — orchestrator plan injection and continuation nudge logic.
+ * Plan integration tests, orchestrator plan injection and continuation nudge logic.
  *
  * Tests focus on the plan-related helper behaviors:
  * - Pre-turn plan injection adds a system message when an active plan exists
@@ -41,7 +41,7 @@ describe('ExecutionPlanManager behavior', () => {
     // Reset active file pointer so there's no active plan on disk for this test
     // (In CI there may be no .goodvibes/plans directory at all)
     const active = manager.getActive();
-    // May be null or an existing plan — just verify it doesn't throw
+    // May be null or an existing plan, just verify it doesn't throw
     expect(active === null || typeof active === 'object').toBe(true);
   });
 
@@ -80,7 +80,7 @@ describe('ExecutionPlanManager behavior', () => {
     manager.updateItem(plan.id, plan.items[0].id, 'complete');
     const updated = manager.load(plan.id)!;
     const next = manager.getNextItems(updated);
-    // Task B is pending with no deps — should appear
+    // Task B is pending with no deps, should appear
     expect(next.length).toBeGreaterThanOrEqual(1);
     expect(next.every(i => i.status === 'pending')).toBe(true);
   });
@@ -260,7 +260,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
     });
     expect(result.spawned).toHaveLength(0);
     expect(result.limitReached).toBe(false);
-    // Items remain pending — not mutated
+    // Items remain pending, not mutated
     const loaded = manager.load(plan.id)!;
     expect(loaded.items[0].status).toBe('pending');
   });
@@ -313,7 +313,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
       { phase: 'Phase 1', description: 'Task C', dependencies: [] },
     ]);
     const items = manager.getNextItems(plan);
-    // 1 agent running, maxActiveAgents = 2 — should spawn 1 more
+    // 1 agent running, maxActiveAgents = 2, should spawn 1 more
     const result = fakeSpawnLoop(plan, items, manager, {
       recursionEnabled: true,
       maxActiveAgents: 2,

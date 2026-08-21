@@ -64,7 +64,7 @@ describe('renderSelectionModalOverlay', () => {
     ]);
     // Join with a space (not '\n') and strip box-drawing chars before
     // collapsing whitespace, so wrapped lines rejoin into the source
-    // sentence — a prior version of this test asserted only the first two
+    // sentence, a prior version of this test asserted only the first two
     // words of `detail` (`toContain('detail text')`), which stayed green
     // even when everything after those two words was silently clipped.
     const text = renderSelectionModalOverlay(modal, 44, 18)

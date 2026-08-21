@@ -19,7 +19,7 @@ function makeResult(overrides: Partial<CostAttributionResult> = {}): CostAttribu
 }
 
 describe('formatCostAttributionSection', () => {
-  test('optional dimension with no rows renders nothing — honest-empty, never a fabricated section', () => {
+  test('optional dimension with no rows renders nothing; honest-empty, never a fabricated section', () => {
     const result = makeResult({ dimension: 'tool', rows: [] });
     expect(formatCostAttributionSection(result, true)).toBeNull();
   });
@@ -37,7 +37,7 @@ describe('formatCostAttributionSection', () => {
     });
     const text = formatCostAttributionSection(result, false)!.join('\n');
     expect(text).toContain('$0.5000');
-    // The row itself never reads "unpriced" — only the (accurate, 0-count) summary line does.
+    // The row itself never reads "unpriced", only the (accurate, 0-count) summary line does.
     const rowLine = formatCostAttributionSection(result, false)!.find((line) => line.includes('agent-1'));
     expect(rowLine).not.toContain('unpriced');
   });

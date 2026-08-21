@@ -1,5 +1,5 @@
 /**
- * auth-behavior.test.ts — the daemon-auth behaviors this app depends on.
+ * auth-behavior.test.ts, the daemon-auth behaviors this app depends on.
  *
  * Pins four behaviors of the SDK's HttpListener / UserAuthManager surfaces:
  *
@@ -15,7 +15,7 @@
  *      `trustCloudflare` accepts CF-Connecting-IP only when the connecting peer
  *      is inside Cloudflare's published ranges, and ignores it otherwise. It is
  *      a listener constructor option with no config key behind it, so no
- *      shipped composition turns it on — these tests construct it directly.
+ *      shipped composition turns it on, these tests construct it directly.
  *   5. Empty/whitespace password regression: rejected on addUser,
  *      rotatePassword, and the /login endpoint.
  *
@@ -62,7 +62,7 @@ function makeTempAuthEnv(): {
  * Starts an HttpListener on the given port with a custom serveFactory that
  * bypasses the OS port-availability check.
  *
- * Bun.serve is not injected — a proxy around Bun.serve is used so that the
+ * Bun.serve is not injected, a proxy around Bun.serve is used so that the
  * listener acquires a real TCP socket (needed for fetch()) while still skipping
  * the pre-bind probe.
  */
@@ -122,7 +122,7 @@ function nextPort(): number {
 // 1. Rate-limiter behavior: per-IP throttling on login attempts
 // ---------------------------------------------------------------------------
 
-describe('login rate limiter — per-IP throttling', () => {
+describe('login rate limiter: per-IP throttling', () => {
   let listener: HttpListener;
   let baseUrl: string;
 
@@ -176,16 +176,16 @@ describe('login rate limiter — per-IP throttling', () => {
     expect(blocked.status).toBe(429);
   });
 
-  test('default loginRateLimit is 5 — SDK constant pinned to guard against regression', async () => {
+  test('default loginRateLimit is 5: SDK constant pinned to guard against regression', async () => {
     // Proves the SDK default is 5 by exercising the `?? 5` fallback at
     // http-listener.js:79 via a listener started WITHOUT loginRateLimit.
-    // If the SDK default changes, this test fails — that is the point.
+    // If the SDK default changes, this test fails, that is the point.
     const { configManager, userAuth } = makeTempAuthEnv();
     const { listener: defaultListener, baseUrl: defaultBaseUrl } = await startListener({
       port: nextPort(),
       configManager,
       userAuth,
-      // loginRateLimit intentionally omitted — SDK must supply the default of 5
+      // loginRateLimit intentionally omitted, SDK must supply the default of 5
     });
 
     try {
@@ -195,7 +195,7 @@ describe('login rate limiter — per-IP throttling', () => {
         expect(res.status).toBe(401);
       }
 
-      // Attempt 6: must return 429 — proves the default limit is exactly 5.
+      // Attempt 6: must return 429, proves the default limit is exactly 5.
       const blocked = await loginRequest(defaultBaseUrl, 'admin', 'wrong-password');
       expect(blocked.status).toBe(429);
     } finally {
@@ -205,10 +205,10 @@ describe('login rate limiter — per-IP throttling', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2a. Forwarded-IP spoofing: trustProxy OFF — headers do NOT rotate bucket
+// 2a. Forwarded-IP spoofing: trustProxy OFF, headers do NOT rotate bucket
 // ---------------------------------------------------------------------------
 
-describe('forwarded-IP spoofing — trustProxy OFF (headers ignored for rate bucket)', () => {
+describe('forwarded-IP spoofing: trustProxy OFF (headers ignored for rate bucket)', () => {
   let listener: HttpListener;
   let baseUrl: string;
 
@@ -246,7 +246,7 @@ describe('forwarded-IP spoofing — trustProxy OFF (headers ignored for rate buc
         });
       }
 
-      // 4th request with yet another spoofed IP — still blocked because all
+      // 4th request with yet another spoofed IP, still blocked because all
       // prior requests landed in the same bucket.
       const blocked = await loginRequest(baseUrl, 'admin', 'wrong-password', {
         'X-Forwarded-For': '200.1.2.3',
@@ -274,8 +274,8 @@ describe('forwarded-IP spoofing — trustProxy OFF (headers ignored for rate buc
   );
 
   test(
-    // With trustProxy OFF the listener reads no forwarded header at all —
-    // CF-Connecting-IP included — so every request shares the connection's own
+    // With trustProxy OFF the listener reads no forwarded header at all,
+    // CF-Connecting-IP included, so every request shares the connection's own
     // bucket. Honoring CF-Connecting-IP is `trustCloudflare`'s job and requires
     // trustProxy as well; see the trustCloudflare block below.
     'CF-Connecting-IP header is ignored (same bucket as all other requests)',
@@ -287,7 +287,7 @@ describe('forwarded-IP spoofing — trustProxy OFF (headers ignored for rate buc
         });
       }
 
-      // CF header does not provide any IP isolation — 4th request still blocked.
+      // CF header does not provide any IP isolation, 4th request still blocked.
       const blocked = await loginRequest(baseUrl, 'admin', 'wrong-password', {
         'CF-Connecting-IP': '141.101.64.1',
       });
@@ -297,7 +297,7 @@ describe('forwarded-IP spoofing — trustProxy OFF (headers ignored for rate buc
 });
 
 // ---------------------------------------------------------------------------
-// 2b. Forwarded-IP spoofing: trustProxy ON — the header IS the bucket key.
+// 2b. Forwarded-IP spoofing: trustProxy ON, the header IS the bucket key.
 //
 // trustProxy ON means the listener believes X-Forwarded-For, which is the
 // point of it: behind a tunnel or reverse proxy the connection address is the
@@ -310,7 +310,7 @@ describe('forwarded-IP spoofing — trustProxy OFF (headers ignored for rate buc
 // closes it for a Cloudflare deployment is `trustCloudflare`, pinned in 2c.
 // ---------------------------------------------------------------------------
 
-describe('forwarded-IP spoofing — trustProxy ON (the forwarded header is the bucket key)', () => {
+describe('forwarded-IP spoofing: trustProxy ON (the forwarded header is the bucket key)', () => {
   let listener: HttpListener;
   let baseUrl: string;
 
@@ -331,7 +331,7 @@ describe('forwarded-IP spoofing — trustProxy ON (the forwarded header is the b
 
   test(
     // Distinct X-Forwarded-For values produce distinct rate-limiter buckets, so
-    // a direct client rotates its own. Not a safety assertion — the mechanism.
+    // a direct client rotates its own. Not a safety assertion, the mechanism.
     'distinct X-Forwarded-For values land in distinct buckets',
     async () => {
       // Send 3 requests, each with a different X-Forwarded-For.
@@ -362,17 +362,17 @@ describe('forwarded-IP spoofing — trustProxy ON (the forwarded header is the b
 });
 
 // ---------------------------------------------------------------------------
-// 2c. trustCloudflare — CF-Connecting-IP is honored only from a Cloudflare peer
+// 2c. trustCloudflare, CF-Connecting-IP is honored only from a Cloudflare peer
 //
 // The listener option that closes 2b for a Cloudflare deployment. It requires
 // trustProxy as well: the peer address it validates is read from
 // X-Forwarded-For, and only when that peer is inside Cloudflare's published
 // ranges is CF-Connecting-IP taken as the client. There is no config key behind
-// this option, so no shipped composition sets it — the listener is constructed
+// this option, so no shipped composition sets it, the listener is constructed
 // with it directly here.
 // ---------------------------------------------------------------------------
 
-describe('trustCloudflare — CF-Connecting-IP honored only from a Cloudflare peer', () => {
+describe('trustCloudflare: CF-Connecting-IP honored only from a Cloudflare peer', () => {
   let listener: HttpListener;
   let baseUrl: string;
 
@@ -460,7 +460,7 @@ describe('empty/whitespace password rejection', () => {
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),
     });
-    // Single spaces are shorter than 8 chars — also caught by the length guard.
+    // Single spaces are shorter than 8 chars, also caught by the length guard.
     expect(() => auth.addUser('newuser', '   ')).toThrow(/password must be at least 8 characters/i);
   });
 
@@ -523,7 +523,7 @@ describe('empty/whitespace password rejection', () => {
     });
 
     test('empty password returns 401, not 200', async () => {
-      // authenticate() hashes the empty string and compares — mismatch → null → 401.
+      // authenticate() hashes the empty string and compares, mismatch → null → 401.
       const res = await loginRequest(baseUrl, 'admin', '');
       expect(res.status).toBe(401);
       const body = await res.json() as { error: string };

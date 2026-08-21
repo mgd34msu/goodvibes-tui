@@ -1,10 +1,10 @@
 /**
- * provider-fallback.ts — boot-time model routability, the part the SDK does
+ * provider-fallback.ts, boot-time model routability, the part the SDK does
  * not cover.
  *
  * The pre-catalog fallback registration for the configured model
  * (`ensureConfiguredModelIsRoutable`) is the SDK's own
- * (`@pellux/goodvibes-sdk/platform/providers`) — this file only imports it for
+ * (`@pellux/goodvibes-sdk/platform/providers`), this file only imports it for
  * `ensureBootModelResolvable` below, which is NOT in the SDK: it is the
  * boot-time custom-provider-readiness wrapper this app's boot path needs and
  * the SDK's floor does not compose.
@@ -16,7 +16,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 /**
  * Boot-time custom-provider readiness. Custom providers register
  * asynchronously (services.ts fires initCustomProviders() without awaiting),
- * while the boot path resolves the current model synchronously — without
+ * while the boot path resolves the current model synchronously, without
  * waiting here, a saved provider.model that points at a custom provider
  * throws "not in registry" before the first frame renders. The routability
  * guard must re-run after ready(): its services-composition pass bails when

@@ -1,14 +1,14 @@
 /**
- * fast-path.ts — minimum-steps first run.
+ * fast-path.ts, minimum-steps first run.
  *
  * The full onboarding wizard is comprehensive but long (5+ steps for a brand
  * new user). The fast path gets a new user to a working session in the fewest
  * possible steps:
  *   - If a provider API key is already configured (env / secrets), skip
- *     onboarding entirely — write the check marker and drop straight into a
+ *     onboarding entirely, write the check marker and drop straight into a
  *     working session. ZERO steps.
  *   - Otherwise ask exactly one question: start now on the default model, or
- *     run the full guided setup. Dismissing (Esc) starts now — so it is
+ *     run the full guided setup. Dismissing (Esc) starts now, so it is
  *     always skippable. The start-now copy is GENERATED from the default
  *     model's registered auth state (buildOnboardingModelCopy), so a
  *     "no API key needed" promise can only render when the provider is
@@ -39,7 +39,7 @@ export interface OnboardingFastPathDeps {
   readonly render: () => void;
 }
 
-/** Read configured provider ids defensively — returns [] if the surface can't answer. */
+/** Read configured provider ids defensively, returns [] if the surface can't answer. */
 function readConfiguredProviderIds(commandContext: CommandContext): string[] | null {
   const registry = commandContext.provider?.providerRegistry;
   if (!registry || typeof registry.getConfiguredProviderIds !== 'function') return null;
@@ -89,10 +89,10 @@ export function startOnboardingFastPath(deps: OnboardingFastPathDeps): void {
   }
 
   if (configured.length > 0) {
-    // A provider key already exists — nothing to ask. Straight to a working session.
+    // A provider key already exists, nothing to ask. Straight to a working session.
     writeOnboardingCheckMarker(shellPaths, MARKER_OPTIONS);
     commandContext.print?.(
-      `Ready — provider configured (${configured.join(', ')}). Run /onboarding anytime for full setup.`,
+      `Ready: provider configured (${configured.join(', ')}). Run /onboarding anytime for full setup.`,
     );
     render();
     return;
@@ -104,7 +104,7 @@ export function startOnboardingFastPath(deps: OnboardingFastPathDeps): void {
     { id: 'full-setup', label: 'Full guided setup', detail: 'Choose provider, model, channels, and more', primaryAction: 'select' },
   ];
   commandContext.openSelection(
-    'Welcome to GoodVibes — get started',
+    'Welcome to GoodVibes: get started',
     items,
     { allowSearch: false, primaryVerbLabel: 'Choose' },
     (result) => {

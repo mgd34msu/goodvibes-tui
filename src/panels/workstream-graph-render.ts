@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// workstream-graph-render.ts — render a workstream's task graph (fleet.graph.get)
+// workstream-graph-render.ts, render a workstream's task graph (fleet.graph.get)
 // legibly, so the observability layer shows the dependency graph's shape,
 // states, and pool posture WITHOUT opening any transcript.
 //
@@ -23,7 +23,7 @@ export function renderPoolSummary(pool: WorkstreamGraphSnapshot['pool']): string
   return pool.atCap ? `${base}, at cap (fleet.maxSize=${pool.maxSize})` : base;
 }
 
-/** The leading glyph for a node — orphaned/blocked/stalled tells win over the base state. */
+/** The leading glyph for a node, orphaned/blocked/stalled tells win over the base state. */
 function nodeGlyph(node: WorkstreamGraphNode): string {
   if (node.orphaned) return '⊘';
   if (node.blockedReason) return '⊘';
@@ -41,7 +41,7 @@ function nodeGlyph(node: WorkstreamGraphNode): string {
 function nodeTell(node: WorkstreamGraphNode, needs: readonly string[]): string {
   const parts: string[] = [];
   if (node.blockedReason) {
-    parts.push(`blocked — waiting on: ${node.blockedReason}`);
+    parts.push(`blocked: waiting on: ${node.blockedReason}`);
   } else if (node.state === 'running') {
     parts.push(node.agentId ? `running (${node.agentId})` : 'running');
   } else if (node.state === 'ready') {
@@ -61,7 +61,7 @@ function fit(line: string, width: number): string {
 }
 
 /**
- * Wrap content to the width on word boundaries — NO clipping: the whole tell
+ * Wrap content to the width on word boundaries, NO clipping: the whole tell
  * (including a long "waiting on: …" reason) survives onto indented continuation
  * lines rather than being cut off. `firstIndent` leads the first line;
  * `contIndent` leads each continuation. A single word longer than the width is
@@ -96,7 +96,7 @@ function wrapContent(content: string, width: number, firstIndent: string, contIn
 export function renderWorkstreamGraphLines(snapshot: WorkstreamGraphSnapshot, width: number): string[] {
   const lines: string[] = [];
   // Title and pool posture on their own lines so neither clips the other at a
-  // narrow width — the pool summary ("… at cap (fleet.maxSize=N)") is load-bearing.
+  // narrow width, the pool summary ("… at cap (fleet.maxSize=N)") is load-bearing.
   lines.push(fit(snapshot.title, width));
   lines.push(fit(`  ${renderPoolSummary(snapshot.pool)}`, width));
 

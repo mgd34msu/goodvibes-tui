@@ -1,5 +1,5 @@
 /**
- * terminal-bg-probe — OSC 11 terminal-background detection for `auto` theme mode.
+ * terminal-bg-probe, OSC 11 terminal-background detection for `auto` theme mode.
  *
  *. On startup, when appearance is `auto` and stdout is a TTY, we ask
  * the terminal for its background colour with an OSC 11 query and classify the
@@ -7,21 +7,21 @@
  * any timeout, any unparseable reply, any ambiguity resolves to DARK, which is
  * the historical default and keeps headless/unsupported terminals byte-stable.
  *
- * Timing (Option B — render dark first, repaint once if light wins):
+ * Timing (Option B, render dark first, repaint once if light wins):
  *   The probe never blocks startup. The splash renders immediately in dark; if a
  *   light reply arrives within the timeout window the caller flips the active mode
  *   to light and repaints ONCE. Rationale vs. blocking the first paint until the
  *   reply/timeout: blocking would tax EVERY non-responding terminal (tmux without
  *   passthrough, CI, old SSH hosts, dumb terminals) with up to `timeoutMs` of blank
- *   screen on every launch — the common failure case. Option B adds zero startup
+ *   screen on every launch, the common failure case. Option B adds zero startup
  *   latency and costs at most a single dark→light repaint on genuinely light
  *   terminals (rare for this audience, one frame).
  *
  * Stream safety (never corrupt the composer):
  *   The reply arrives on the same stdin the keyboard uses. filterInput() sits at
  *   the very front of the stdin handler (before blocking-input / paste / the
- *   tokenizer). It passes every non-OSC-11 byte straight through — interleaved
- *   keystrokes reach the tokenizer untouched — and consumes ONLY a matched OSC 11
+ *   tokenizer). It passes every non-OSC-11 byte straight through, interleaved
+ *   keystrokes reach the tokenizer untouched, and consumes ONLY a matched OSC 11
  *   reply (whole or split across chunks). On timeout, any buffered reply fragment
  *   is discarded rather than flushed, so partial/garbled response bytes can never
  *   leak into the input pipeline.
@@ -111,7 +111,7 @@ export function parseColorSpec(spec: string): ProbeRgb | null {
  * Classify a background colour as 'light' or 'dark' by relative luminance.
  * Uses the Rec. 601 luma weights (0.299/0.587/0.114) normalized to 0..1 and
  * splits at LUMINANCE_LIGHT_THRESHOLD (0.5): a background at least half as
- * luminous as white reads as light. Conservative by construction — the exact
+ * luminous as white reads as light. Conservative by construction, the exact
  * threshold only matters for mid-grey backgrounds, which are rare.
  */
 export function classifyBackgroundLuminance(rgb: ProbeRgb): ThemeMode {
@@ -130,7 +130,7 @@ interface TerminatorSpan {
  * Returns null if no terminator is present yet (reply still arriving). A lone
  * trailing ESC returns null (wait for the next byte to tell ST from a stray ESC);
  * an ESC followed by a non-'\' byte is treated as the end boundary (malformed
- * terminator — the body before it is still parsed, the stray byte passes through).
+ * terminator, the body before it is still parsed, the stray byte passes through).
  */
 function findTerminator(buffer: string, from: number): TerminatorSpan | null {
   for (let k = from; k < buffer.length; k++) {
@@ -159,7 +159,7 @@ function trailingPrefixLen(buffer: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// TerminalBackgroundProbe — the stateful stream filter + timing
+// TerminalBackgroundProbe, the stateful stream filter + timing
 // ---------------------------------------------------------------------------
 
 export interface ProbeResolution {
@@ -177,7 +177,7 @@ export interface TerminalBackgroundProbeOptions {
 /**
  * Stateful OSC 11 reply filter. feed() takes a raw stdin chunk and returns the
  * bytes that should continue down the input pipeline (everything except a matched
- * OSC 11 reply). Resolves once — on the first complete reply or on timeout.
+ * OSC 11 reply). Resolves once, on the first complete reply or on timeout.
  */
 export class TerminalBackgroundProbe {
   /** True until resolved. filterInput() only calls feed() while active. */
@@ -259,7 +259,7 @@ export class TerminalBackgroundProbe {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    // Any bytes still buffered here are an incomplete/garbled reply fragment —
+    // Any bytes still buffered here are an incomplete/garbled reply fragment,
     // discard them so they can never leak into the composer.
     this.buffer = '';
     this.onResolve({ mode, reason });

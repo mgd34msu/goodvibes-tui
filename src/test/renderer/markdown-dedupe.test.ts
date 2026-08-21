@@ -1,5 +1,5 @@
 /**
- * α3: Markdown render dedupe — renderMarkdownTracked is the sole implementation.
+ * α3: Markdown render dedupe, renderMarkdownTracked is the sole implementation.
  *
  * Verifies that renderMarkdown is now a thin wrapper over renderMarkdownTracked
  * and that their outputs are identical for the same input.

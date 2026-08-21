@@ -1,25 +1,25 @@
 /**
- * services.ts — the terminal app's composition root, as a CLIENT.
+ * services.ts, the terminal app's composition root, as a CLIENT.
  *
- * Every gateway-serving piece — the `GatewayMethodCatalog`, the
+ * Every gateway-serving piece, the `GatewayMethodCatalog`, the
  * inbox/triage/drafts/routing handlers, the cluster group and its election,
- * the device-posture runtime and its housekeeping, the mail service deps —
+ * the device-posture runtime and its housekeeping, the mail service deps,
  * lives in the daemon product. This composition serves no verbs, elects
  * nothing, polls no mailbox, and supervises no remote runner. It builds what
  * a TURN needs in this process and reaches the daemon for the rest.
  *
  * ── The floor comes from the SDK ───────────────────────────────────────────
  *
- * The loop essentials — the agent graph, the model stack, config/secrets/
+ * The loop essentials, the agent graph, the model stack, config/secrets/
  * services, hooks, plugins, MCP, the file-tool caches, permissions as a client,
- * the spine clients — are composed by `createClientRuntimeServices`, the SDK's
+ * the spine clients, are composed by `createClientRuntimeServices`, the SDK's
  * one implementation of that shape. Not a fork of it and not a copy of it: the
  * agent product composes the same function, so a wiring step added there
  * cannot silently miss this product.
  *
  * The SDK's own note on that shape applies here literally: it is a FLOOR, not a
  * ceiling. Everything below the `createClientRuntimeServices` call is what THIS
- * surface adds on top — panels, keybindings, the WRFC controller wired over the
+ * surface adds on top, panels, keybindings, the WRFC controller wired over the
  * client's own `agentManager`, the workstream engine, the fleet read model, the
  * voice stack with its local playback sink, the knowledge stack the recall
  * surfaces read. None of those need daemon furniture; they are simply not
@@ -29,7 +29,7 @@
  * ── The two things that look like daemon furniture and are not ─────────────
  *
  * `sessionBroker` and `approvalBroker` are still constructed. They are this
- * surface's own record of the sessions it is running and the asks it raised —
+ * surface's own record of the sessions it is running and the asks it raised,
  * what the transcript, the session panel and the approval card read. They are
  * NOT authoritative: session identity is mirrored to the daemon's spine
  * (register/heartbeat/inputs) and an ask is raised on the daemon
@@ -110,7 +110,7 @@ export type { RuntimeServicesOptions, RuntimeServices } from './runtime-services
 export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeServices {
   const disposalScope = createDisposalScope('RuntimeServices'); const workingDirectory = options.workingDir; // disposal seam: see ./disposal-wiring.ts
   const homeDirectory = options.homeDirectory;
-  // Built before anything that touches session state — see session-storage-services.ts.
+  // Built before anything that touches session state, see session-storage-services.ts.
   const { surface, sessionManager } = createSessionStorageServices({ workingDirectory, homeDirectory, surfaceRoot: GOODVIBES_TUI_SURFACE_ROOT });
   const configManager = options.configManager;
   const featureFlags = options.featureFlags ?? createFeatureFlagManager();
@@ -135,7 +135,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // pure (it derives paths, it opens nothing), so building it twice costs
   // nothing and keeps the ordering honest.
   const shellPaths = createShellPathService({ workingDirectory, homeDirectory });
-  // The surface's own record of the asks it raised — what the approval card and
+  // The surface's own record of the asks it raised, what the approval card and
   // the panel read. The AUTHORITATIVE record is the daemon's; the raiser below
   // keeps the two in step (see the SDK's client/approval-raiser.ts).
   const approvalBroker = new ApprovalBroker({
@@ -166,7 +166,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     // The push channel for a decision made on another surface. Without it the
     // raiser learns by re-reading the record on an interval; with it a phone's
     // answer reaches this terminal in the time one SSE frame takes. The interval
-    // stays as the fallback — see client/approval-updates.ts.
+    // stays as the fallback, see client/approval-updates.ts.
     subscribeApprovalUpdates: createTerminalApprovalUpdateSubscriber({ configManager, homeDirectory }),
   });
 
@@ -235,7 +235,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // handed one. With adoptOnly no DaemonServer is constructed, so nothing is
   // ever served off it.
   const gatewayMethods = new GatewayMethodCatalog();
-  // The credential/identity seam (credential-composition.ts) — this
+  // The credential/identity seam (credential-composition.ts), this
   // installation's own pairing tokens and step-up service.
   const { stepUpService, pairingTokens } = composeCredentialServices({
     workingDirectory, homeDirectory, configManager,
@@ -258,7 +258,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
   });
-  // WRFC over the client's own agent graph — the "floor, not ceiling" case,
+  // WRFC over the client's own agent graph, the "floor, not ceiling" case,
   // verbatim: the review/fix workstream controller needs the agent manager and
   // the message bus, and nothing daemon-side at all.
   const wrfcController = new WrfcController(options.runtimeBus, agentMessageBus, {
@@ -278,8 +278,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // the same runner whether it came from the local broker or from the daemon's
   // queue. The wire half is inert until bootstrap.ts adopts a daemon (see
   // the SDK's client/session-dispatch.ts); binding one runner to both is what stops a
-  // continuation delivered over the wire from taking a different path — and a
-  // different set of routing options — than one raised locally.
+  // continuation delivered over the wire from taking a different path, and a
+  // different set of routing options, than one raised locally.
   const wireSessionDispatch = createWireSessionDispatch({
     hostedSessionIds: () => (liveSessionIdRef.value ? [liveSessionIdRef.value] : []),
     // The reply half. A continuation dispatched here runs in THIS process, so
@@ -382,7 +382,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
       return record.id;
     },
   });
-  // Knowledge/wiki + home-graph stack (governor backpressure wired in) — see knowledge-services.ts.
+  // Knowledge/wiki + home-graph stack (governor backpressure wired in), see knowledge-services.ts.
   const {
     knowledgeStore, agentKnowledgeStore, homeGraphKnowledgeStore,
     knowledgeSemanticService, homeGraphSemanticService, agentKnowledgeSemanticService,
@@ -390,7 +390,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     projectPlanningService, projectPlanningProjectId, workPlanStore,
   } = createKnowledgeServices({ configManager, providerRegistry, artifactStore, memoryRegistry, runtimeBus: options.runtimeBus, workingDirectory, homeDirectory, isBackgroundPaused: isKnowledgeBackgroundPaused, admitExpensiveWork });
   // Voice: the PROVIDERS are local (a spoken turn plays out of this terminal's
-  // own speaker) — synthesis reaches `voice.tts.stream` when a daemon serves it
+  // own speaker), synthesis reaches `voice.tts.stream` when a daemon serves it
   // and falls back to a local provider otherwise; see audio/spoken-turn-wiring.ts.
   const voiceProviders = new VoiceProviderRegistry();
   ensureBuiltinVoiceProviders(voiceProviders, { readConfig: (key) => configManager.get(key as Parameters<typeof configManager.get>[0]) });
@@ -435,7 +435,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const idempotencyStore = new IdempotencyStore();
   // ONE router, not two. This surface used to build a second ChannelDeliveryRouter
   // from the same four arguments AutomationDeliveryManager builds its own from,
-  // and expose that second one — so the router on the service surface and the
+  // and expose that second one, so the router on the service surface and the
   // router replies actually leave through were different objects, and a delivery
   // strategy registered on the exposed one reached nothing. The SDK's
   // RuntimeServices contract requires the field; it now names the real router.
@@ -467,7 +467,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // adopted daemon's rows. The daemon runs work no registry here knows about
   // (scheduled jobs, channel-driven runs, sessions other surfaces started, the
   // external agents it observes), and a panel showing only half the fleet is
-  // worse than one showing none — the half it shows looks complete.
+  // worse than one showing none, the half it shows looks complete.
   const fleetReadModel = createFleetUnionReadModel({
     local: createFleetReadModel(processRegistry, options.runtimeBus),
     verbs,
@@ -500,7 +500,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   admitExpensiveWorkRef.current = (label) => memoryGovernor.admitExpensiveWork(label);
 
-  // Managed local-voice provisioning (voice.local.status/install) — single-flight
+  // Managed local-voice provisioning (voice.local.status/install), single-flight
   // one-act install + no-network status; see voice-setup-services.ts.
   const { voiceSetup, stopWakeHousekeeping } = wireVoiceSetup({ configManager, shellPaths, voiceProviders, admitExpensiveWork,
     provisionWakeModelsAtBoot: options.provisionWakeModelsAtBoot === true });
@@ -517,7 +517,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // "allow for this project" persists and later fetches never ask.
   const localhostFetchApproval = buildLocalhostFetchApproval({ requestApproval: (input) => requestApproval(input), configManager });
   // Exec stuck on a terminal prompt rides the same raiser; the typed answer feeds
-  // the continuing run. Built once and shared with every setDependencies site —
+  // the continuing run. Built once and shared with every setDependencies site,
   // a wholesale replace that forgets it hangs interactive prompts.
   const execPromptAnswerHandler = buildExecPromptAnswerHandler({ requestApproval: (input) => requestApproval(input) });
   agentOrchestrator.setDependencies({

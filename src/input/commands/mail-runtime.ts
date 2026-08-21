@@ -1,12 +1,12 @@
 /**
- * mail-runtime.ts — `/mail`, the terminal surface over the daemon's mail
+ * mail-runtime.ts, `/mail`, the terminal surface over the daemon's mail
  * capability.
  *
  * This command implements no mail. Every verb here is one call into the
  * gateway method catalog, where `src/daemon/handlers/email/` owns IMAP, SMTP,
  * settings resolution, the credential read, and the confirmation gate. What
  * lives in this file is argument parsing, rendering, and an honest refusal when
- * the capability is not set up — nothing else.
+ * the capability is not set up, nothing else.
  *
  * ## What is exposed, and what is not
  *
@@ -14,8 +14,8 @@
  * without leaving the terminal is squarely what this product is for, and
  * because a draft changes nothing outside the account's own Drafts folder.
  *
- * Sending is exposed too — a shipped route with no way to reach it is a route
- * that is not wired up — but never in one step. `/mail send` first renders
+ * Sending is exposed too, a shipped route with no way to reach it is a route
+ * that is not wired up, but never in one step. `/mail send` first renders
  * exactly what would leave the machine and stops; only a re-run carrying
  * `--confirm` sets both flags the daemon's gate demands. That mirrors the
  * preview-then-confirm shape `/review` uses for hunk reverts, and it means the
@@ -65,12 +65,12 @@ function truncate(value: string, width: number): string {
 
 export function renderInboxList(messages: readonly InboxMessage[]): string {
   if (messages.length === 0) return 'Inbox is empty (nothing matched).';
-  const lines = [`Inbox — ${messages.length} message${messages.length === 1 ? '' : 's'}:`];
+  const lines = [`Inbox: ${messages.length} message${messages.length === 1 ? '' : 's'}:`];
   for (const message of messages) {
     const mark = message.unread ? '●' : ' ';
     lines.push(`  ${mark} ${String(message.uid).padStart(6)}  ${truncate(message.from, 28).padEnd(28)}  ${truncate(message.subject, 48)}`);
   }
-  lines.push('', '  /mail read <uid> — open one message');
+  lines.push('', '  /mail read <uid>: open one message');
   return lines.join('\n');
 }
 
@@ -191,7 +191,7 @@ async function listInbox(ctx: CommandContext, gateway: Gateway, limit: number, w
       ctx.print(renderConnectionStatus({
         surface: 'mail',
         state: 'ready',
-        detail: 'Mail is connected — the daemon reached the server and returned a result.',
+        detail: 'Mail is connected: the daemon reached the server and returned a result.',
         nextActions: [],
       }));
     }
@@ -202,7 +202,7 @@ async function listInbox(ctx: CommandContext, gateway: Gateway, limit: number, w
 async function readMessage(ctx: CommandContext, gateway: Gateway, rawUid: string | undefined): Promise<void> {
   const uid = Number(rawUid);
   if (!Number.isFinite(uid) || uid <= 0) {
-    ctx.print('Usage: /mail read <uid> — the uid column from /mail list.');
+    ctx.print('Usage: /mail read <uid>; the uid column from /mail list.');
     return;
   }
   await withStatusOnFailure(ctx, gateway, 'read', async () => {
@@ -221,7 +221,7 @@ async function compose(ctx: CommandContext, gateway: Gateway, verb: 'draft' | 's
   if (parsed === null) {
     ctx.print([
       `Usage: /mail ${verb} <to | subject | body>`,
-      '  Three fields separated by | — for example:',
+      '  Three fields separated by |, for example:',
       `  /mail ${verb} me@example.com | Build is green | All gates passed.`,
     ].join('\n'));
     return;

@@ -1,5 +1,5 @@
 /**
- * ProfilePickerModal — state management for the /profiles picker modal.
+ * ProfilePickerModal, state management for the /profiles picker modal.
  *
  * Lists profiles from ProfileManager.list(), tracks selected index,
  * and handles load/delete/save actions.

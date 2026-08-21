@@ -1,5 +1,5 @@
 /**
- * StreamStallWatchdog — detects gaps of silence (no STREAM_DELTA) longer than
+ * StreamStallWatchdog, detects gaps of silence (no STREAM_DELTA) longer than
  * a configurable threshold, whether the gap is at the start of a turn or in
  * the middle of an otherwise-flowing stream, and emits a low-priority hint
  * each time a gap crosses the threshold.
@@ -18,7 +18,7 @@
  *     clear the timeout (turn finished normally or with error).
  *   - If the timeout fires: emit ONE hint for that episode (do not repeat
  *     while the same gap continues), then wait for the gap to close (another
- *     STREAM_DELTA/STREAM_START) before a further silence can fire again —
+ *     STREAM_DELTA/STREAM_START) before a further silence can fire again,
  *     each such re-arm-then-timeout cycle is a new "stall episode" and the
  *     episode counter passed to onStall increments each time.
  *   - dispose(): clears all subscriptions and any pending timeout.
@@ -46,13 +46,13 @@ export interface StreamStallWatchdogOptions {
    * Called once per stall episode when the no-delta threshold is exceeded.
    * Receives the provider display name and a 1-based episode counter that
    * increments each time a new silence (after a re-arm) crosses the
-   * threshold within the same turn — so a second mid-stream stall after a
+   * threshold within the same turn, so a second mid-stream stall after a
    * recovery is distinguishable from the first.
    */
   onStall: (providerName: string, episode: number) => void;
   /**
    * Provides the current provider display name at the moment the hint fires.
-   * Optional — defaults to 'provider' when not supplied.
+   * Optional, defaults to 'provider' when not supplied.
    */
   getProviderName?: () => string;
   /**

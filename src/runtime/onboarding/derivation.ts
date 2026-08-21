@@ -269,7 +269,7 @@ function describeLocalTuiOnly(snapshot: OnboardingSnapshotState): string {
   // GoodVibes surfaces on this machine. Turn it off in Settings > daemon if you
   // want none at all.
   if (!hasAnyServerEnabled(snapshot)) {
-    return 'Use GoodVibes only in this terminal. No browser access, HTTP listener, external app surface, or network setup. A loopback-only background daemon still runs by default so sessions here stay visible to other GoodVibes surfaces on this machine — turn it off in Settings > daemon if you want none at all.';
+    return 'Use GoodVibes only in this terminal. No browser access, HTTP listener, external app surface, or network setup. A loopback-only background daemon still runs by default so sessions here stay visible to other GoodVibes surfaces on this machine; turn it off in Settings > daemon if you want none at all.';
   }
 
   return 'Turn off browser access, HTTP listeners, external app surfaces, and network setup. The loopback-only background daemon keeps running by default for cross-surface visibility unless you turn it off in Settings > daemon.';

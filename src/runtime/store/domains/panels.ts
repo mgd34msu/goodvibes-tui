@@ -1,5 +1,5 @@
 /**
- * Panels domain state — tracks the panel-first operator UX surfaces:
+ * Panels domain state, tracks the panel-first operator UX surfaces:
  * which panels are open, their layout, and focus state.
  */
 
@@ -43,7 +43,7 @@ export interface PanelState {
 }
 
 /**
- * PanelDomainState — panel layout and focus management.
+ * PanelDomainState, panel layout and focus management.
  */
 export interface PanelDomainState {
   // ── Domain metadata ────────────────────────────────────────────────────────

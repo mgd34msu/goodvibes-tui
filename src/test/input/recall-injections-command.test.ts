@@ -41,8 +41,8 @@ function makeContext(
       runtime: { model: '', provider: '', debugMode: false, systemPrompt: '', reasoningEffort: '', sessionId: 'session-1' },
       // when provided, mirrors the real bootstrap wiring of
       // Orchestrator.getTurnInjections() onto the command context. When omitted,
-      // the accessor is absent — exactly like a context built without an
-      // orchestrator — so the no-id path renders the honest empty state.
+      // the accessor is absent, exactly like a context built without an
+      // orchestrator, so the no-id path renders the honest empty state.
       getMainSessionTurnInjections: mainSessionInjections
         ? () => mainSessionInjections
         : undefined,
@@ -116,7 +116,7 @@ describe('/recall injections', () => {
     expect(text).toContain('turn 1');
     expect(text).toContain('mem-main-1');
     expect(text).toContain('turn 2');
-    expect(text).toContain('nothing injected this turn — nothing cleared the relevance floor');
+    expect(text).toContain('nothing injected this turn: nothing cleared the relevance floor');
     expect(text).toContain('[lexical fallback]');
     // Most recent first: turn 2's line appears before turn 1's.
     expect(text.indexOf('turn 2')).toBeLessThan(text.indexOf('turn 1'));
@@ -184,7 +184,7 @@ describe('/recall injections', () => {
     expect(text).toContain('turn 1');
     expect(text).toContain('mem-9');
     expect(text).toContain('turn 2');
-    expect(text).toContain('nothing injected this turn — nothing cleared the relevance floor');
+    expect(text).toContain('nothing injected this turn: nothing cleared the relevance floor');
     expect(text).toContain('[lexical fallback]');
     // Most recent first: turn 2's line should appear before turn 1's.
     expect(text.indexOf('turn 2')).toBeLessThan(text.indexOf('turn 1'));

@@ -1,11 +1,11 @@
 /**
- * Pins for restoreTerminal — the exit teardown must leave the user's terminal
+ * Pins for restoreTerminal, the exit teardown must leave the user's terminal
  * exactly usable: no scrollback wipe (ESC[3J), cursor made visible on the
  * screen the shell prompt lands on (after the alt-screen switch), idempotent,
  * and no compositor frame may follow it (isTerminalRestored gate).
  *
  * Regression context: exiting the TUI sometimes left the shell prompt typing
- * over stale screen content — late frames after restore plus a scrollback
+ * over stale screen content, late frames after restore plus a scrollback
  * wipe issued from inside the alt screen.
  */
 import { describe, expect, test } from 'bun:test';

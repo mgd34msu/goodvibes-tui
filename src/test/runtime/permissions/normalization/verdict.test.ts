@@ -38,7 +38,7 @@ function evalCmd(
 
 // ── evaluateSegmentNode ───────────────────────────────────────────────────────
 
-describe('evaluateSegmentNode — basic classification', () => {
+describe('evaluateSegmentNode: basic classification', () => {
   function nodeFor(cmd: string): CommandNode {
     const ast = parseCommandAST(cmd);
     const nodes = collectCommandNodes(ast);
@@ -84,9 +84,9 @@ describe('evaluateSegmentNode — basic classification', () => {
   });
 });
 
-// ── evaluateCommandAST — compound verdict ─────────────────────────────────────
+// ── evaluateCommandAST, compound verdict ─────────────────────────────────────
 
-describe('evaluateCommandAST — compound verdict', () => {
+describe('evaluateCommandAST: compound verdict', () => {
   it('allows a fully safe compound command', () => {
     const verdict = evalCmd('ls /tmp && cat file.txt');
     expect(verdict.allowed).toBe(true);
@@ -163,11 +163,11 @@ describe('evaluateCommandAST — compound verdict', () => {
 
 // ── Obfuscation / bypass detection ────────────────────────────────────────────
 
-describe('evaluateCommandAST — obfuscation detection', () => {
+describe('evaluateCommandAST: obfuscation detection', () => {
   it('flags base64-encoded argument', () => {
     // A base64-looking arg of appropriate length
     const verdict = evalCmd('bash cm0gLXJmIC90bXA=');
-    // The base64 pattern is detected — segment should be denied
+    // The base64 pattern is detected, segment should be denied
     const seg = verdict.segments[0];
     expect(seg).toBeDefined();
     if (seg && seg.hasObfuscation) {

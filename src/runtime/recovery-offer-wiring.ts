@@ -1,5 +1,5 @@
 /**
- * recovery-offer-wiring.ts — binds the startup recovery offer
+ * recovery-offer-wiring.ts, binds the startup recovery offer
  * (runtime/recovery-prompt.ts) to this shell's live objects.
  *
  * Kept out of main.ts so the entrypoint stays under the architecture
@@ -12,7 +12,7 @@
  *     actually happened. The transcript journal rebinds on that field
  *     (turn-event-wiring.ts), and every later turn snapshot keys off it.
  *     Without this the restored conversation would be written back under the
- *     fresh boot session id — the recovery point would be gone and its content
+ *     fresh boot session id, the recovery point would be gone and its content
  *     would live somewhere the user never asked for. It moves AFTER the apply
  *     rather than before, so a refusal (nothing on disk, a damaged file) leaves
  *     this boot on its own session instead of adopting one it never loaded.
@@ -67,7 +67,7 @@ export function buildRecoveryOfferWiring(input: RecoveryOfferWiringInput): Recov
           saveSource: 'user',
         });
       };
-      // The user picked "Resume it" in the offer modal — that answer, and
+      // The user picked "Resume it" in the offer modal, that answer, and
       // nothing else, is what unlocks the restore.
       const result = applyRecoverySnapshot({
         sessionId,
@@ -91,7 +91,7 @@ export function buildRecoveryOfferWiring(input: RecoveryOfferWiringInput): Recov
       // Unconditional, and the reason is the whole point of this feature: a
       // crash-recovery snapshot is NOT a session-store entry. The snapshot
       // file has just been retired by the read that loaded it, so until this
-      // write lands the recovered conversation exists only in memory — the
+      // write lands the recovered conversation exists only in memory, the
       // pointer below would name a session nothing could load, and `/session
       // resume <id>` would still not reach it. The gap-closure persist above
       // only fires when the journal actually had records to replay, so it

@@ -1,4 +1,4 @@
-# Reference Node Host
+# Reference node host
 
 This is a Bun/TypeScript reference client for the GoodVibes distributed remote contract.
 

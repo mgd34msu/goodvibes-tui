@@ -20,7 +20,7 @@ beforeEach(() => {
   resetTestRuntimeServices();
 });
 
-describe('ModeManager — HITL UX modes', () => {
+describe('ModeManager: HITL UX modes', () => {
   // ── setHITLMode / getHITLMode ──────────────────────────────────────────────
 
   it('defaults to balanced mode', () => {
@@ -103,7 +103,7 @@ describe('ModeManager — HITL UX modes', () => {
   it('getDomainVerbosity falls back to preset default when no override exists', () => {
     const mgr = getTestModeManager();
     mgr.setHITLMode('quiet');
-    // No override for 'tasks' — should return HITL_QUIET.defaultDomainVerbosity
+    // No override for 'tasks', should return HITL_QUIET.defaultDomainVerbosity
     expect(mgr.getDomainVerbosity('tasks')).toBe('minimal');
   });
 
@@ -185,7 +185,7 @@ describe('ModeManager — HITL UX modes', () => {
 // with no arguments at all (no featureFlags), and isFeatureGateEnabled is
 // permissive when no manager is wired, so a composition root that omitted
 // featureFlags did not disable the HITL UX mode system when behavior.hitlMode
-// was set to 'off' — setHITLMode kept accepting writes either way.
+// was set to 'off', setHITLMode kept accepting writes either way.
 // services.ts now threads featureFlags, the same shape as the
 // RouteBindingManager fix.
 //
@@ -194,7 +194,7 @@ describe('ModeManager — HITL UX modes', () => {
 // permissive and accepts the mode change anyway.
 // ---------------------------------------------------------------------------
 
-describe('ModeManager — behavior.hitlMode feature gate', () => {
+describe('ModeManager: behavior.hitlMode feature gate', () => {
   function modeManagerWithGate(root: string, hitlMode: 'off' | 'balanced'): ModeManager {
     const configManager = new ConfigManager({ surfaceRoot: 'tui', workingDir: root, homeDir: root, configDir: join(root, '.goodvibes', 'tui') });
     configManager.set('behavior.hitlMode', hitlMode);

@@ -56,11 +56,11 @@ function makeFakeEvents() {
   const tools = makeFakeTurnEventBus();
   const agents = makeFakeTurnEventBus();
   const workflows = makeFakeTurnEventBus();
-  // UiRuntimeEvents shape: { turns, tools, agents, workflows, ... } — these
+  // UiRuntimeEvents shape: { turns, tools, agents, workflows, ... }, these
   // four are what wireTurnEventHandlers reads (added agents/workflows
   // for the agent/chain-failure desktop alerts).
   return {
-    // @ts-expect-error — duck-typed minimal fake for UiRuntimeEvents
+    // @ts-expect-error, duck-typed minimal fake for UiRuntimeEvents
     events: { turns, tools, agents, workflows } as WireTurnEventHandlersOptions['events'],
     emitTurn: (type: string, payload: unknown) => turns.emit(type, payload),
     emitTool: (type: string, payload: unknown) => tools.emit(type, payload),
@@ -76,7 +76,7 @@ function makeFakeEvents() {
 function makeSpyNotifier(urls: string[] = ['https://ntfy.sh/test-topic']) {
   const sentMessages: string[] = [];
   // WebhookNotifier is a real class with private fields, so a duck-typed
-  // fake can never satisfy it structurally — the same `as unknown as
+  // fake can never satisfy it structurally, the same `as unknown as
   // WebhookNotifier` cast already used by long-task-notifier.test.ts,
   // approval-alert.test.ts, and budget-breach-notifier.test.ts for this
   // exact class.
@@ -109,9 +109,9 @@ function makeMinimalOptions(
       toJSON: () => { throw new Error('stub: no conversation'); },
       getTitleSource: () => 'stub',
       title: '',
-      // Satisfy ConversationManager duck-type — only toJSON/getTitleSource/title used in TURN_COMPLETED.
+      // Satisfy ConversationManager duck-type, only toJSON/getTitleSource/title used in TURN_COMPLETED.
       // ConversationManager is a real class with private fields, so the fake
-      // can't satisfy it structurally — same `as unknown as` pattern already
+      // can't satisfy it structurally, same `as unknown as` pattern already
       // used for this class in format-user-error.test.ts / system-message-router.test.ts.
     } as unknown as WireTurnEventHandlersOptions['conversation'],
     runtime: { sessionId: 'test-sess-id-001', model: 'test-model', provider: 'test-provider' },
@@ -148,7 +148,7 @@ function makeMinimalOptions(
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('wireTurnEventHandlers — TURN_COMPLETED notification integration', () => {
+describe('wireTurnEventHandlers: TURN_COMPLETED notification integration', () => {
   test('maybeNotifyLongTask fires exactly once on TURN_COMPLETED with correct elapsedMs', () => {
     // Controlled clock: TURN_SUBMITTED at t=1000, TURN_COMPLETED at t=62000 → elapsed = 61000ms
     let clockValue = 1000;
@@ -225,7 +225,7 @@ describe('wireTurnEventHandlers — TURN_COMPLETED notification integration', ()
   test('no double-fire across persist/rotate branches: exactly one notification per TURN_COMPLETED', () => {
     // The notification fires before the persist try/catch. Even when the persist
     // block throws (simulated by conversation.toJSON throwing), the notification
-    // must fire exactly once — never again in the journal catch branch.
+    // must fire exactly once, never again in the journal catch branch.
     let clockValue = 0;
     const { notifier } = makeSpyNotifier();
 
@@ -252,7 +252,7 @@ describe('wireTurnEventHandlers — TURN_COMPLETED notification integration', ()
   });
 
   test('no notification when TURN_COMPLETED fires without prior TURN_SUBMITTED (elapsed=0)', () => {
-    // When turnStartTime is null, elapsedMs defaults to 0 — below any threshold.
+    // When turnStartTime is null, elapsedMs defaults to 0, below any threshold.
     const { notifier } = makeSpyNotifier();
 
     const opts = makeMinimalOptions({
@@ -262,7 +262,7 @@ describe('wireTurnEventHandlers — TURN_COMPLETED notification integration', ()
 
     wireTurnEventHandlers(opts);
 
-    // No TURN_SUBMITTED — turnStartTime stays null
+    // No TURN_SUBMITTED, turnStartTime stays null
     opts.emitTurn('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 'turn-no-start', response: 'hi', stopReason: 'completed' });
 
     // elapsedMs == 0 < threshold (60s) → no notification
@@ -271,10 +271,10 @@ describe('wireTurnEventHandlers — TURN_COMPLETED notification integration', ()
 });
 
 // ---------------------------------------------------------------------------
-// — budget-breach edge trigger on TURN_COMPLETED
+//, budget-breach edge trigger on TURN_COMPLETED
 // ---------------------------------------------------------------------------
 
-describe('wireTurnEventHandlers — budget-breach alert', () => {
+describe('wireTurnEventHandlers: budget-breach alert', () => {
   // 'claude-sonnet-4-6' has real fallback pricing in cost-utils.ts ($3/1M input)
   // so calcSessionCost produces a real, non-zero cost.
   const PRICED_MODEL = 'claude-sonnet-4-6';
@@ -348,12 +348,12 @@ describe('wireTurnEventHandlers — budget-breach alert', () => {
 });
 
 // ---------------------------------------------------------------------------
-// — agent/chain-failure desktop alerts
+//, agent/chain-failure desktop alerts
 // ---------------------------------------------------------------------------
 
-describe('wireTurnEventHandlers — agent/chain-failure alerts', () => {
+describe('wireTurnEventHandlers: agent/chain-failure alerts', () => {
   // notifyCompletion (SDK) writes a terminal bell ('\x07') synchronously for
-  // any durationMs > 5000 — the alert modules pass FORCE_NOTIFY_DURATION_MS
+  // any durationMs > 5000, the alert modules pass FORCE_NOTIFY_DURATION_MS
   // (30_001) precisely so this is observable without mocking the SDK module
   // (process-global module mocking is disallowed by this repo's test
   // discipline rules). Same technique as src/test/utils/notify.test.ts.
@@ -425,7 +425,7 @@ describe('wireTurnEventHandlers — agent/chain-failure alerts', () => {
 
   test('WORKFLOW_CHAIN_FAILED with failureKind=cancelled still alerts (operator-cancel branch, WO item 2)', () => {
     // The cancelled branch narrates a cancellation rather than a failure but must
-    // still ring the bell when unfocused — the operator asked to stop and wants to
+    // still ring the bell when unfocused, the operator asked to stop and wants to
     // know it stopped. (The distinct title is asserted at the SDK narration level;
     // process-global module mocking to read the title is disallowed here.)
     const spy = spyOnStdoutWrite();
@@ -433,7 +433,7 @@ describe('wireTurnEventHandlers — agent/chain-failure alerts', () => {
     tracker.setFocused(false);
     const opts = makeMinimalOptions({ focusTracker: tracker, configManager: { get: () => undefined } });
     wireTurnEventHandlers(opts);
-    opts.emitWorkflow('WORKFLOW_CHAIN_FAILED', { type: 'WORKFLOW_CHAIN_FAILED', chainId: 'chain-abcdef123456', reason: 'operator cancellation — 2 files already modified on disk', failureKind: 'cancelled' });
+    opts.emitWorkflow('WORKFLOW_CHAIN_FAILED', { type: 'WORKFLOW_CHAIN_FAILED', chainId: 'chain-abcdef123456', reason: 'operator cancellation: 2 files already modified on disk', failureKind: 'cancelled' });
     expect(spy).toHaveBeenCalledWith('\x07');
     spy.mockRestore();
   });
@@ -481,12 +481,12 @@ function spyOnStdoutWrite(): ReturnType<typeof spyOn> {
 }
 
 // ---------------------------------------------------------------------------
-// — transcript journal rebinds across a session switch (cross-session
-//   contamination regression — see turn-event-wiring.ts's transcriptJournal
+//, transcript journal rebinds across a session switch (cross-session
+//   contamination regression, see turn-event-wiring.ts's transcriptJournal
 //   construction)
 // ---------------------------------------------------------------------------
 
-describe('wireTurnEventHandlers — transcript journal rebinds on session switch', () => {
+describe('wireTurnEventHandlers: transcript journal rebinds on session switch', () => {
   let tmpHome: string;
 
   beforeEach(() => {
@@ -498,7 +498,7 @@ describe('wireTurnEventHandlers — transcript journal rebinds on session switch
   });
 
   /** A conversation stub whose toJSON() reflects a mutable marker so each
-   *  appended journal record is distinguishable in the test's assertions —
+   *  appended journal record is distinguishable in the test's assertions,
    *  appendRecord persists conversation.toJSON(), not the TURN_SUBMITTED
    *  event payload. */
   function makeMarkedConversation(): { conversation: WireTurnEventHandlersOptions['conversation']; setMarker: (m: string) => void } {
@@ -513,7 +513,7 @@ describe('wireTurnEventHandlers — transcript journal rebinds on session switch
     };
   }
 
-  test('switching runtime.sessionId rebinds the journal — each file only ever contains its own session', () => {
+  test('switching runtime.sessionId rebinds the journal: each file only ever contains its own session', () => {
     // `runtime` is mutated in place the same way /session resume and
     // /session fork reassign sessionId on the shared MutableRuntimeState object.
     const runtime = { sessionId: 'sess-A', model: 'm', provider: 'p' };
@@ -581,7 +581,7 @@ describe('a desktop notification carries no chain identifier', () => {
    * `notifyCompletion` is an SDK import and this file already records why the
    * title cannot be read here: reading it needs process-global module mocking,
    * which is disallowed in this suite. So the check is made where the defect
-   * actually lives — the call site. Every `notifyCompletion` in this module must
+   * actually lives, the call site. Every `notifyCompletion` in this module must
    * be free of the chain id, and that is a property of the text being built, not
    * of the notifier being called.
    *
@@ -643,7 +643,7 @@ describe('a desktop notification carries no chain identifier', () => {
     }
   });
 
-  test('the workstream branch delegates its words — this is not a suppression fix', () => {
+  test('the workstream branch delegates its words; this is not a suppression fix', () => {
     // The three narrated outcomes (cancelled / spent turn budget / failed) moved
     // into workstream-notification.ts, where they are asserted by calling the
     // function. The guard that belongs here is that the wiring still routes

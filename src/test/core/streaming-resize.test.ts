@@ -12,7 +12,7 @@ import { createTestConfigManager } from '../helpers/test-managers.ts';
 // they occupy), but historically left streamingStartLine pointing at the old
 // buffer offset. The next updateStreamingBlock() then truncateToLine()d to
 // that STALE index, chopping correctly-rendered lines and re-appending the
-// streamed text at the wrong position — visibly corrupting the transcript for
+// streamed text at the wrong position, visibly corrupting the transcript for
 // the rest of the turn.
 //
 // Fix: track _streamWidth; on a width change updateStreamingBlock() forces the
@@ -21,12 +21,12 @@ import { createTestConfigManager } from '../helpers/test-managers.ts';
 //
 // These tests assert the streaming block re-anchors to the correct
 // content-start line so the tail of the buffer is EXACTLY the streamed content
-// re-rendered at the new width — no stale offset, no leaked preceding lines.
+// re-rendered at the new width, no stale offset, no leaked preceding lines.
 // ---------------------------------------------------------------------------
 
 // A long single-line message wraps to a DIFFERENT number of lines at width 80
 // vs width 40, so a stale (width-80) anchor would point into the wrong region
-// of the width-40 buffer — exactly the corruption this guards against.
+// of the width-40 buffer, exactly the corruption this guards against.
 const LONG_USER =
   'The quick brown fox jumps over the lazy dog and then keeps running clear ' +
   'across the entire wide open field far beyond the distant horizon line.';

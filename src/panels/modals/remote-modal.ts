@@ -24,7 +24,7 @@ function stateTone(state: string): Tone {
  * snapshot is synchronous; a subscribe() keeps live transport/heartbeat values
  * refreshing between key presses. The panel's `Tab` connections/contracts browse
  * toggle becomes two real tabs. `r`/Enter dispatch `/remote recover` for the
- * selected runner — the panel's only corrective keybinding; the richer
+ * selected runner, the panel's only corrective keybinding; the richer
  * `/remote` command set (show/supervisor/cancel/dispatch/artifact/…) stays on
  * the command front-door.
  */

@@ -1,5 +1,5 @@
 /**
- * relay-reachability-bridge.ts — what this terminal can honestly say about the
+ * relay-reachability-bridge.ts, what this terminal can honestly say about the
  * outbound relay's live state.
  *
  * The relay is a DAEMON capability. The reachability controller is composed
@@ -9,7 +9,7 @@
  * registers with the relay and can mint a pairing payload for it.
  *
  * This terminal is a client. It never constructs a `DaemonServer`, so it holds
- * no controller of its own, and it has no handle to the adopted daemon's — the
+ * no controller of its own, and it has no handle to the adopted daemon's, the
  * control plane exposes no verb for one. The operator contract's `relay`
  * category carries the two step-up ceremony verbs (`stepup.challenge.mint`,
  * `stepup.credential.register`) and nothing that reports registration state or
@@ -55,7 +55,7 @@ export interface RelayReadAccessors {
  */
 export const RELAY_STATE_NOT_READABLE_HERE =
   'The daemon holds the relay connection and the control plane exposes no verb for its state, '
-  + 'so this terminal cannot read it — ask the machine running the daemon.';
+  + 'so this terminal cannot read it; ask the machine running the daemon.';
 
 /** The two relay accessors, spread into `externalServices` from bootstrap.ts. */
 export const relayReadAccessors: RelayReadAccessors = {

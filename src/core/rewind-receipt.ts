@@ -1,11 +1,11 @@
 /**
- * rewind-receipt.ts — transcript rendering for an applied unified rewind.
+ * rewind-receipt.ts, transcript rendering for an applied unified rewind.
  *
  * The SDK's UnifiedRewindService returns a RewindReceipt from rewind.apply (and
  * emits a matching REWIND_APPLIED workspace event). This module turns that
  * receipt into a distinct, multi-line `[Rewind]` block, mirroring the
  * `[Compaction]` receipt (compaction-receipt.ts) so a rewind is never a silent
- * mutation of files or conversation history — the transcript records exactly
+ * mutation of files or conversation history, the transcript records exactly
  * what was restored and whether it can be reversed.
  *
  * The `[Rewind]` prefix is one of the FORCE_CONVERSATION_PREFIXES the
@@ -42,13 +42,13 @@ function describeAnchor(turnId: string | null): string {
 }
 
 /**
- * Build the distinct multi-line `[Rewind]` receipt block. Pure — no state, no
+ * Build the distinct multi-line `[Rewind]` receipt block. Pure, no state, no
  * I/O. Lines after the header are indented two spaces so the transcript renders
  * them as one grouped block under the `[Rewind] Receipt` heading.
  */
 export function buildRewindReceiptBlock(receipt: RewindReceiptInput): string {
   const lines: string[] = [];
-  lines.push(`[Rewind] Receipt — rewound ${receipt.scope} to ${describeAnchor(receipt.turnId)}.`);
+  lines.push(`[Rewind] Receipt: rewound ${receipt.scope} to ${describeAnchor(receipt.turnId)}.`);
 
   if (receipt.files) {
     if (receipt.files.restored) {
@@ -57,7 +57,7 @@ export function buildRewindReceiptBlock(receipt: RewindReceiptInput): string {
         `removed ${plural(receipt.files.removedFileCount, 'file')}.`,
       );
     } else {
-      lines.push('  Files: not restored — no workspace checkpoint matched this anchor.');
+      lines.push('  Files: not restored; no workspace checkpoint matched this anchor.');
     }
   }
 
@@ -65,7 +65,7 @@ export function buildRewindReceiptBlock(receipt: RewindReceiptInput): string {
     if (receipt.conversation.rewound) {
       lines.push(`  Conversation: dropped ${plural(receipt.conversation.droppedMessages, 'message')} after this turn.`);
     } else {
-      lines.push('  Conversation: not rewound — no conversation boundary was recorded for this anchor.');
+      lines.push('  Conversation: not rewound; no conversation boundary was recorded for this anchor.');
     }
   }
 

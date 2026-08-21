@@ -1,5 +1,5 @@
 /**
- * Failure Forensics — comprehensive unit tests.
+ * Failure Forensics, comprehensive unit tests.
  *
  * Covers:
  * - Classifier: all 9 FailureClass categories + priority ordering
@@ -75,10 +75,10 @@ async function emitTask(bus: RuntimeEventBus, payload: Record<string, unknown>, 
 }
 
 // ---------------------------------------------------------------------------
-// 1. Classifier — all 9 categories + priority
+// 1. Classifier, all 9 categories + priority
 // ---------------------------------------------------------------------------
 
-describe('classifyFailure — all 9 categories', () => {
+describe('classifyFailure: all 9 categories', () => {
   test('wasCancelled → cancelled (highest priority)', async () => {
     expect(classifyFailure({
       wasCancelled: true,
@@ -164,7 +164,7 @@ describe('classifyFailure — all 9 categories', () => {
   });
 });
 
-describe('classifyFailure — priority ordering', () => {
+describe('classifyFailure: priority ordering', () => {
   test('cancelled beats compaction_error', async () => {
     expect(classifyFailure({ wasCancelled: true, hasCompactionError: true })).toBe('cancelled');
   });
@@ -225,10 +225,10 @@ describe('summariseFailure', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Registry — push/evict/getById/latest
+// 2. Registry, push/evict/getById/latest
 // ---------------------------------------------------------------------------
 
-describe('ForensicsRegistry — push and retrieve', () => {
+describe('ForensicsRegistry: push and retrieve', () => {
   test('push adds a report retrievable by getById', async () => {
     const reg = makeRegistry();
     const r = makeReport('abc123');
@@ -269,7 +269,7 @@ describe('ForensicsRegistry — push and retrieve', () => {
   });
 });
 
-describe('ForensicsRegistry — eviction', () => {
+describe('ForensicsRegistry: eviction', () => {
   test('evicts oldest report when at capacity', async () => {
     const reg = makeRegistry(3);
     reg.push(makeReport('r1'));
@@ -298,7 +298,7 @@ describe('ForensicsRegistry — eviction', () => {
   });
 });
 
-describe('ForensicsRegistry — subscribe', () => {
+describe('ForensicsRegistry: subscribe', () => {
   test('subscriber is called on push', async () => {
     const reg = makeRegistry();
     let called = 0;
@@ -437,10 +437,10 @@ describe('ForensicsRegistry — subscribe', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Collector lifecycle — turn terminal states
+// 3. Collector lifecycle, turn terminal states
 // ---------------------------------------------------------------------------
 
-describe('ForensicsCollector — turn lifecycle', () => {
+describe('ForensicsCollector: turn lifecycle', () => {
   function makeCollector() {
     const bus = new RuntimeEventBus();
     const registry = makeRegistry();
@@ -542,10 +542,10 @@ describe('ForensicsCollector — turn lifecycle', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Collector lifecycle — task terminal states
+// 4. Collector lifecycle, task terminal states
 // ---------------------------------------------------------------------------
 
-describe('ForensicsCollector — task lifecycle', () => {
+describe('ForensicsCollector: task lifecycle', () => {
   function makeCollector() {
     const bus = new RuntimeEventBus();
     const registry = makeRegistry();
@@ -616,10 +616,10 @@ describe('ForensicsCollector — task lifecycle', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. Tracker size cap — orphan eviction
+// 5. Tracker size cap, orphan eviction
 // ---------------------------------------------------------------------------
 
-describe('ForensicsCollector — tracker size cap', () => {
+describe('ForensicsCollector: tracker size cap', () => {
   test('orphaned turn trackers are capped at 500 (evicts oldest)', async () => {
     const bus = new RuntimeEventBus();
     const registry = makeRegistry();
@@ -630,7 +630,7 @@ describe('ForensicsCollector — tracker size cap', () => {
       await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: `orphan-${i}`, prompt: 'p' });
     }
 
-    // Now terminate the first turn (orphan-0) — it should have been evicted
+    // Now terminate the first turn (orphan-0), it should have been evicted
     // so no report is generated
     await emitTurn(bus, { type: 'TURN_ERROR', turnId: 'orphan-0', error: 'late error' });
     expect(registry.count()).toBe(0);

@@ -1,5 +1,5 @@
 /**
- * install-self-check.ts — cheap, non-fatal detection of an incomplete
+ * install-self-check.ts, cheap, non-fatal detection of an incomplete
  * install, run at TUI startup and re-surfaced by `goodvibes doctor`.
  *
  * A packaged install (the standalone `install.sh` binary, or the
@@ -12,16 +12,16 @@
  *   2. the daemon launch path resolves to nothing runnable, so any
  *      daemon/control-plane/listener/web surface silently fails to start.
  *
- * This module decides those two facts from injected inputs only — an
+ * This module decides those two facts from injected inputs only, an
  * install kind, a package root, the resolved daemon executable, and a
- * `fileExists` predicate — so it is pure and testable with fake paths and
+ * `fileExists` predicate, so it is pure and testable with fake paths and
  * never touches the network. The production wiring (real existsSync + the
  * real daemon resolution) lives in install-self-check-startup.ts and in the
  * CLI status/doctor entrypoint; this file only makes the judgement.
  *
  * A `source` checkout run via `bun src/main.ts` is NOT an incomplete
- * install — there is no vendor directory to populate and the daemon runs
- * from source — so it is never flagged.
+ * install, there is no vendor directory to populate and the daemon runs
+ * from source, so it is never flagged.
  *
  * Install-kind detection and the per-kind repair one-liner are reused from
  * update-check.ts rather than re-derived here.
@@ -39,7 +39,7 @@ import { resolveArtifactNames } from './release-artifacts.ts';
  */
 export interface DaemonPathResolution {
   readonly command: string;
-  /** How the path was resolved. 'fallback' means no runnable file was found — a bare PATH command. */
+  /** How the path was resolved. 'fallback' means no runnable file was found, a bare PATH command. */
   readonly source: string;
   readonly absolute: boolean;
 }

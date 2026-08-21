@@ -20,7 +20,7 @@ const classifyCases: ClassifyCase[] = [
   { label: 'status 401', err: { status: 401, message: 'Unauthorized' }, expected: 'auth' },
   { label: 'statusCode 401', err: { statusCode: 401, message: 'permission denied' }, expected: 'auth' },
   { label: 'invalid api key message', err: new Error('Invalid API key provided'), expected: 'auth' },
-  { label: 'invalid key (variant)', err: new Error('invalid key — check your credentials'), expected: 'auth' },
+  { label: 'invalid key (variant)', err: new Error('invalid key: check your credentials'), expected: 'auth' },
   { label: 'Unauthorized string', err: 'Unauthorized', expected: 'auth' },
   { label: 'authentication failed message', err: new Error('authentication failed'), expected: 'auth' },
 
@@ -60,7 +60,7 @@ describe('classifyError', () => {
 });
 
 // ---------------------------------------------------------------------------
-// formatUserFacingError — verify messages and actions per class
+// formatUserFacingError, verify messages and actions per class
 // ---------------------------------------------------------------------------
 
 describe('formatUserFacingError', () => {
@@ -147,7 +147,7 @@ function simulateTurnError(
 
 // (the purge): SystemMessagesPanel was DELETE-disposition and has been
 // removed; SystemMessageRouter no longer takes a panel argument at all (see
-// system-message-router.ts's file doc — every message now reaches
+// system-message-router.ts's file doc, every message now reaches
 // conversation.addTypedSystemMessage()). These tests used to also assert on
 // a mock panel's push() calls; that assertion is gone, the conversation
 // assertion is what remains and is unchanged in spirit.

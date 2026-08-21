@@ -14,7 +14,7 @@
 //
 // Attachable kinds: only 'agent' and 'wrfc-chain' carry anything worth
 // attaching to (a transcript for an agent; a live member summary for a
-// chain — see fleet-transcript.ts). workflow/trigger/schedule/watcher/
+// chain, see fleet-transcript.ts). workflow/trigger/schedule/watcher/
 // background-process/wrfc-subtask nodes have no transcript and are never
 // attachable (FleetPanel shows a status message instead, matching the
 // existing i/K "not supported" convention).
@@ -34,14 +34,14 @@ export function isAttachableFleetKind(kind: ProcessKind): kind is FleetAttachabl
 /**
  * Lifecycle of a queued steer message, tracked
  * per-tab. `queued` means `ProcessRegistry.steer()` accepted the message
- * onto the target's inbox, NOT that the agent has seen it — that is the
+ * onto the target's inbox, NOT that the agent has seen it, that is the
  * later, honest `consumed` transition (a `COMMUNICATION_CONSUMED` runtime-bus
  * event matching this badge's `messageId`). `dropped` is a TUI-side
  * inference: the SDK emits no "expired"/"cancelled" signal for a queued
  * steer, so if the target node goes terminal (done/failed/killed/
  * interrupted) while the badge is still `queued`, FleetPanel resolves it to
  * `dropped` itself rather than leaving the badge hanging forever (see
- * fleet-panel.ts reconcileSteerBadges — cross-WO note: the SDK engineer
+ * fleet-panel.ts reconcileSteerBadges, cross-WO note: the SDK engineer
  * confirmed no dropped signal exists).
  */
 export type SteerBadgeStatus = 'queued' | 'consumed' | 'dropped';
@@ -50,19 +50,19 @@ export type SteerBadgeStatus = 'queued' | 'consumed' | 'dropped';
 export interface SteerBadge {
   readonly messageId: string;
   readonly status: SteerBadgeStatus;
-  /** Present for 'dropped' — a one-line honest explanation shown in the tab. */
+  /** Present for 'dropped', a one-line honest explanation shown in the tab. */
   readonly note?: string;
-  /** epoch ms when status left 'queued' (consumed or dropped) — drives FleetPanel's linger-then-clear tick. */
+  /** epoch ms when status left 'queued' (consumed or dropped), drives FleetPanel's linger-then-clear tick. */
   readonly resolvedAt?: number;
   /**
    * epoch ms when status entered 'queued' (set once, at submit time). Drives
    * fleet-steer.ts's reconcileSteerBadges TTL-expiry fallback: the SDK's
    * MessageBus attaches its own STEER_TTL_MS to the underlying steer message
    * (see registry.js's steer()) but never tells the TUI when that TTL lapses
-   * without delivery — the "agent stays healthy/non-terminal through one
+   * without delivery, the "agent stays healthy/non-terminal through one
    * very long tool call, and the steer simply expires unseen in the bus"
    * case. Without this, that badge would show 'queued' forever. Optional
-   * because older/hand-built badges (tests, pre-fix data) may not carry it —
+   * because older/hand-built badges (tests, pre-fix data) may not carry it,
    * absence just means "no TTL-expiry inference possible for this badge",
    * not an error.
    */
@@ -73,7 +73,7 @@ export interface SteerBadge {
  * Append one character of steer-composer input to a draft, normalizing a
  * pasted multi-line block's line breaks (terminals transmit bracketed-paste
  * newlines as literal `\r`/`\n` characters delivered one at a time through
- * the same per-char burst pipeline as ordinary typing — see
+ * the same per-char burst pipeline as ordinary typing, see
  * handler-feed-routes.ts's isCapturingTextBurst contract) to a single
  * collapsed space instead of either corrupting the one-line field with a
  * raw control character or silently dropping the content. Mirrors how a
@@ -89,10 +89,10 @@ export function appendSteerText(draft: string, ch: string): string {
 
 /**
  * One attached session tab. `agentId` is the SDK attach handle for
- * `AgentManager.getConversationSnapshot(agentId)` — populated only for
+ * `AgentManager.getConversationSnapshot(agentId)`, populated only for
  * 'agent' tabs (agent.ts sets ProcessNode.id = record.id, so node.id IS the
  * agentId). 'wrfc-chain' tabs render a live member-summary instead of a
- * transcript (a chain has no single conversation of its own — see
+ * transcript (a chain has no single conversation of its own, see
  * fleet-transcript.ts renderFleetChainSummary) and carry an empty agentId,
  * unused.
  *
@@ -112,7 +112,7 @@ export interface FleetTab {
    * Cached parsed ledger fallback for a terminal agent whose conversation
    * snapshot has been evicted from the SDK's retention ring (the degraded
    * fallback path). `null` = not yet loaded/attempted; `[]` = loaded and
-   * empty (or the load failed) — both render the same honest "no transcript"
+   * empty (or the load failed), both render the same honest "no transcript"
    * state once loaded is true.
    */
   ledgerEntries: Record<string, unknown>[] | null;
@@ -122,7 +122,7 @@ export interface FleetTab {
    * when not composing. Mirrors git-panel.ts's `commitMessage` mutable-slot
    * convention (FleetPanel.isCapturingTextBurst() gates on this being
    * non-null so a burst/paste lands here char-by-char, never as tree/tab
-   * hotkeys — see FleetPanel.handleSteerInput).
+   * hotkeys, see FleetPanel.handleSteerInput).
    */
   steerDraft: string | null;
   /** This tab's most recent steer message's lifecycle, or null. */
@@ -172,7 +172,7 @@ export function activeFleetTab(state: FleetTabsState): FleetTab | null {
 /**
  * Attach a node as a tab (Enter on an attachable tree row). Re-focuses an
  * already-open tab for the same node instead of creating a duplicate.
- * Returns `state` unchanged if `node.kind` is not attachable — callers
+ * Returns `state` unchanged if `node.kind` is not attachable, callers
  * (FleetPanel) are expected to guard with `isAttachableFleetKind` first and
  * report a status message rather than silently doing nothing; this
  * function's own no-op fallback is defense in depth.
@@ -222,7 +222,7 @@ export function switchFleetTab(state: FleetTabsState, activeTabIndex: number): F
   return { tabs: state.tabs, activeTabIndex };
 }
 
-/** Move focus to the next/previous tab in the strip (wrapping is deliberately NOT applied — clamps at the ends). */
+/** Move focus to the next/previous tab in the strip (wrapping is deliberately NOT applied, clamps at the ends). */
 export function stepFleetTab(state: FleetTabsState, direction: 1 | -1): FleetTabsState {
   const next = state.activeTabIndex + direction;
   return switchFleetTab(state, Math.max(0, Math.min(state.tabs.length, next)));

@@ -70,7 +70,7 @@ describe('buildBudgetAlertUsdSyntheticEntry', () => {
     const groups = buildSettingGroups(cm);
     const behaviorKeys = (groups.get('behavior') ?? []).map((e) => e.setting.key);
     // Both keys below are TUI-local synthetic settings, not members of the
-    // SDK's ConfigKey union — same `as ConfigKey` cast production code uses.
+    // SDK's ConfigKey union, same `as ConfigKey` cast production code uses.
     expect(behaviorKeys.filter((k) => k === (BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey))).toHaveLength(1);
     expect(behaviorKeys).toContain('behavior.notifyOnBudgetBreach' as ConfigKey);
   });

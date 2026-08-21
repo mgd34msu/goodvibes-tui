@@ -1,5 +1,5 @@
 /**
- * theme-runtime.test.ts — the active-mode runtime.
+ * theme-runtime.test.ts, the active-mode runtime.
  *
  * Covers: the active-mode accessors, the in-place palette rebuild registry and
  * its reversibility (light→dark restores byte-identical dark), the transcript
@@ -191,7 +191,7 @@ describe('theme-mode config', () => {
     // the SDK's ConfigValue mapped type is a very large discriminated union,
     // and asking the compiler to structurally verify a freshly-written
     // generic signature against it here risks TS's "excessive stack depth"
-    // recursion limit (TS2321) — a compiler limitation, not a real type
+    // recursion limit (TS2321), a compiler limitation, not a real type
     // mismatch.
     expect(resolveConfiguredThemeMode({
       get: ((_key: string) => 'light') as unknown as ConfigManager['get'],

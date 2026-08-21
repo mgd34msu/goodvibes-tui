@@ -1,10 +1,10 @@
 /**
- * hosted-sessions-client.test.ts — the terminal's half of the hosted-session
+ * hosted-sessions-client.test.ts, the terminal's half of the hosted-session
  * contract: what it sends, what it does with what comes back, and what it does
  * when the daemon will not answer.
  *
  * Everything here is asserted against a recorded verb caller rather than a live
- * daemon — the live proof is the adopt e2e, which drives the real binary. What
+ * daemon, the live proof is the adopt e2e, which drives the real binary. What
  * this file protects is the wire shape (verb ids, required fields, the clientId
  * this terminal attaches under) and the honesty rules: a refused stream is a
  * value, an unread roster is not an empty one, and the detach sentence comes
@@ -195,7 +195,7 @@ describe('hosted session stream', () => {
     expect(readHostedStreamEnvelope('turn', {
       type: 'STREAM_DELTA', ts: 5, sessionId: 'hosted-1', payload: { accumulated: 'hi' },
     })).toEqual({ domain: 'turn', type: 'STREAM_DELTA', sessionId: 'hosted-1', at: 5, payload: { accumulated: 'hi' } });
-    // No session stamp means nothing can be filtered on it — dropping it is the
+    // No session stamp means nothing can be filtered on it, dropping it is the
     // only honest answer, since rendering it would attribute another
     // conversation's tokens to this one.
     expect(readHostedStreamEnvelope('turn', { type: 'STREAM_DELTA', payload: {} })).toBeNull();

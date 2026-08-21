@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// KillRing — emacs/readline-compatible kill ring implementation.
+// KillRing, emacs/readline-compatible kill ring implementation.
 //
 // The ring holds up to MAX_ENTRIES text strings. Kill commands push to the
 // head. Yank pastes from the current yank pointer (default: head). Yank-pop
@@ -13,7 +13,7 @@
 export const KILL_RING_MAX = 32;
 
 /**
- * KillRing — bounded circular ring of killed text segments.
+ * KillRing, bounded circular ring of killed text segments.
  *
  * All public mutation methods are pure-functional helpers at module level;
  * this class owns the mutable state so the handler can hold a single ref.
@@ -41,7 +41,7 @@ export class KillRing {
   }
 
   /**
-   * Yank — return the entry at the current yank pointer.
+   * Yank, return the entry at the current yank pointer.
    * Returns '' if the ring is empty.
    * Sets lastActionWasYank so a subsequent yank-pop is valid.
    */
@@ -53,7 +53,7 @@ export class KillRing {
   }
 
   /**
-   * YankPop — advance the yank pointer by one step (wrapping) and return the
+   * YankPop, advance the yank pointer by one step (wrapping) and return the
    * new entry. Only valid after a yank; if the ring has <=1 entry, returns the
    * same string. Returns '' if the ring is empty.
    */
@@ -85,7 +85,7 @@ export class KillRing {
 // ---------------------------------------------------------------------------
 
 /**
- * isWordChar — true when the character is a "word" character.
+ * isWordChar, true when the character is a "word" character.
  * Word = letter (Unicode), digit, or underscore. This is the emacs/readline
  * word boundary definition used for Alt+B, Alt+F, Ctrl+W, Alt+D.
  */
@@ -94,7 +94,7 @@ function isWordChar(ch: string): boolean {
 }
 
 /**
- * wordBoundaryBack — find the start of the word that the cursor is in, or the
+ * wordBoundaryBack, find the start of the word that the cursor is in, or the
  * start of the previous word if the cursor is at a non-word character.
  *
  * Emacs Alt+B semantics:
@@ -106,15 +106,13 @@ function isWordChar(ch: string): boolean {
  */
 export function wordBoundaryBack(text: string, pos: number): number {
   let p = pos;
-  // Skip non-word chars first (move past punctuation/spaces)
   while (p > 0 && !isWordChar(text[p - 1]!)) p--;
-  // Then skip word chars (the word body)
   while (p > 0 && isWordChar(text[p - 1]!)) p--;
   return p;
 }
 
 /**
- * wordBoundaryForward — find the position just past the end of the next word.
+ * wordBoundaryForward, find the position just past the end of the next word.
  *
  * Emacs Alt+F semantics:
  *   - Skip non-word chars forward
@@ -126,9 +124,7 @@ export function wordBoundaryBack(text: string, pos: number): number {
 export function wordBoundaryForward(text: string, pos: number): number {
   let p = pos;
   const len = text.length;
-  // Skip non-word chars first
   while (p < len && !isWordChar(text[p]!)) p++;
-  // Then skip word chars
   while (p < len && isWordChar(text[p]!)) p++;
   return p;
 }

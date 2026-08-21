@@ -35,21 +35,21 @@ describe('compositeScore', () => {
     expect(compositeScore({})).toBeNull();
   });
 
-  it('handles partial scores — swe only', () => {
+  it('handles partial scores: swe only', () => {
     const scores: ModelBenchmarks = { swe: 0.75 };
     const result = compositeScore(scores);
     expect(result).not.toBeNull();
     expect(result!).toBeCloseTo(0.75, 5);
   });
 
-  it('handles partial scores — swe and gpqa, no aime', () => {
+  it('handles partial scores: swe and gpqa, no aime', () => {
     const scores: ModelBenchmarks = { swe: 0.6, gpqa: 0.7 };
     const result = compositeScore(scores);
     expect(result).not.toBeNull();
     expect(result!).toBeCloseTo(0.65, 5);
   });
 
-  it('handles partial scores — gpqa only', () => {
+  it('handles partial scores: gpqa only', () => {
     const scores: ModelBenchmarks = { gpqa: 0.9 };
     const result = compositeScore(scores);
     expect(result).not.toBeNull();

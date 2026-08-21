@@ -1,11 +1,11 @@
 // Deliberately per-repo test scaffolding, byte-identical to the sibling product's copy by design: it binds to this repo's own working tree, source layout and Bun test lifecycle, so a shared home would mean inventing a test-only published package rather than hoisting anything.
 /**
- * Liveness contract harness (c) — reusable, surface-agnostic assertions.
+ * Liveness contract harness (c), reusable, surface-agnostic assertions.
  *
  * A live-updating modal must mutate VALUES in place: rows never reflow under the
  * cursor mid-edit, and any structural layout change waits for an interaction
  * boundary. These helpers make that contract testable by comparing two rendered
- * frames — A (initial, cursor at row R) and B (after a values-only update).
+ * frames, A (initial, cursor at row R) and B (after a values-only update).
  *
  * The integrator can point the same helpers at the provider/MCP modals
  * by rendering the two frames and calling assertFrameLiveness(A, B). It is seeded
@@ -13,12 +13,12 @@
  *
  * Contract enforced by assertFrameLiveness(A, B):
  *   1. identical line count and per-line width (no rows/columns added or removed);
- *   2. an identical STRUCTURAL-glyph skeleton — every box border, separator, tree
+ *   2. an identical STRUCTURAL-glyph skeleton, every box border, separator, tree
  *      connector, and gutter/selection marker sits at the exact same (row,col) in
  *      both frames (nothing reflowed);
  *   3. the selection marker resolves to the same row (the cursor did not jump);
  *   4. (optional) every differing cell falls inside a caller-declared value
- *      region — proving ONLY values changed.
+ *      region, proving ONLY values changed.
  */
 
 import { expect } from 'bun:test';
@@ -102,7 +102,7 @@ export function assertFrameLiveness(a: Line[], b: Line[], opts: LivenessOptions 
     expect(b[r]!.length).toBe(a[r]!.length);
   }
 
-  // (2) structural skeleton identical — nothing reflowed.
+  // (2) structural skeleton identical, nothing reflowed.
   expect(skeleton(b, structural)).toEqual(skeleton(a, structural));
 
   // (3) the selection marker is on the same row (the cursor did not jump).

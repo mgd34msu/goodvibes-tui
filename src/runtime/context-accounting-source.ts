@@ -6,7 +6,7 @@ import type { ContextAccountingSource } from '@pellux/goodvibes-sdk/platform/too
 /**
  * Minimal runtime-bus surface this module needs: subscribe by event type.
  * A narrow structural type (not the full RuntimeEventBus) so this module
- * doesn't pull in `runtime/index.ts` — bootstrap.ts imports this module
+ * doesn't pull in `runtime/index.ts`, bootstrap.ts imports this module
  * directly, and index.ts re-exports bootstrap.ts, so a barrel import here
  * would be a 3-file cycle (see check-architecture.ts's cycle detector).
  */
@@ -15,7 +15,7 @@ export interface CompactionActivityBus {
 }
 
 /**
- * Builds the interactive session's ContextAccountingSource — the honest
+ * Builds the interactive session's ContextAccountingSource, the honest
  * backing for the SDK's `context_accounting` tool. Bound onto
  * `RuntimeServices.contextAccountingHolder` once, at bootstrap (see
  * bootstrap.ts, right after the live Orchestrator is constructed).
@@ -29,7 +29,7 @@ export interface CompactionActivityBus {
  *  - getCompactionState()  → compactionCount from SessionLineageTracker (the
  *    same counter session-maintenance and /compact read); isCompacting is
  *    tracked from real 'compaction' domain lifecycle events on the runtime
- *    bus, since the Orchestrator has no public accessor for it — NOT
+ *    bus, since the Orchestrator has no public accessor for it, NOT
  *    fabricated. Without a runtime bus (headless/test callers), isCompacting
  *    honestly stays false rather than guessing.
  */
@@ -104,7 +104,7 @@ export function createContextAccountingSource(deps: ContextAccountingSourceDeps)
 
 /**
  * Create the source, install it on the holder, and register its dispose on
- * the caller's unsubscribe list — the one-call bootstrap wiring.
+ * the caller's unsubscribe list, the one-call bootstrap wiring.
  */
 export function wireContextAccountingSource(
   deps: ContextAccountingSourceDeps,

@@ -12,13 +12,13 @@
 //
 //   USAGE       Angle brackets for required args: "<arg>"
 //               Square brackets for optional args: "[arg]"
-//               MUST NOT be an empty string — omit the field instead.
+//               MUST NOT be an empty string, omit the field instead.
 //
 //   ARGS_HINT   MUST be present for simple single-placeholder commands whose
 //               usage is exactly "<arg>", "[arg]", or a two-token form of those.
 //               Complex subcommand surfaces (usage lists alternatives with "|") are
-//               exempt — they intentionally omit argsHint.
-//               MUST NOT be an empty string when present — omit the field instead.
+//               exempt, they intentionally omit argsHint.
+//               MUST NOT be an empty string when present, omit the field instead.
 //
 //   DESCRIPTION Starts with an uppercase letter.
 //               Does NOT end with a period.
@@ -71,7 +71,7 @@ function usageTakesArgs(usage: string | null | undefined): boolean {
 // ---------------------------------------------------------------------------
 
 const ALLOWLIST: Array<{ name: string; rule: string; reason: string }> = [
-  // /help alias "?" — conventional Unix/CLI help shorthand; widely understood;
+  // /help alias "?", conventional Unix/CLI help shorthand; widely understood;
   // not kebab-case but an accepted single-character punctuation alias.
   { name: 'help', rule: 'alias-kebab', reason: '"?" is the conventional Unix help shorthand and a deliberate UX choice' },
 ];
@@ -140,7 +140,7 @@ describe('Slash-command grammar lint', () => {
       const usage = cmd.usage as string | null | undefined;
       if (usage === '') {
         violations.push(
-          `/${cmd.name}: usage is an empty string — omit the field when the command takes no arguments`,
+          `/${cmd.name}: usage is an empty string; omit the field when the command takes no arguments`,
         );
       }
     }
@@ -150,14 +150,14 @@ describe('Slash-command grammar lint', () => {
   test('argsHint is not an empty string (omit the field instead)', () => {
     // argsHint presence is optional for complex subcommand surfaces (many panel-launchers
     // document their subcommands in usage but don't surface an inline hint).
-    // When argsHint IS present, it must not be empty — omit the field instead.
+    // When argsHint IS present, it must not be empty, omit the field instead.
     const violations: string[] = [];
     for (const cmd of allCommands) {
       if (isAllowlisted(cmd.name, 'args-hint-empty')) continue;
       const hint = cmd.argsHint as string | null | undefined;
       if (hint !== null && hint !== undefined && hint.trim() === '') {
         violations.push(
-          `/${cmd.name}: argsHint is an empty string — omit the field when no inline hint is needed`,
+          `/${cmd.name}: argsHint is an empty string; omit the field when no inline hint is needed`,
         );
       }
     }
@@ -206,7 +206,7 @@ describe('Slash-command grammar lint', () => {
       if (isAllowlisted(cmd.name, 'desc-no-trailing-period')) continue;
       if (cmd.description.trimEnd().endsWith('.')) {
         violations.push(
-          `/${cmd.name}: description ends with a period — trailing periods are not part of the convention`,
+          `/${cmd.name}: description ends with a period; trailing periods are not part of the convention`,
         );
       }
     }
@@ -229,7 +229,7 @@ describe('Slash-command grammar lint', () => {
     for (const entry of ALLOWLIST) {
       if (!registeredNames.has(entry.name)) {
         stale.push(
-          `Allowlist entry for "/${entry.name}" (rule: ${entry.rule}) is stale — no such command is registered`,
+          `Allowlist entry for "/${entry.name}" (rule: ${entry.rule}) is stale; no such command is registered`,
         );
       }
     }
@@ -289,7 +289,7 @@ describe('Slash-command grammar lint', () => {
     // alias violation detected on a live registration
     expect((badTwo.aliases ?? []).every(isValidAlias)).toBe(false);
 
-    // Third registration: a blank description no longer registers at all —
+    // Third registration: a blank description no longer registers at all,
     // the registry refuses it at the door, which supersedes detect-after-the-fact.
     expect(() =>
       fresh.register({

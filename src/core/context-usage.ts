@@ -6,7 +6,7 @@
  * hand-rolled copies.
  *
  * IMPORTANT: compaction-preview.ts intentionally displays usage > 100%
- * ("exceeds window") — callers that need the unclamped value must use
+ * ("exceeds window"), callers that need the unclamped value must use
  * rawRatio, not clampedRatio / pct.
  */
 

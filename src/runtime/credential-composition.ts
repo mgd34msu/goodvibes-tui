@@ -7,7 +7,7 @@
  * These are grouped because they share one fact, and it is the fact this round
  * had to fix: WHERE the daemon's own credentials live. `daemonHome` is threaded
  * rather than defaulted, because without it a daemon told to run out of a temp
- * tree moved its identity directory and nothing else — the credential store
+ * tree moved its identity directory and nothing else, the credential store
  * stayed in the real home, so an "isolated" test daemon held live credentials
  * and long-polled a real account. A default here would silently restore that.
  *
@@ -25,7 +25,7 @@ interface CredentialCompositionInput {
   readonly homeDirectory: string;
   /**
    * The daemon's state root when the host was told one. Absent means "not
-   * overridden" and must stay absent rather than being defaulted — see above.
+   * overridden" and must stay absent rather than being defaulted, see above.
    */
   readonly daemonHomeDirectory?: string | undefined;
   readonly configManager: ConstructorParameters<typeof SecretsManager>[0]['configManager'];

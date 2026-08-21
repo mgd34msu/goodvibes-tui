@@ -1,5 +1,5 @@
 /**
- * no-unused-exports-rule.ts — architecture-gate rule.
+ * no-unused-exports-rule.ts, architecture-gate rule.
  *
  * Bans exported symbols in src/renderer/**\/*.ts that have no non-test
  * import site anywhere in the codebase. This is the guard that would have
@@ -7,14 +7,14 @@
  * up): an export with zero real callers is either dead code that should be
  * deleted, or code that was written but never plugged in.
  *
- * Scope: every top-level export in src/renderer/**\/*.ts — const/let/function/
+ * Scope: every top-level export in src/renderer/**\/*.ts, const/let/function/
  * class/interface/type/enum declarations, and local `export { a, b as c }`
  * lists and re-export forwarding (`export { a } from './x'`).
  *
  * VALUE exports (const/let/function/class, and named exports/re-exports of
  * those) "count as used" only when some non-test file (anywhere in the repo,
  * including scripts/) imports that exact name from a specifier resolving to
- * the defining file — JS requires a real import to reach a value, so nothing
+ * the defining file, JS requires a real import to reach a value, so nothing
  * short of that proves it's reachable. This is the check that would have
  * caught diff-view.ts sitting unwired for 19 versions.
  *
@@ -26,20 +26,20 @@
  * name-import `ThingOptions` to pass a matching literal, so requiring a
  * cross-file import site for every companion parameter-shape interface would
  * flag hundreds of legitimate types and swamp the real signal. A type that
- * appears only once in its own file — its own declaration, referenced
- * nowhere, in that file or any other — is still flagged: that's the
+ * appears only once in its own file, its own declaration, referenced
+ * nowhere, in that file or any other, is still flagged: that's the
  * `UiGlyphRegistry`-shaped case of a genuinely orphaned type.
  *
  * Two further carve-outs from needing a proven usage site:
- *   1. Type-only re-exports — `export type { X } from './y'` or
- *      `export { type X } from './y'` — that forward a type through a
+ *   1. Type-only re-exports, `export type { X } from './y'` or
+ *      `export { type X } from './y'`, that forward a type through a
  *      canonical module without themselves being the type's declaration site.
  *      These commonly exist to consolidate a public type surface at one
  *      import path for future/external consumers; requiring proof of a
  *      current importer would create churn disproportionate to the risk (a
  *      forwarded type costs nothing at runtime and the *original*
  *      declaration is still subject to this same rule wherever it lives).
- *   2. NO_UNUSED_EXPORTS_EXEMPT — a minimal, individually justified list of
+ *   2. NO_UNUSED_EXPORTS_EXEMPT, a minimal, individually justified list of
  *      `relPath#exportName` entries for exports that are genuinely part of a
  *      public surface this static pass cannot see a caller for. Prefer
  *      wiring the export into a real call site or deleting it outright;
@@ -49,7 +49,7 @@
  * `export * from './x'` (whole-module re-export) is out of scope: no
  * src/renderer file used this form as of rule authoring, and it can't be
  * resolved to individual names without deeper resolution. If one is ever
- * added, this rule silently stops covering the names it forwards — extend
+ * added, this rule silently stops covering the names it forwards, extend
  * `extractExportedSymbols`/`extractImportedBindings` rather than relying on
  * that gap.
  */
@@ -81,7 +81,7 @@ export interface ImporterFile {
 }
 
 /**
- * Fully-qualified `relPath#exportName` exemptions. Keep this list minimal —
+ * Fully-qualified `relPath#exportName` exemptions. Keep this list minimal,
  * prefer wiring the export into a real call site or deleting it, same
  * discipline as SELECTED_INDEX_EXEMPT / the hex-literal baseline. Each entry
  * must carry a justifying comment.
@@ -90,7 +90,7 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   // ── Internal-only, but with dedicated tests pinning exact behavior that a
   // rewrite through the public wrapper would only make less direct. Each is
   // genuinely wired in production (through the sibling named in the comment)
-  // — this rule just can't see the indirection — and each's own test
+  //, this rule just can't see the indirection, and each's own test
   // exercises algorithmic edge cases (color-math rounding, threshold
   // boundaries, tokenizer branches) the wrapper's tests don't isolate.
   'src/renderer/overlay-viewport.ts#getOverlayWidthClass', // wired via getOverlaySurfaceMetrics; width-band boundaries also pinned by a release-gate test
@@ -203,9 +203,9 @@ function asDynamicImportCall(expr: ts.Expression): ts.CallExpression | null {
 
 /**
  * Extract every relative-import/re-export binding a file's source text pulls
- * in — static `import {...} from './x'`, `export {...} from './x'`
+ * in, static `import {...} from './x'`, `export {...} from './x'`
  * forwarding, and destructured dynamic imports (`const { a, b } = await
- * import('./x')`, anywhere in the file, not just top level — this codebase
+ * import('./x')`, anywhere in the file, not just top level, this codebase
  * lazy-loads a few heavy renderer modules that way).
  */
 export function extractImportedBindings(text: string, relPath = 'file.ts'): ImportedBinding[] {
@@ -225,7 +225,7 @@ export function extractImportedBindings(text: string, relPath = 'file.ts'): Impo
       // Default and namespace imports of src/renderer files are intentionally
       // not tracked: no src/renderer file exports a default, and no importer
       // takes a namespace import of one (verified at rule authoring time). A
-      // future one would silently escape this rule's usage tracking — extend
+      // future one would silently escape this rule's usage tracking, extend
       // this function rather than relying on that gap.
     } else if (
       ts.isExportDeclaration(stmt) &&
@@ -268,7 +268,7 @@ export function extractImportedBindings(text: string, relPath = 'file.ts'): Impo
  *
  * `resolveSpecifier` resolves a relative import specifier written in
  * `fromRelPath` to the repo-relative path of the file it targets (or null if
- * unresolvable) — the caller supplies filesystem resolution so this module
+ * unresolvable), the caller supplies filesystem resolution so this module
  * stays pure and unit-testable without touching disk.
  */
 export function checkNoUnusedExports(
@@ -312,7 +312,7 @@ export function checkNoUnusedExports(
 
 /**
  * Whether a type name is referenced anywhere in its own declaring file
- * besides its declaration — a plain word-boundary occurrence count, matching
+ * besides its declaration, a plain word-boundary occurrence count, matching
  * the text-scanning style of the hex-literal/selected-index rules rather
  * than a full type-checker walk. `>= 2` means "appears at its declaration
  * plus at least once more" (typically the exported function it describes).

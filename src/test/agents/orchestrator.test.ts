@@ -505,7 +505,7 @@ describe('AgentOrchestrator', () => {
       }
     });
 
-    test('never throws — all errors captured in record.error', async () => {
+    test('never throws: all errors captured in record.error', async () => {
       const origWarn = console.warn;
       console.warn = () => {};
       try {
@@ -610,7 +610,7 @@ describe('AgentOrchestrator', () => {
       expect((provider.chat as ReturnType<typeof mock>).mock.calls.length).toBe(2);
     });
 
-    test('tool call for unknown tool does not crash — records error in result', async () => {
+    test('tool call for unknown tool does not crash; records error in result', async () => {
       const provider = makeMockProvider([
         {
           content: '',
@@ -727,7 +727,7 @@ describe('AgentOrchestrator', () => {
 
   describe('max turn limit', () => {
     test('circuit breaker trips on consecutive all-error turns before MAX_TURNS', async () => {
-      // Provider that always returns an unknown tool call — every turn all tools fail,
+      // Provider that always returns an unknown tool call, every turn all tools fail,
       // triggering the circuit breaker (CONSECUTIVE_ERROR_BREAK = 10) before MAX_TURNS (50)
       const provider = makeMockProvider([
         { content: '', toolCalls: [{ id: 'call-inf', name: 'noop', arguments: {} }] },
@@ -758,7 +758,7 @@ describe('AgentOrchestrator', () => {
         }),
       };
 
-      // Ask for 'agent' to be included — it should be filtered out
+      // Ask for 'agent' to be included, it should be filtered out
       const record = makeRecord({ tools: ['agent', 'find'] });
       await withMockProvider(captureToolsProvider, () => orchestrator.runAgent(record));
 
@@ -861,7 +861,7 @@ describe('AgentOrchestrator', () => {
 
     test('says nothing when no argument names what the tool is doing', () => {
       // The old "otherwise use the first string value found" fallback is gone.
-      // It is what produced `exec — standard`: the flat scan missed the nested
+      // It is what produced `exec, standard`: the flat scan missed the nested
       // `cmd` and grabbed `verbosity`, whose default is the literal string
       // "standard", so the label named a tool and then a value with nothing to
       // do with what it was about to run. A bare tool name is the honest answer.

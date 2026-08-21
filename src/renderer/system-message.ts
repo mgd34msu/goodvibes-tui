@@ -15,7 +15,7 @@ export function classifySystemMessage(content: string): SystemMessageType {
 
   // [WRFC] messages
   if (/^\[WRFC\]/.test(content)) {
-    // Failed gate result → error (red) — must be checked before generic FAILED
+    // Failed gate result → error (red), must be checked before generic FAILED
     if (/Gate:.*FAILED/i.test(content)) return 'error';
     // Hard failures and cascade aborts → error (red)
     if (/FAILED|cascade abort/i.test(content)) return 'error';
@@ -40,13 +40,13 @@ export function classifySystemMessage(content: string): SystemMessageType {
   // [Plan] messages are always informational
   if (/^\[Plan\]/.test(content)) return 'info';
 
-  // [Model] messages — "Unknown model" is a warning, switch is info
+  // [Model] messages, "Unknown model" is a warning, switch is info
   if (/^\[Model\]/.test(content)) {
     if (/Unknown model/i.test(content)) return 'warning';
     return 'info';
   }
 
-  // [Routing] chip — a mid-session model change is informational (the [Failover]
+  // [Routing] chip, a mid-session model change is informational (the [Failover]
   // line, not this, carries the alarming transport-error cases).
   if (/^\[Routing\]/.test(content)) return 'info';
 

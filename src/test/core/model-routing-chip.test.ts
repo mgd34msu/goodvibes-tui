@@ -2,7 +2,7 @@
 // model-routing-chip.test.ts
 // The never-silent routing-chip decision: report every real model change, with
 // the fallback log's own reason when one correlates and "reason unknown" only
-// when nothing explains it. Silence is reserved for non-changes — the failover
+// when nothing explains it. Silence is reserved for non-changes, the failover
 // path suppresses its own two switches at the listener (stream-event-wiring).
 // ---------------------------------------------------------------------------
 

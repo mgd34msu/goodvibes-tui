@@ -1,4 +1,4 @@
-# Home Assistant Surface
+# Home Assistant surface
 
 GoodVibes can expose a Home Assistant companion surface through the daemon. The TUI owns onboarding, settings, and auto-start selection; the SDK daemon owns Home Assistant API calls, callback verification, tool/action metadata, and event delivery.
 
@@ -28,7 +28,7 @@ Home Assistant values are also editable after onboarding:
 
 Clearing or resetting a Home Assistant secret-backed config key removes the derived GoodVibes user secret when possible. Existing `goodvibes://secrets/env/...`, `goodvibes://secrets/file/...`, and `goodvibes://secrets/goodvibes/...` references are preserved as references rather than copied.
 
-## Daemon Contract
+## Daemon contract
 
 The inbound callback path is:
 
@@ -125,7 +125,7 @@ POST /api/homeassistant/home-graph/refinement/tasks/{id}/cancel
 
 Read routes accept `installationId` or `knowledgeSpaceId`. List and browse routes also accept `limit`; issue listing also accepts `status`, `severity`, and `code`. `GET /api/homeassistant/home-graph/status` includes Home Graph readiness and refinement counts so clients can show whether the graph is ready, needs source work, has active repair tasks, or has review-needed tasks.
 
-### Client Rendering Rules
+### Client rendering rules
 
 TUI and companion clients should render the SDK-returned fields directly:
 
@@ -138,7 +138,7 @@ Do not locally infer Home Assistant facet names, object identity, source quality
 
 Home Graph answers are designed to be responsive. If evidence is weak, Ask should return the current best answer plus gaps/refinement task ids instead of blocking indefinitely. Repair and enrichment continue through durable refinement tasks.
 
-### Refinement And Reindex
+### Refinement and reindex
 
 The TUI daemon composes the SDK Home Graph service with the SDK web-backed semantic gap repairer. Refinement tasks can search for candidate repair sources, ingest accepted sources, promote subject-linked facts, refresh generated pages, and continue the SDK refinement state machine.
 
@@ -150,7 +150,7 @@ Operational expectations:
 - Broad refinement runs should report budget/truncation fields instead of pinning the daemon.
 - A task blocked with `No semantic gap repairer is configured` indicates a stale daemon or host composition bug, not a Home Assistant client issue.
 
-### Artifact Ingest
+### Artifact ingest
 
 Home Graph artifact ingest accepts the same large-upload bodies as the generic artifact and knowledge routes:
 

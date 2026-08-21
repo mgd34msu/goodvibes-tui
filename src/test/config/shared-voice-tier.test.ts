@@ -10,7 +10,7 @@
  * src/daemon/cli.ts, src/runtime/legacy-daemon-migration.ts) all pass an
  * explicit `homeDir` + `surfaceRoot: 'tui'` and never override `sharedTierPath`,
  * so this is a mechanical consequence of the SDK's own logic rather than
- * something the TUI implements — this test exists to prove that stays true for
+ * something the TUI implements, this test exists to prove that stays true for
  * THIS surface's exact construction shape, not to re-derive the SDK's
  * resolution-order behavior (already covered by the SDK's own test suite).
  */
@@ -35,7 +35,7 @@ afterEach(() => {
   for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-describe('shared voice tier — TUI ConfigManager construction shape', () => {
+describe('shared voice tier: TUI ConfigManager construction shape', () => {
   test('a voice set under another surface root resolves in the TUI manager', () => {
     const h = home();
     // Simulate another surface (e.g. the agent) setting the voice first.
@@ -68,7 +68,7 @@ describe('shared voice tier — TUI ConfigManager construction shape', () => {
     }
 
     // A second TUI-surface-root manager (e.g. a second TUI process on the same
-    // home) sees the same write — the tier is keyed on homeDir, not process identity.
+    // home) sees the same write, the tier is keyed on homeDir, not process identity.
     const tuiAgain = new ConfigManager({ homeDir: h, surfaceRoot: 'tui' });
     expect(tuiAgain.get('tts.voice')).toBe('daniel');
   });

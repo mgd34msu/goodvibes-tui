@@ -1,5 +1,5 @@
 /**
- * surface.ts — the TUI's single surface-root identifier.
+ * surface.ts, the TUI's single surface-root identifier.
  *
  * Every piece of the TUI's own on-disk state (sessions, the last-session
  * pointer, recovery snapshots, checkpoints, the transcript journal, the

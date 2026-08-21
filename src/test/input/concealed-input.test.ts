@@ -53,7 +53,7 @@ describe('concealed-input', () => {
     // A plain local `let` narrows to its initializer's literal type across
     // the `beginConcealedInputFor` call boundary (TS's control-flow analysis
     // does not account for the callback below actually running during that
-    // call) — an object property does not get that stale narrowing, so the
+    // call), an object property does not get that stale narrowing, so the
     // captured state lives on one.
     const captured: { delivered: string | null; stateWhenDelivered: unknown } = {
       delivered: null,

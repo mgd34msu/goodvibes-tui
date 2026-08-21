@@ -19,10 +19,10 @@ function makeSummary(openPanels: readonly string[]): SessionReturnContextSummary
 }
 
 // W6 review (finding 3): saved-layout restore must not lie about a
-// MIGRATE-TO-MODAL id like 'sessions' — it has no panel to restore (a modal
+// MIGRATE-TO-MODAL id like 'sessions', it has no panel to restore (a modal
 // isn't part of a saved panel layout), so restoring it must be skipped and
 // noted honestly, never silently dropped or claimed as "reopened".
-describe('reopenPanelsFromReturnContext — modal-redirect restore honesty (W6 review, finding 3)', () => {
+describe('reopenPanelsFromReturnContext: modal-redirect restore honesty (W6 review, finding 3)', () => {
   test("a redirected id ('sessions') is skipped, never opened as a panel, and noted honestly", () => {
     const pm = new PanelManager();
     pm.registerModalRedirect('sessions', 'sessionPicker');
@@ -34,7 +34,7 @@ describe('reopenPanelsFromReturnContext — modal-redirect restore honesty (W6 r
 
     expect(reopened).toEqual([]); // not counted as a reopened panel
     expect(opened).toEqual([]); // restore never fires the modal open — no phantom picker pop mid-resume
-    expect(out.join('\n')).toContain('sessions moved to a modal — reopen via its command instead of as a panel.');
+    expect(out.join('\n')).toContain('sessions moved to a modal; reopen via its command instead of as a panel.');
   });
 
   test('a genuine panel id in the saved layout is actually reopened, unaffected by the redirect check', () => {

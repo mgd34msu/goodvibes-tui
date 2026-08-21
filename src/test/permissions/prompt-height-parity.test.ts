@@ -1,7 +1,7 @@
 /**
  * PermissionPromptUI.getPromptHeight(request, hunkState) must equal the
  * actual number of Line rows PermissionPromptUI.createPromptLines(width,
- * request, hunkState) returns — main.ts's render loop reserves viewport
+ * request, hunkState) returns, main.ts's render loop reserves viewport
  * space from getPromptHeight *before* the real render happens (see
  * src/main.ts's overlayRows computation), so any drift between the two
  * clips or misplaces the conversation viewport. This is the single
@@ -114,7 +114,7 @@ describe('PermissionPromptUI.getPromptHeight / createPromptLines parity', () => 
 
   const lineText = (line: { char: string }[]): string => line.map((c) => c.char).join('');
 
-  test('2a — a nested {files:[{path}]} arg renders the real path in the Path field, raw JSON only in Args', () => {
+  test('2a: a nested {files:[{path}]} arg renders the real path in the Path field, raw JSON only in Args', () => {
     const request = makeFilesRequest('write', 'write', ['notes/haiku.txt']);
     const rows = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, true).map(lineText);
     const pathRow = rows.find((r) => r.trimStart().startsWith('Path'));
@@ -126,13 +126,13 @@ describe('PermissionPromptUI.getPromptHeight / createPromptLines parity', () => 
     expect(argsRow!).toContain('{"files"');
   });
 
-  test('2a — many files collapse to a "N files: …" summary line', () => {
+  test('2a: many files collapse to a "N files: …" summary line', () => {
     const request = makeFilesRequest('write', 'write', Array.from({ length: 6 }, (_, i) => `f${i}.ts`));
     const text = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, true).map(lineText).join('\n');
     expect(text).toContain('6 files:');
   });
 
-  test('2b — a low-risk local read is condensed by default and expands with details', () => {
+  test('2b: a low-risk local read is condensed by default and expands with details', () => {
     const request = makeFilesRequest('read', 'read', ['src/foo.ts']);
     const collapsedHeight = PermissionPromptUI.getPromptHeight(request, undefined, false);
     const expandedHeight = PermissionPromptUI.getPromptHeight(request, undefined, true);
@@ -174,7 +174,7 @@ describe('PermissionPromptUI.getPromptHeight / createPromptLines parity', () => 
   });
 });
 
-describe('PermissionPromptUI — attribution + remember-scope preview (Item 3 b/c)', () => {
+describe('PermissionPromptUI: attribution + remember-scope preview (Item 3 b/c)', () => {
   const lineText = (line: { char: string }[]): string => line.map((c) => c.char).join('');
 
   function req(tool: string, args: Record<string, unknown>, category: 'read' | 'write' | 'execute'): PermissionPromptRequest & { resolve: (approved: boolean) => void } {

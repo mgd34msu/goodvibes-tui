@@ -203,7 +203,7 @@ describe('spawn mode', () => {
       tools: ['read', 'find'],
       restrictTools: true,
     });
-    // restrictTools bypasses additive merge — only the specified tools are used
+    // restrictTools bypasses additive merge, only the specified tools are used
     expect(result.tools).toEqual(['read', 'find']);
     // Template defaults must NOT be present
     const tools = result.tools as string[];
@@ -690,7 +690,7 @@ describe('cancel mode', () => {
     const result = await runAgentMayFail({ mode: 'cancel', agentId });
     expect(result.success).toBe(true);
     const parsed = JSON.parse(result.output!) as Record<string, unknown>;
-    // AgentManager.cancel() only overwrites 'pending'/'running' — so status stays 'completed'.
+    // AgentManager.cancel() only overwrites 'pending'/'running', so status stays 'completed'.
     expect(parsed.status).toBe('completed');
   });
 });
@@ -938,7 +938,7 @@ describe('wait mode', () => {
     const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
     const agentId = spawned.agentId as string;
 
-    // Agent remains 'pending' — wait with very short timeout
+    // Agent remains 'pending', wait with very short timeout
     const result = await runAgent({ mode: 'wait', agentId, timeoutMs: 50 });
     expect(result.agentId).toBe(agentId);
     expect(result.timedOut).toBe(true);
@@ -948,7 +948,7 @@ describe('wait mode', () => {
     const spawned = await runAgent({ mode: 'spawn', task: 'Stuck task' });
     const agentId = spawned.agentId as string;
 
-    // timeoutMs: 0 means no polling — should return immediately
+    // timeoutMs: 0 means no polling, should return immediately
     const result = await runAgent({ mode: 'wait', agentId, timeoutMs: 0 });
     expect(result.agentId).toBe(agentId);
     expect(result.timedOut).toBe(true);

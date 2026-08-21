@@ -1,5 +1,5 @@
 /**
- * terminal-bg-probe.test.ts — fake-terminal harness for the OSC 11 background probe.
+ * terminal-bg-probe.test.ts, fake-terminal harness for the OSC 11 background probe.
  *
  * Drives the pure parser/classifier and the TerminalBackgroundProbe stream filter
  * against scripted byte streams (the exact hazards scoped): BEL vs ST
@@ -26,7 +26,7 @@ import { activeTheme, resolveTheme, setActiveThemeMode } from '../../renderer/th
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { configGetStub } from '../helpers/config-manager-stub.ts';
 
-// The probe forcing tests mutate global active mode — always restore to dark so
+// The probe forcing tests mutate global active mode, always restore to dark so
 // this file's default-dark assumption (and any downstream test) stays honest.
 afterEach(() => setActiveThemeMode('dark'));
 
@@ -39,7 +39,7 @@ function makeProbe(out: ProbeResolution[], timeoutMs = 1_000): TerminalBackgroun
 }
 
 // ---------------------------------------------------------------------------
-// parseColorSpec — colour-spec variants
+// parseColorSpec, colour-spec variants
 // ---------------------------------------------------------------------------
 
 describe('parseColorSpec', () => {
@@ -78,7 +78,7 @@ describe('parseColorSpec', () => {
 });
 
 // ---------------------------------------------------------------------------
-// classifyBackgroundLuminance — threshold + endpoints
+// classifyBackgroundLuminance, threshold + endpoints
 // ---------------------------------------------------------------------------
 
 describe('classifyBackgroundLuminance', () => {
@@ -100,7 +100,7 @@ describe('classifyBackgroundLuminance', () => {
 });
 
 // ---------------------------------------------------------------------------
-// TerminalBackgroundProbe.feed — the stream filter
+// TerminalBackgroundProbe.feed, the stream filter
 // ---------------------------------------------------------------------------
 
 describe('TerminalBackgroundProbe.feed', () => {
@@ -163,7 +163,7 @@ describe('TerminalBackgroundProbe.feed', () => {
     const out: ProbeResolution[] = [];
     const probe = makeProbe(out, 15);
     probe.startTimeout();
-    // A prefix arrives with no terminator — none of these bytes may reach the
+    // A prefix arrives with no terminator, none of these bytes may reach the
     // pipeline; a real keystroke before it must.
     const passthrough = probe.feed('k\x1b]11;rgb:ffff/ffff');
     expect(passthrough).toBe('k'); // only the real keystroke escaped
@@ -227,7 +227,7 @@ describe('tmux passthrough + query', () => {
 });
 
 // ---------------------------------------------------------------------------
-// installBackgroundThemeProbe — config forcing + auto/TTY gating
+// installBackgroundThemeProbe, config forcing + auto/TTY gating
 // ---------------------------------------------------------------------------
 
 /** Minimal ConfigManager-shaped stub returning a fixed themeMode value. */
@@ -241,7 +241,7 @@ function isMode(mode: 'dark' | 'light'): boolean {
   return activeTheme() === resolveTheme(mode);
 }
 
-describe('installBackgroundThemeProbe — forcing paths', () => {
+describe('installBackgroundThemeProbe: forcing paths', () => {
   test("forced 'dark' applies dark, writes no query, filter is passthrough", () => {
     let wrote = '';
     const handle = installBackgroundThemeProbe({
@@ -283,7 +283,7 @@ describe('installBackgroundThemeProbe — forcing paths', () => {
   });
 });
 
-describe('installBackgroundThemeProbe — auto probe flow', () => {
+describe('installBackgroundThemeProbe: auto probe flow', () => {
   test('auto + TTY writes the query; a light reply flips to light + repaints once', () => {
     let wrote = '';
     let repaints = 0;

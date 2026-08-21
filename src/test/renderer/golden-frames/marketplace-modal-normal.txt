@@ -1,6 +1,6 @@
 # GV_GOLDEN surface=marketplace-modal-normal width=100 height=18
 |    ┌─Marketplace──────────────────────────────────────────────────────────────┐                    |
-|    │   This is your local plugin, skill, hook-pack, and policy-pack catalog — │                    |
+|    │   This is your local plugin, skill, hook-pack, and policy-pack catalog;  │                    |
 |    │   not a remote store.                                                    │                    |
 |    │   It’s empty because nothing has been published or imported into this    │                    |
 |    │   workspace yet. Entries appear here once you publish a local component  │                    |

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // fleet-read-model.test.ts
-// — fleet read-model: tree building from flat ProcessNode[], sorting,
+//, fleet read-model: tree building from flat ProcessNode[], sorting,
 // tree-prefix correctness, cycle guard, state glyph/tone mapping, and honest
 // cost/token aggregation (never a fabricated $0.00/0-token reading).
 // ---------------------------------------------------------------------------
@@ -39,10 +39,10 @@ function makeNode(overrides: Partial<ProcessNode> & { id: string }): ProcessNode
 }
 
 // ---------------------------------------------------------------------------
-// buildFleetRows — tree building
+// buildFleetRows, tree building
 // ---------------------------------------------------------------------------
 
-describe('buildFleetRows — tree shape', () => {
+describe('buildFleetRows: tree shape', () => {
   test('empty input yields empty rows', () => {
     expect(buildFleetRows([])).toHaveLength(0);
   });
@@ -153,10 +153,10 @@ describe('buildFleetRows — tree shape', () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildFleetSnapshot — honest cost/token aggregates
+// buildFleetSnapshot, honest cost/token aggregates
 // ---------------------------------------------------------------------------
 
-describe('buildFleetSnapshot — honest cost/token aggregates', () => {
+describe('buildFleetSnapshot: honest cost/token aggregates', () => {
   test('empty input yields null totals and zero runningCount', () => {
     const snap = buildFleetSnapshot([], NOW);
     expect(snap.rows).toHaveLength(0);
@@ -243,7 +243,7 @@ describe('buildFleetSnapshot — honest cost/token aggregates', () => {
   // Leaf-only aggregation (bug fix): a wrfc-chain node's usage/costUsd is the
   // SDK's OWN rollup of its member agents (see wrfc.ts adaptChain / registry.ts
   // assemble()), and those same member agents ALSO appear individually in the
-  // flat node list. Summing over every flat node therefore double-counts —
+  // flat node list. Summing over every flat node therefore double-counts,
   // the chain total gets added ON TOP of the totals its own members already
   // contribute. Same story for a completed WRFC owner agent: the SDK backfills
   // owner.usage from aggregateChainUsage(chain) (wrfc-controller.ts
@@ -278,7 +278,7 @@ describe('buildFleetSnapshot — honest cost/token aggregates', () => {
     expect(snap.totalTokens).toBe(1_200); // members only: (600+200) + (300+100), chain's own usage excluded
   });
 
-  test('runningCount excludes the wrfc-chain rollup row itself — only its running members count', () => {
+  test('runningCount excludes the wrfc-chain rollup row itself; only its running members count', () => {
     const chain = makeNode({ id: 'chain:c1', kind: 'wrfc-chain', state: 'executing-tool' });
     const memberA = makeNode({ id: 'member-a', parentId: 'chain:c1', state: 'executing-tool' });
     const memberB = makeNode({ id: 'member-b', parentId: 'chain:c1', state: 'done' });
@@ -297,7 +297,7 @@ describe('buildFleetSnapshot — honest cost/token aggregates', () => {
     expect(snap.totalCost).toBeNull();
   });
 
-  test('a completed WRFC owner agent (raw.wrfcRole === "owner") is excluded from cost/token totals — its usage is a rollup of its already-counted phase children', () => {
+  test('a completed WRFC owner agent (raw.wrfcRole === "owner") is excluded from cost/token totals; its usage is a rollup of its already-counted phase children', () => {
     const engineer = makeNode({
       id: 'engineer-1',
       parentId: 'chain:c2',
@@ -338,7 +338,7 @@ describe('buildFleetSnapshot — honest cost/token aggregates', () => {
 });
 
 // ---------------------------------------------------------------------------
-// State classification — glyph/tone/kind mapping
+// State classification, glyph/tone/kind mapping
 // ---------------------------------------------------------------------------
 
 describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningProcessState', () => {
@@ -381,7 +381,7 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
   });
 
   // 'interrupted' is a distinct terminal outcome
-  // from 'killed' — both come from AgentManager.cancel(), but a graceful
+  // from 'killed', both come from AgentManager.cancel(), but a graceful
   // interrupt is display-distinguishable from a hard kill (the replay-found
   // defect this item fixes: before this, both landed on 'killed'/⊘).
   test("'interrupted' has a glyph and tone distinct from 'killed' and 'failed'", () => {
@@ -417,11 +417,11 @@ describe('fleetStateGlyph / fleetStateTone / isTerminalProcessState / isRunningP
 // ---------------------------------------------------------------------------
 // 'code-index' is a leaf node, not a rollup: it has no
 // children in the flat list, reports no usage/cost (an index build has no
-// LLM turn), but DOES count toward runningCount while building — it is a
+// LLM turn), but DOES count toward runningCount while building, it is a
 // real, distinct unit of work, not an arithmetic sum of other rows.
 // ---------------------------------------------------------------------------
 
-describe("buildFleetSnapshot — 'code-index' leaf node", () => {
+describe("buildFleetSnapshot: 'code-index' leaf node", () => {
   test('a building code-index node counts toward runningCount and contributes no cost/tokens (it reports none)', () => {
     const node = makeNode({
       id: 'code-index:main',
@@ -460,7 +460,7 @@ describe("buildFleetSnapshot — 'code-index' leaf node", () => {
 // and buildFleetRows nesting workstream -> phase -> work-item -> agent.
 // ---------------------------------------------------------------------------
 
-describe('buildFleetSnapshot — workstream/phase/work-item rollup', () => {
+describe('buildFleetSnapshot: workstream/phase/work-item rollup', () => {
   function makeUsage(inputTokens: number, outputTokens: number) {
     return { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1, toolCallCount: 1 };
   }
@@ -506,7 +506,7 @@ describe('buildFleetSnapshot — workstream/phase/work-item rollup', () => {
     expect(snap.totalCost).toBeNull();
   });
 
-  test('a work-item leaf DOES contribute its own usage/cost — it is not a rollup kind', () => {
+  test('a work-item leaf DOES contribute its own usage/cost; it is not a rollup kind', () => {
     const item = makeNode({
       id: 'work-item:solo',
       kind: 'work-item',
@@ -519,7 +519,7 @@ describe('buildFleetSnapshot — workstream/phase/work-item rollup', () => {
     expect(snap.totalTokens).toBe(500);
   });
 
-  test('runningCount excludes the workstream and phase rollup rows — only the running work-item (or its agent) counts', () => {
+  test('runningCount excludes the workstream and phase rollup rows; only the running work-item (or its agent) counts', () => {
     const workstream = makeNode({ id: 'workstream:w1', kind: 'workstream', state: 'executing-tool' });
     const phase = makeNode({ id: 'phase:w1:p1', kind: 'phase', parentId: 'workstream:w1', state: 'executing-tool' });
     const item = makeNode({ id: 'work-item:i1', kind: 'work-item', parentId: 'phase:w1:p1', state: 'executing-tool' });
@@ -617,10 +617,10 @@ describe('createFleetReadModel', () => {
     expect(registry.steerCalls).toEqual([{ id: 'agent-x', text: 'hello' }]);
   });
 
-  test('steer passes the SDK\'s wake-retry result (woke: true) straight through — this read model needs no change for steer-wake', () => {
+  test('steer passes the SDK\'s wake-retry result (woke: true) straight through; this read model needs no change for steer-wake', () => {
     // ProcessRegistry.steer() now wake-retries a stalled node internally (SDK
     // 1.6.1's agent-experience round) and reports it via SteerResult.woke.
-    // The TUI's fleet read model is a pure passthrough to registry.steer() —
+    // The TUI's fleet read model is a pure passthrough to registry.steer(),
     // pin that the extra field survives instead of being dropped by an
     // exact-shape reconstruction somewhere in the plumbing.
     const registry = makeRegistry([]);
@@ -694,7 +694,7 @@ describe('createStaticFleetReadModel', () => {
 // adaptAutomationJob (platform/runtime/fleet/adapters/automation.ts) produces
 // the ProcessNode; this mirrors its exact documented output (a job created via
 // /schedule IS a schedule from the user's viewpoint) and proves the TUI
-// read-model surfaces it correctly — kind 'schedule', 'sched' tag, disabled ->
+// read-model surfaces it correctly, kind 'schedule', 'sched' tag, disabled ->
 // 'paused' + resumable, and the raw.source marker that distinguishes it from a
 // workflow-tool ScheduleEntry sharing the same kind.
 // ---------------------------------------------------------------------------
@@ -744,7 +744,7 @@ describe('automation-sourced schedule node (d4)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// blocked-on-me — derived "waiting on the user" state (never a stored flag)
+// blocked-on-me, derived "waiting on the user" state (never a stored flag)
 // ---------------------------------------------------------------------------
 
 describe('isBlockedOnUserState', () => {

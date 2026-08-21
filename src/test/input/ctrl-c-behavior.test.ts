@@ -81,8 +81,8 @@ describe('Ctrl+C behavior', () => {
   // exit" arm hint survive a frame of interleaved async output (a streamed
   // token, a TTS notice) rather than flashing and vanishing. showExitNotice
   // has exactly one write site (handleCtrlCForHandler, via handleCtrlC in
-  // handler-content-actions.ts) and is read fresh — as a plain field, not a
-  // per-feed-buffered value — by createFooter on every render call, so an
+  // handler-content-actions.ts) and is read fresh, as a plain field, not a
+  // per-feed-buffered value, by createFooter on every render call, so an
   // unrelated render triggered in between cannot observe or produce anything
   // other than the same true value until the 1s timeout clears it. This test
   // pins that: it simulates the interleaving directly (extra render() calls
@@ -158,7 +158,7 @@ describe('Ctrl+C exit chord survives a throwing TTS-stop (6b)', () => {
 
 // A second empty-prompt Ctrl+C press arriving just inside the 1s
 // "press again to exit" window used to leave the FIRST press's hide-timer
-// live — nothing cleared it. If exitApp() isn't perfectly synchronous, that
+// live, nothing cleared it. If exitApp() isn't perfectly synchronous, that
 // stale timer fires mid-shutdown and flips showExitNotice/requestRender
 // after the user already believes the app is exiting.
 describe('Ctrl+C confirm-window race (f): stale hide-timer bookkeeping', () => {
@@ -187,7 +187,7 @@ describe('Ctrl+C confirm-window race (f): stale hide-timer bookkeeping', () => {
 
     try {
       // First press at t=10_000 (lastCtrlCTime starts at 0, so this is well
-      // outside the window — a real "first ever press", not a same-window
+      // outside the window, a real "first ever press", not a same-window
       // repeat): opens the notice window and schedules a hide-timer.
       nowSpy.mockReturnValue(10_000);
       callHandleCtrlC(state, () => { exited = true; });
@@ -224,7 +224,7 @@ describe('Ctrl+C confirm-window race (f): stale hide-timer bookkeeping', () => {
       expect(firstTimeoutId).not.toBeNull();
 
       // Third-and-later press well outside the window (>= 1000ms since the
-      // last press) opens a brand-new window rather than exiting — its own
+      // last press) opens a brand-new window rather than exiting, its own
       // stale predecessor timer must still be cleared.
       nowSpy.mockReturnValue(15_000);
       clearTimeoutSpy.mockClear();
@@ -256,7 +256,7 @@ describe('Ctrl+C confirm-window race (f): stale hide-timer bookkeeping', () => {
       expect(state.showExitNotice).toBe(true);
       expect(exited).toBe(false);
 
-      // Press 2 at t=4_000 (3s later — "seconds apart", outside the 1s window):
+      // Press 2 at t=4_000 (3s later, "seconds apart", outside the 1s window):
       // re-arms the notice, STILL does not exit.
       nowSpy.mockReturnValue(4_000);
       callHandleCtrlC(state, () => { exited = true; });

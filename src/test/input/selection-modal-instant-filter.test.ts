@@ -1,7 +1,7 @@
 /**
  * item 3: SelectionModal-based pickers (/help, /tools, /sessions,
  * /bookmarks, TTS provider/voice, ...) used to require pressing '/' before
- * typing would filter the list — any other unclaimed keystroke silently did
+ * typing would filter the list, any other unclaimed keystroke silently did
  * nothing. /help in particular registers NO customActions, so every letter
  * was swallowed: "help search needs '/' arming while the palette filters
  * instantly" (evaluator finding). Escape also took up to three presses after
@@ -11,7 +11,7 @@
  *   - an unclaimed keystroke (no customAction bound to it) now instantly
  *     arms search AND starts the query, in addition to '/' still working;
  *   - a claimed hotkey letter (e.g. /bookmarks' 'd' for delete) still fires
- *     its action first, unaffected — search only claims what nothing else did;
+ *     its action first, unaffected, search only claims what nothing else did;
  *   - Escape ALWAYS closes in one press, regardless of search/query state.
  */
 import { describe, expect, test } from 'bun:test';
@@ -33,9 +33,9 @@ function buildState(modal: SelectionModal, overrides: Record<string, unknown> = 
 }
 
 describe('SelectionModal instant filter (item 3a)', () => {
-  test('/help-shaped modal (allowSearch, no customActions): an unclaimed letter instantly arms search and starts the query — no /-arming needed', () => {
+  test('/help-shaped modal (allowSearch, no customActions): an unclaimed letter instantly arms search and starts the query; no /-arming needed', () => {
     const modal = new SelectionModal();
-    modal.open('Help — Commands', [
+    modal.open('Help: Commands', [
       { id: '/model', label: '/model' },
       { id: '/config', label: '/config' },
     ], { allowSearch: true });
@@ -48,9 +48,9 @@ describe('SelectionModal instant filter (item 3a)', () => {
     expect(modal.query).toBe('c');
   });
 
-  test("'/' still works too — additive, not a replacement", () => {
+  test("'/' still works too: additive, not a replacement", () => {
     const modal = new SelectionModal();
-    modal.open('Help — Commands', [{ id: '/model', label: '/model' }], { allowSearch: true });
+    modal.open('Help: Commands', [{ id: '/model', label: '/model' }], { allowSearch: true });
     const state = buildState(modal);
 
     handleSelectionModalToken(state, { type: 'text', value: '/' });
@@ -69,13 +69,13 @@ describe('SelectionModal instant filter (item 3a)', () => {
 
     handleSelectionModalToken(state, { type: 'text', value: 'd' });
     // TS narrows dispatched to its initializer (null) and doesn't widen back
-    // across the closure reassignment inside selectionCallback — the cast
+    // across the closure reassignment inside selectionCallback, the cast
     // reflects the variable's real declared type.
     expect(dispatched as string | null).toBe('delete');
     expect(modal.searchFocused).toBe(false); // search was never armed
   });
 
-  test('allowSearch: false pickers (e.g. /effort) are unaffected — an unclaimed letter still does nothing', () => {
+  test('allowSearch: false pickers (e.g. /effort) are unaffected; an unclaimed letter still does nothing', () => {
     const modal = new SelectionModal();
     modal.open('Reasoning Effort', [{ id: 'low', label: 'low' }], { allowSearch: false });
     const state = buildState(modal);
@@ -89,7 +89,7 @@ describe('SelectionModal instant filter (item 3a)', () => {
 describe('SelectionModal single-Escape close (item 3b)', () => {
   test('ONE Escape closes the modal even mid-search with a non-empty query (was a 3-press sequence: clear query, blur search, close)', () => {
     const modal = new SelectionModal();
-    modal.open('Help — Commands', [{ id: '/model', label: '/model' }], { allowSearch: true });
+    modal.open('Help: Commands', [{ id: '/model', label: '/model' }], { allowSearch: true });
     let closed = false;
     const state = buildState(modal, { handleEscape: () => { modal.close(); closed = true; } });
 
@@ -107,7 +107,7 @@ describe('SelectionModal single-Escape close (item 3b)', () => {
 
   test('ONE Escape closes the modal when search is focused but the query is still empty', () => {
     const modal = new SelectionModal();
-    modal.open('Help — Commands', [{ id: '/model', label: '/model' }], { allowSearch: true });
+    modal.open('Help: Commands', [{ id: '/model', label: '/model' }], { allowSearch: true });
     let closed = false;
     const state = buildState(modal, { handleEscape: () => { modal.close(); closed = true; } });
 

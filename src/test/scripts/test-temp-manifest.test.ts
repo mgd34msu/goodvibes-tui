@@ -1,5 +1,5 @@
 /**
- * Tests for scripts/test-temp-manifest.ts — the race-free half of the temp
+ * Tests for scripts/test-temp-manifest.ts, the race-free half of the temp
  * cleanup, run by scripts/run-tests.ts after a child test process has exited.
  *
  * Both directions matter. It has to remove what a manifest names, and it has to

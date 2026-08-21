@@ -221,7 +221,7 @@ describe('getMessages', () => {
 describe('TTL and cleanup', () => {
   test('expired messages are not returned', () => {
     const bus = getTestAgentMessageBus();
-    // Send with 0 ms TTL — already expired by the time we read
+    // Send with 0 ms TTL, already expired by the time we read
     bus.send('agent-a', 'agent-b', 'expired', 0);
     const msgs = bus.getMessages('agent-b');
     // TTL 0 means timestamp + 0 <= now, so it should be filtered out

@@ -1,8 +1,8 @@
 /**
- * settings-modal-mutations — pure mutation helpers for SettingsModal.
+ * settings-modal-mutations, pure mutation helpers for SettingsModal.
  *
  * These functions encapsulate the side-effectful write operations. Every
- * write — feature-unit headers included — is a plain domain-settings config
+ * write, feature-unit headers included, is a plain domain-settings config
  * write; the SDK's settings bridge keeps the runtime gate manager in sync
  * (flipping runtime-toggleable gates live and recording honest
  * pending-restart markers for startup-gated ones). Each function takes its
@@ -17,7 +17,7 @@ import type { FlagEntry, SettingEntry } from './settings-modal-types.ts';
 import { deepEqual } from './settings-modal-data.ts';
 
 // ---------------------------------------------------------------------------
-// ApplyValueResult — returned by applySettingValue so the caller can react
+// ApplyValueResult, returned by applySettingValue so the caller can react
 // ---------------------------------------------------------------------------
 
 export interface ApplyValueResult {
@@ -45,7 +45,7 @@ export type SettingAppliedCallback = (change: {
  * `surfaces.*`, `controlPlane.*`, `watchers.*`, `device.*`, `automation.*` and
  * the rest are executed by the daemon, unattended, with every surface closed.
  * Writing one into this surface's own settings file reports success and
- * configures nothing — the daemon reads a different file and never sees it.
+ * configures nothing, the daemon reads a different file and never sees it.
  * So a daemon-owned write goes over `config.set`, and a write with no reachable
  * daemon FAILS rather than landing somewhere harmless-looking.
  */
@@ -80,8 +80,8 @@ export function applySettingValue({
   // live under a config section CONFIG_SCHEMA/DEFAULT_CONFIG has never populated
   // (e.g. 'worktree' as of the SDK 1.6.1 repack), so configManager.get can throw
   // "Invalid config path" here even though the write attempt below is already
-  // guarded. Without this, that read — which runs unconditionally, before the
-  // write's own try/catch — would crash the whole settings modal on save instead
+  // guarded. Without this, that read, which runs unconditionally, before the
+  // write's own try/catch, would crash the whole settings modal on save instead
   // of surfacing the honest "Save failed" message the write path below produces.
   let previousValue: unknown;
   try {
@@ -101,7 +101,7 @@ export function applySettingValue({
       // manager is still written so this session's own reads and the rows
       // below reflect the edit immediately; the daemon's copy is what the
       // daemon acts on, and a refusal from it is surfaced rather than
-      // swallowed — the local value would then be the lie.
+      // swallowed, the local value would then be the lie.
       void daemonConfig.set(key, value).catch((error) => {
         logger.error('SettingsModal: the daemon refused a daemon-owned config write', { key, error: summarizeError(error) });
         onAsyncError?.(`That setting is applied by the daemon and saving it there failed: ${summarizeError(error)}`);

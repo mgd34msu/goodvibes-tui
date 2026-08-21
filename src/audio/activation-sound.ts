@@ -1,17 +1,17 @@
 /**
- * activation-sound.ts — the sound a confirmed wake makes.
+ * activation-sound.ts, the sound a confirmed wake makes.
  *
  * A wake takes the microphone from "scoring frames nobody hears" to "recording
- * what you say next", and the user needs to know the moment that happened —
+ * what you say next", and the user needs to know the moment that happened,
  * otherwise the only feedback is a transcript arriving seconds later, and a
  * false accept is indistinguishable from nothing having happened at all. So the
  * sound is played AT the wake, before transcription, per
  * `voice.wake.activationSound`:
  *
- *  - `chime`  — a short two-tone WAV synthesised here. No asset file to ship,
+ *  - `chime` , a short two-tone WAV synthesised here. No asset file to ship,
  *               install, provision or lose, and nothing to fetch at runtime.
- *  - `custom` — the file named by `voice.wake.activationSoundPath`.
- *  - `none`   — silent.
+ *  - `custom`, the file named by `voice.wake.activationSoundPath`.
+ *  - `none`  , silent.
  *
  * Playback reuses the streaming player the spoken-turn path already owns
  * (player.ts), so a host with mpv or ffplay needs nothing extra and a host with
@@ -32,7 +32,7 @@ const CHIME_SAMPLE_RATE = 16000;
 const CHIME_TONES_HZ = [880, 1320] as const;
 /** Milliseconds per tone. Short enough not to overlap the start of an utterance. */
 const CHIME_TONE_MS = 70;
-/** Peak amplitude on the int16 magnitude scale — audible without being startling. */
+/** Peak amplitude on the int16 magnitude scale, audible without being startling. */
 const CHIME_PEAK = 6000;
 /**
  * Fade applied to each end of each tone, in samples. Without it the abrupt start
@@ -83,7 +83,7 @@ export interface ActivationSoundPlayerDeps {
  * sound that fails to play must not delay or cancel that.
  *
  * `settings.activationSound` arrives already resolved against surface capability
- * — the SDK downgrades `custom` to `chime` on a surface that cannot read a local
+ *, the SDK downgrades `custom` to `chime` on a surface that cannot read a local
  * file, and this surface can, so `custom` here means a real path.
  */
 export function playActivationSound(sound: WakeActivationSound, deps: ActivationSoundPlayerDeps): void {

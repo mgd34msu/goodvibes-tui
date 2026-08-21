@@ -9,10 +9,10 @@ runBasePanelContractSuite({
 });
 
 // ---------------------------------------------------------------------------
-// SkillsPanel — ScrollableListPanel modal filter contract
+// SkillsPanel, ScrollableListPanel modal filter contract
 // ---------------------------------------------------------------------------
 
-describe('SkillsPanel — ScrollableListPanel modal filter contract', () => {
+describe('SkillsPanel: ScrollableListPanel modal filter contract', () => {
   const makePanel = () => new SkillsPanel({ shellPaths: { workingDirectory: '/tmp', homeDirectory: '/tmp' } });
 
   test('initial filterQuery is empty string', () => {

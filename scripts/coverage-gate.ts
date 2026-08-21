@@ -1,12 +1,12 @@
 /**
- * coverage-gate.ts — aggregate coverage enforcement (thin toolchain adapter).
+ * coverage-gate.ts, aggregate coverage enforcement (thin toolchain adapter).
  *
  * The parse + floor-comparison mechanic is owned by
  * @pellux/goodvibes-toolchain (evaluateCoverageGate / parseCoverageSummary);
  * the floors and the coverage command live in this repo's toolchain.config.json
  * (single source). This module is a thin adapter that keeps the TUI-specific
- * evidence layer — the exact reported lines and the cross-file-interference
- * note — and preserves the exported API its unit tests exercise.
+ * evidence layer, the exact reported lines and the cross-file-interference
+ * note, and preserves the exported API its unit tests exercise.
  *
  * Why a separate whole-suite process at all:
  * - "bun run test" (scripts/run-tests.ts) spawns one bun process PER FILE for
@@ -16,7 +16,7 @@
  *   interference failures (they pass under the per-file runner). Correctness is
  *   gated by "bun run test"; this gate reports interference without pretending
  *   they are coverage problems.
- * - IMPORTANT: bunfig.toml must not set "coverage = false" — in bun that key
+ * - IMPORTANT: bunfig.toml must not set "coverage = false", in bun that key
  *   overrides the CLI --coverage flag and the child emits no coverage table.
  */
 import { readFileSync } from "node:fs";
@@ -75,19 +75,19 @@ export function evaluateGate(output: string): GateResult {
   if (!evaluated.summary) {
     return {
       pass: false,
-      lines: ["coverage-gate: FAIL — no coverage table found in output (did the run crash before reporting?)"],
+      lines: ["coverage-gate: FAIL; no coverage table found in output (did the run crash before reporting?)"],
     };
   }
   const funcsOk = evaluated.summary.funcsPct >= FUNCS_FLOOR;
   const linesOk = evaluated.summary.linesPct >= LINES_FLOOR;
   const lines: string[] = [
-    "coverage-gate: functions " + evaluated.summary.funcsPct.toFixed(2) + "% (floor " + FUNCS_FLOOR + "%) — " + (funcsOk ? "OK" : "BELOW FLOOR"),
-    "coverage-gate: lines     " + evaluated.summary.linesPct.toFixed(2) + "% (floor " + LINES_FLOOR + "%) — " + (linesOk ? "OK" : "BELOW FLOOR"),
+    "coverage-gate: functions " + evaluated.summary.funcsPct.toFixed(2) + "% (floor " + FUNCS_FLOOR + "%): " + (funcsOk ? "OK" : "BELOW FLOOR"),
+    "coverage-gate: lines     " + evaluated.summary.linesPct.toFixed(2) + "% (floor " + LINES_FLOOR + "%): " + (linesOk ? "OK" : "BELOW FLOOR"),
   ];
   const failCount = parseFailCount(output);
   if (failCount !== null && failCount > 0) {
     lines.push(
-      "coverage-gate: note — " + failCount + " test(s) failed in whole-suite (single-process) mode.",
+      "coverage-gate: note; " + failCount + " test(s) failed in whole-suite (single-process) mode.",
       "coverage-gate: correctness is gated by bun run test (per-file isolation); single-process",
       "coverage-gate: failures indicate cross-file interference debt, tracked separately.",
     );
@@ -112,13 +112,13 @@ export async function runCoverageGate(options: RunGateOptions = {}): Promise<Gat
   const cwd = options.cwd ?? process.cwd();
   const configured = coverageConfig.command ? [...coverageConfig.command] : ["bun", "test", "--coverage", "src"];
   const cmd = options.cmd ?? configured;
-  // This spawns a single whole-suite `bun test` process directly — unlike
+  // This spawns a single whole-suite `bun test` process directly, unlike
   // `bun run test` (scripts/run-tests.ts), there is no per-file TMPDIR
   // redirection here, so anything the suite creates via a raw
   // mkdtemp(tmpdir()) call lands in the real OS temp dir. Sweep this
   // project's own known-stale entries there before every run (age-gated,
-  // see scripts/stale-tmp-sweep.ts) so this entry point — the one CI
-  // actually calls via `bun run test:coverage` — isn't left unswept.
+  // see scripts/stale-tmp-sweep.ts) so this entry point, the one CI
+  // actually calls via `bun run test:coverage`, isn't left unswept.
   sweepStaleOsTmpEntries(tmpdir());
   // Fence git's upward repo discovery at `.test-tmp` for the same reason
   // scripts/run-tests.ts does (see its longer comment): makeProjectTempDir
@@ -126,7 +126,7 @@ export async function runCoverageGate(options: RunGateOptions = {}): Promise<Gat
   // repo, and any test that needs a genuinely non-repo directory would
   // otherwise silently resolve to the project root instead. Set in the
   // spawn env (not mutated later) so it is part of this child process's own
-  // startup snapshot — Bun.spawnSync-based git calls only honor a ceiling
+  // startup snapshot, Bun.spawnSync-based git calls only honor a ceiling
   // set before the process starts, not a later same-process mutation.
   const testTmpRoot = join(cwd, ".test-tmp");
   const existingCeiling = process.env.GIT_CEILING_DIRECTORIES;

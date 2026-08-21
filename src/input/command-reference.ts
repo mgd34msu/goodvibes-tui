@@ -1,12 +1,12 @@
 /**
- * command-reference.ts — pure renderer for the generated slash-command
+ * command-reference.ts, pure renderer for the generated slash-command
  * reference (docs/commands-reference.md).
  *
  * The reference is generated from the live command registry (via
  * {@link categorizeBuiltinCommands} in ./commands.ts), never hand-maintained.
  * This module is deliberately side-effect free so both the generator
  * (scripts/project-surfaces.ts) and the drift-check test import the same
- * rendering logic — the committed file and a fresh render must be byte-identical
+ * rendering logic, the committed file and a fresh render must be byte-identical
  * or the gate fails.
  */
 import type { SlashCommand } from './command-registry.ts';
@@ -31,10 +31,10 @@ function slug(text: string): string {
 }
 
 /**
- * renderCommandReferenceMarkdown — deterministic markdown for the full command
+ * renderCommandReferenceMarkdown, deterministic markdown for the full command
  * set. Categories are sorted alphabetically and commands alphabetically by
  * primary name within each category, so the output depends only on the command
- * set and their metadata — not on registration order — which keeps the drift
+ * set and their metadata, not on registration order, which keeps the drift
  * check meaningful (a genuinely new/renamed command moves the bytes; a pure
  * reordering does not).
  */
@@ -50,7 +50,7 @@ export function renderCommandReferenceMarkdown(entries: readonly CategorizedComm
   const total = entries.length;
 
   const lines: string[] = [];
-  lines.push('<!-- GENERATED FILE — DO NOT EDIT BY HAND.');
+  lines.push('<!-- GENERATED FILE: DO NOT EDIT BY HAND.');
   lines.push('     Regenerate with `bun run docs:commands`.');
   lines.push('     Source of truth: the slash-command registry (src/input/commands.ts).');
   lines.push('     A drift check (src/test/release-gates/command-reference-gate.test.ts)');
@@ -69,7 +69,7 @@ export function renderCommandReferenceMarkdown(entries: readonly CategorizedComm
   lines.push('');
   for (const category of categories) {
     const count = byCategory.get(category)?.length ?? 0;
-    lines.push(`- [${escapeCell(category)}](#${slug(category)}) — ${count}`);
+    lines.push(`- [${escapeCell(category)}](#${slug(category)}): ${count}`);
   }
   lines.push('');
 

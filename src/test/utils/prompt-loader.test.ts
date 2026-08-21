@@ -51,7 +51,7 @@ describe('readPromptFile', () => {
     expect(readPromptFile(a)).toBe('C');
   });
 
-  test('circular include detection: A includes B includes A — skips circular ref', () => {
+  test('circular include detection: A includes B includes A; skips circular ref', () => {
     // Write placeholders first so paths resolve, then overwrite with circular refs
     const aPath = join(dir, 'a.md');
     const bPath = join(dir, 'b.md');
@@ -106,7 +106,7 @@ describe('readPromptFile', () => {
     expect(readPromptFile(p)).toBe('before\nafter');
   });
 
-  test('visited Set is shared across siblings — file included once is not duplicated', () => {
+  test('visited Set is shared across siblings; file included once is not duplicated', () => {
     write(dir, 'shared.md', 'SHARED');
     // Both branches include shared.md; should only appear once
     const p = write(dir, 'main.md', '@shared.md\n@shared.md');
@@ -156,7 +156,7 @@ describe('loadSystemPrompt', () => {
   });
 
   test('config-specified file is appended when no CLI arg', () => {
-    // Avoid hitting real ~/.goodvibes files — just test getConfigPath injection
+    // Avoid hitting real ~/.goodvibes files, just test getConfigPath injection
     const extra = write(dir, 'extra.md', 'Extra content');
     process.argv = ['bun', 'main.ts'];
     const result = loadSystemPrompt({
@@ -171,7 +171,7 @@ describe('loadSystemPrompt', () => {
 
   test('returns empty string when no files exist and no CLI arg', () => {
     process.argv = ['bun', 'main.ts'];
-    // No config path, home files likely missing in test env — should not throw
+    // No config path, home files likely missing in test env, should not throw
     expect(() => loadSystemPrompt({
       workingDirectory: dir,
       homeDirectory: dir,

@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
-// file-dev-panels-ux.test.ts — UX behavior tests for the development-surface
+// file-dev-panels-ux.test.ts, UX behavior tests for the development-surface
 // panels (git / diff).
 //
 // (the purge): this file used to also cover file-explorer, file-preview,
 // symbol-outline (all DELETE-disposition) and worktree (RETIRE-INTO-FLEET).
-// Their describe blocks were removed along with the panels — see
+// Their describe blocks were removed along with the panels, see
 // .goodvibes/audit/2026-07-04-wave6-briefs.json.
 //
 // These assert the *user-facing* improvements: at-a-glance counts, status
-// glyphs, context-aware footer hints, and tree icons — not just geometry.
+// glyphs, context-aware footer hints, and tree icons, not just geometry.
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, afterEach } from 'bun:test';
@@ -64,7 +64,7 @@ afterEach(() => {
 
 // ── DiffPanel ────────────────────────────────────────────────────────────────
 
-describe('DiffPanel — at-a-glance change counts', () => {
+describe('DiffPanel: at-a-glance change counts', () => {
   const diff = '@@ -1,3 +1,4 @@\n line one\n-line two\n+line two mod\n+line ins\n line three';
 
   test('tab bar surfaces +adds/-dels for the file', () => {
@@ -115,13 +115,13 @@ describe('DiffPanel — at-a-glance change counts', () => {
   });
 });
 
-// (the purge): 'DiffPanel — o opens the current file in preview via the
-// bridge' removed here — 'preview' is DELETE-disposition with no successor
+// (the purge): 'DiffPanel, o opens the current file in preview via the
+// bridge' removed here, 'preview' is DELETE-disposition with no successor
 // surface, and diff-panel.ts no longer has an 'o' key or a
 // handlePanelIntegrationAction hook (see diff-panel.ts's comment at the old
 // hook's former location).
 
-describe('DiffPanel — self-load via its own diff plumbing (w/h/s)', () => {
+describe('DiffPanel: self-load via its own diff plumbing (w/h/s)', () => {
   test('w loads the working-tree diff (unstaged only)', async () => {
     const dir = makeTempRepo();
     tempDirs.push(dir);
@@ -161,7 +161,7 @@ describe('DiffPanel — self-load via its own diff plumbing (w/h/s)', () => {
   });
 });
 
-describe('DiffPanel — not-a-git-repo gate (defensive, mirrors GitPanel)', () => {
+describe('DiffPanel: not-a-git-repo gate (defensive, mirrors GitPanel)', () => {
   test('w/h/s and showFileDiffs all report a friendly not-a-git-repo placeholder instead of a raw git error', async () => {
     const dir = makeProjectTempDir('gv-diff-nogit');
     tempDirs.push(dir);
@@ -195,7 +195,7 @@ describe('DiffPanel — not-a-git-repo gate (defensive, mirrors GitPanel)', () =
   });
 });
 
-describe('DiffPanel — w/h/s hotkeys give visible confirmation (not just a silent re-render)', () => {
+describe('DiffPanel: w/h/s hotkeys give visible confirmation (not just a silent re-render)', () => {
   test('pressing w immediately shows a loading status, then a reloaded confirmation once git resolves', async () => {
     const dir = makeTempRepo();
     tempDirs.push(dir);
@@ -216,7 +216,7 @@ describe('DiffPanel — w/h/s hotkeys give visible confirmation (not just a sile
   });
 });
 
-describe('DiffPanel — splitIntoDiffEntries recognizes non-standard diff headers', () => {
+describe('DiffPanel: splitIntoDiffEntries recognizes non-standard diff headers', () => {
   test('a combined/merge-conflict header ("diff --cc") resolves the real file path, not "unknown"', () => {
     const raw = 'diff --cc conflicted.ts\nindex 111,222..333\n--- a/conflicted.ts\n+++ b/conflicted.ts\n@@@ -1,1 -1,1 +1,1 @@@\n++resolved\n';
     const panel = new DiffPanel('/tmp');
@@ -238,7 +238,7 @@ describe('DiffPanel — splitIntoDiffEntries recognizes non-standard diff header
 
 // ── GitPanel ─────────────────────────────────────────────────────────────────
 
-describe('GitPanel — loading + geometry', () => {
+describe('GitPanel: loading + geometry', () => {
   test('still renders exactly height lines while loading', () => {
     const panel = new GitPanel('/tmp');
     const lines = panel.render(W, H);
@@ -248,7 +248,7 @@ describe('GitPanel — loading + geometry', () => {
 });
 
 
-describe('GitPanel — selection skips header/section/empty filler rows', () => {
+describe('GitPanel: selection skips header/section/empty filler rows', () => {
   test('initial selection and down both land on file/commit rows, never filler', async () => {
     const dir = makeTempRepo();
     tempDirs.push(dir);
@@ -260,7 +260,7 @@ describe('GitPanel — selection skips header/section/empty filler rows', () => 
     await waitFor(() => !linesText(panel.render(W, H)).includes('Loading git status'));
 
     // I5: the initial selection must never rest on the branch header, a
-    // section label, or an "(no ... files)" empty-row placeholder — the
+    // section label, or an "(no ... files)" empty-row placeholder, the
     // "Selected" detail panel resolves what's actually selected.
     const initial = linesText(panel.render(W, H));
     expect(initial).toContain(' File ');
@@ -277,7 +277,7 @@ describe('GitPanel — selection skips header/section/empty filler rows', () => 
   });
 });
 
-describe('GitPanel — stage/unstage/commit round trip', () => {
+describe('GitPanel: stage/unstage/commit round trip', () => {
   test('s stages, u unstages the selected file via GitService add/reset', async () => {
     const dir = makeTempRepo();
     tempDirs.push(dir);
@@ -326,7 +326,7 @@ describe('GitPanel — stage/unstage/commit round trip', () => {
   });
 });
 
-describe('GitPanel — Enter on a commit row shows diffBetween/diffStat', () => {
+describe('GitPanel: Enter on a commit row shows diffBetween/diffStat', () => {
   test('opens the patch and stat for the selected commit', async () => {
     const dir = makeTempRepo();
     tempDirs.push(dir);
@@ -348,7 +348,7 @@ describe('GitPanel — Enter on a commit row shows diffBetween/diffStat', () => 
   });
 });
 
-describe('GitPanel — no more auto `git init`; explicit i confirm instead', () => {
+describe('GitPanel: no more auto `git init`; explicit i confirm instead', () => {
   test('a non-git directory does not get auto-initialised, but i + y does it explicitly', async () => {
     const dir = makeProjectTempDir('gv-git-panel-nonrepo');
     tempDirs.push(dir);
@@ -357,10 +357,10 @@ describe('GitPanel — no more auto `git init`; explicit i confirm instead', () 
     // NOT guaranteed by mkdtemp alone: the suite runner (scripts/run-tests.ts)
     // redirects TMPDIR into `.test-tmp/` *inside* this project's own repo, so a
     // bare temp dir sits under the project's `.git` and git discovery walks up
-    // and finds it — the panel would show the parent repo instead of "Not a git
+    // and finds it, the panel would show the parent repo instead of "Not a git
     // repository". Fence discovery with GIT_CEILING_DIRECTORIES set to the temp
     // dir's parent so git stops there; the panel's own git subprocesses inherit
-    // it via process.env. `git init` is unaffected — it still creates `.git` in
+    // it via process.env. `git init` is unaffected, it still creates `.git` in
     // `dir` on i+y.
     const prevCeiling = process.env.GIT_CEILING_DIRECTORIES;
     process.env.GIT_CEILING_DIRECTORIES = dirname(dir);

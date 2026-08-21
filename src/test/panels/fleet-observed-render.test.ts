@@ -5,7 +5,7 @@ import { buildFleetSnapshot } from '../../panels/fleet-read-model.ts';
 import { lineToString } from '../setup.ts';
 
 // ---------------------------------------------------------------------------
-// Observed foreign agents render — externally-launched Claude Code / Codex
+// Observed foreign agents render, externally-launched Claude Code / Codex
 // sessions goodvibes only WATCHES: honest kind + liveness state, never counted
 // in our-fleet counts, no stop ever, steer as a drill-in (channel or honest
 // reason). Full strings at 80x24 and 60 columns.
@@ -16,7 +16,7 @@ function observedNode(steer: ProcessObserved['steer'], livenessState: 'active' |
     externalKind: 'claude-code',
     pid: 4242,
     cwd: '/home/dev/project',
-    liveness: { state: livenessState, cpuSeconds: 12.5, detail: livenessState === 'quiet' ? 'no CPU burned since last check — may be blocked on you, not proof of idle' : 'CPU advancing' },
+    liveness: { state: livenessState, cpuSeconds: 12.5, detail: livenessState === 'quiet' ? 'no CPU burned since last check; may be blocked on you, not proof of idle' : 'CPU advancing' },
     steer,
     steerDrillInOnly: true,
   };
@@ -35,7 +35,7 @@ function observedNode(steer: ProcessObserved['steer'], livenessState: 'active' |
 }
 
 const TMUX_STEER: ProcessObserved['steer'] = { kind: 'tmux', paneId: '%90', tty: '/dev/pts/11' };
-const NO_STEER: ProcessObserved['steer'] = { kind: 'none', reason: 'no controlling tty — cannot map a tmux pane' };
+const NO_STEER: ProcessObserved['steer'] = { kind: 'none', reason: 'no controlling tty: cannot map a tmux pane' };
 
 const noOverflow = (text: string, width: number) => text.split('\n').every((l) => [...l].length <= width);
 
@@ -63,7 +63,7 @@ describe('observed row render', () => {
   });
 });
 
-describe('observed detail render — steer drill-in, never a stop', () => {
+describe('observed detail render: steer drill-in, never a stop', () => {
   for (const width of [80, 60]) {
     test(`a steerable channel is named at ${width} columns`, () => {
       const lines = renderObservedDetailLines(observedNode(TMUX_STEER), width, undefined as never).map(lineToString);
@@ -80,7 +80,7 @@ describe('observed detail render — steer drill-in, never a stop', () => {
     test(`a none-channel states the honest reason at ${width} columns`, () => {
       const lines = renderObservedDetailLines(observedNode(NO_STEER), width, undefined as never).map(lineToString);
       const flat = lines.join(' ').replace(/\s+/g, ' ');
-      expect(flat).toContain('unavailable — no controlling tty — cannot map a tmux pane');
+      expect(flat).toContain('unavailable: no controlling tty: cannot map a tmux pane');
       expect(flat).not.toContain('tmux pane %'); // no channel pane named
       expect(flat).toContain('not offered'); // still no stop
       expect(noOverflow(lines.join('\n'), width)).toBe(true);

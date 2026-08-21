@@ -9,7 +9,7 @@
  * *deferred* `ConfigValue<K>` instantiations against each other, which exceeds its
  * instantiation-depth budget and aborts with TS2321 "Excessive stack depth comparing
  * types". The compiler reports only one such site per run, so patching whichever file
- * happens to fail just moves the error to the next one — and the threshold shifts as the
+ * happens to fail just moves the error to the next one, and the threshold shifts as the
  * schema grows, so a suite that passes today fails on an unrelated commit tomorrow.
  *
  * The fix is to never re-declare the generic: build a plain non-generic lookup and assert

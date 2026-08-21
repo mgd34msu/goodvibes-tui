@@ -1,4 +1,4 @@
-# CLI Flags
+# CLI flags
 
 Most flags below are global (available regardless of the subcommand in use). Session-lifecycle flags are evaluated at TUI startup and are silently ignored for non-TUI commands. A few flags are specific to one command; those are listed separately in [Command-specific flags](#command-specific-flags).
 

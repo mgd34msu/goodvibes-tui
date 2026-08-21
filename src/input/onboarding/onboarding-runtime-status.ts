@@ -41,7 +41,7 @@ export function runtimePortDiagnostic(
     // The only mode left after every named branch above is 'embedded', and this
     // function reads either endpoint's status (see getRuntimeEndpointStatus):
     // the daemon status can never carry it in this product (adoptOnly is
-    // hardcoded — see bootstrap.ts), but the HTTP listener's status legitimately
+    // hardcoded, see bootstrap.ts), but the HTTP listener's status legitimately
     // does, since the SDK always reports its in-process listener as 'embedded'.
     return `An embedded GoodVibes service is running at ${status.baseUrl}.`;
   }
@@ -66,7 +66,7 @@ export function isRuntimeEndpointActive(
   // This helper serves both endpoints (see handler-onboarding.ts's daemon and
   // httpListener calls), so the 'embedded' arm stays live for httpListener even
   // though a daemon status here is never 'embedded' in this product (adoptOnly
-  // is hardcoded — see bootstrap.ts). Dropping the arm would mark a running
+  // is hardcoded, see bootstrap.ts). Dropping the arm would mark a running
   // HTTP listener as inactive.
   if (status) return status.mode === 'embedded' || status.mode === 'external';
   return endpoint === 'daemon'
@@ -80,7 +80,7 @@ export function isRuntimeEndpointOccupyingConfiguredPort(
 ): boolean {
   const status = getRuntimeEndpointStatus(state, endpoint);
   // 'incompatible' means a GoodVibes daemon holds the configured port (we just
-  // did not adopt it) — the port IS occupied, so report it as such. As with
+  // did not adopt it), the port IS occupied, so report it as such. As with
   // isRuntimeEndpointActive above, 'embedded' stays live here for httpListener
   // (daemon status never carries it in this product).
   if (status) return status.mode === 'embedded' || status.mode === 'external' || status.mode === 'blocked' || status.mode === 'incompatible';

@@ -3,11 +3,11 @@ import { getOperatorRpc, describeOperatorRpcError } from './operator-rpc.ts';
 import { renderWorkstreamGraphLines } from '../../panels/workstream-graph-render.ts';
 
 // ---------------------------------------------------------------------------
-// /graph — a workstream's task graph (fleet.graph.get) rendered legibly.
+// /graph, a workstream's task graph (fleet.graph.get) rendered legibly.
 //
 // The observability-layer surface: nodes, edges, per-node states (ready /
 // running / blocked-with-"waiting on: X" / stalled / orphaned) and the elastic
-// pool posture ("N ready, M running, at cap (fleet.maxSize=N)") — the shape of
+// pool posture ("N ready, M running, at cap (fleet.maxSize=N)"), the shape of
 // the dependency graph WITHOUT opening any transcript. The fix-phase chain's
 // task graph is one such workstream.
 // ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ function renderWidth(): number {
 export function registerGraphRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'graph',
-    description: "Show a workstream's task graph — nodes, edges, states, and pool posture",
+    description: "Show a workstream's task graph: nodes, edges, states, and pool posture",
     usage: '<workstreamId>',
     argsHint: '<workstreamId>',
     async handler(args, ctx) {

@@ -182,9 +182,9 @@ describe('CLI status and doctor output', () => {
 });
 
 describe('CLI exposure report', () => {
-  test("an unrecognized hostMode ('LAN') is never presented as a definite loopback binding — bind row warns, reach is unknown, doctor flags it", () => {
+  test("an unrecognized hostMode ('LAN') is never presented as a definite loopback binding; bind row warns, reach is unknown, doctor flags it", () => {
     // Pins the verifier's probe: a hand-edited controlPlane.hostMode 'LAN'
-    // used to render bind 'LAN 127.0.0.1:3421' with reach 'Local only' —
+    // used to render bind 'LAN 127.0.0.1:3421' with reach 'Local only',
     // asserting the resolver's fallback as fact for a config the SDK cannot
     // bind at all (its resolver has no default case; the daemon throws
     // before binding). Every display surface now routes through the one
@@ -250,7 +250,7 @@ describe('CLI exposure report', () => {
 
   test('the rendered status output includes the exposure section', () => {
     const text = renderCliStatus(makeOptions());
-    expect(text).toContain('Exposure (report only — no changes made):');
+    expect(text).toContain('Exposure (report only: no changes made):');
     expect(text).toContain('originAllowlist:');
   });
 });
@@ -315,7 +315,7 @@ describe('resolveDoctorExitCode', () => {
 
   test('exits 0 for a healthy install carrying only advisory (warning) findings', () => {
     // makeOptions()'s default fixture has no onboarding marker, which alone
-    // produces a 'warning'-severity finding — a healthy, usable install must
+    // produces a 'warning'-severity finding, a healthy, usable install must
     // never report failure for that.
     const findings = buildCliDoctorFindings(makeOptions());
     expect(findings.length).toBeGreaterThan(0);

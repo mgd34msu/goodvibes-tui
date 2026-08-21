@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// workstream-runtime.ts — /workstream
+// workstream-runtime.ts, /workstream
 //
 // UX over the OrchestrationEngine (@pellux/goodvibes-sdk/platform/orchestration,
 //) via its command-facing facade wired onto RuntimeServices as
@@ -8,11 +8,11 @@
 // already is (bootstrap-command-context.ts).
 //
 // Render precedent: TRANSCRIPT + subcommand approve (like /plan approve,
-// planning-runtime.ts), NOT a panel — a multi-phase proposal is too rich for
+// planning-runtime.ts), NOT a panel, a multi-phase proposal is too rich for
 // a one-line confirm overlay, and Pillar-3 doctrine keeps work visible in the
 // transcript. create -> approve -> launch is a real three-step flow (edit and
 // cancel apply to the pending proposal too). The transcript IS the plan-review
-// gate: between create and approve the proposal is reshapable in place —
+// gate: between create and approve the proposal is reshapable in place,
 // edit-item rewrites one item's brief, remove-item drops an item (and unlinks
 // it from siblings' dependencies), move-item reorders authoring order, and
 // each re-renders the whole proposal and clears any prior approval, so nothing
@@ -20,7 +20,7 @@
 // immediately materializes a real, ticking-eligible Workstream with no
 // pre-creation "draft" concept, so approval happens on a TUI-held draft
 // (workstream-services.ts's WorkstreamDraft) before anything is created in
-// the engine at all — see that module's header doc for the full reality-wins
+// the engine at all, see that module's header doc for the full reality-wins
 // divergence from the design brief.
 // ---------------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ function shortId(id: string): string {
 /**
  * The engine's ONLY two terminal work-item states (mirrors the SDK's own
  * internal TERMINAL_ITEM_STATES in platform/runtime/fleet/adapters/
- * orchestration.ts and engine.ts's kill() guard — neither is exported, so
+ * orchestration.ts and engine.ts's kill() guard, neither is exported, so
  * this is kept in lockstep by hand). Deriving "active" as NOT-terminal
  * instead of enumerating the non-terminal states means a state this module
  * doesn't know about yet (as 'blocked-budget' once was here) is still
@@ -56,7 +56,7 @@ function isActiveItemState(state: WorkItemState): boolean {
   return !TERMINAL_ITEM_STATES.has(state);
 }
 
-/** Mirrors the engine's templateForPhase (phase-runner.ts): only 'review'/'gate' phases run the general template — everything else, INCLUDING 'custom', runs the engineer template regardless of phase.role's text. */
+/** Mirrors the engine's templateForPhase (phase-runner.ts): only 'review'/'gate' phases run the general template, everything else, INCLUDING 'custom', runs the engineer template regardless of phase.role's text. */
 function templateForPhaseKind(kind: PhaseKind): string {
   return kind === 'review' || kind === 'gate' ? 'general' : 'engineer';
 }
@@ -64,13 +64,13 @@ function templateForPhaseKind(kind: PhaseKind): string {
 /**
  * Pre-fan-out quota consultation for /workstream launch. Assesses whether the
  * draft's work-item count (the fan-out this launch is about to create, worst
- * case — items can run concurrently within a phase) is likely to exhaust the
+ * case, items can run concurrently within a phase) is likely to exhaust the
  * active provider's quota window, grounded in observed rate-limit signals
  * (quota.fanout.get). Returns a printable warning + evidence when the daemon
  * reports 'likely-exhausts'; returns null for 'unlikely'/'unknown' (no
  * evidence of risk is not itself evidence of safety, so those verdicts never
  * block) and whenever the check itself can't run (daemon unavailable/
- * unreachable, or no active provider) — an infra gap in the quota check is
+ * unreachable, or no active provider), an infra gap in the quota check is
  * not grounds to block launching work the operator already approved.
  */
 async function checkFanoutQuotaWarning(ctx: CommandContext, draft: WorkstreamDraft): Promise<string | null> {
@@ -93,12 +93,12 @@ async function checkFanoutQuotaWarning(ctx: CommandContext, draft: WorkstreamDra
     ev.observedLimit !== undefined ? `observedLimit=${ev.observedLimit}` : null,
   ].filter((part): part is string => part !== null);
   return [
-    `[workstream launch] WARNING — ${provider} likely exhausts its quota window for ${agentCount} agent(s) fanning out.`,
+    `[workstream launch] WARNING: ${provider} likely exhausts its quota window for ${agentCount} agent(s) fanning out.`,
     `  reason: ${assessment.reason}`,
     `  evidence: ${evidenceParts.join(' ')}`,
     '',
     `Launch anyway: /workstream launch ${draft.id} --force`,
-    'Cancel: do nothing — the approved proposal stays ready to launch later.',
+    'Cancel: do nothing; the approved proposal stays ready to launch later.',
   ].join('\n');
 }
 
@@ -106,12 +106,12 @@ async function checkFanoutQuotaWarning(ctx: CommandContext, draft: WorkstreamDra
  * Launch an already-approved draft through its gates (best-of-N attempt
  * validation, then the fan-out quota warning unless `--force`), and print the
  * outcome. Shared by `launch` and by `approve` (which launches in the same act
- * — the one confirmed step that replaces the old approve-then-retype ceremony).
+ *, the one confirmed step that replaces the old approve-then-retype ceremony).
  */
 async function launchApprovedDraft(ctx: CommandContext, service: WorkstreamCommandService, id: string, draft: WorkstreamDraft, force: boolean): Promise<void> {
   const attemptsCheck = validateAttempts(draft.spec);
   if (attemptsCheck.violations.length > 0) {
-    ctx.print(`Cannot launch ${id} — best-of-N plan constraints are violated:\n${attemptsCheck.violations.map((v) => `  - ${v}`).join('\n')}\nFix the plan (or drop the attempts) and re-approve.`);
+    ctx.print(`Cannot launch ${id}: best-of-N plan constraints are violated:\n${attemptsCheck.violations.map((v) => `  - ${v}`).join('\n')}\nFix the plan (or drop the attempts) and re-approve.`);
     return;
   }
   if (!force) {
@@ -126,15 +126,15 @@ async function launchApprovedDraft(ctx: CommandContext, service: WorkstreamComma
     ctx.print(`Could not launch ${id}.`);
     return;
   }
-  ctx.print(`Launched workstream ${result.workstreamId} — track it with /workstream status ${result.workstreamId} or the Fleet panel.`);
+  ctx.print(`Launched workstream ${result.workstreamId}: track it with /workstream status ${result.workstreamId} or the Fleet panel.`);
 }
 
 /**
  * phase.role for a 'custom' phase is the free-text description passed to
- * `/workstream insert-phase` — it is purely COSMETIC. Neither
+ * `/workstream insert-phase`, it is purely COSMETIC. Neither
  * templateForPhase nor buildPhaseTask (phase-runner.ts, engine-side) ever
  * reads it: a custom phase always runs the engineer template against the
- * work item's own task text. Rendering it as `<kind> — <role>` like a real
+ * work item's own task text. Rendering it as `<kind>, <role>` like a real
  * role would falsely imply the description drives what the phase does, so
  * custom phases get an explicit "this is a description, not a role" label
  * instead.
@@ -143,7 +143,7 @@ function formatPhaseLabel(phase: { readonly kind: PhaseKind; readonly role: Phas
   if (phase.kind === 'custom') {
     return `custom: "${phase.role}" (runs the ${templateForPhaseKind(phase.kind)} template)`;
   }
-  return `${phase.kind} — ${phase.role}`;
+  return `${phase.kind}: ${phase.role}`;
 }
 
 /**
@@ -151,7 +151,7 @@ function formatPhaseLabel(phase: { readonly kind: PhaseKind; readonly role: Phas
  * `args` (create/edit both accept it ahead of, or interleaved with, the task
  * text). Returns the flag stripped out so the remaining tokens are the task
  * text exactly as before this flag existed. An unrecognized value is a hard
- * error (never silently ignored or defaulted) — a typo'd isolation mode
+ * error (never silently ignored or defaulted), a typo'd isolation mode
  * must never quietly launch in the wrong one.
  */
 function extractIsolationFlag(args: readonly string[]): { isolation?: WorkstreamIsolation; rest: string[]; error?: string } {
@@ -174,7 +174,7 @@ function extractIsolationFlag(args: readonly string[]): { isolation?: Workstream
 
 /**
  * Per-item merge-state text for `/workstream status` (worktree isolation
- * only — see formatItemMergeState's caller). Distinct from `item.state` (the
+ * only, see formatItemMergeState's caller). Distinct from `item.state` (the
  * pipeline verdict): an item can be terminally 'passed' while its branch is
  * still 'merge pending' in the integration lane, or stuck at
  * 'merge-conflict' with its worktree deliberately kept for inspection.
@@ -213,7 +213,7 @@ function formatItemDependencyNote(item: WorkItem, ws: Workstream): string {
 /**
  * Compact item + dependency graph for the draft-approval view (BIG-3 item 4):
  * items in ordinal order (the spec preserves the proposal's order), each with
- * an honest text 'after: X, Y' clause when it depends on siblings — no fake DAG
+ * an honest text 'after: X, Y' clause when it depends on siblings, no fake DAG
  * art. Dependency ids are resolved back to titles from the spec itself.
  */
 function formatDraftItems(spec: CreateWorkstreamInput): string[] {
@@ -225,7 +225,7 @@ function formatDraftItems(spec: CreateWorkstreamInput): string[] {
     const attempts = (it.attempts ?? 1) > 1 ? `  [best-of-${it.attempts}${it.autoAcceptWinner ? ', auto-accept winner' : ''}]` : '';
     lines.push(`  ${i + 1}. ${it.title}${after}${attempts}`);
     // Show the brief (the instructions the item's agent runs) only when it says
-    // something the title doesn't — an edited brief (via /workstream edit-item)
+    // something the title doesn't, an edited brief (via /workstream edit-item)
     // must be visible on the review surface, but a decomposition whose title and
     // brief coincide would just repeat itself.
     if (it.task.trim() && it.task.trim() !== it.title.trim()) {
@@ -265,13 +265,13 @@ function formatProvenance(p: WorkstreamDraftProvenance): string {
   return 'Decomposition: heuristic (configured)';
 }
 
-/** The engine's own PlanProposal is deliberately not rendered as the launchable spec — see workstream-services.ts's buildSpec doc. This renders the REAL launchable spec (so the proposal and the launch are always the same plan) plus an honest provenance line describing how the goal was decomposed. */
+/** The engine's own PlanProposal is deliberately not rendered as the launchable spec, see workstream-services.ts's buildSpec doc. This renders the REAL launchable spec (so the proposal and the launch are always the same plan) plus an honest provenance line describing how the goal was decomposed. */
 function renderDraftProposal(draft: WorkstreamDraft): string {
   const lines: string[] = [];
-  lines.push(`Workstream proposal ${draft.id} — "${draft.task}"`);
+  lines.push(`Workstream proposal ${draft.id}: "${draft.task}"`);
   lines.push(`Isolation: ${draft.spec.isolation ?? 'shared (default)'}`);
   lines.push(
-    `Planner: strategy=${draft.gate.strategy} (${draft.gate.reasonCode}) — ${AdaptivePlanner.explainReasonCode(draft.gate.reasonCode)}`,
+    `Planner: strategy=${draft.gate.strategy} (${draft.gate.reasonCode}); ${AdaptivePlanner.explainReasonCode(draft.gate.reasonCode)}`,
   );
   lines.push(formatProvenance(draft.provenance));
   // Honest mapping boundary (BIG-3 item 4): a multi-item proposal launches as
@@ -281,8 +281,8 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
   const multiItem = draft.spec.items.length > 1;
   lines.push(
     multiItem
-      ? `Mapping: multi-item plan — ${draft.spec.items.length} items run the engineer→review pipeline, dependency-scheduled.`
-      : 'Mapping: single-item compat chain (engineer→review) — no multi-item structure to schedule.',
+      ? `Mapping: multi-item plan; ${draft.spec.items.length} items run the engineer→review pipeline, dependency-scheduled.`
+      : 'Mapping: single-item compat chain (engineer→review); no multi-item structure to schedule.',
   );
   lines.push('Phases:');
   draft.spec.phases.forEach((phase, i) => {
@@ -299,7 +299,7 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
     lines.push('Best-of-N: plan is INVALID and cannot launch until fixed:');
     for (const v of attemptsCheck.violations) lines.push(`  ✗ ${v}`);
   } else if (attemptsCheck.hasAttempts) {
-    lines.push('Best-of-N: worktree + stable-id constraints satisfied — winners are chosen via /workstream attempts pick, and any dependents wait for the winner to be picked and merged.');
+    lines.push('Best-of-N: worktree + stable-id constraints satisfied; winners are chosen via /workstream attempts pick, and any dependents wait for the winner to be picked and merged.');
   }
   for (const n of attemptsCheck.notes) lines.push(`  note: ${n}`);
   lines.push(
@@ -312,18 +312,18 @@ function renderDraftProposal(draft: WorkstreamDraft): string {
   // Honest durability note (see workstream-services.ts's REALITY-WINS doc):
   // the engine has no pre-launch draft concept, but the TUI journals this
   // proposal to disk (.goodvibes/orchestration/drafts/) and reloads it at
-  // startup, so it survives a restart and is here to launch afterward — its
+  // startup, so it survives a restart and is here to launch afterward, its
   // approval state included.
-  lines.push('Note: saved to .goodvibes/orchestration/drafts/ — survives a restart until you launch or cancel it.');
+  lines.push('Note: saved to .goodvibes/orchestration/drafts/; survives a restart until you launch or cancel it.');
   return lines.join('\n');
 }
 
 function renderWorkstreamStatus(ws: Workstream): string {
   const isolated = ws.isolation === 'worktree';
   const lines: string[] = [];
-  lines.push(`Workstream ${ws.id} — "${ws.title}"`);
+  lines.push(`Workstream ${ws.id}: "${ws.title}"`);
   lines.push(`Isolation: ${ws.isolation ?? 'shared'}`);
-  // Origin provenance (BIG-3 item 1) — only present on workstreams assembled
+  // Origin provenance (BIG-3 item 1), only present on workstreams assembled
   // from a decomposition proposal; absent for compat/authored ones.
   if (ws.provenance) {
     const pv = ws.provenance;
@@ -344,7 +344,7 @@ function renderWorkstreamStatus(ws: Workstream): string {
     lines.push(`  ${shortId(item.id)}  [${item.state}]  ${item.title}  — phase: ${item.currentPhaseId ?? '—'}${depNote}${mergeNote}`);
   }
   if (isolated) {
-    // Honest terminal-summary truth (never inferred from item.state alone —
+    // Honest terminal-summary truth (never inferred from item.state alone,
     // an item can be terminally 'passed' with its branch still unmerged):
     // an item counts as unmerged the instant it enters the integration lane
     // (mergeState 'pending') and stays counted through a conflict or any
@@ -352,8 +352,8 @@ function renderWorkstreamStatus(ws: Workstream): string {
     const unmerged = ws.items.filter((item) => item.mergeState === 'pending' || item.mergeState === 'conflict' || item.worktreeKept);
     lines.push(
       unmerged.length > 0
-        ? `Unmerged items: ${unmerged.length} (${unmerged.map((item) => shortId(item.id)).join(', ')}) — this run is NOT fully integrated yet.`
-        : 'Unmerged items: none — every terminated item is merged (or had nothing to merge).',
+        ? `Unmerged items: ${unmerged.length} (${unmerged.map((item) => shortId(item.id)).join(', ')}); this run is NOT fully integrated yet.`
+        : 'Unmerged items: none; every terminated item is merged (or had nothing to merge).',
     );
   }
   return lines.join('\n');
@@ -387,7 +387,7 @@ function resolveWorkstream(service: WorkstreamCommandService, ref: string): Work
  * approve/edit/launch/*-item all fail this way when `id` doesn't resolve to a
  * held draft. Drafts are now journaled to disk and reloaded at startup (see
  * renderDraftProposal's note and workstream-services.ts's REALITY-WINS doc), so
- * a restart no longer silently wipes them — a missing id is a typo or a
+ * a restart no longer silently wipes them, a missing id is a typo or a
  * stale/already-launched proposal, and the plain message is the honest guess.
  * `service` is kept in the signature so callers stay uniform and a future
  * "did you mean <closest id>?" hint has somewhere to live.
@@ -458,7 +458,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
         const target = ref ? resolveWorkstream(service, ref) : (live.length === 1 ? live[0] : undefined);
         if (!target) {
           if (!ref && live.length > 1) {
-            ctx.print(`Multiple workstreams running — specify one: ${live.map((ws) => shortId(ws.id)).join(', ')}`);
+            ctx.print(`Multiple workstreams running: specify one: ${live.map((ws) => shortId(ws.id)).join(', ')}`);
             return;
           }
           ctx.print(ref ? `No workstream found: ${ref}` : 'No workstreams running. Use /workstream list to see pending proposals.');
@@ -489,7 +489,7 @@ export function registerWorkstreamRuntimeCommands(registry: CommandRegistry): vo
           gate: templateGate,
         });
         if (!inserted) {
-          ctx.print(`Could not insert phase — is "${id}" still an active workstream?`);
+          ctx.print(`Could not insert phase: is "${id}" still an active workstream?`);
           return;
         }
         ctx.print(`Inserted phase "${description}" into ${shortId(ws.id)} after ordinal ${lastOrdinal} (new ordinal ${inserted.ordinal}).`);

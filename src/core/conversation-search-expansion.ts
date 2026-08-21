@@ -1,5 +1,5 @@
 /**
- * conversation-search-expansion.ts — tracks which collapse keys transcript
+ * conversation-search-expansion.ts, tracks which collapse keys transcript
  * search auto-expanded so they can be restored on search close, unless the
  * user explicitly acted on the block while it was open.
  *
@@ -11,14 +11,14 @@
  *
  * The contract (see SearchManager.revealCurrentMatch and .close in
  * search.ts): a single keystroke in the search field must never expand
- * collapsed content — only navigating TO a match hidden inside it does, and
+ * collapsed content, only navigating TO a match hidden inside it does, and
  * that expansion is undone when search closes UNLESS the user separately
  * touched the block (toggled, copied, bookmarked, saved, or bulk-expanded
  * via /expand) while it sat auto-expanded. An explicit user action always
  * wins over search's own bookkeeping, regardless of which happened first.
  */
 
-/** Structural shape restoreOnto() needs — matches ConversationManager's own
+/** Structural shape restoreOnto() needs, matches ConversationManager's own
  *  public setCollapsed() without importing the class (avoids a cycle). */
 export interface CollapseSettable {
   setCollapsed(collapseKey: string, collapsed: boolean): void;
@@ -28,13 +28,13 @@ export class SearchExpansionTracker {
   /**
    * Collapse keys currently expanded because the user navigated to a search
    * match hidden inside them. Never contains a key the user has touched
-   * explicitly — noteUserTouch() removes it on the way in.
+   * explicitly, noteUserTouch() removes it on the way in.
    */
   private searchExpandedKeys = new Set<string>();
 
   /**
    * Collapse keys the user has explicitly acted on at least once. Growth is
-   * unbounded for the life of the conversation — membership only ever gates
+   * unbounded for the life of the conversation, membership only ever gates
    * one decision (whether restoreSearchExpansions() may re-collapse a key),
    * so a stale positive is harmless and pruning would add complexity for no
    * behavioral gain.
@@ -57,7 +57,7 @@ export class SearchExpansionTracker {
   }
 
   /** Re-collapse every key search auto-expanded and not since user-touched,
-   *  through `conversationManager`'s public setCollapsed() — called from
+   *  through `conversationManager`'s public setCollapsed(), called from
    *  SearchManager.close() to restore pre-search collapse state. */
   restoreOnto(conversationManager: CollapseSettable): void {
     const keys = [...this.searchExpandedKeys];

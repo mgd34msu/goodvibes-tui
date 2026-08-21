@@ -1,5 +1,5 @@
 /**
- * item 3 (report-vs-modal front doors) — /settings-sync has a full
+ * item 3 (report-vs-modal front doors), /settings-sync has a full
  * modal surface (settings-sync-modal), so the bare command now opens it; the
  * old bare/`review` transcript report moved to an explicit `report`
  * subcommand so scripts calling bare `/settings-sync` for text output keep

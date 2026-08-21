@@ -1,11 +1,11 @@
 /**
- * voice-capture-shell.ts — the shell's side of microphone capture.
+ * voice-capture-shell.ts, the shell's side of microphone capture.
  *
  * Extracted from main() for the same reason the process-lifecycle wiring was:
  * the entrypoint is a wiring file held under a source-line gate, and new shell
  * composition gets its own module and a single call there.
  *
- * What this owns is only the shell-facing half — where a transcript lands (the
+ * What this owns is only the shell-facing half, where a transcript lands (the
  * composer draft, through the same public `prompt`/`cursorPos` fields the
  * external-editor path writes), how a turn is submitted, which keybinding seam
  * the Alt+V action hangs off, and the teardown registration that guarantees a
@@ -30,7 +30,7 @@ export interface VoiceCaptureShellDeps {
   readonly commandContext: CommandContext;
   /** The shell's teardown registry; the device release is appended to it. */
   readonly unsubs: Array<() => void>;
-  /** The live composer buffer — InputHandler exposes public `prompt`/`cursorPos`. */
+  /** The live composer buffer, InputHandler exposes public `prompt`/`cursorPos`. */
   readonly buffer: { prompt: string; cursorPos: number };
   readonly submitInput: (text: string) => void;
   readonly notify: (message: string) => void;

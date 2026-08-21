@@ -57,7 +57,7 @@ describe('permissions.execEnvScrubAllowlist synthetic setting', () => {
     // ConfigValue<K>` makes tsc compare two deferred `ConfigValue<K>`
     // conditionals against each other and give up with "excessive stack depth"
     // (TS2321), so the stub returns `unknown` and is asserted onto the real
-    // member type once — a shallow comparison tsc can actually complete.
+    // member type once, a shallow comparison tsc can actually complete.
     const stub = {
       get: (_key: ConfigKey): unknown => 'not-an-array',
     } as Pick<ConfigManagerType, 'get'>;
@@ -88,7 +88,7 @@ describe('permissions.execEnvScrubAllowlist synthetic setting', () => {
     // EXEC_ENV_SCRUB_ALLOWLIST_CONFIG_KEY is declared as plain `ConfigKey`
     // (the whole schema union) in exec-env-scrub-config.ts, not narrowed to
     // its own literal, so cm.get(...) here statically resolves to the union
-    // of every schema value type — which never includes string[] since this
+    // of every schema value type, which never includes string[] since this
     // key genuinely isn't schema-registered. It really does round-trip as a
     // string[] at runtime; go through `unknown` to say so, as TS suggests.
     expect(cm.get(EXEC_ENV_SCRUB_ALLOWLIST_CONFIG_KEY) as unknown as string[]).toEqual(['CI_SIGNING_KEY']);

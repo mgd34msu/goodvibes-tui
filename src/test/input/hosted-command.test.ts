@@ -1,12 +1,12 @@
 /**
- * hosted-command.test.ts — the `/hosted` surface: what it says, and what it
+ * hosted-command.test.ts, the `/hosted` surface: what it says, and what it
  * refuses to say.
  *
  * The command's job is to put the daemon's own answers in front of a person
  * without editorialising them. So what is pinned here is the wording that
  * carries a fact: the detach sentence names the policy AND where the policy
  * came from, an unattached terminal says so rather than showing a blank status,
- * and the flag parsing keeps "no override" distinct from "kill" — because a
+ * and the flag parsing keeps "no override" distinct from "kill", because a
  * session with no override follows the setting, which is a different thing from
  * one pinned to the setting's current value.
  */
@@ -73,7 +73,7 @@ describe('/hosted', () => {
     const feed = new HostedSessionFeed();
     feed.attach(makeRecord(), []);
     feed.setStreaming(false, 'the daemon would not open an event stream');
-    expect(renderHostedStatus(feed)).toContain('no live stream — the daemon would not open an event stream');
+    expect(renderHostedStatus(feed)).toContain('no live stream: the daemon would not open an event stream');
   });
 
   test('a list row states the status, the id, the detach effect and who is attached', () => {
@@ -86,7 +86,7 @@ describe('/hosted', () => {
 
   test('a terminated row carries the reason it ended rather than just vanishing from view', () => {
     const line = renderHostedRecordLine(makeRecord({ status: 'terminated', terminatedReason: 'detached' }), 2);
-    expect(line).toContain('3. the hosted one [terminated] — ended: detached');
+    expect(line).toContain('3. the hosted one [terminated]: ended: detached');
   });
 
   test('no flag means "follow the setting", which is not the same as --kill', () => {

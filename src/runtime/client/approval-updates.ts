@@ -1,12 +1,12 @@
 /**
- * approval-updates.ts — this terminal's subscription to approval decisions made
+ * approval-updates.ts, this terminal's subscription to approval decisions made
  * somewhere else.
  *
  * ── What this replaces ────────────────────────────────────────────────────
  *
  * The SDK's client raiser (approval-raiser.ts) raises an ask on the daemon and
  * prompts locally at the same time, and then has to learn about a decision made
- * on another surface — a phone, the web UI, a second terminal. Without a push
+ * on another surface, a phone, the web UI, a second terminal. Without a push
  * channel wired it learns by RE-READING the record on an interval, which is
  * both slower than it needs to be and the thing the `control.approval_update`
  * event exists to end. Wiring this seam makes a remote decision arrive in the
@@ -17,7 +17,7 @@
  * a connection) still has to be able to answer a tool call. `watchApprovalUpdates`
  * reports failure by returning null rather than throwing, and the raiser then
  * behaves exactly as it did before this seam existed. Push is the fast path, not
- * a new dependency — and the raiser's own discipline of doing one immediate read
+ * a new dependency, and the raiser's own discipline of doing one immediate read
  * after subscribing stays intact, because a decision can land between the raise
  * and the subscription and no push channel can deliver what happened before it
  * opened.

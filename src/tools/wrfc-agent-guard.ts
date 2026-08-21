@@ -46,8 +46,8 @@ type AgentTaskArgs = {
 
 /**
  * Emitted whenever the guard changes the effective routing decision:
- *   - 'spawn-forced-wrfc'      — implementation-like spawn promoted to WRFC
- *   - 'spawn-suppressed-wrfc'  — spawn judged read-only; WRFC suppressed
+ *   - 'spawn-forced-wrfc'     , implementation-like spawn promoted to WRFC
+ *   - 'spawn-suppressed-wrfc' , spawn judged read-only; WRFC suppressed
  *   - 'batch-collapsed-to-wrfc'— batch-spawn collapsed into a single WRFC owner chain
  */
 export type WrfcGuardTraceKind =
@@ -248,7 +248,7 @@ function isImplementationLikeTask(task: AgentTaskArgs): boolean {
 function isReadOnlyTask(text: string): boolean {
   // Branch A: explicit do-not-write guards
   if (/\bdo\s+not\s+(?:write|edit|modify|change|create)\b|\bread[-\s]*only\b|\bwithout\s+(?:writing|editing|modifying|changing|creating)\b/i.test(text)) return true;
-  // Branch B: task leads with an analysis/reporting verb — treat it as read-only regardless
+  // Branch B: task leads with an analysis/reporting verb, treat it as read-only regardless
   // of any action verbs that appear later in the sentence. A task that LEADS with
   // "report", "investigate", "describe", "audit", etc. is describing or evaluating an
   // action, not performing it. Examples that must NOT reach WRFC:
@@ -259,7 +259,7 @@ function isReadOnlyTask(text: string): boolean {
   //   "audit which modules to delete"
   //   "evaluate whether to migrate"
   // The negative-lookahead is intentionally absent: the leading verb is authoritative.
-  // Note: 'review' is intentionally excluded — tasks leading with 'review' are caught
+  // Note: 'review' is intentionally excluded, tasks leading with 'review' are caught
   // by isRootReviewRoleTask() and routed to a WRFC chain as a reviewer role.
   return /^\s*(?:inspect|research|read|find|list|summarize|analy[sz]e|explain|report|investigate|document|describe|audit|evaluate|assess|check|compare|tell|show)\b/i.test(text);
 }

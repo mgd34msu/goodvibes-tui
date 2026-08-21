@@ -167,8 +167,8 @@ describe('renderMarkdown', () => {
   test('wraps a narrow table cell containing a wide glyph instead of ellipsizing it', () => {
     // A narrow overall width plus a very wide second column squeezes the
     // first column hard. "ab日x" (display width 5: a=1, b=1, 日=2, x=1)
-    // must still reach the buffer in full — wrapped across physical lines
-    // if the column is narrower than 5 — and the wide glyph keeps its
+    // must still reach the buffer in full, wrapped across physical lines
+    // if the column is narrower than 5, and the wide glyph keeps its
     // placeholder cell so the column edge stays where the border expects.
     const md = [
       '| A | B |',
@@ -236,7 +236,7 @@ describe('fence syntax variants', () => {
   });
 
   test('asymmetric close: backtick fence closed with tilde is treated as content, not close', () => {
-    // A ~~~ close should NOT close a ``` fence — the ~~~ line becomes content
+    // A ~~~ close should NOT close a ``` fence, the ~~~ line becomes content
     const md = '```\ncode line\n~~~\nmore content\n```';
     const result = renderMarkdown(md, 80);
     const text = textLines(result).join('\n');

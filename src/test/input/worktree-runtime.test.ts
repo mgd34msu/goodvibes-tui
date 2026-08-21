@@ -9,7 +9,7 @@ import type { CommandContext } from '../../input/command-registry.ts';
 import type { ManagedWorktreeMeta, WorktreeStatusRecord } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
-// formatSetupTag / formatSetupDetail — pure formatting helpers
+// formatSetupTag / formatSetupDetail, pure formatting helpers
 // ---------------------------------------------------------------------------
 
 describe('formatSetupTag', () => {
@@ -160,7 +160,7 @@ describe('/worktree setup', () => {
 });
 
 // ---------------------------------------------------------------------------
-// /worktree discard — the real destructive act (worktrees.discard), no longer
+// /worktree discard, the real destructive act (worktrees.discard), no longer
 // a metadata setState flip.
 // ---------------------------------------------------------------------------
 
@@ -199,7 +199,7 @@ describe('/worktree discard', () => {
   test('routes through the worktrees.discard operator verb, never a metadata setState flip', async () => {
     const { ctx, printed, setStateCalls } = ctxWithSetStateSpy(false);
     await makeRegistry().get('worktree')!.handler(['discard', '/tmp/wt/agent-1'], ctx);
-    // Discard is a real act now — it must NOT silently flip the persisted state.
+    // Discard is a real act now, it must NOT silently flip the persisted state.
     expect(setStateCalls).toEqual([]);
     // With no daemon reachable it prints the honest operator-rpc unavailable reason.
     expect(printed.at(-1)).toContain('[worktree discard]');

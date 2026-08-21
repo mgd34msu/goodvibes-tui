@@ -25,7 +25,7 @@ function getStore(ctx: import('../command-registry.ts').CommandContext): WorkPla
 }
 
 function openPanel(ctx: import('../command-registry.ts').CommandContext): void {
-  // work-plan migrated to the 'work-plan' modal — open it via the seam.
+  // work-plan migrated to the 'work-plan' modal, open it via the seam.
   openModalCommand(ctx, 'work-plan-modal');
 }
 
@@ -99,7 +99,7 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
           return;
         }
         if (subcommand === 'export') {
-          // Thin wrapper over WorkPlanStore.exportMarkdown() — writes the plan's
+          // Thin wrapper over WorkPlanStore.exportMarkdown(), writes the plan's
           // markdown alongside the JSON and reports the path. (W6 command-path
           // parity: the work-plan modal's export action routes here.)
           const { path } = store.exportMarkdown();

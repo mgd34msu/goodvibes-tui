@@ -1,9 +1,9 @@
 /**
- * hosted-roster.ts — the last answer the daemon gave about what it is hosting.
+ * hosted-roster.ts, the last answer the daemon gave about what it is hosting.
  *
  * The session picker is where a person goes to ask "what sessions are there?",
  * and the honest answer includes conversations running inside the
- * daemon — not only this terminal's saved transcripts and the cross-surface
+ * daemon, not only this terminal's saved transcripts and the cross-surface
  * union. The picker is a synchronous render over modal state, though, and
  * `sessions.hosted.list` is a round trip. This roster is the seam between them:
  * it holds the last list the daemon answered with, refreshes on demand, and
@@ -22,7 +22,7 @@
  * The picker is constructed in the input layer, which has no config manager and
  * no home directory to resolve a daemon from. The composition root
  * (runtime/services.ts) has both and already builds the verb caller, so it binds
- * the client here once — the same shape the shared notification feed uses for a
+ * the client here once, the same shape the shared notification feed uses for a
  * surface that two unrelated layers read.
  */
 import type { HostedSessionRecord, HostedSessionsClient } from './hosted-sessions.ts';
@@ -64,7 +64,7 @@ export class HostedSessionRoster {
   }
 
   /**
-   * Ask the daemon again. Never throws and never runs twice at once — a picker
+   * Ask the daemon again. Never throws and never runs twice at once, a picker
    * opened repeatedly must not stack round trips.
    */
   async refresh(): Promise<void> {

@@ -4,7 +4,7 @@
  *
  * Pins:
  *   - a shutdown that completes quickly (under saveNoticeAfterMs) prints
- *     nothing at all — quiet stays quiet.
+ *     nothing at all, quiet stays quiet.
  *   - a shutdown that takes a moment (over saveNoticeAfterMs, under the hard
  *     timeout) prints exactly one "saving session…" line, then completes
  *     normally with no further message.
@@ -96,13 +96,13 @@ function makeHarness(opts: {
   void deletedRecoveryFor;
   // restoreTerminal() (called synchronously at the top of exitApp, before any
   // of this test's own assertions matter) writes its own ANSI escape
-  // sequences to the same stdout — strip those so assertions here only see
+  // sequences to the same stdout, strip those so assertions here only see
   // the plain-text progress/receipt lines this item actually adds.
   const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;?>]*[a-zA-Z]/g, '');
   return { exitApp: handlers.exitApp, written: () => stripAnsi(chunks.join('')) };
 }
 
-describe('exitApp — exit-progress messaging', () => {
+describe('exitApp: exit-progress messaging', () => {
   test('a fast, clean shutdown prints nothing at all (quiet stays quiet)', async () => {
     const h = makeHarness({
       shutdown: () => Promise.resolve(),
@@ -136,7 +136,7 @@ describe('exitApp — exit-progress messaging', () => {
     await h.exitApp();
     const out = h.written();
     expect(out).toContain('saving session…\n');
-    expect(out).toContain('exit before save completed — a recovery snapshot was kept for next launch\n');
+    expect(out).toContain('exit before save completed: a recovery snapshot was kept for next launch\n');
     expect(out).not.toContain('no recovery snapshot had been written yet');
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
@@ -150,7 +150,7 @@ describe('exitApp — exit-progress messaging', () => {
     });
     await h.exitApp();
     const out = h.written();
-    expect(out).toContain('exit before save completed — no recovery snapshot had been written yet\n');
+    expect(out).toContain('exit before save completed: no recovery snapshot had been written yet\n');
     expect(out).not.toContain('a recovery snapshot was kept for next launch');
   });
 
@@ -166,7 +166,7 @@ describe('exitApp — exit-progress messaging', () => {
   });
 });
 
-describe('exitApp — liveness marker cleanup (item 6a)', () => {
+describe('exitApp: liveness marker cleanup (item 6a)', () => {
   test('the session liveness marker is removed on a clean exit', async () => {
     writeLivenessMarker(makeTestSurface(tmpHome), 'sess-clean-exit', process.pid);
     expect(existsSync(livenessMarkerPathFor(makeTestSurface(tmpHome), 'sess-clean-exit'))).toBe(true);

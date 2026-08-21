@@ -30,7 +30,7 @@ import {
 
 const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
   'display.themeMode': {
-    auto: 'Probe the terminal background colour (OSC 11) once at startup and pick light or dark. Falls back to dark on unreadable/unsupported terminals. Only evaluated at startup — selecting auto takes effect next launch.',
+    auto: 'Probe the terminal background colour (OSC 11) once at startup and pick light or dark. Falls back to dark on unreadable/unsupported terminals. Only evaluated at startup: selecting auto takes effect next launch.',
     dark: 'Force the dark theme regardless of terminal background. Applies immediately.',
     light: 'Force the light theme regardless of terminal background. Applies immediately.',
   },
@@ -46,7 +46,7 @@ const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
   },
   'permissions.mode': {
     prompt: 'Normal: ask before powerful or risky actions according to tool policy.',
-    plan: 'Plan mode: read-only planning posture — writes, commands, and network calls are blocked so the model can plan without changing anything. Toggle with /plan or Shift+Tab.',
+    plan: 'Plan mode: read-only planning posture; writes, commands, and network calls are blocked so the model can plan without changing anything. Toggle with /plan or Shift+Tab.',
     'accept-edits': 'Accept edits: file writes and edits are auto-approved, but exec, network, and escalations are still gated.',
     'allow-all': 'Auto: allow all actions without prompting. Fast, but removes an important safety gate.',
     custom: 'Use per-tool-class permission settings from the rows below.',
@@ -128,11 +128,11 @@ function formatDefaultValue(value: unknown): string {
 
 function currentSettingValue(modal: SettingsModal, entry: SettingEntry, selected: boolean): string {
   if (selected && modal.editingMode) {
-    // Secret-backed keys (surfaces.*.botToken, .signingSecret, etc. — see
+    // Secret-backed keys (surfaces.*.botToken, .signingSecret, etc., see
     // secret-config.ts) must never echo the in-progress plaintext buffer:
     // not in the row, not in the "Current: ..." context line, not in search
     // results. Reuse the composer's concealed-input mask (concealed-input.ts)
-    // rather than a second masking implementation — same bullet-per-character
+    // rather than a second masking implementation, same bullet-per-character
     // shape, so keystrokes still visibly register without revealing content.
     const buffer = isSecretConfigKey(entry.setting.key) ? maskConcealedText(modal.editBuffer) : modal.editBuffer;
     return `${buffer}${GLYPHS.surface.cursor}`;
@@ -254,7 +254,7 @@ function buildFlagContext(entry: SettingEntry | null): string[] {
     `State: ${displayState}`,
     // A capability the registry declares not operable reads as disabled no
     // matter what its settings key says. Without this line the row shows a
-    // value of true beside a state of disabled and explains nothing — the
+    // value of true beside a state of disabled and explains nothing, the
     // written reason exists in the registry, so render it where the user meets
     // the contradiction rather than leaving it to be discovered.
     ...(feature.operable === false && feature.inoperableDetail
@@ -680,10 +680,10 @@ function footerText(modal: SettingsModal, width: number): string {
       { key: 'Esc', verb: 'Close' },
     ]));
   // Every topical category that hosts feature units flows through the default
-  // settings footer below — Enter/Space toggles a feature-unit header exactly
+  // settings footer below, Enter/Space toggles a feature-unit header exactly
   // as it edits/toggles any setting row.
   // Default settings pane: tier the reset affordances by available width.
-  // W<80:  minimal — only the most critical action survives.
+  // W<80:  minimal, only the most critical action survives.
   // W<160: compact but still shows both reset affordances.
   // W≥160: standard with all navigation tokens.
   if (width < 80)
@@ -720,18 +720,18 @@ export function renderSettingsModal(
   const metrics = getFullscreenWorkspaceMetrics({ width, height: viewportHeight });
   const categoryRows = renderCategories(modal, metrics.leftWidth - 2, metrics.bodyRows);
   // Documentation pane: long content SCROLLS (PgUp/PgDn) with honest
-  // more-above/below markers — it is never silently clipped.
+  // more-above/below markers, it is never silently clipped.
   const allContextLines = buildContextLines(modal, metrics.contextWidth);
   const visibleContext = metrics.contextRows;
   const maxContextScroll = Math.max(0, allContextLines.length - visibleContext);
   const contextOffset = Math.min(Math.max(0, modal.contextScroll ?? 0), maxContextScroll);
   const windowedContext = allContextLines.slice(contextOffset, contextOffset + visibleContext);
   if (contextOffset > 0) {
-    windowedContext[0] = `${GLYPHS.navigation.moreAbove} ${contextOffset} more line(s) above — PgUp`;
+    windowedContext[0] = `${GLYPHS.navigation.moreAbove} ${contextOffset} more line(s) above; PgUp`;
   }
   if (contextOffset + visibleContext < allContextLines.length) {
     const below = allContextLines.length - contextOffset - visibleContext;
-    windowedContext[windowedContext.length - 1] = `${GLYPHS.navigation.moreBelow} ${below} more line(s) below — PgDn`;
+    windowedContext[windowedContext.length - 1] = `${GLYPHS.navigation.moreBelow} ${below} more line(s) below; PgDn`;
   }
   const contextRows = windowedContext.map((text, row): WorkspaceRow => {
     const selectedSetting = modal.getSelected();

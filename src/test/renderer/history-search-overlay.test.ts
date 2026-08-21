@@ -23,7 +23,7 @@ function searchWith(entries: string[], query: string): HistorySearch {
 }
 
 // ---------------------------------------------------------------------------
-// renderHistorySearchOverlay — basic output shape
+// renderHistorySearchOverlay, basic output shape
 // ---------------------------------------------------------------------------
 
 describe('renderHistorySearchOverlay', () => {

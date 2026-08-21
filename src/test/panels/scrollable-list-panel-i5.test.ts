@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
-// scrollable-list-panel-i5.test.ts — I5: selection gutter + filter input line
+// scrollable-list-panel-i5.test.ts, I5: selection gutter + filter input line
 //
 // Tests the opt-in showSelectionGutter flag and the buildFilterLine helper
 // on ScrollableListPanel (SearchableListPanel was deleted once its
-// last subclasses — skills, memory — converged onto ScrollableListPanel's
+// last subclasses, skills, memory, converged onto ScrollableListPanel's
 // modal '/' filter; this file now exercises that shared contract directly).
 // ---------------------------------------------------------------------------
 
@@ -83,10 +83,10 @@ function lineText(line: Line): string {
 }
 
 // ---------------------------------------------------------------------------
-// ScrollableListPanel — showSelectionGutter
+// ScrollableListPanel, showSelectionGutter
 // ---------------------------------------------------------------------------
 
-describe('ScrollableListPanel — showSelectionGutter (I5)', () => {
+describe('ScrollableListPanel: showSelectionGutter (I5)', () => {
   const WIDTH = 20;
   const HEIGHT = 10;
 
@@ -155,14 +155,14 @@ describe('ScrollableListPanel — showSelectionGutter (I5)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ScrollableListPanel — buildFilterLine (I5, converged modal filter)
+// ScrollableListPanel, buildFilterLine (I5, converged modal filter)
 //
 // This is the single pinned rendering contract every filterable list panel
 // shares: 'Filter: ' unfocused / '[Filter] ' focused, literal trailing '_'
 // cursor while active.
 // ---------------------------------------------------------------------------
 
-describe('ScrollableListPanel — buildFilterLine (I5)', () => {
+describe('ScrollableListPanel: buildFilterLine (I5)', () => {
   const WIDTH = 40;
   let panel: TestScrollablePanel;
 

@@ -1,7 +1,7 @@
 import { GLYPHS, SPINNER_FRAMES, UI_TONES } from './ui-primitives.ts';
 
 /**
- * Layout constants — single source of truth for margins and content width.
+ * Layout constants, single source of truth for margins and content width.
  * All renderers import these instead of hardcoding indent values. The object
  * itself lives in @pellux/goodvibes-terminal-shell alongside the transcript
  * tree geometry that reads LEFT_MARGIN/RIGHT_MARGIN out of it, so the margins

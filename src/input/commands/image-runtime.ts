@@ -4,17 +4,17 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 /**
  * registerImageRuntimeCommands - `/imagine <prompt>`.
  *
- * Named 'imagine', not 'image' — `/image <path> [prompt]` already exists
+ * Named 'imagine', not 'image', `/image <path> [prompt]` already exists
  * (local-runtime.ts) and does something entirely different (attach a local
  * image file to the next message). Re-verified against the current registry
  * before wiring this in: the brief that scoped this command was written
  * before checking for the collision.
  *
- * First production caller of MediaProviderRegistry.generate() — the SDK
+ * First production caller of MediaProviderRegistry.generate(), the SDK
  * plumbing existed with zero non-test call sites before this command.
  * findProvider('generate') returns whichever generation-capable provider is
  * configured; when none are, the command prints the registry's own
- * per-provider status (id/state/detail) verbatim — those detail strings
+ * per-provider status (id/state/detail) verbatim, those detail strings
  * already name the exact env var per builtin provider
  * (builtin-generation-providers.ts's buildStatus()), so this command never
  * has to (and never should) guess or hardcode an env-var name itself.
@@ -48,7 +48,7 @@ export function registerImageRuntimeCommands(registry: CommandRegistry): void {
           lines.push('No media-generation providers are registered in this build.');
         } else {
           for (const status of generationStatuses) {
-            lines.push(`  ${status.id} (${status.label}): ${status.state}${status.detail ? ` — ${status.detail}` : ''}`);
+            lines.push(`  ${status.id} (${status.label}): ${status.state}${status.detail ? `; ${status.detail}` : ''}`);
           }
         }
         ctx.print(lines.join('\n'));
@@ -70,7 +70,7 @@ export function registerImageRuntimeCommands(registry: CommandRegistry): void {
         const lines = [`Generated ${result.artifacts.length} artifact(s) via ${provider.label} (${result.providerId}).`];
         for (const artifact of result.artifacts) {
           if (!artifact.mimeType.startsWith('image/')) {
-            lines.push(`  Note: ${provider.label} produced ${artifact.mimeType}, not an image — no image-capable provider is configured in this build.`);
+            lines.push(`  Note: ${provider.label} produced ${artifact.mimeType}, not an image; no image-capable provider is configured in this build.`);
           }
           if (artifact.dataBase64) {
             const descriptor = await artifactStore.create({
@@ -97,7 +97,7 @@ export function registerImageRuntimeCommands(registry: CommandRegistry): void {
               sourceUri: artifact.uri,
               metadata: { ...artifact.metadata, generatedBy: result.providerId, remote: true },
             });
-            lines.push(`  artifact: ${descriptor.id} (remote reference — not downloaded)`);
+            lines.push(`  artifact: ${descriptor.id} (remote reference; not downloaded)`);
             lines.push(`  url: ${artifact.uri}`);
           } else {
             lines.push('  artifact: (no retrievable content returned)');

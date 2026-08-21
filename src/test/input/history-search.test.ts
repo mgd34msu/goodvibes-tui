@@ -13,7 +13,7 @@ function makeSearch(entries: string[]): HistorySearch {
 // open() / close() lifecycle
 // ---------------------------------------------------------------------------
 
-describe('HistorySearch — lifecycle', () => {
+describe('HistorySearch: lifecycle', () => {
   test('open() sets active=true and resets state', () => {
     const hs = makeSearch(['hello']);
     hs.open('draft');
@@ -67,10 +67,10 @@ describe('HistorySearch — lifecycle', () => {
 });
 
 // ---------------------------------------------------------------------------
-// search() — matching behaviour
+// search(), matching behaviour
 // ---------------------------------------------------------------------------
 
-describe('HistorySearch — search()', () => {
+describe('HistorySearch: search()', () => {
   let hs: HistorySearch;
 
   beforeEach(() => {
@@ -115,7 +115,7 @@ describe('HistorySearch — search()', () => {
 // appendChar() / deleteChar() incremental search
 // ---------------------------------------------------------------------------
 
-describe('HistorySearch — appendChar() / deleteChar()', () => {
+describe('HistorySearch: appendChar() / deleteChar()', () => {
   let hs: HistorySearch;
 
   beforeEach(() => {
@@ -164,7 +164,7 @@ describe('HistorySearch — appendChar() / deleteChar()', () => {
 // stepOlder() / stepNewer() boundary conditions
 // ---------------------------------------------------------------------------
 
-describe('HistorySearch — stepOlder() / stepNewer()', () => {
+describe('HistorySearch: stepOlder() / stepNewer()', () => {
   let hs: HistorySearch;
 
   beforeEach(() => {

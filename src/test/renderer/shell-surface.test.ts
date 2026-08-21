@@ -156,7 +156,7 @@ describe('shell surface', () => {
   });
 
   test('estimate keys its cache on compact mode so a compact render does not answer a non-compact query', () => {
-    // Render a compact footer first — this populates the "last rendered
+    // Render a compact footer first, this populates the "last rendered
     // footer height" fast path in estimateShellFooterHeight with the
     // compact height (no process indicator, no context-info line).
     const compactResult = buildShellFooter({
@@ -272,9 +272,9 @@ describe('shell surface', () => {
   });
 
   // item 1c: an unfocused, EMPTY composer names the state and the way
-  // back — the dimmed fill alone told you nothing was wrong, but not why
+  // back, the dimmed fill alone told you nothing was wrong, but not why
   // keystrokes weren't landing there.
-  test('an unfocused, empty composer shows the "panel focused — Esc returns" hint', () => {
+  test('an unfocused, empty composer shows the "panel focused; Esc returns" hint', () => {
     const unfocusedEmpty = buildShellFooter({
       width: 80,
       promptText: '',
@@ -292,7 +292,7 @@ describe('shell surface', () => {
       indicatorFocused: false,
       panelFocused: true,
     });
-    expect(lineToString(unfocusedEmpty.lines[1])).toContain('panel focused — Esc returns');
+    expect(lineToString(unfocusedEmpty.lines[1])).toContain('panel focused: Esc returns');
   });
 
   test('the hint never appears when the composer is focused, or when it holds real (non-empty) text', () => {
@@ -367,7 +367,7 @@ describe('shell surface', () => {
  * capture device is open, so its presence, its wording and its absence when the
  * feature is off are all asserted rather than assumed.
  */
-describe('shell surface — the live microphone row', () => {
+describe('shell surface: the live microphone row', () => {
   function footerWith(voiceCapture: VoiceCaptureIndicatorState | null): ReturnType<typeof buildShellFooter> {
     return buildShellFooter({
       width: 100,
@@ -409,10 +409,10 @@ describe('shell surface — the live microphone row', () => {
     expect(result.height).toBe(estimateShellFooterHeight(1, 0, false, null));
   });
 
-  test('a push-to-talk recording renders even when the wake indicator is off — the user just pressed the key', () => {
+  test('a push-to-talk recording renders even when the wake indicator is off; the user just pressed the key', () => {
     const result = footerWith({ kind: 'recording', deviceLabel: 'pw-record', indicator: 'off', detail: '3s' });
     const text = result.lines.map(lineToString).join('\n');
-    expect(text).toContain('Voice: recording — press the voice-input key again to stop');
+    expect(text).toContain('Voice: recording: press the voice-input key again to stop');
     expect(text).toContain('3s');
   });
 

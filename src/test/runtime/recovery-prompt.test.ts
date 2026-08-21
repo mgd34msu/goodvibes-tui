@@ -1,5 +1,5 @@
 /**
- * recovery-prompt.test.ts — the ask-then-retire recovery flow.
+ * recovery-prompt.test.ts, the ask-then-retire recovery flow.
  *
  * Pins the owner ruling: a crash-recovery snapshot is offered, never applied
  * on its own; declining leads to a second, explicit question about retiring
@@ -80,7 +80,7 @@ function makeDeps(open: SelectionOpener | undefined, sink: { receipts: string[];
     receipt: (line) => sink.receipts.push(line),
     render: () => {},
     now: () => Date.now(),
-    // The same call the real wiring makes — this test drives the actual
+    // The same call the real wiring makes, this test drives the actual
     // read/retire/apply mechanism, so "retires the file" below is a fact about
     // the shipped code rather than about a stub that happened to delete it.
     applySnapshot: ({ sessionId }) => {
@@ -123,7 +123,7 @@ describe('nothing to offer', () => {
     expect(sink.applied).toHaveLength(0);
   });
 
-  test('a snapshot whose session has a live pid marker is not offered — another terminal owns it', async () => {
+  test('a snapshot whose session has a live pid marker is not offered; another terminal owns it', async () => {
     writeCrash('sess-live');
     writeLivenessMarker(surface, 'sess-live', process.pid); // this process's pid always resolves alive
     const op = scriptedOperator(['resume']);
@@ -157,7 +157,7 @@ describe('Resume', () => {
     expect(sink.receipts).toHaveLength(1);
     expect(sink.receipts[0]).toContain('4 message(s)');
     expect(sink.receipts[0]).toContain('sess-resume');
-    // Only one question asked — Resume never leads to the retire modal.
+    // Only one question asked, Resume never leads to the retire modal.
     expect(op.asked).toBe(1);
   });
 
@@ -247,7 +247,7 @@ describe('modal copy is complete, not clipped', () => {
     // A selection modal starts on index 0, so row order decides what an
     // unread Enter does. On the retire question that has to be Keep: the
     // question arrives unrequested at boot and Remove destroys a
-    // conversation. On the offer, index 0 is Resume — the affirmative answer
+    // conversation. On the offer, index 0 is Resume, the affirmative answer
     // the user is there for, and it deletes nothing they wanted kept.
     expect(buildRecoveryRetireItems('f')[0]?.id).toBe('keep');
     expect(buildRecoveryOfferItems('f')[0]?.id).toBe('resume');
@@ -303,7 +303,7 @@ describe('every recovery call is keyed to the snapshot session, never a bulk for
   // clear there could delete an unrelated project's snapshot). Only a
   // session-id-keyed call does. A modal that answered "removed" while calling
   // the bulk form would leave a pre-upgrade snapshot on disk to be re-offered
-  // on every launch, forever — a receipt that lies.
+  // on every launch, forever, a receipt that lies.
   //
   // Two concurrent snapshots make the distinction observable: the keyed call
   // touches exactly one, the bulk form would clear both.
@@ -336,7 +336,7 @@ describe('every recovery call is keyed to the snapshot session, never a bulk for
     expect(existsSync(surface.recoveryFile('sess-older2'))).toBe(true);
   });
 
-  test('the receipt names the same session the modal offered — no drift between question and outcome', async () => {
+  test('the receipt names the same session the modal offered; no drift between question and outcome', async () => {
     writeCrash('sess-named', 'A named crash');
     const op = scriptedOperator(['resume']);
     const sink = makeSink();
@@ -395,7 +395,7 @@ describe('a removal decision outlives the process', () => {
   // The shipped defect: "Remove" deleted the file, and the deletion WAS the
   // memory of the answer. A session still running on an older build rewrites
   // its snapshot every 60s into the directory this build reads, so the file
-  // came back and the same question came back with it — three times, each
+  // came back and the same question came back with it, three times, each
   // time answered "remove". The decision now lives in a ledger under the
   // surface, and a recorded snapshot found again is discarded, not re-asked.
 
@@ -439,7 +439,7 @@ describe('a removal decision outlives the process', () => {
     expect(existsSync(surface.recoveryFile('sess-comes-back'))).toBe(false);
   });
 
-  test('Keep is NOT recorded — it means "ask me next launch", and next launch still asks', async () => {
+  test('Keep is NOT recorded: it means "ask me next launch", and next launch still asks', async () => {
     writeCrash('sess-kept-durable');
     expect(await offerRecoverySnapshot(makeDeps(scriptedOperator(['not-now', 'keep']).open, makeSink()))).toBe('kept');
     expect(existsSync(recoveryDecisionsPathFor(surface))).toBe(false);

@@ -51,7 +51,7 @@ function makeRegistry(): MemoryRegistry {
         && (!filter?.query || `${record.summary} ${record.detail ?? ''}`.toLowerCase().includes(filter.query.toLowerCase()))
       )) as never;
     },
-    // Used by the memory-spine local access path (createLocalMemoryAccess) —
+    // Used by the memory-spine local access path (createLocalMemoryAccess),
     // a plain literal-scan envelope over the same filtered records `search()`
     // returns, since this fake has no real recall-honesty machinery.
     honestSearch: (filter?: { scope?: string; cls?: string; query?: string }) => {
@@ -227,7 +227,7 @@ function makeRecallCommandContext(
         memory: createMemoryApi(options.memoryRegistry),
       } as never,
       // /recall's browse/link/queue/export/import (and add/get/remove/review)
-      // now route through the memory spine, not knowledgeApi.memory — see
+      // now route through the memory spine, not knowledgeApi.memory, see
       // recall-query.ts's getMemorySpine. Local mode (no transport activated)
       // routes straight to this fake registry, same data the assertions below
       // already read back through it.

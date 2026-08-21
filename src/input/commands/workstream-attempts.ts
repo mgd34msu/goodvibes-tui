@@ -1,16 +1,16 @@
 // ---------------------------------------------------------------------------
-// workstream-attempts.ts — the /workstream attempts surface for best-of-N.
+// workstream-attempts.ts, the /workstream attempts surface for best-of-N.
 //
 // The engine runs a best-of-N work item as N sibling attempts in isolated
 // worktrees and HOLDS the merge, exposing the candidates for a winner pick
 // (orchestration engine.listHeldMergeGroups / proposeAttemptWinner /
-// pickAttemptWinner — the same seam the fleet.attempts.* gateway verbs use).
+// pickAttemptWinner, the same seam the fleet.attempts.* gateway verbs use).
 // This module drives that seam from the /workstream command:
-//   • list             — the held-merge groups awaiting a pick, with candidates.
-//   • diff <c>         — one candidate's worktree diff in the existing DiffPanel.
-//   • judge            — the OPTIONAL model proposal, clearly labelled a model
+//   • list            , the held-merge groups awaiting a pick, with candidates.
+//   • diff <c>        , one candidate's worktree diff in the existing DiffPanel.
+//   • judge           , the OPTIONAL model proposal, clearly labelled a model
 //                        judgment (scoredBy 'model'), with its reasons; never a pick.
-//   • pick <c>         — behind a DiffPanel confirm; merges the winner and lets
+//   • pick <c>        , behind a DiffPanel confirm; merges the winner and lets
 //                        the engine clean the losers, then renders the receipt.
 // ---------------------------------------------------------------------------
 
@@ -64,7 +64,7 @@ function candidateLine(c: AttemptCandidate): string {
     : isTurnBudgetReason(c.failureReason)
       ? describeFailureReason(c.failureReason) // a spent budget, not an infrastructure failure
       : `failed${c.failureReason ? `: ${c.failureReason}` : ''}`;
-  return `    ${c.attemptIndex + 1}. [${state}] ${c.title} — ${files}, item ${shortId(c.itemId)}`;
+  return `    ${c.attemptIndex + 1}. [${state}] ${c.title}: ${files}, item ${shortId(c.itemId)}`;
 }
 
 function renderGroupList(groups: readonly HeldMergeGroup[], resolveItems?: ResolveWorkstreamItems): string {
@@ -73,7 +73,7 @@ function renderGroupList(groups: readonly HeldMergeGroup[], resolveItems?: Resol
   }
   const lines: string[] = ['Best-of-N groups (held for a winner pick):'];
   for (const g of groups) {
-    lines.push(`  ${shortId(g.groupId)} — "${g.sourceTitle}" (workstream ${shortId(g.workstreamId)})  ${g.ready ? 'READY' : 'still running'}${g.autoAccept ? ', auto-accept' : ''}`);
+    lines.push(`  ${shortId(g.groupId)}: "${g.sourceTitle}" (workstream ${shortId(g.workstreamId)})  ${g.ready ? 'READY' : 'still running'}${g.autoAccept ? ', auto-accept' : ''}`);
     for (const c of g.candidates) lines.push(candidateLine(c));
     if (g.judgment?.proposedWinnerItemId) {
       lines.push(`    judge proposal: item ${shortId(g.judgment.proposedWinnerItemId)} (model, advisory)`);
@@ -91,13 +91,13 @@ function renderGroupList(groups: readonly HeldMergeGroup[], resolveItems?: Resol
 
 /** The model proposal, CLEARLY labelled a model judgment (never ground truth), with reasons. */
 function renderJudgment(group: HeldMergeGroup, judgment: AttemptJudgment): string {
-  const lines: string[] = [`Judge proposal for group ${shortId(group.groupId)} — "${group.sourceTitle}"`];
-  lines.push('  MODEL PROPOSAL (scoredBy: model) — advisory only; a human still confirms the pick.');
+  const lines: string[] = [`Judge proposal for group ${shortId(group.groupId)}: "${group.sourceTitle}"`];
+  lines.push('  MODEL PROPOSAL (scoredBy: model); advisory only; a human still confirms the pick.');
   if (judgment.proposedWinnerItemId) {
     const cand = group.candidates.find((c) => c.itemId === judgment.proposedWinnerItemId);
-    lines.push(`  Proposed winner: ${cand ? `attempt ${cand.attemptIndex + 1} — ${cand.title}` : `item ${shortId(judgment.proposedWinnerItemId)}`}`);
+    lines.push(`  Proposed winner: ${cand ? `attempt ${cand.attemptIndex + 1}: ${cand.title}` : `item ${shortId(judgment.proposedWinnerItemId)}`}`);
   } else {
-    lines.push('  Proposed winner: none — the judge declined to choose.');
+    lines.push('  Proposed winner: none; the judge declined to choose.');
   }
   if (judgment.model) lines.push(`  Model: ${judgment.model}`);
   if (judgment.reasons.length > 0) {
@@ -199,10 +199,10 @@ export async function handleAttemptsSubcommand(ctx: CommandContext, service: Wor
   if (action === 'pick') {
     const candRef = args[3];
     if (!candRef) { ctx.print(`Usage: /workstream attempts pick ${shortId(group.groupId)} <#>`); return true; }
-    if (!group.ready) { ctx.print(`Group ${shortId(group.groupId)} is not ready — its siblings are still running. Wait until every attempt is terminal.`); return true; }
+    if (!group.ready) { ctx.print(`Group ${shortId(group.groupId)} is not ready: its siblings are still running. Wait until every attempt is terminal.`); return true; }
     const cand = resolveCandidate(group, candRef);
     if ('error' in cand) { ctx.print(cand.error); return true; }
-    if (cand.state !== 'held-merge') { ctx.print(`Attempt ${cand.attemptIndex + 1} failed — only a held (pick-ready) candidate can win.`); return true; }
+    if (cand.state !== 'held-merge') { ctx.print(`Attempt ${cand.attemptIndex + 1} failed: only a held (pick-ready) candidate can win.`); return true; }
 
     const { DiffPanel } = await import('../../panels/diff-panel.ts');
     const pm = requirePanelManager(ctx);
@@ -217,7 +217,7 @@ export async function handleAttemptsSubcommand(ctx: CommandContext, service: Wor
 
     diffPanel.confirmOverlay.arm({
       id: `${group.groupId}:${cand.itemId}`,
-      label: `Pick attempt ${cand.attemptIndex + 1} ("${cand.title}") — merge it, clean the ${group.candidates.length - 1} other worktree(s)`,
+      label: `Pick attempt ${cand.attemptIndex + 1} ("${cand.title}"): merge it, clean the ${group.candidates.length - 1} other worktree(s)`,
       verb: 'Pick',
       onConfirm: async () => {
         try {
@@ -235,7 +235,7 @@ export async function handleAttemptsSubcommand(ctx: CommandContext, service: Wor
       onCancel: () => {
         pm.close('diff');
         ctx.focusPrompt?.();
-        ctx.print('Pick cancelled — nothing merged, no worktree cleaned.');
+        ctx.print('Pick cancelled: nothing merged, no worktree cleaned.');
         ctx.renderRequest();
       },
     });

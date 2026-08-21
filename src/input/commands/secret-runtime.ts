@@ -1,5 +1,5 @@
 /**
- * /secret — capture a password-like value through the composer's concealed
+ * /secret, capture a password-like value through the composer's concealed
  * input mode, without the plaintext ever appearing in the transcript or input
  * history.
  *
@@ -27,7 +27,7 @@ export function registerSecretRuntimeCommands(registry: CommandRegistry): void {
     handler(args, ctx) {
       const name = toEnvVarName(args[0] ?? '');
       if (!name) {
-        ctx.print('[Secret] Usage: /secret <NAME> — the value is typed on the next line with the keystrokes masked.');
+        ctx.print('[Secret] Usage: /secret <NAME>; the value is typed on the next line with the keystrokes masked.');
         return;
       }
       if (!ctx.beginConcealedInput) {
@@ -43,7 +43,7 @@ export function registerSecretRuntimeCommands(registry: CommandRegistry): void {
             return;
           }
           process.env[name] = value;
-          // Never echo the value — only a redacted confirmation of length.
+          // Never echo the value, only a redacted confirmation of length.
           ctx.print(`[Secret] Stored ${name} (${value.length} character${value.length === 1 ? '' : 's'}, value hidden). Available to shell/tool runs as $${name}.`);
         },
         onCancel: () => {

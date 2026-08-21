@@ -1,5 +1,5 @@
 /**
- * /resume — the discoverable session-resume front door.
+ * /resume, the discoverable session-resume front door.
  *
  * Pins: no args opens the picker over saved sessions (newest first from the
  * session manager, current session excluded); headless surfaces (no
@@ -70,7 +70,7 @@ describe('/resume', () => {
     expect(call.items[0]!.detail).toContain('openai:gpt-5.5');
   });
 
-  test('subagent transcripts (agent-* names) are excluded from the picker — a mixed fixture of user + agent sessions', async () => {
+  test('subagent transcripts (agent-* names) are excluded from the picker; a mixed fixture of user + agent sessions', async () => {
     const { ctx, pickerCalls } = makeCtx({
       sessions: [
         { name: 'user-2cf82b10', title: 'real work', timestamp: 5, messageCount: 4 },

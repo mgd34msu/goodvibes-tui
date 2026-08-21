@@ -12,7 +12,7 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
   if (sub === 'panel' || sub === 'open') {
     // browse view moved to local-auth-modal. The LocalAuthPanel itself is
     // kept (masked password-entry host) but is no longer the /local-auth panel
-    // destination — masked entry is reached via add-user/rotate-password below.
+    // destination, masked entry is reached via add-user/rotate-password below.
     ctx.openModal?.('local-auth-modal');
     return;
   }
@@ -25,7 +25,7 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
       return;
     }
     if (!password) {
-      // No password supplied — open masked-entry mode on the LocalAuthPanel.
+      // No password supplied, open masked-entry mode on the LocalAuthPanel.
       if (ctx.openLocalAuthMaskedEntry) {
         ctx.openLocalAuthMaskedEntry('add-user', username);
       } else {
@@ -68,7 +68,7 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
       return;
     }
     if (!password) {
-      // No password supplied — open masked-entry mode on the LocalAuthPanel.
+      // No password supplied, open masked-entry mode on the LocalAuthPanel.
       if (ctx.openLocalAuthMaskedEntry) {
         ctx.openLocalAuthMaskedEntry('rotate-password', username);
       } else {

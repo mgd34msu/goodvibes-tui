@@ -3,8 +3,8 @@
  *
  * The header (top-right) and the footer (context-info line) both answer "which
  * backend is serving this session?". They used to answer it from different
- * sources — the header read the provider registry live, the footer read
- * session runtime state that only bootstrap and explicit user switches wrote —
+ * sources, the header read the provider registry live, the footer read
+ * session runtime state that only bootstrap and explicit user switches wrote,
  * so after an automatic failover the header named the fallback backend while
  * the footer went on naming the configured one, indefinitely.
  *
@@ -51,7 +51,7 @@ const SERVING_FALLBACK = {
   registryKey: 'openai-subscriber:gpt-5.6-sol',
 };
 
-describe('resolveActiveModelDisplay — no divergence', () => {
+describe('resolveActiveModelDisplay: no divergence', () => {
   test('serving is the configured selection: both surfaces render as they always have', () => {
     const { header, footer, note } = renderBothSurfaces({
       serving: { id: 'route-llm', provider: 'abacusai', registryKey: CONFIGURED.registryKey },

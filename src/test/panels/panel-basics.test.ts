@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------------
-// panel-basics.test.ts — Pure data-transformation and render tests for panels
+// panel-basics.test.ts, Pure data-transformation and render tests for panels
 //
 // Tests the render() -> Line[] pattern. No Ink JSX used anywhere.
 // Panels tested (all have zero prior coverage):
-//   1. DiffPanel    — parseDiff logic via showDiff+render, splitIntoDiffEntries
-//   2. TokenBudgetPanel — fmtTok, renderStackedBar, renderContextBar, renderTotals
-//   3. GitPanel     — render in loading/error/data states
+//   1. DiffPanel   , parseDiff logic via showDiff+render, splitIntoDiffEntries
+//   2. TokenBudgetPanel, fmtTok, renderStackedBar, renderContextBar, renderTotals
+//   3. GitPanel    , render in loading/error/data states
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -62,7 +62,7 @@ describe('DiffPanel', () => {
     panel = new DiffPanel(TEST_ROOT);
   });
 
-  describe('render() — empty state', () => {
+  describe('render(): empty state', () => {
     test('renders "No diff to display" message when empty', () => {
       const lines = panel.render(80, 10);
       expect(lines).toHaveLength(10);
@@ -86,7 +86,7 @@ describe('DiffPanel', () => {
     });
   });
 
-  describe('showDiff() — parseDiff via render', () => {
+  describe('showDiff(): parseDiff via render', () => {
     const simpleDiff = [
       '@@ -1,3 +1,4 @@',
       ' line one',
@@ -155,7 +155,7 @@ describe('DiffPanel', () => {
     });
   });
 
-  describe('loadRawDiff() — multi-file diff splitting', () => {
+  describe('loadRawDiff(): multi-file diff splitting', () => {
     const multiFileDiff = [
       'diff --git a/src/alpha.ts b/src/alpha.ts',
       'index 000000..111111 100644',
@@ -279,7 +279,7 @@ describe('TokenBudgetPanel', () => {
     panel.onDeactivate();
   });
 
-  describe('render() — unwired panel', () => {
+  describe('render(): unwired panel', () => {
     test('renders without throwing when not wired', () => {
       expect(() => panel.render(80, 20)).not.toThrow();
     });
@@ -321,7 +321,7 @@ describe('TokenBudgetPanel', () => {
     });
   });
 
-  describe('render() — wired with usage data', () => {
+  describe('render(): wired with usage data', () => {
     test('shows input/output data when wired', () => {
       const orch = makeOrchMock({ input: 1000, output: 500 });
       panel.wire(asOrchestratorMock(orch), () => 0);
@@ -400,7 +400,7 @@ describe('TokenBudgetPanel', () => {
     test('maintenance guidance advertises the C key, not a printed /compact, once C is armed', () => {
       // 92% fill both crosses the default 80% auto-compact threshold (so
       // evaluateSessionMaintenance's nextSteps[0] is '/compact') and the
-      // panel's own 70% WARN_YELLOW elevation gate that arms the C key —
+      // panel's own 70% WARN_YELLOW elevation gate that arms the C key,
       // so the two are never actually out of sync here.
       const orch = makeOrchMock({ lastInputTokens: 92000 });
       panel.wire(asOrchestratorMock(orch), () => 100000);
@@ -471,7 +471,7 @@ describe('GitPanel', () => {
     panel.onDeactivate();
   });
 
-  describe('render() — initial loading state', () => {
+  describe('render(): initial loading state', () => {
     test('renders without throwing', () => {
       expect(() => panel.render(80, 20)).not.toThrow();
     });

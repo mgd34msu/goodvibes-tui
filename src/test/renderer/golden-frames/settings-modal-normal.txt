@@ -11,7 +11,7 @@
 |│     Policy-as-Code (4  │ Source: default                                                         │|
 |│     Token Security (4  │                                                                         │|
 |│ AI ROUTING             │ Stream LLM tokens as they arrive                                        │|
-|│     Provider (7)       │ ▼ 7 more line(s) below — PgDn                                           │|
+|│     Provider (7)       │ ▼ 7 more line(s) below; PgDn                                            │|
 |│     Pricing (1)        │─────────────────────────────────────────────────────────────────────────│|
 |│     Subscriptions (1)  │   Setting             Value       Type       Source        Default      │|
 |│     Helper (3)         │ • stream              true        boolean    default       true         │|
@@ -1755,7 +1755,6 @@
 12 53 bg=#161a22
 12 54 fg=#e2e8f0
 12 54 bg=#161a22
-12 55 fg=#e2e8f0
 12 55 bg=#161a22
 12 56 bg=#161a22
 12 57 bg=#161a22

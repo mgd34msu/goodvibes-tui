@@ -29,7 +29,7 @@ describe('onboarding state', () => {
     shellPaths = makeShellPaths(tmpDir);
   });
 
-  // ── read — missing file ─────────────────────────────────────────────────
+  // ── read, missing file ─────────────────────────────────────────────────
 
   test('readOnboardingRuntimeState returns exists:false for missing file', () => {
     const result = readOnboardingRuntimeState(shellPaths, 'project');
@@ -85,7 +85,7 @@ describe('onboarding state', () => {
     expect(result.payload!.acknowledgements['subscriptions']).toBe(true);
   });
 
-  // ── scope — user vs project ─────────────────────────────────────────────
+  // ── scope, user vs project ─────────────────────────────────────────────
 
   test('user-scope and project-scope are independent files', () => {
     writeOnboardingAcknowledgementState(shellPaths, {
@@ -207,7 +207,7 @@ describe('onboarding state', () => {
     const fd = openSync(lockPath, 'w');
     closeSync(fd);
 
-    // Write should still complete (degraded path — atomic write fires without lock).
+    // Write should still complete (degraded path, atomic write fires without lock).
     writeOnboardingAcknowledgementState(shellPaths, {
       target: 'auth', acknowledged: true, source: 'degraded-path-test',
     });

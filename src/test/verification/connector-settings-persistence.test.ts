@@ -6,23 +6,23 @@
  *
  * Before 2.0.8 the connector keys were cast onto the live config invisibly and
  * the settings surface answered "Unknown setting calendar.google.clientId" for
- * keys the daemon's own gateway compositions really resolve — the exact
+ * keys the daemon's own gateway compositions really resolve, the exact
  * discovery failure from the owner's 2026-08-05 Google session. Declaring them
  * fixed that, and grew the settings inventory the verification ledger counts
  * with no matching local behavior coverage, pushing `localBehaviorPercent`
- * below its floor — the same shape surfaces.email.* went through before
+ * below its floor, the same shape surfaces.email.* went through before
  * daemon-mailbox-settings-persistence.test.ts.
  *
  * These tests supply that coverage to exactly the standard the ledger already
  * uses for a settings key: for every key in CONNECTOR_LOCAL_SETTINGS they
- * exercise the real persistence contract end to end — schema default exposure,
+ * exercise the real persistence contract end to end, schema default exposure,
  * `set()` write through the validator to disk, reload into a fresh
- * ConfigManager, read-back equality, and reset-to-default — through the actual
+ * ConfigManager, read-back equality, and reset-to-default, through the actual
  * ConfigManager, not a mock.
  *
  * The three secret-valued keys (`email.passwordRef`, `email.smtpPasswordRef`,
  * `calendar.google.clientSecretRef`) and `google.oauth.refreshToken` hold
- * goodvibes://secrets/ references by design — a settings file never carries a
+ * goodvibes://secrets/ references by design, a settings file never carries a
  * secret value. The round-trip below therefore stores a reference string,
  * which is exactly what the key holds.
  */
@@ -81,7 +81,7 @@ function freshManager(): { manager: ConfigManager; configDir: string } {
   return { manager, configDir };
 }
 
-describe('connector settings — the counted list is honest', () => {
+describe('connector settings: the counted list is honest', () => {
   test('every counted key is a live CONFIG_SCHEMA key with a declared default', () => {
     for (const key of CONNECTOR_LOCAL_SETTINGS) {
       const schema = schemaByKey.get(key);
@@ -90,7 +90,7 @@ describe('connector settings — the counted list is honest', () => {
     }
   });
 
-  test('the ledger counts each key exactly once — no overlap with the other counted sets', () => {
+  test('the ledger counts each key exactly once; no overlap with the other counted sets', () => {
     expect(new Set(CONNECTOR_LOCAL_SETTINGS).size).toBe(CONNECTOR_LOCAL_SETTINGS.length);
     const knobs = new Set<string>(FEATURE_KNOB_LOCAL_SETTINGS);
     const deviceTrigger = new Set<string>(DEVICE_AND_TRIGGER_LOCAL_SETTINGS);
@@ -128,7 +128,7 @@ describe('connector settings — the counted list is honest', () => {
   });
 });
 
-describe('connector settings — default exposure', () => {
+describe('connector settings: default exposure', () => {
   let manager: ConfigManager;
 
   beforeEach(() => {
@@ -143,7 +143,7 @@ describe('connector settings — default exposure', () => {
   });
 });
 
-describe('connector settings — set, persist, reload, read back, reset', () => {
+describe('connector settings: set, persist, reload, read back, reset', () => {
   test('each key round-trips its alternate value through disk into a fresh manager', () => {
     const { manager, configDir } = freshManager();
     for (const key of CONNECTOR_LOCAL_SETTINGS) {

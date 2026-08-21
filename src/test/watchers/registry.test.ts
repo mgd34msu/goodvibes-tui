@@ -189,7 +189,7 @@ describe('WatcherRegistry', () => {
   // WatcherRegistry without a featureFlags manager, and isFeatureGateEnabled
   // is permissive when no manager is wired, so a composition root that
   // omitted featureFlags did not disable the registry when watchers.enabled
-  // was turned off — registerWatcher/startWatcher/etc. kept working either
+  // was turned off, registerWatcher/startWatcher/etc. kept working either
   // way. services.ts now threads featureFlags, the same shape as the
   // RouteBindingManager fix.
   //
@@ -255,7 +255,7 @@ describe('WatcherRegistry', () => {
       registry.stopWatcher('watcher-gate', 'test-complete');
 
       // The default half: with the key never written, effective behaviour
-      // matches true. A genuinely fresh root — ConfigManager's project tier
+      // matches true. A genuinely fresh root, ConfigManager's project tier
       // is keyed by workingDir/surfaceRoot regardless of configDir, so reusing
       // `root` here would read back the write above instead of the real default.
       const { root: unsetRoot } = createTempWatcherStore();

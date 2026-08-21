@@ -1,5 +1,5 @@
 /**
- * renderBlockActionsMenu — renders the BlockActionsMenu (src/renderer/block-actions.ts)
+ * renderBlockActionsMenu, renders the BlockActionsMenu (src/renderer/block-actions.ts)
  * as a docked overlay, so opening it via Enter-on-an-empty-composer actually
  * shows something. Follows the established docked-overlay pattern (see
  * selection-modal-overlay.ts / bookmark-modal.ts): ModalFactory sizes the box

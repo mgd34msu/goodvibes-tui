@@ -27,7 +27,7 @@ describe('parseDiffForApply', () => {
     expect(result.filePath).toBeUndefined();
   });
 
-  test('handles partial diff — only additions', () => {
+  test('handles partial diff: only additions', () => {
     const diff = [
       '--- a/src/bar.ts',
       '+++ b/src/bar.ts',
@@ -57,7 +57,7 @@ describe('parseDiffForApply', () => {
   });
 });
 
-describe('ConversationManager — collapse state', () => {
+describe('ConversationManager: collapse state', () => {
   let cm: ConversationManager;
 
   beforeEach(() => {
@@ -102,7 +102,7 @@ describe('ConversationManager — collapse state', () => {
   });
 });
 
-describe('ConversationManager — getBlockContentAtLine / getDiffAtLine', () => {
+describe('ConversationManager: getBlockContentAtLine / getDiffAtLine', () => {
   let cm: ConversationManager;
 
   beforeEach(() => {
@@ -151,7 +151,7 @@ describe('ConversationManager — getBlockContentAtLine / getDiffAtLine', () => 
   });
 });
 
-describe('applyDiffContent — occurrence counting', () => {
+describe('applyDiffContent: occurrence counting', () => {
   test('applies diff when original appears exactly once', () => {
     const content = 'line one\nconst x = 1;\nline three';
     const result = applyDiffContent(content, 'const x = 1;', 'const x = 42;');
@@ -182,7 +182,7 @@ describe('applyDiffContent — occurrence counting', () => {
   });
 });
 
-describe('ConversationManager — diff detection (no false positives)', () => {
+describe('ConversationManager: diff detection (no false positives)', () => {
   let cm: ConversationManager;
 
   beforeEach(() => {
@@ -196,7 +196,7 @@ describe('ConversationManager — diff detection (no false positives)', () => {
     cm.addToolResults([{ callId: 'c1', success: true, output: fakeDiff }]);
     cm.getDisplayBlocks();
 
-    // getDiffAtLine should return null — it's not a real diff
+    // getDiffAtLine should return null, it's not a real diff
     expect(cm.getDiffAtLine(0)).toBeNull();
   });
 

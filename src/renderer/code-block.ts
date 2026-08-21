@@ -14,7 +14,7 @@ import { UI_TONES } from './ui-primitives.ts';
  * tree-sitter parse doesn't visibly shift color mid-stream.
  * `accent` and `bg` are chrome (the language-label header bar and the body
  * background), not syntax tokens, and keep their original VS Code Dark+
- * values — folded here from two separate literals (one in the header, one
+ * values, folded here from two separate literals (one in the header, one
  * duplicated on the footer line) into a single named source.
  */
 const FALLBACK_THEME = {
@@ -389,7 +389,7 @@ export function renderCodeBlock(
         }
         line[cx] = createStyledCell(ch, { fg: token.fg, bg: BG, bold: token.bold, italic: token.italic });
         // Bound the wide-glyph placeholder against the body's own right edge
-        // (effectiveWidth), not the full line width — otherwise a 2-column
+        // (effectiveWidth), not the full line width, otherwise a 2-column
         // glyph landing on the last body column spills its placeholder cell
         // into the reserved right-margin band the header/footer stop at.
         if (cw === 2 && cx + 1 < effectiveWidth) line[cx + 1] = { ...line[cx], char: '' };

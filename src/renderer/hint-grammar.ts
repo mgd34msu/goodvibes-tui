@@ -1,5 +1,5 @@
 /**
- * hint-grammar.ts — the single hint-bar grammar for every overlay footer.
+ * hint-grammar.ts, the single hint-bar grammar for every overlay footer.
  *
  * one grammar across the model picker, settings modal, help/shortcuts
  * overlays, and ModalFactory variants so footers stop drifting into three
@@ -44,7 +44,7 @@ export function formatHints(specs: readonly HintSpec[]): string {
 
 /**
  * Join already-rendered segments (hint bars, state tags) with the shared
- * separator, dropping empties. Order is preserved — use this to append state
+ * separator, dropping empties. Order is preserved, use this to append state
  * indicators after a {@link formatHints} bar.
  */
 export function joinHints(...segments: Array<string | null | undefined>): string {

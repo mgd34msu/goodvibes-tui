@@ -3,7 +3,7 @@
  * preloaded, and reports the handles still live when the run ends.
  *
  * This is deliberately NOT how `scripts/run-tests.ts` runs the suite. That
- * runner gives each file its own process, which is the right default — it is
+ * runner gives each file its own process, which is the right default, it is
  * what keeps a poller one test forgot from firing inside an unrelated later
  * file. But process isolation also HIDES those pollers: the process exits and
  * takes them with it, so nothing is ever measured. Collapsing the suite into a
@@ -61,5 +61,5 @@ const result = spawnSync(
 
 console.log(`\nleak report written to ${reportPath}`);
 if (result.status !== 0) {
-  console.log(`(suite exited ${result.status ?? 'null'} — leak data above is still valid)`);
+  console.log(`(suite exited ${result.status ?? 'null'}: leak data above is still valid)`);
 }

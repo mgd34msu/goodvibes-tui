@@ -43,21 +43,21 @@ const SETTINGS_BEHAVIOR_BASELINE = 184;
  * knobs"). Adding these 28 keys raised the settings inventory `total` without a
  * matching rise in behavior-verified coverage, which dropped
  * `localBehaviorPercent` below its floor. Each key is a local, non-external
- * setting whose full persistence behavior — schema default, set → write →
- * reload round-trip, and reset-to-default — is exercised by
+ * setting whose full persistence behavior, schema default, set → write →
+ * reload round-trip, and reset-to-default, is exercised by
  * `src/test/verification/feature-knob-settings-persistence.test.ts`. They are
  * therefore genuinely behavior-verified locally and counted as such here.
  */
 /**
  * The daemon's own mailbox and calendar keys (`surfaces.email.*`,
- * `surfaces.calendar.*`), promoted into CONFIG_SCHEMA so the settings modal —
- * which renders from that schema — can actually show them. Before, the
+ * `surfaces.calendar.*`), promoted into CONFIG_SCHEMA so the settings modal,
+ * which renders from that schema, can actually show them. Before, the
  * daemon's handlers named these keys in their own error messages
  * ("Set surfaces.calendar.caldavUrl and surfaces.calendar.caldavUser") while
  * the UI that told an operator to set them could not display one of them.
  *
  * Declaring 25 keys raised the settings inventory `total` with no matching
- * behavior coverage, which dropped `localBehaviorPercent` below its floor —
+ * behavior coverage, which dropped `localBehaviorPercent` below its floor,
  * the same arrival shape as the two lists above.
  *
  * THIS CONSTANT IS NOT A DIAL. Every key below is counted because
@@ -75,7 +75,7 @@ const SETTINGS_BEHAVIOR_BASELINE = 184;
  * (platform/email/surface-config.ts and platform/calendar/caldav-gateway-config.ts)
  * resolve every one of them when the daemon serves `email.*` and `calendar.*`,
  * and the `surfaces.email.inbound.*` block is read by the daemon's inbound mail
- * reader — the poller/IDLE path that makes incoming mail visible at all.
+ * reader, the poller/IDLE path that makes incoming mail visible at all.
  * The five password keys (email.password, email.imapPassword,
  * email.imap.password, email.smtp.password, calendar.caldavPassword)
  * additionally resolve through the daemon secret tier rather than from config,
@@ -106,7 +106,7 @@ export const DAEMON_MAILBOX_LOCAL_SETTINGS = [
   'surfaces.email.smtp.port',
   'surfaces.email.smtp.password',
   'surfaces.email.smtp.secure',
-  // Inbound mail — the poller/IDLE reader the daemon runs to actually READ mail,
+  // Inbound mail, the poller/IDLE reader the daemon runs to actually READ mail,
   // which arrived with the platform runtime. These are counted for exactly the
   // reason the keys above are: the same four-part persistence contract runs over
   // every one of them in
@@ -179,14 +179,14 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  * exercises it was actually written:
  * `src/test/verification/device-and-trigger-settings-persistence.test.ts` runs,
  * for every key in this list, the same four-part persistence contract the
- * feature-knob keys are counted for — schema default exposure, `set()` through
+ * feature-knob keys are counted for, schema default exposure, `set()` through
  * the key's own validator to disk, reload into a fresh ConfigManager with
  * read-back equality, and reset-to-default that also survives reload. That test
  * additionally asserts this list is exactly the non-enablement key set of both
  * domains and overlaps neither of the other counted sets, so nothing here is
  * double-counted and nothing drifts in uncounted.
  *
- * PER-KEY EVIDENCE — what is verified, and how live the key is TODAY.
+ * PER-KEY EVIDENCE, what is verified, and how live the key is TODAY.
  * "persistence" below means the four-part contract above; the second column
  * records whether anything in this tree (TUI or the pinned SDK) reads the key,
  * audited by tracing each key to its consumers.
@@ -221,7 +221,7 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  *   device.grants.auditRetentionDays         persistence · behavior (grant ledger retention)
  *   device.nodes.maxPaired                   persistence · live (enforced at the pairing path)
  *
- * On `device.nodes.maxPaired`: the SDK enforces it where a device pairs —
+ * On `device.nodes.maxPaired`: the SDK enforces it where a device pairs,
  * PairingTokenManager.mint refuses a NEW node at the cap with
  * PairingLimitReachedError (code DEVICE_NODES_MAX_PAIRED, carrying the setting
  * name, the cap and the live count), mapped to HTTP 409 by the pairing and
@@ -231,7 +231,7 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  * non-finite value reads as no cap so a broken setting cannot lock the owner
  * out. The cap is read per mint, so a change applies without a restart. What is
  * counted HERE is still only the persistence contract this repo's test
- * exercises — the enforcement itself is SDK-side and SDK-tested, and is recorded
+ * exercises, the enforcement itself is SDK-side and SDK-tested, and is recorded
  * in this column so the "how live is it" audit stays accurate, not to claim
  * coverage this repo did not write.
  *
@@ -239,7 +239,7 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  * platform's device posture runtime (src/runtime/device-posture-composition.ts)
  * on the same distributed runtime phones pair onto and the same approval broker
  * every other confirmation rides, registers the `phone` tool on it, and binds the
- * devices.* verbs to it — so each of these keys is read, per request and per
+ * devices.* verbs to it, so each of these keys is read, per request and per
  * sweep, by the DeviceCapabilityService / DeviceGrantStore /
  * DeviceCaptureArtifactStore / DeviceHousekeeper that serve them. They were dark
  * before that: the policy struct carried matching defaults and named the keys in
@@ -251,7 +251,7 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  * `src/test/verification/device-posture-behavior.test.ts`, which drives THIS
  * app's composition with a real ConfigManager over a temp home and the platform's
  * real stores, stubs only the peer transport and the approval bridge, and asserts
- * per key at two values that the observable outcome differs — refusal code, how
+ * per key at two values that the observable outcome differs, refusal code, how
  * authority was established, what reached the transport, what the prompt was
  * given, and what survives on disk after a sweep. It also invokes the `phone`
  * tool and the devices.* verbs off the composed runtime graph, because a mapping
@@ -259,7 +259,7 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  *
  * STILL NOT COUNTED, FOR A DIFFERENT REASON NOW: the 24 non-enablement
  * `voice.wake.*` keys from the same release. When this list was written they were
- * excluded because nothing captured audio at all. That is no longer true — this
+ * excluded because nothing captured audio at all. That is no longer true, this
  * terminal opens a recorder subprocess (src/audio/capture.ts), runs the SDK
  * detector over it through onnxruntime-web (src/audio/wake-inference.ts), and
  * hands both a confirmed wake's utterance and a push-to-talk recording to the
@@ -267,8 +267,8 @@ export const FEATURE_KNOB_LOCAL_SETTINGS = [
  * resolveWakeRuntimeSettings and reaches this surface's runtime.
  *
  * They stay out of the NUMERATOR here because this constant counts exactly one
- * thing — keys whose four-part PERSISTENCE contract is exercised by
- * device-and-trigger-settings-persistence.test.ts — and that test does not cover
+ * thing, keys whose four-part PERSISTENCE contract is exercised by
+ * device-and-trigger-settings-persistence.test.ts, and that test does not cover
  * them. The behaviour they now drive is covered instead by the capture and wake
  * tests under src/test/audio/, which assert the frame path, the detection
  * chain, the disabled-means-no-capture rule, the supervisor's restart and latch,
@@ -343,24 +343,24 @@ const ENABLEMENT_KEYS_BEHAVIOR_VERIFIED = new Set(
  * THIS CONSTANT IS NOT A DIAL, for the same reason as the two above. Each key
  * is counted because a test that exercises it was actually written:
  * `src/test/verification/cluster-group-settings-persistence.test.ts` runs the
- * same four-part persistence contract — schema default exposure, `set()`
+ * same four-part persistence contract, schema default exposure, `set()`
  * through the key's own validator to disk, reload into a fresh ConfigManager
  * with read-back equality, and reset-to-default that survives reload.
  *
  * PER-KEY EVIDENCE. All four have a LIVE consumer in this build, which is more
  * than several of the keys counted above can claim:
- *   cluster.keyRotationHours        — read by resolveClusterGroupSettings and
+ *   cluster.keyRotationHours       , read by resolveClusterGroupSettings and
  *                                     compared against the current key's age in
  *                                     the group runtime's rotation check.
- *   cluster.keyRotationGraceMinutes — sets how long the previous generation
+ *   cluster.keyRotationGraceMinutes, sets how long the previous generation
  *                                     stays accepted after a scheduled
  *                                     rotation; drives the keyring's accepted
  *                                     generation set.
- *   cluster.beaconSeconds           — the discovery beacon timer interval, and
+ *   cluster.beaconSeconds          , the discovery beacon timer interval, and
  *                                     the basis of the "recently heard from"
  *                                     window that decides which member mints a
  *                                     rotation.
- *   cluster.rosterGossipSeconds     — how often the member list is shared.
+ *   cluster.rosterGossipSeconds    , how often the member list is shared.
  *
  * `cluster.enabled` is NOT here: it is a feature enablement key and the ledger
  * counts those in its own set.
@@ -378,7 +378,7 @@ export const CLUSTER_GROUP_LOCAL_SETTINGS = [
  * budget knobs, the shipping-tier preference, the fourteen billing/shipping
  * address sub-fields, the two approval/veto windows, and the notify-channel
  * list. Card MATERIAL (number, expiry, CVV, cardholder name) is intentionally
- * NOT here — see the SDK's schema-domain-payments.ts header and this repo's
+ * NOT here, see the SDK's schema-domain-payments.ts header and this repo's
  * own input/payments-config.ts: that material lives write-only in the daemon
  * secret store, never in CONFIG_SCHEMA, so there is nothing for a persistence
  * contract to count.
@@ -439,7 +439,7 @@ export const PAYMENTS_LOCAL_SETTINGS = [
 ] as const;
 
 /**
- * Connector settings — the daemon's Google-backed mail/calendar keys plus the
+ * Connector settings, the daemon's Google-backed mail/calendar keys plus the
  * connected-host dial switch and the hosted-turn routing switch, declared as
  * described schema rows by platform runtime 2.0.8 (before that the connector
  * keys were cast onto the live config invisibly and the settings surface
@@ -451,7 +451,7 @@ export const PAYMENTS_LOCAL_SETTINGS = [
  * google prefixes
  * plus the two switches. Arriving uncounted is what dropped
  * localBehaviorPercent through its floor when the schema grew. The three
- * secret-valued keys hold goodvibes://secrets/ references, never values —
+ * secret-valued keys hold goodvibes://secrets/ references, never values,
  * same note as the mailbox passwords above.
  */
 export const CONNECTOR_LOCAL_SETTINGS = [
@@ -577,7 +577,7 @@ function countBuiltinPanels(root: string): number {
 
 /**
  * The CLI command words this terminal actually accepts, read off the catalog
- * the parser is driven by rather than scraped out of a source file — the
+ * the parser is driven by rather than scraped out of a source file, the
  * ledger counts what ships, and a catalog entry IS what ships.
  */
 function listCliCommands(): string[] {

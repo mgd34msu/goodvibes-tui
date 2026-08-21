@@ -8,7 +8,7 @@ import type { CompositeRequest, PanelCompositeData, SelectionInfo } from '../../
 // Test helpers
 // ---------------------------------------------------------------------------
 
-/** Minimal mock WriteStream — records all writes. */
+/** Minimal mock WriteStream, records all writes. */
 function makeMockStream() {
   const writes: string[] = [];
   const stream = {
@@ -65,7 +65,7 @@ function makeBaseRequest(overrides: Partial<CompositeRequest> = {}): CompositeRe
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Compositor — no panel', () => {
+describe('Compositor: no panel', () => {
   test('produces output (stdout.write called)', () => {
     const { compositor, stream } = makeCompositor();
     compositor.composite(makeBaseRequest());
@@ -78,7 +78,7 @@ describe('Compositor — no panel', () => {
     // Stamp a recognisable character at col 30 on viewport row 0 (screen row 2)
     stampChar(viewport[0], 30, 'X');
     compositor.composite(makeBaseRequest({ viewport }));
-    // Without a panel, the full line is blitted — col 30 on screen row 2 should be 'X'
+    // Without a panel, the full line is blitted, col 30 on screen row 2 should be 'X'
     expect(cellAt(compositor, 30, 2)?.char).toBe('X');
   });
 
@@ -107,7 +107,7 @@ describe('Compositor — no panel', () => {
   });
 });
 
-describe('Compositor — with panel', () => {
+describe('Compositor: with panel', () => {
   function makePanelData(): PanelCompositeData {
     const workspaceBar = makeLine(PANEL_WIDTH, 'W');
     const topContent = Array.from({ length: 5 }, () => makeLine(PANEL_WIDTH, 'P'));
@@ -174,7 +174,7 @@ describe('Compositor — with panel', () => {
   });
 });
 
-describe('Compositor — dual-pane (top + bottom)', () => {
+describe('Compositor: dual-pane (top + bottom)', () => {
   // Layout for these tests (single consolidated workspace bar, no per-pane bars):
   //   WIDTH=40, HEIGHT=14, PANEL_WIDTH=15
   //   header=2, footer=2 → vHeight=10
@@ -255,7 +255,7 @@ describe('Compositor — dual-pane (top + bottom)', () => {
   });
 
   test('dual pane handles sparse content (fewer lines than pane height)', () => {
-    // topContent has 1 line but topPaneHeight is 4 — should render without crash
+    // topContent has 1 line but topPaneHeight is 4, should render without crash
     // bottomContent has 2 lines but bottomPaneHeight is 4
     const { compositor } = makeCompositor();
     const panel = makeDualPaneData();
@@ -274,12 +274,12 @@ describe('Compositor — dual-pane (top + bottom)', () => {
     // Bottom content rows i=6 and i=7 (screen 8, 9) should be populated
     expect(cellAt(compositor, PANEL_START_X, 8)?.char).toBe('X');
     expect(cellAt(compositor, PANEL_START_X, 9)?.char).toBe('X');
-    // Row i=9 (screen 11) is beyond bottomContent — should not crash
+    // Row i=9 (screen 11) is beyond bottomContent, should not crash
     expect(cellAt(compositor, PANEL_START_X, 11)).toBeDefined();
   });
 });
 
-describe('Compositor — buffer reuse (double-buffer, no clone)', () => {
+describe('Compositor: buffer reuse (double-buffer, no clone)', () => {
   test('TerminalBuffer constructor is NOT called on second composite() (buffer is reused)', () => {
     // We track constructor calls by counting .cells allocations via composite calls.
     // The core assertion: lastBufferForTest after N composites always returns a non-null
@@ -325,7 +325,7 @@ describe('Compositor — buffer reuse (double-buffer, no clone)', () => {
   });
 });
 
-describe('Compositor — degenerate panelWidth >= width', () => {
+describe('Compositor: degenerate panelWidth >= width', () => {
   test('leftWidth clamped to 1 when panelWidth >= width - 1', () => {
     const { compositor } = makeCompositor();
     // panelWidth = width - 1 → leftWidth would be -1 without clamp, clamped to 1

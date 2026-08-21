@@ -5,15 +5,15 @@
  * roster, but only reports real data once a consumer binds a
  * ContextAccountingSource onto the RuntimeServices-level
  * ContextAccountingHolder passed into registerAllTools (see
- * bootstrap-core.ts) — otherwise it honestly reports `available: false`.
+ * bootstrap-core.ts), otherwise it honestly reports `available: false`.
  * runtime/context-accounting-source.ts builds that source from the live
  * Orchestrator, bound at bootstrap.ts. These tests exercise:
  *
- *  1. createContextAccountingSource() in isolation — token state, compaction
+ *  1. createContextAccountingSource() in isolation, token state, compaction
  *     count, and the compaction-activity tracker driven by real runtime-bus
  *     event types (not fabricated).
  *  2. The full path through the REAL tool (createContextAccountingTool +
- *     ContextAccountingHolder from the SDK) — bound source returns real
+ *     ContextAccountingHolder from the SDK), bound source returns real
  *     data, unbound holder returns the honest "not available" message.
  */
 import { describe, expect, test } from 'bun:test';

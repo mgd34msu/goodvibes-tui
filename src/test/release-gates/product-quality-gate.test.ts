@@ -1,5 +1,5 @@
 /**
- * Product Quality Gate — Release Gate 5
+ * Product Quality Gate, Release Gate 5
  *
  * Verifies that:
  * - Every platform capability is declared on the FEATURE_SETTINGS surface

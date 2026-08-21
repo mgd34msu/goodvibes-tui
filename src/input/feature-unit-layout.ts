@@ -1,5 +1,5 @@
 /**
- * feature-unit-layout — every platform capability renders as a feature UNIT in
+ * feature-unit-layout, every platform capability renders as a feature UNIT in
  * its settings DOMAIN: the feature's real enablement row (its domain settings
  * key, with the feature's name and full description attached) immediately
  * followed by the settings keys that tune it.
@@ -12,7 +12,7 @@
  * configures the feature.
  *
  * A feature-unit header is the REAL config row for the feature's enablement
- * key — boolean headers toggle, enum headers cycle their mode choices through
+ * key, boolean headers toggle, enum headers cycle their mode choices through
  * the ordinary settings interactions. Two features can share one enablement
  * key (e.g. behavior.compactionStrategy drives both compaction features);
  * each still gets its own header row so every capability keeps its own name,
@@ -25,7 +25,7 @@ import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
 import { getConfigSchemaSetting } from '@pellux/goodvibes-terminal-shell';
 import type { FlagEntry, SettingEntry, SettingsCategory } from './settings-modal-types.ts';
 
-/** Every enablement key — these rows render as feature headers, never as plain sub-rows. */
+/** Every enablement key, these rows render as feature headers, never as plain sub-rows. */
 const ENABLEMENT_KEYS: ReadonlySet<string> = new Set(
   FEATURE_SETTINGS.map((feature) => feature.enablement.key),
 );
@@ -41,7 +41,7 @@ export function getFeatureUnitHostCategory(featureId: string): SettingsCategory 
 
 /**
  * Map every non-enablement settings key claimed by any feature to the feature
- * that OWNS it — the first feature (in FEATURE_SETTINGS declaration order)
+ * that OWNS it, the first feature (in FEATURE_SETTINGS declaration order)
  * whose settings list contains it. A key claimed by two features is listed
  * once, under its owner, so no settings key double-lists across feature units.
  */
@@ -60,7 +60,7 @@ export function buildConfigKeyOwnership(): Map<string, string> {
  * Build a feature unit's header row: the REAL config row for the feature's
  * enablement key (so booleans toggle and enums cycle their mode choices
  * through the ordinary settings paths), cloned with the feature attached.
- * When the category has no row for the key (it should always have one — every
+ * When the category has no row for the key (it should always have one, every
  * binding key is CONFIG_SCHEMA-registered), the schema descriptor is used
  * directly so the header still renders honestly.
  */

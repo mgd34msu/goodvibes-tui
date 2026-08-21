@@ -52,7 +52,7 @@ function stripAnsi(text: string): string {
  * each component's width is summed and ZWJ/VS chars contribute zero width,
  * so the total is accurate. However, truncation (truncateDisplay) may split
  * a ZWJ family mid-sequence, leaving dangling ZWJ/VS characters. This is a
- * cosmetic degradation only — line widths remain correct.
+ * cosmetic degradation only, line widths remain correct.
  */
 export function getDisplayWidth(text: string): number {
   text = stripAnsi(text);
@@ -86,7 +86,7 @@ export function getDisplayWidth(text: string): number {
       code === 0x2717 ||
       code === 0x2714 ||
       code === 0x2718 ||
-      // ✕ (0x2715) and ✖ (0x2716) — the multiplication-X cross family used for
+      // ✕ (0x2715) and ✖ (0x2716), the multiplication-X cross family used for
       // the error-line prefix. Terminals draw them one cell wide, but they sit
       // inside the 0x2600–0x27bf emoji block below and would otherwise be counted
       // as width 2, desyncing the styled cell grid from the physical glyph and
@@ -176,12 +176,12 @@ export interface PrioritizedSegment {
 /**
  * Join segments left-to-right with `separator`, but when the joined line
  * would exceed `width`, drop whole low-priority segments (highest `priority`
- * number first) one at a time until it fits — rather than character-truncating
+ * number first) one at a time until it fits, rather than character-truncating
  * the joined string, which can mangle a high-value segment mid-word (e.g. a
  * `spine:online` daemon-liveness marker clipped to `spi…`).
  *
  * Only falls back to character truncation (via truncateDisplay) if the
- * remaining highest-priority segments still don't fit at width — a rare,
+ * remaining highest-priority segments still don't fit at width, a rare,
  * very-narrow-terminal case.
  */
 export function joinPrioritizedSegments(
@@ -192,11 +192,11 @@ export function joinPrioritizedSegments(
   const join = (list: readonly PrioritizedSegment[]) => list.map(s => s.text).join(separator);
   let kept = segments;
   // Keep dropping whole segments while more than one remains; once a single
-  // segment is left, stop — an empty result would be a worse outcome than
+  // segment is left, stop, an empty result would be a worse outcome than
   // falling through to character truncation on that last segment below.
   while (kept.length > 1 && getDisplayWidth(join(kept)) > width) {
     // Drop the single lowest-priority (highest `priority` number) segment;
-    // ties broken toward the leftmost (earlier-declared) segment surviving —
+    // ties broken toward the leftmost (earlier-declared) segment surviving,
     // `>=` (not `>`) so that on equal priority the LATER index keeps winning
     // as the drop candidate, leaving the earliest-declared segment of that
     // priority tier intact (e.g. cwd survives over model when both are

@@ -1,4 +1,4 @@
-# Cloudflare Batch And Control Plane
+# Cloudflare batch and control plane
 
 GoodVibes can optionally use Cloudflare Workers and Queues for batch-capable daemon work. This is opt-in. By default the TUI keeps immediate local daemon behavior:
 
@@ -21,7 +21,7 @@ Select `Use Cloudflare for batch or remote daemon work` on the first onboarding 
 
 Workers and Queues are the normal default components. Tunnel, Access, DNS, KV, Durable Objects, Secrets Store, and R2 are advanced optional components.
 
-## Token Setup
+## Token setup
 
 The wizard supports these paths:
 
@@ -33,7 +33,7 @@ The wizard supports these paths:
 
 Bootstrap tokens should be temporary and should be revoked or allowed to expire after GoodVibes creates and validates the operational token.
 
-## Slash Command
+## Slash command
 
 Use `/cloudflare` for runtime inspection and daemon actions:
 
@@ -53,7 +53,7 @@ Use `/cloudflare` for runtime inspection and daemon actions:
 
 `/cloudflare provision` accepts the same major SDK daemon fields the onboarding screen exposes, including `--tunnel-name`, `--tunnel-id`, `--tunnel-service-url`, `--tunnel-token-ref`, `--access-app-id`, `--access-service-token-id`, `--access-service-token-ref`, `--kv-namespace-name`, `--kv-namespace-id`, `--do-namespace-name`, `--do-namespace-id`, `--r2-bucket-name`, `--secrets-store-name`, `--secrets-store-id`, `--operator-token-ref`, and `--worker-client-token-ref`.
 
-## Daemon Routes
+## Daemon routes
 
 The TUI integrates with these daemon routes:
 
@@ -71,7 +71,7 @@ POST /api/cloudflare/disable
 
 Errors return JSON with `error` and `code`. The TUI displays route failures as actionable wizard or command output and does not block normal local daemon usage unless the user explicitly depends on Cloudflare provisioning.
 
-## Batch Modes
+## Batch modes
 
 `off` keeps all work on the immediate local path.
 

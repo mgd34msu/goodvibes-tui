@@ -306,7 +306,7 @@ function renderWideLayout(
   const selectedText = selectedFieldText(wizard);
   // The selected field's own hint is the direct analog of the reported
   // defect (descriptive text explaining what the currently-focused option
-  // does) — some hints run past 400 characters, e.g. security-caveat text.
+  // does), some hints run past 400 characters, e.g. security-caveat text.
   // It is never clipped to a single row: it wraps onto as many lines as it
   // needs, and the field list below starts after it, growing/shrinking the
   // field-list area rather than losing hint text. Title/description/controls

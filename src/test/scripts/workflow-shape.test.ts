@@ -4,7 +4,7 @@
  * CI cannot run without pushing, so this suite is the local proof that the
  * hand-authored workflow YAML is well-formed: the job graphs, needs edges, no
  * continue-on-error on any job, timeout caps, pinned action SHAs, and the
- * by-reference release wiring — including that release.yml consumes the SDK's
+ * by-reference release wiring, including that release.yml consumes the SDK's
  * reusable workflows at mgd34msu/goodvibes-sdk@main.
  */
 import { describe, expect, test } from "bun:test";
@@ -124,7 +124,7 @@ describe("ci.yml: zero-touch auto-release", () => {
     for (const job of gatingJobs) {
       expect(needs, `auto-release must need ${job} so it only runs when that gate is green`).toContain(job);
     }
-    // And its needs set is exactly the other jobs — no gate omitted, no self-need.
+    // And its needs set is exactly the other jobs, no gate omitted, no self-need.
     const otherJobs = jobs(ci)
       .map(([n]) => n)
       .filter((n) => n !== "auto-release");
@@ -204,7 +204,7 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
 
   test("every smoke:true matrix leg carries its own binary path matching the config's appArtifact", () => {
     // reusable-binary-matrix contract: targets is {key, runner, smoke, binary}
-    // and `binary` is REQUIRED when smoke is true — each leg only builds its
+    // and `binary` is REQUIRED when smoke is true, each leg only builds its
     // own suffixed artifact, so the smoke step hard-fails without it (the
     // config's smoke.binaryDefault serves local CLI runs only).
     const binaries = rel.jobs!["binaries"]! as Job & { with?: Record<string, unknown> };
@@ -243,7 +243,7 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
     expect(notesFile).toStartWith("docs/releases/");
     expect(notesFile).toEndWith(".md");
     // Version comes from the stage job's tag-derived output, which strips the
-    // v prefix — docs/releases files are named <version>.md, not v<version>.md.
+    // v prefix, docs/releases files are named <version>.md, not v<version>.md.
     expect(notesFile).toContain("needs.stage-release-assets.outputs.version");
     expect(notesFile).not.toContain("docs/releases/v");
     // The producing job must actually expose that output.
@@ -260,7 +260,7 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
   test("dispatch is dry-run unless mode=release", () => {
     // A release-mode dispatch is now a first-class publish path (the zero-touch
     // auto-release job in ci.yml dispatches release.yml with mode=release), so
-    // the publish jobs run on a push OR a release-mode dispatch — while
+    // the publish jobs run on a push OR a release-mode dispatch, while
     // install-smoke's non-release-dispatch legs and the binaries job's
     // dry-validation leg stay fenced off to a non-release dispatch so they can
     // never publish.
@@ -364,8 +364,8 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
 
 describe("composite setup action: single Bun source", () => {
   test("action metadata never references the vars context", () => {
-    // GitHub template-evaluates the ENTIRE action manifest — including input
-    // descriptions — and the vars context does not exist in composite actions.
+    // GitHub template-evaluates the ENTIRE action manifest, including input
+    // descriptions, and the vars context does not exist in composite actions.
     // A literal vars expression anywhere in this file fails every consuming
     // job at load time (this took down all six bun jobs on the v1.19.2 run).
     const raw = readFileSync(resolve(ROOT, ".github/actions/setup/action.yml"), "utf8");

@@ -3,14 +3,14 @@
  *
  * Implements the Project Memory Substrate commands:
  *
- *   /recall add <class> <summary>           — Add a new memory record
+ *   /recall add <class> <summary>          , Add a new memory record
  *   /recall add <class> <summary> --detail <text> --tags <tag,tag>
- *   /recall search [query]                  — Search memory records
- *   /recall search --cls <class>            — Filter by class
- *   /recall link <fromId> <toId> <relation> — Link two records
- *   /recall get <id>                        — Show a single record with provenance
- *   /recall list [class]                    — List all records (optionally by class)
- *   /recall remove <id>                     — Delete a record
+ *   /recall search [query]                 , Search memory records
+ *   /recall search --cls <class>           , Filter by class
+ *   /recall link <fromId> <toId> <relation>, Link two records
+ *   /recall get <id>                       , Show a single record with provenance
+ *   /recall list [class]                   , List all records (optionally by class)
+ *   /recall remove <id>                    , Delete a record
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
@@ -27,17 +27,17 @@ import { handleRecallFilesApply, handleRecallFilesReview, handleRecallFilesSync 
  * item 3 divergence note (historical): the work order that shipped
  * this command named its front door "/memory", but at the time `/memory` was
  * already a distinct, unrelated command (session-pinned sticky notes,
- * src/input/commands/session-content.ts) with no modal surface — so that
+ * src/input/commands/session-content.ts) with no modal surface, so that
  * work order deliberately did NOT touch /memory and used /recall instead.
  *
- * Update from the core-verb naming pass (MEMORY fragmentation — worst-class
+ * Update from the core-verb naming pass (MEMORY fragmentation, worst-class
  * collision #2): the agent's own `/memory` command was a plain alias for its
  * `/recall`-equivalent the whole time, meaning "/memory" meant two unrelated
  * things depending which surface you were on. The session-notes command was
  * renamed to `/note` (session-content.ts) to free the word, and `/memory` is
- * now registered here as a real alias of `/recall` — the word means the same
+ * now registered here as a real alias of `/recall`, the word means the same
  * durable Project Memory Substrate on both surfaces. The modal that exists
- * for this data — the Project Memory Substrate — is still `memory-modal.ts`,
+ * for this data, the Project Memory Substrate, is still `memory-modal.ts`,
  * owned by THIS command, confirmed by the panel-id redirect
  * `registerModalRedirect('memory', 'memory-modal')` in builtin-modals.ts.
  */
@@ -79,12 +79,12 @@ export const recallCommand: SlashCommand = {
   name: 'recall',
   aliases: ['rc', 'memory', 'mem'],
   description: 'Bare opens the Memory modal; project memory subcommands add decisions, constraints, incidents, and patterns with provenance',
-  usage: '[<subcommand> [args]] — bare opens the modal; report prints the subcommand usage text',
+  usage: '[<subcommand> [args]]: bare opens the modal; report prints the subcommand usage text',
   argsHint: 'add|search|link|get|list|remove|report',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const [sub, ...rest] = args;
 
-    // item 3: bare `/recall` opens the memory-modal surface — the old
+    // item 3: bare `/recall` opens the memory-modal surface, the old
     // bare/unknown-subcommand usage block moved to an explicit `report`
     // subcommand (scriptability preserved: /recall report).
     if (sub === undefined) {

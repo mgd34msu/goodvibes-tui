@@ -118,7 +118,7 @@ function stubController(providers: OnboardingProviderAccountRecord[]): Onboardin
   } as unknown as OnboardingWizardControllerLike;
 }
 
-describe('onboarding provider step — provider-agnostic key fields', () => {
+describe('onboarding provider step: provider-agnostic key fields', () => {
   test('emits one masked key field per key-accepting provider and never a single hardcoded vendor', () => {
     const step = buildProvidersStep(stubController([
       record('acme', { apiKeyEnvVar: 'ACME_API_KEY' }),

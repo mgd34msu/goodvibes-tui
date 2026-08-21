@@ -1,5 +1,5 @@
 /**
- * worktree-setup-config.ts — TUI-local synthetic settings entries for
+ * worktree-setup-config.ts, TUI-local synthetic settings entries for
  * worktree.setup.commands / worktree.setup.carryOverGlobs.
  *
  * Neither key is in the SDK's ConfigKey union: the SDK's cold-start worktree
@@ -12,8 +12,8 @@
  * settings-modal-data.ts (behavior.notifyAfterSeconds, storage.codeIndexEnabled, etc).
  *
  * Both keys hold a JSON array of strings on disk. The settings modal's
- * inline editor is a single-line text field, so — matching the SDK's own
- * convention for controlPlane.cors.allowedOrigins — they are displayed and
+ * inline editor is a single-line text field, so, matching the SDK's own
+ * convention for controlPlane.cors.allowedOrigins, they are displayed and
  * edited as a comma-separated list and parsed back into an array on commit
  * (see isWorktreeSetupListConfigKey's use in settings-modal.ts#commitEdit).
  */
@@ -34,14 +34,14 @@ export function isWorktreeSetupListConfigKey(key: ConfigKey): boolean {
 }
 
 /**
- * Read a config value as a string array — mirrors the SDK's own tolerant
+ * Read a config value as a string array, mirrors the SDK's own tolerant
  * readStringArray (non-array/malformed degrades to empty).
  *
  * Defensive try/catch (now belt-and-suspenders): the SDK registers the
  * `worktree` section in DEFAULT_CONFIG (setup.commands / setup.carryOverGlobs,
  * both empty lists) as of this repack, so ConfigManager.get no longer throws
- * for these keys on a fresh store. The guard is retained so an older SDK — or
- * a config store whose section was pruned — degrades to an empty list here
+ * for these keys on a fresh store. The guard is retained so an older SDK, or
+ * a config store whose section was pruned, degrades to an empty list here
  * (this read runs on every settings-modal build) rather than crashing /config
  * or /settings.
  */
@@ -65,14 +65,14 @@ export const WORKTREE_SETUP_COMMANDS_SYNTHETIC_SETTING: ConfigSetting = {
   key: WORKTREE_SETUP_COMMANDS_CONFIG_KEY,
   type: 'string',
   default: [],
-  description: 'Comma-separated shell command lines run in order in a freshly-created isolated worktree before it is handed to an agent (e.g. "bun install, bun run codegen"). A command that exits non-zero stops setup there and marks the worktree failed — visible on /worktree review and the worktree record, never silent. Empty = no setup commands run.',
+  description: 'Comma-separated shell command lines run in order in a freshly-created isolated worktree before it is handed to an agent (e.g. "bun install, bun run codegen"). A command that exits non-zero stops setup there and marks the worktree failed; visible on /worktree review and the worktree record, never silent. Empty = no setup commands run.',
 };
 
 export const WORKTREE_SETUP_CARRY_OVER_GLOBS_SYNTHETIC_SETTING: ConfigSetting = {
   key: WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY,
   type: 'string',
   default: [],
-  description: 'Comma-separated glob patterns (e.g. ".env, .env.*, config/local.json") of UNTRACKED files copied from the source working tree into a freshly-created isolated worktree, after setup commands run. Only files git reports as untracked are eligible — committed files already carry over through the worktree checkout itself. Empty = nothing carried over.',
+  description: 'Comma-separated glob patterns (e.g. ".env, .env.*, config/local.json") of UNTRACKED files copied from the source working tree into a freshly-created isolated worktree, after setup commands run. Only files git reports as untracked are eligible; committed files already carry over through the worktree checkout itself. Empty = nothing carried over.',
 };
 
 function buildWorktreeSetupListEntry(configManager: Pick<ConfigManager, 'get'>, setting: ConfigSetting): SettingEntry {

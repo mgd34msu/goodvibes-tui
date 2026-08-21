@@ -117,7 +117,7 @@ export function openCommandPanel(
  * (group-B migration): open a config-modal surface by name via the
  * ctx.openModal seam (ui-openers wires it; the host replaces the interim
  * "not available yet" implementation with real dispatch). Front-doors for
- * panels that migrated to modals call this instead of openCommandPanel — the
+ * panels that migrated to modals call this instead of openCommandPanel, the
  * modal is the surface's new home. Stubbed in tests by setting ctx.openModal.
  */
 export function openModalCommand(
@@ -336,7 +336,6 @@ export async function compactConversation(context: CommandContext): Promise<Comp
     compactionCtx,
   );
   const eventAfter = getLastCompactionEvent();
-  // Return the new event only if it differs from the one recorded before the call.
   if (eventAfter !== null && eventAfter !== eventBefore) {
     //: score this run out-of-band (see compaction-quality.ts for why
     // this can't just subscribe to the SDK's own CompactionManager pipeline)

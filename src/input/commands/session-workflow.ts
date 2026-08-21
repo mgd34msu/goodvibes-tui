@@ -75,7 +75,7 @@ function buildTranscriptReviewLines(
   return [
     `Transcript Events${kind === 'all' ? '' : `: ${kind}`}`,
     `  events: ${events.length}`,
-    ...events.slice(0, 16).map((event) => `  #${String(event.messageIndex).padStart(3)}  ${event.kind.padEnd(20)} ${event.title} — ${event.detail}`),
+    ...events.slice(0, 16).map((event) => `  #${String(event.messageIndex).padStart(3)}  ${event.kind.padEnd(20)} ${event.title}: ${event.detail}`),
     ...(events.length > 16 ? [`  … ${events.length - 16} more event(s)`] : []),
   ];
 }
@@ -84,14 +84,14 @@ function buildTranscriptReviewLines(
 // (W6 review, finding 3: saved-layout restore with 'sessions' must not lie)
 // can be unit-tested directly instead of through a full /resume harness.
 // Delegates to the shared reopenPanelsWithModalSkip (core/session-resume-core.ts)
-// — the same routine resumeSessionCore uses — so this standalone entry point
+//, the same routine resumeSessionCore uses, so this standalone entry point
 // and the canonical resume sequence can never diverge on panel-reopen behavior.
 export function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionReturnContextSummary | undefined): string[] {
   if (!summary?.openPanels || summary.openPanels.length === 0) return [];
   const panelManager = requirePanelManager(ctx);
   const { reopened, movedToModal, notReopened } = reopenPanelsWithModalSkip(panelManager, summary.openPanels, DEFAULT_PANEL_REOPEN_LIMIT);
   if (movedToModal.length > 0) {
-    ctx.print(`Note: ${movedToModal.join(', ')} moved to a modal — reopen via its command instead of as a panel.`);
+    ctx.print(`Note: ${movedToModal.join(', ')} moved to a modal; reopen via its command instead of as a panel.`);
   }
   if (notReopened.length > 0) {
     ctx.print(`  …and ${notReopened.length} more not reopened (/panels to open)`);
@@ -213,7 +213,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
           provider: ctx.session.runtime.provider,
           timestamp: Date.now(),
           // Naming a session is an act of curation, so the file this
-          // materializes for rename to act on is a user save, not machinery —
+          // materializes for rename to act on is a user save, not machinery,
           // the retention sweep must not expire something the user named.
           saveSource: 'user',
         });
@@ -229,7 +229,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
   }
 
   if (sub === 'resume') {
-    // '--force' bypasses the multi-instance liveness confirm below — never a
+    // '--force' bypasses the multi-instance liveness confirm below, never a
     // session-id/name token itself (session ids never start with '--').
     const rawArgs = args.slice(1);
     const force = rawArgs.includes('--force');
@@ -250,14 +250,14 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
     }
 
     // Multi-instance safety: warn (and require --force) when this session
-    // looks open in another still-running terminal right now — resuming it
+    // looks open in another still-running terminal right now, resuming it
     // here would fork its live state out from under that other instance.
     // Best-effort: a missing/stale marker (or this process's OWN marker,
     // e.g. re-resuming the session already active here) never blocks anything.
     const liveness = checkSessionLiveness(requireSurface(ctx), found.name);
     if (liveness.live && liveness.pid !== process.pid && !force) {
       ctx.print(
-        `Session appears open in another terminal (pid ${liveness.pid}) — resuming will fork its live state.\n` +
+        `Session appears open in another terminal (pid ${liveness.pid}): resuming will fork its live state.\n` +
         `Re-run \`/session resume ${found.name} --force\` to proceed anyway.`,
       );
       return true;
@@ -279,10 +279,10 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       ctx.renderRequest();
       ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${resumedMessageCount}\n  Model: ${meta.model || ctx.session.runtime.model}`);
       if (restoredAnchorCount > 0) {
-        ctx.print(`  Rewind: restored ${restoredAnchorCount} turn anchor(s) — /rewind is available for this resumed session.`);
+        ctx.print(`  Rewind: restored ${restoredAnchorCount} turn anchor(s); /rewind is available for this resumed session.`);
       }
       if (journalReplay.replayed > 0) {
-        ctx.print(`  [Recovery] Replayed ${journalReplay.replayed} journal record(s) — restored turns since last snapshot.`);
+        ctx.print(`  [Recovery] Replayed ${journalReplay.replayed} journal record(s): restored turns since last snapshot.`);
       }
       if (journalReplay.hadCorruptTail && journalReplay.replayed === 0) {
         ctx.print('  [Recovery] Journal tail was corrupt or unrecognised (quarantined). Proceeding with snapshot only.');
@@ -290,7 +290,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
         ctx.print('  [Recovery] Journal tail was partially corrupt (quarantined). Replay stopped at last good record.');
       }
       if (panels.movedToModal.length > 0) {
-        ctx.print(`Note: ${panels.movedToModal.join(', ')} moved to a modal — reopen via its command instead of as a panel.`);
+        ctx.print(`Note: ${panels.movedToModal.join(', ')} moved to a modal; reopen via its command instead of as a panel.`);
       }
       if (panels.notReopened.length > 0) {
         ctx.print(`  …and ${panels.notReopened.length} more not reopened (/panels to open)`);

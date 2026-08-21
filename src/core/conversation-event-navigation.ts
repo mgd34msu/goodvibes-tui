@@ -1,5 +1,5 @@
 /**
- * conversation-event-navigation.ts — resolving "jump to the next/previous
+ * conversation-event-navigation.ts, resolving "jump to the next/previous
  * transcript event" into a history-buffer line number.
  *
  * Extracted from ConversationManager (core/conversation.ts), which is at its
@@ -8,7 +8,7 @@
  *
  * The rule both directions share: take the events of the requested kind, map
  * each to the line its message was rendered at, drop the ones that were never
- * rendered (a message with no registry entry), sort ascending, then wrap —
+ * rendered (a message with no registry entry), sort ascending, then wrap,
  * searching forward past `currentLine` falls back to the first line, searching
  * backward falls back to the last. -1 means there is nowhere to go.
  */

@@ -1,5 +1,5 @@
 /**
- * Integration: Config persistence — set → get roundtrip.
+ * Integration: Config persistence, set → get roundtrip.
  *
  * Tests the ConfigManager's read/write lifecycle using the typed ConfigKey API.
  * Config keys follow the format 'section.field' or 'section.subsection.field'.
@@ -10,14 +10,14 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
-// NOTE: 'provider.provider' is not a real schema leaf — GoodVibesConfig's
+// NOTE: 'provider.provider' is not a real schema leaf, GoodVibesConfig's
 // 'provider' section only has model/reasoningEffort/embeddingProvider/etc
 // (getConfiguredProviderId derives the provider by parsing the
 // "provider:model" prefix out of provider.model instead; see
 // the SDK's platform/config + platform/providers provider-model). ConfigManager's get/set are
 // permissive about unknown dot-paths at runtime (no schema entry ⇒ no
 // validation, plain property read/write on the section object), so this
-// still round-trips — it's legacy/orphaned coverage for a key nothing else
+// still round-trips, it's legacy/orphaned coverage for a key nothing else
 // in the app reads or writes. Left in place per policy (no test deletions);
 // the key is cast through ConfigKey the same way
 // src/input/sandbox-exec-config.ts already does for its own synthetic,
@@ -28,7 +28,7 @@ const PROVIDER_PROVIDER_KEY = 'provider.provider' as ConfigKey;
 // ConfigManager set/get roundtrip
 // ---------------------------------------------------------------------------
 
-describe('Config persistence — set/get roundtrip', () => {
+describe('Config persistence: set/get roundtrip', () => {
   let configManager: ConfigManager;
 
   beforeEach(() => {
@@ -82,7 +82,7 @@ describe('Config persistence — set/get roundtrip', () => {
 // ConfigManager get() with typed paths
 // ---------------------------------------------------------------------------
 
-describe('Config persistence — typed path access', () => {
+describe('Config persistence: typed path access', () => {
   let configManager: ConfigManager;
 
   beforeEach(() => {
@@ -126,7 +126,7 @@ describe('Config persistence — typed path access', () => {
 // Config provider.model / provider.provider fields
 // ---------------------------------------------------------------------------
 
-describe('Config persistence — provider fields', () => {
+describe('Config persistence: provider fields', () => {
   let configManager: ConfigManager;
 
   beforeEach(() => {
@@ -159,7 +159,7 @@ describe('Config persistence — provider fields', () => {
 // Config display fields
 // ---------------------------------------------------------------------------
 
-describe('Config persistence — display fields', () => {
+describe('Config persistence: display fields', () => {
   let configManager: ConfigManager;
 
   beforeEach(() => {
@@ -191,7 +191,7 @@ describe('Config persistence — display fields', () => {
 // Config state isolation
 // ---------------------------------------------------------------------------
 
-describe('Config persistence — isolation between tests', () => {
+describe('Config persistence: isolation between tests', () => {
   let configManager: ConfigManager;
 
   beforeEach(() => {

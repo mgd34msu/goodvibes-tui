@@ -11,7 +11,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 // acceptance comes from running the SDK's own HookDispatcher.loadFromFile (the
 // same loader the app uses at startup), and the "is this a real hook event
 // point" verdict comes from the SDK's getHookPointContract. This module only
-// reads and reports — it changes no config and fires no hooks.
+// reads and reports, it changes no config and fires no hooks.
 // ---------------------------------------------------------------------------
 
 /** Per-hook acceptance verdict, keyed to the on-disk position it was declared at. */
@@ -28,7 +28,7 @@ export interface HookCheck {
 
 /** The full validation result for one hooks file. */
 export interface HooksValidation {
-  /** Absolute path the app resolves `tools.hooksFile` to — the "from where" of every hook. */
+  /** Absolute path the app resolves `tools.hooksFile` to, the "from where" of every hook. */
   readonly path: string;
   readonly present: boolean;
   readonly valid: boolean;
@@ -42,7 +42,7 @@ export interface HooksValidation {
 }
 
 export const LOADER_FIELD_REASON =
-  "the hooks loader skipped this entry — a hook needs a string \"match\" and a \"type\" of command, prompt, agent, http, or ts";
+  "the hooks loader skipped this entry; a hook needs a string \"match\" and a \"type\" of command, prompt, agent, http, or ts";
 
 /** Build a consumable multiset of the loader-accepted definitions, keyed by pattern. */
 function acceptedMultiset(accepted: Map<string, HookDefinition[]>): Map<string, Map<string, number>> {
@@ -100,7 +100,7 @@ export function buildHooksValidation(configManager: Pick<ConfigManager, 'get' | 
   try {
     parsed = JSON.parse(readFileSync(path, 'utf-8'));
   } catch (error) {
-    return { path, present: true, valid: false, reason: `hooks.json is not valid JSON — ${summarizeError(error)}`, topLevelIssues: [], checks: [], chains: { declared: 0, accepted: 0 }, passCount: 0, failCount: 1 };
+    return { path, present: true, valid: false, reason: `hooks.json is not valid JSON; ${summarizeError(error)}`, topLevelIssues: [], checks: [], chains: { declared: 0, accepted: 0 }, passCount: 0, failCount: 1 };
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

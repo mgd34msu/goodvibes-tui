@@ -17,7 +17,7 @@ export interface PlanningAnswerAction {
   readonly disabled?: boolean;
 }
 
-/** SDK placeholder recommendations that carry no real signal — never surfaced as an answer action. */
+/** SDK placeholder recommendations that carry no real signal, never surfaced as an answer action. */
 export function isGenericRecommendation(value: string): boolean {
   return /\bdefine the first-pass scope\b/i.test(value)
     || /\bcreate task records\b/i.test(value)
@@ -32,12 +32,12 @@ function compactAnswerDetail(text: string): string {
 
 /**
  * Builds the answer-action list for the current question: keyword-matched
- * canned suggestions first (de-duplicated by normalized answer text — a
+ * canned suggestions first (de-duplicated by normalized answer text, a
  * question that matches more than one keyword category, e.g. scope +
  * recommendedAnswer echoing one of the scope answers verbatim, must not show
  * the same suggested answer twice), then the fixed ask-narrower/custom actions.
  *
- * dismissing planning is no longer a pseudo answer-row — it is a
+ * dismissing planning is no longer a pseudo answer-row, it is a
  * first-class confirmed modal action (the `d` key), so no dismiss row is
  * produced here. A canned answer records against the current open question via
  * /plan answer; the custom row's free-form text is submitted to chat.

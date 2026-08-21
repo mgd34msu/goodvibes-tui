@@ -1,5 +1,5 @@
 /**
- * Plugin system tests — loader, api, and manager.
+ * Plugin system tests, loader, api, and manager.
  *
  * Strategy: use a real temp filesystem for plugin fixtures;
  * mock internal registries with lightweight in-memory fakes.
@@ -497,7 +497,7 @@ describe('createPluginAPI', () => {
     expect(cmdReg._commands).toContain('plugin-my-plugin-hello');
     expect(cleanup.length).toBe(1);
 
-    // Run cleanup — command should be unregistered
+    // Run cleanup, command should be unregistered
     cleanup[0]();
     expect(cmdReg._commands).not.toContain('plugin-my-plugin-hello');
   });
@@ -867,7 +867,7 @@ describe('loadPlugin path traversal guard', () => {
   test('allows manifest.main within plugin dir', async () => {
     const { loadPlugin } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const deps = makeFakeDeps();
-    // Entry file doesn't exist — but traversal check passes first, so
+    // Entry file doesn't exist, but traversal check passes first, so
     // the failure is "entry file not found", not "path traversal".
     const manifest = {
       name: 'safe',
@@ -876,7 +876,7 @@ describe('loadPlugin path traversal guard', () => {
       main: 'lib/entry.ts',
     };
     const result = await loadPlugin({ pluginDir, manifest }, deps);
-    // null because file doesn't exist — not because of traversal rejection
+    // null because file doesn't exist, not because of traversal rejection
     expect(result).toBeNull();
     // The test confirms we got past the traversal check.
     // If traversal had fired, it would be null due to that specific error.

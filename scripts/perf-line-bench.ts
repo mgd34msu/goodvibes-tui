@@ -1,7 +1,7 @@
 /**
- * perf-line-bench.ts — Headless line-production micro-benchmarks.
+ * perf-line-bench.ts, Headless line-production micro-benchmarks.
  *
- * Measures the cost of building Line[] ABOVE the compositor — the layer the
+ * Measures the cost of building Line[] ABOVE the compositor, the layer the
  * frame bench (perf-frame-bench.ts) does NOT cover. The frame bench measures
  * Compositor.composite() (buffer diff + emit); this bench measures everything
  * that produces the Line[] the compositor is handed:
@@ -12,7 +12,7 @@
  *                         workspace bar, split layout), panels invalidated per build
  *   markdown.render       renderMarkdownTracked on a representative mixed document
  *   codeblock.regex       renderCodeBlock via the regex fallback tokenizer (cold /
- *                         tree-sitter not yet cached — the streaming path)
+ *                         tree-sitter not yet cached, the streaming path)
  *   codeblock.treesitter  renderCodeBlock via the tree-sitter cache-hit path (settled)
  *   overlay.open          renderHelpOverlay frame build (representative overlay open)
  *
@@ -20,7 +20,7 @@
  *   Bun's process.memoryUsage().heapUsed does NOT update synchronously between
  *   GC boundaries, so it reads a flat delta for a tight allocation loop. Instead
  *   we use bun:jsc heapStats() bracketed by forced GC (Bun.gc(true)) around a
- *   retained batch of outputs — this yields the RETAINED footprint per operation
+ *   retained batch of outputs, this yields the RETAINED footprint per operation
  *   (bytes + object count), the honest measure of per-frame allocation churn for
  *   row builders that produce fresh Line[]/Cell[] every frame.
  *
@@ -53,7 +53,7 @@ import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform
 // Config
 // ---------------------------------------------------------------------------
 
-/** Bench configuration — change here to update both gate and test. */
+/** Bench configuration, change here to update both gate and test. */
 export const LINE_BENCH_CONFIG = {
   /** Column width used for every builder (a common real terminal width). */
   width: 100,
@@ -65,7 +65,7 @@ export const LINE_BENCH_CONFIG = {
  * Ratchet budgets (ms) keyed by metric id. Set just above measured reality on a
  * quiet dev linux-x64 box; CI runners run 2-4× slower so budgets carry headroom.
  * The committed perf-baseline.json `line` section is the source of truth the gate
- * compares against — these are the fallback defaults when no baseline exists.
+ * compares against, these are the fallback defaults when no baseline exists.
  * Ratchet rule: tighten when measured p95 drops below budget/2.
  */
 export const LINE_BUDGETS: Readonly<Record<string, number>> = {
@@ -76,13 +76,13 @@ export const LINE_BUDGETS: Readonly<Record<string, number>> = {
   // 1 ms on a quiet box.
   // ratchet: re-measured with the per-message cache in place, on a quiet linux-x64 box the p50 is
   // rock-stable at 0.87-0.91 ms across 8 runs. Gate stat is p50 (a robust median
-  // over 200 iterations — it does not spike on a single GC pause). Budget
+  // over 200 iterations, it does not spike on a single GC pause). Budget
   // tightened 20 -> 6 ms: ~6.7× this-box p50 and ~1.7-3.3× a CI-slowed median
   // (runners run 2-4× slower). A regression that reintroduces the pre-cache full
   // rebuild on append (~45 ms) now fails the gate by ~7.5×.
   'transcript.append_one_ms': 6,
   // a resize invalidates every width-dependent message (all of them), so
-  // it still pays a near-full re-render — gated at the same ceiling as build_1k.
+  // it still pays a near-full re-render, gated at the same ceiling as build_1k.
   'transcript.resize_1k_ms': 400,
   'panel.two_pane_build_ms': 4,
   'markdown.render_ms': 6,
@@ -142,7 +142,7 @@ function timeOp(fn: () => unknown, iterations: number, warmup: number): Percenti
  * Retained-footprint heap measurement. Bun's heapStats().heapSize / objectCount
  * only settle at GC boundaries, so we force GC on both sides and keep every
  * produced output alive across the batch. The delta divided by the batch size is
- * the retained bytes/objects a single build leaves behind — the allocation churn
+ * the retained bytes/objects a single build leaves behind, the allocation churn
  * a real frame throws away and re-allocates every repaint.
  */
 function measureHeap(fn: () => unknown, iterations: number): { bytesPerOp: number; objectsPerOp: number } {
@@ -291,14 +291,14 @@ function makeConversationContext() {
  * A self-contained, deterministic full-pane content panel for the two-pane
  * composite benchmark. Fills each pane with styled rows (mixed fg tones + a
  * separator) so the compositor does representative per-cell work every frame.
- * (the purge) replaced the previously-used DocsPanel here — a migrated,
- * now-deleted panel — with this bench-local implementation so the perf bench
+ * (the purge) replaced the previously-used DocsPanel here, a migrated,
+ * now-deleted panel, with this bench-local implementation so the perf bench
  * never breaks when a domain panel is retired.
  */
 /**
  * Category the bench panels register under. Typed as PanelCategory so a future
  * rename of the category union fails `bun run typecheck` here instead of at run
- * time — the string literal 'system' used to sit inline and had already gone
+ * time, the string literal 'system' used to sit inline and had already gone
  * stale when the union was split into the current nine categories.
  */
 const BENCH_PANEL_CATEGORY: PanelCategory = 'runtime-ops';
@@ -320,7 +320,7 @@ function createBenchPanel(id: string, name: string, icon: string): Panel {
           continue;
         }
         const line = createEmptyLine(width);
-        const text = `  ${name} row ${row}: composite benchmark content — mixed tokens, glyphs, and padding fill`;
+        const text = `  ${name} row ${row}: composite benchmark content, mixed tokens, glyphs, and padding fill`;
         const fg = palette[row % palette.length]!;
         for (let x = 0; x < text.length && x < width; x++) {
           line[x] = createStyledCell(text[x]!, { fg, bold: row % 5 === 0 });
@@ -412,7 +412,7 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
   // --- transcript.resize_1k (width change invalidates everything) -----
   // A resize changes the render width, which is part of every message's cache
   // key, so it invalidates all 1000 messages and pays a near-full re-render. We
-  // toggle between two widths each iteration so no rebuild can reuse the cache —
+  // toggle between two widths each iteration so no rebuild can reuse the cache,
   // the honest cost of a resize on a large transcript.
   {
     const seed = buildMixedConversation(transcriptMessages);
@@ -485,7 +485,7 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
 
   // --- codeblock.regex (fallback tokenizer, cache-miss / streaming path) ------
   // Each iteration renders a UNIQUE variant so the shared tree-sitter cache never
-  // hits — exercising the regex fallback tokenizer every time (the cold path a
+  // hits, exercising the regex fallback tokenizer every time (the cold path a
   // streaming code block takes before tree-sitter warms).
   {
     let n = 0;
@@ -508,7 +508,7 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
 
   // --- codeblock.treesitter (parsed cache-hit path, settled render) ----------
   // Warm the shared highlighter cache for one fixed sample, then measure repeated
-  // renders of that SAME sample — every call is a tree-sitter cache hit.
+  // renders of that SAME sample, every call is a tree-sitter cache hit.
   {
     const warmCode = CODE_SAMPLE_TS;
     const flatten = (ls: Line[]) => ls.map((l) => l.map((c) => c.fg).join(',')).join('|');

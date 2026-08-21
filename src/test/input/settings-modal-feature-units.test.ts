@@ -1,9 +1,9 @@
 /**
  * Feature-unit presentation in the settings modal.
  *
- * Every platform capability renders as ONE unit in its settings DOMAIN — the
+ * Every platform capability renders as ONE unit in its settings DOMAIN, the
  * feature's real enablement row as a named header plus the settings keys that
- * tune it — sourced from the SDK's FEATURE_SETTINGS surface. This locks:
+ * tune it, sourced from the SDK's FEATURE_SETTINGS surface. This locks:
  *   - every feature is reachable in the settings structure;
  *   - a header IS the real config row for its enablement key (boolean toggle
  *     or enum mode choices), never a synthetic key;
@@ -34,7 +34,7 @@ function makeTmpDir(): string {
 /** Every enablement key in the feature surface (some are shared by two features). */
 const ENABLEMENT_KEYS = new Set(FEATURE_SETTINGS.map((feature) => feature.enablement.key));
 
-describe('settings modal — feature units', () => {
+describe('settings modal: feature units', () => {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
   let tmpDir: string;
@@ -77,7 +77,7 @@ describe('settings modal — feature units', () => {
     for (const feature of FEATURE_SETTINGS) {
       expect(headers.has(feature.id)).toBe(true);
     }
-    // Exactly one header per feature — features sharing an enablement key
+    // Exactly one header per feature, features sharing an enablement key
     // (both compaction strategies, both telemetry modes) each keep their own.
     let headerCount = 0;
     for (const entries of groups.values()) headerCount += entries.filter((e) => e.flag).length;
@@ -134,7 +134,7 @@ describe('settings modal — feature units', () => {
     }
 
     // Within each key's HOME (namespace) category, an owned key appears exactly
-    // once, as a sub-option under its unit — never as an un-owned orphan row.
+    // once, as a sub-option under its unit, never as an un-owned orphan row.
     // The 'network' category is a deliberate combined cross-list view of
     // controlPlane/httpListener/web keys; it is not any key's home category,
     // so it is excluded from the double-listing rule.

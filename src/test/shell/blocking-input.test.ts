@@ -75,7 +75,7 @@ describe('shell/blocking-input', () => {
     expect(rendered).toBe(1);
   });
 
-  test('escape drops focus only — passes through to input, keeps the card pending, never denies', () => {
+  test('escape drops focus only: passes through to input, keeps the card pending, never denies', () => {
     const resolved: Array<[boolean, boolean | undefined]> = [];
     const { conversation } = makeConversation();
     const { router } = makeRouter();
@@ -155,11 +155,11 @@ describe('shell/blocking-input', () => {
 
 
   // ---------------------------------------------------------------------------
-  // Hunk-mode routing — pendingPermission.hunkState present.
+  // Hunk-mode routing, pendingPermission.hunkState present.
   //
   // Every non-hunk-mode test above passes `pendingPermission` objects with no
   // `hunkState` property, so they exercise the exact same y/a/n switch as
-  // before this change — the regression safety net this suite is pinning.
+  // before this change, the regression safety net this suite is pinning.
   // ---------------------------------------------------------------------------
   describe('hunk-mode routing (pendingPermission.hunkState present)', () => {
     function makeHunkPending(overrides?: {
@@ -305,7 +305,7 @@ describe('shell/blocking-input', () => {
         render: () => {},
       });
 
-      // Must NOT resolve (that would be the outer "remember" path) — hunk mode
+      // Must NOT resolve (that would be the outer "remember" path), hunk mode
       // fully preempts the outer switch (Risk 1).
       expect(resolveCalls).toHaveLength(0);
       const hunkState = (result.pendingPermission as unknown as { hunkState: { selected: Set<number> } }).hunkState;

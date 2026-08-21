@@ -1,16 +1,16 @@
 /**
- * voice-stt-gateway.ts — speech-to-text for captured audio.
+ * voice-stt-gateway.ts, speech-to-text for captured audio.
  *
  * Both voice consumers end here: push-to-talk hands over what the user just
  * said, and a confirmed wake hands over the utterance that followed it. The
- * transcription itself is the daemon's, not this process's — `voice.stt`
+ * transcription itself is the daemon's, not this process's, `voice.stt`
  * (POST /api/voice/stt) transcribes an audio artifact through whichever voice
  * provider is registered, including the managed local whisper that
  * `/voice setup` provisions.
  *
  * The verb has no named facade on the in-process OperatorClient, so it goes over
  * the generic operator invoke path exactly like the voice PROVISIONING verbs do
- * (see core/voice-provision-gateway.ts) — same daemon, same resolution, same
+ * (see core/voice-provision-gateway.ts), same daemon, same resolution, same
  * honest refusal reasons up front rather than a throw mid-capture.
  */
 
@@ -20,7 +20,7 @@ import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
 import type { UtteranceAudioArtifact } from '@pellux/goodvibes-sdk/platform/voice';
 import { resolveOperatorRpc, describeOperatorRpcError } from '../input/commands/operator-rpc.ts';
 
-/** voice.stt output — the recognised text plus the provider that produced it. */
+/** voice.stt output, the recognised text plus the provider that produced it. */
 export type VoiceTranscriptionResult = OperatorMethodOutput<'voice.stt'>;
 
 /** The narrow verb surface a capture consumer needs. */
@@ -64,12 +64,12 @@ export function createVoiceSttGateway(deps: VoiceSttGatewayDeps): VoiceSttGatewa
 /**
  * Render a `voice.stt` rejection honestly. A 501 (the verb is cataloged but this
  * daemon has no voice provider wired behind it) and a 404 (an older daemon
- * without the route) are both "no transcription here" — distinct from a request
+ * without the route) are both "no transcription here", distinct from a request
  * that reached a provider and failed, which the user can act on differently.
  */
 export function describeTranscriptionFailure(error: unknown): string {
   if (error instanceof GoodVibesSdkError && (error.status === 501 || error.status === 404)) {
-    return 'this daemon has no speech-to-text provider wired up — run /voice setup to provision the managed local runtime.';
+    return 'this daemon has no speech-to-text provider wired up; run /voice setup to provision the managed local runtime.';
   }
   return describeOperatorRpcError(error);
 }

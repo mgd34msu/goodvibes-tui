@@ -1,9 +1,9 @@
 /**
- * selection-modal-queue.ts — Serializes overlapping InputHandler.openSelection() calls.
+ * selection-modal-queue.ts, Serializes overlapping InputHandler.openSelection() calls.
  *
  * openSelection (handler.ts) writes into a singleton SelectionModal plus a
  * single callback slot. A second openSelection call while one is already
- * showing used to silently overwrite both — the pre-empted caller's callback
+ * showing used to silently overwrite both, the pre-empted caller's callback
  * was never invoked, not even with null, so any caller that awaits it (see
  * the `ask()` helper in runtime/recovery-prompt.ts, which wraps the callback
  * in a Promise) hung forever. This is reachable in production: the
@@ -13,12 +13,12 @@
  *
  * Fix: queue overlapping requests FIFO and open each automatically once the
  * previous one resolves, through the SAME callback the caller already
- * supplied — openSelection's public signature never changes.
+ * supplied, openSelection's public signature never changes.
  *
  * Why the drain is deferred to a microtask instead of running inline inside
- * the resolving callback: both resolution paths — the select/enter path in
+ * the resolving callback: both resolution paths, the select/enter path in
  * handler-modal-routes.ts's dispatchSelectionAction, and the Escape path in
- * handler-modal-stack.ts's handleEscape/closeSelection — take a snapshot of
+ * handler-modal-stack.ts's handleEscape/closeSelection, take a snapshot of
  * the current selectionCallback before dispatch and write some form of that
  * snapshot back into handler/context state AFTER invoking the callback (the
  * select path re-reads via getSelectionCallback; the Escape path threads a
@@ -28,7 +28,7 @@
  * write-backs would immediately clobber the freshly-set callback for the
  * newly-opened modal. Deferring past the end of the synchronous resolution
  * (queueMicrotask) lets all of that settle first, then opens the next
- * request cleanly — the same shape as the production race this fixes, which
+ * request cleanly, the same shape as the production race this fixes, which
  * itself resolves via a deferred (macrotask) call.
  */
 import type { SelectionItem, SelectionAction, SelectionResult, SelectionModal } from './selection-modal.ts';
@@ -55,7 +55,7 @@ export interface PendingSelectionRequest {
  * modal vs. the recovery offer's 0ms macrotask), so 8 is generous headroom
  * for any future chained-picker sequence without letting a misbehaving
  * caller queue without bound. Once full, the overflowing call is resolved
- * with `null` immediately — a bounded queue must still give every caller a
+ * with `null` immediately, a bounded queue must still give every caller a
  * definite answer, never silently drop one.
  */
 export const MAX_QUEUED_SELECTIONS = 8;
@@ -115,7 +115,7 @@ export class SelectionModalQueue {
     const wrapped: SelectionModalCallback = (result) => {
       request.callback(result);
       // Only a terminal resolution (select/cancel/escape) actually closes
-      // the modal — dispatchSelectionAction's toggle/increment/decrement
+      // the modal, dispatchSelectionAction's toggle/increment/decrement
       // branch invokes the callback but leaves the modal open for further
       // interaction, so only drain the queue once the modal has gone
       // inactive, never on every callback invocation.
@@ -133,7 +133,7 @@ export class SelectionModalQueue {
   private drain(): void {
     // Something else already opened a modal in the meantime (e.g. a
     // synchronously chained openSelection call from inside the resolving
-    // callback) — leave the queue alone; that modal's own resolution will
+    // callback), leave the queue alone; that modal's own resolution will
     // drain it in turn.
     if (this.host.selectionModal.active) return;
     const next = this.pending.shift();
@@ -142,7 +142,7 @@ export class SelectionModalQueue {
   }
 }
 
-/** InputHandler's actual field/method shape — satisfies this structurally, no import needed. */
+/** InputHandler's actual field/method shape, satisfies this structurally, no import needed. */
 export interface SelectionQueueOwner {
   readonly selectionModal: Pick<SelectionModal, 'active' | 'open'>;
   selectionCallback: SelectionModalCallback | null;

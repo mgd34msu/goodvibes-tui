@@ -1,5 +1,5 @@
 /**
- * KeybindingsManager — loads and merges keyboard shortcut configuration.
+ * KeybindingsManager, loads and merges keyboard shortcut configuration.
  *
  * Default bindings are hardcoded here. Users can override any binding by
  * creating ~/.goodvibes/tui/keybindings.json.
@@ -119,7 +119,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'toggle-keep-awake':     'Toggle keep-awake (the "sleep disabled" chip)',
   'toggle-memory-provenance': 'List/hide the memories a turn used (provenance chip drill-in)',
   // Named for what it actually does. A terminal delivers key EVENTS, not held-key
-  // state — there is no release event to watch — so this is two discrete presses,
+  // state, there is no release event to watch, so this is two discrete presses,
   // and the description says so instead of implying a hold that cannot exist.
   'voice-input':           'Voice input: press to start recording, press again to stop and transcribe into the composer',
 };
@@ -138,7 +138,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-close-all':         [{ key: 'x', ctrl: true, shift: true }],
   // Ctrl+] stays the primary next-tab chord; Ctrl+PageDown is added as a second
   // binding. Ctrl+[ was REMOVED as prev-tab: it is byte 0x1B (ESC), so the
-  // legacy tokenizer path emits it as 'escape' — the binding never matched on
+  // legacy tokenizer path emits it as 'escape', the binding never matched on
   // most terminals AND the key fired Escape (a split-brain chord). Ctrl+PageUp
   // replaces it: Ctrl+PageUp/PageDown tokenize consistently (\x1b[5;5~ /
   // \x1b[6;5~ -> pageup/pagedown ctrl:true) in both the legacy and CSI-u paths.
@@ -158,7 +158,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-tab-8':           [{ key: '8', alt: true }],
   'panel-tab-9':           [{ key: '9', alt: true }],
   // Ctrl+O: TOGGLE the Fleet panel (open+focus / bring-to-front+focus / close
-  // — see toggleFleetPanel in handler-shortcuts.ts). The former Ops
+  //, see toggleFleetPanel in handler-shortcuts.ts). The former Ops
   // Control panel was retired to an 'ops-control' -> 'fleet' alias; the
   // binding is KEPT (repointed, not removed) so the Ctrl+O muscle memory still
   // lands somewhere useful. Routed globally in handleGlobalShortcutToken.
@@ -185,7 +185,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'undo':                  [{ key: 'z', ctrl: true }],
   'redo':                  [{ key: 'z', ctrl: true, shift: true }],
   'paste':                 [{ key: 'v', ctrl: true }],
-  // Word navigation (Alt+B / Alt+F — emacs readline standard)
+  // Word navigation (Alt+B / Alt+F, emacs readline standard)
   'word-back':             [{ key: 'b', alt: true }],
   'word-forward':          [{ key: 'f', alt: true }],
   // Kill-ring operations.
@@ -214,7 +214,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'toggle-memory-provenance': [{ key: 'm', alt: true }],
   // Alt+V: start/stop voice input. Alt+V is unused by any other default (Ctrl+V
   // is paste and stays paste). Two presses rather than a hold: see the action's
-  // description — a terminal has no key-release event to hold against.
+  // description, a terminal has no key-release event to hold against.
   'voice-input':           [{ key: 'v', alt: true }],
 };
 
@@ -243,7 +243,7 @@ function resolveKeybindingsPath(options?: KeybindingsManagerOptions): string {
 }
 
 /**
- * KeybindingsManager — owns the resolved keybinding table.
+ * KeybindingsManager, owns the resolved keybinding table.
  *
  * Call loadFromDisk() once at startup (in main.ts) to merge user config.
  * Then use matches() anywhere a key token is being evaluated.
@@ -304,7 +304,7 @@ export class KeybindingsManager {
   }
 
   /**
-   * buildLookupMap — Rebuild the inverted lookup map from the current bindings table.
+   * buildLookupMap, Rebuild the inverted lookup map from the current bindings table.
    * Called after constructor init and after loadFromDisk().
    * Map key format: "logicalName:ctrl:shift:alt" (booleans as 0/1).
    * Last writer wins for duplicate combos (deterministic: iterate actions in order).
@@ -320,7 +320,7 @@ export class KeybindingsManager {
   }
 
   /**
-   * lookup — O(1) keybinding lookup by token.
+   * lookup, O(1) keybinding lookup by token.
    * Returns the matching KeyAction, or null if no binding matches.
    */
   lookup(token: { logicalName?: string; ctrl?: boolean; shift?: boolean; alt?: boolean; meta?: boolean }): KeyAction | null {
@@ -342,7 +342,7 @@ export class KeybindingsManager {
   }
 
   /**
-   * matches — Check whether a keyboard token matches the given action.
+   * matches, Check whether a keyboard token matches the given action.
    *
    * @param action  The action to test.
    * @param token   The parsed keyboard token from InputTokenizer.
@@ -370,7 +370,7 @@ export class KeybindingsManager {
   }
 
   /**
-   * getAll — Return the full resolved binding table for display purposes.
+   * getAll, Return the full resolved binding table for display purposes.
    */
   getAll(): Array<{ action: KeyAction; combos: KeyCombo[]; description: string }> {
     return (Object.keys(this.bindings) as KeyAction[]).map((action) => ({
@@ -381,7 +381,7 @@ export class KeybindingsManager {
   }
 
   /**
-   * getComboLabel — Return a human-readable label for the first combo of an action.
+   * getComboLabel, Return a human-readable label for the first combo of an action.
    * Example: { key: 'f', ctrl: true } → "Ctrl+F"
    */
   getComboLabel(action: KeyAction): string {
@@ -391,7 +391,7 @@ export class KeybindingsManager {
   }
 
   /**
-   * formatCombo — Format a KeyCombo as a human-readable string.
+   * formatCombo, Format a KeyCombo as a human-readable string.
    */
   formatCombo(combo: KeyCombo): string {
     const parts: string[] = [];

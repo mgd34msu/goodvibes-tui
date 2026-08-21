@@ -15,7 +15,7 @@ const settle = async (): Promise<void> => {
  *
  * Replaces "sleep a fixed 70 ms and then assert a keepalive beat has landed".
  * The keepalive's own cadence is 15 ms here, so on an idle machine 70 ms is
- * four beats of headroom — but the beat has to travel through the transport and
+ * four beats of headroom, but the beat has to travel through the transport and
  * be recorded, and how long that takes on a machine running dozens of other
  * test processes is not something a fixed sleep can know. The poll returns on
  * the first beat, so a fast host is no slower than before, and the ceiling is
@@ -25,7 +25,7 @@ async function waitUntil(predicate: () => boolean, what: string, budgetMs = 30_0
   const deadline = Date.now() + budgetMs;
   while (!predicate()) {
     if (Date.now() > deadline) {
-      throw new Error(`waitUntil: ${what} never became true — waited ${budgetMs}ms`);
+      throw new Error(`waitUntil: ${what} never became true; waited ${budgetMs}ms`);
     }
     await new Promise<void>((r) => setTimeout(r, 5));
   }
@@ -57,7 +57,7 @@ function makeSessionRecord(id: string, overrides: Partial<SharedSessionRecord> =
   };
 }
 
-/** A controllable fake SpineSessionsClient — resolves/rejects on command. */
+/** A controllable fake SpineSessionsClient, resolves/rejects on command. */
 function makeFakeSessionsClient(): {
   readonly client: SpineSessionsClient;
   readonly calls: CapturedCall[];
@@ -99,7 +99,7 @@ describe('SessionSpineClient dormant-until-activated', () => {
     expect(() => client.close('s1')).not.toThrow();
     expect(client.status()).toBe('unknown');
     // register (s1), reopen (s2) queued; close(s1) removes s1's cached heartbeat
-    // record but still enqueues its own close op — both survive as queued ops.
+    // record but still enqueues its own close op, both survive as queued ops.
     expect(client.pendingOps).toBeGreaterThan(0);
     client.dispose();
   });
@@ -141,7 +141,7 @@ describe('SessionSpineClient fire-and-forget latency contract', () => {
     // the fixture: `fake.mode = 'pending'` never resolves, so a call site that
     // awaited would hang here and fail on the test budget, not merely be slow.
     // This bound is the secondary sanity check, and 20 ms was a number only an
-    // idle machine can promise — four synchronous calls can straddle a
+    // idle machine can promise, four synchronous calls can straddle a
     // descheduling on a busy host. Widened to a value that still separates
     // "returned immediately" from any real wire round trip.
     expect(elapsedMs).toBeLessThan(1_000);
@@ -175,9 +175,9 @@ describe('SessionSpineClient offline queue / reconnect', () => {
 
     fake.mode = 'succeed';
     // Any further op triggers a flush attempt (this test exercises heartbeat as
-    // the trigger — bootstrap.ts's render-tick heartbeat is the real trigger).
+    // the trigger, bootstrap.ts's render-tick heartbeat is the real trigger).
     // heartbeat() itself dispatches ITS OWN register call (fresh lastSeenAt)
-    // AND, on success, flushes the queue — so the originally-queued register
+    // AND, on success, flushes the queue, so the originally-queued register
     // replays once more alongside it. Net: 1 failed (queued) + 1 heartbeat +
     // 1 flushed replay of the queued op = 3, and critically the queue drains
     // to zero with no duplicate flood on subsequent flushes.
@@ -361,7 +361,7 @@ describe('foldLegacySpineStore', () => {
     // A marker's mere existence is no longer trusted: an interrupted write used
     // to strand the legacy store forever. Only a marker that asserts its own
     // completion short-circuits, so the pre-completion-flag shape below folds
-    // again — a one-time, idempotent re-register (the legacy file never changes
+    // again, a one-time, idempotent re-register (the legacy file never changes
     // again, and register is an upsert) that then writes a marker which does
     // assert completion.
     const storePath = join(root, 'sessions.json');
@@ -425,7 +425,7 @@ describe('SessionSpineClient timer-driven keepalive (surface never goes stale mi
     await settle();
     client.dispose();
     // Settle first so a beat that was already in flight when dispose() ran is
-    // recorded BEFORE the baseline is taken — otherwise the assertion below
+    // recorded BEFORE the baseline is taken, otherwise the assertion below
     // could count a pre-dispose beat as a post-dispose one purely because the
     // machine was busy. What is being proven is that no NEW beat is produced.
     await settle();

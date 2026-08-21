@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // panel-manager-tabs-cache.test.ts
-// β1: PanelManager.getWorkspaceTabs() cache — same reference on repeated calls,
+// β1: PanelManager.getWorkspaceTabs() cache, same reference on repeated calls,
 // broken on lifecycle mutations.
 // ---------------------------------------------------------------------------
 

@@ -96,7 +96,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   // after any resume seam replays historical messages into `conversation`,
   // the freshly-constructed `orchestrator` still has its zeroed default usage
-  // (SDK gap — Orchestrator.usage is never persisted/reseeded). Recompute it
+  // (SDK gap, Orchestrator.usage is never persisted/reseeded). Recompute it
   // from the replayed history so the footer doesn't show Input: 0 post-resume.
   const hydrateSessionUsage = (): void => {
     const { usage, lastInputTokens } = sumConversationUsage(conversation.getMessageSnapshot());
@@ -105,7 +105,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
   };
   // Built before resumeSession below so its providerApi.selectModel is
   // available for the resume handler's model-reselection step (matches
-  // session-workflow.ts's /session resume — see core/session-resume-core.ts).
+  // session-workflow.ts's /session resume, see core/session-resume-core.ts).
   const foundationClients = createRuntimeFoundationClients({
     runtimeServices: services,
     tasksReadModel: uiServices.readModels.tasks,
@@ -156,7 +156,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   // initial cost-budget alert threshold (USD; 0/unset = disabled).
   // Once the session starts, the real control surface is the CostTrackerPanel
-  // itself — the in-panel 'b' key and /cost budget <usd> both call
+  // itself, the in-panel 'b' key and /cost budget <usd> both call
   // CostTrackerPanel.setBudgetThreshold() directly on the live panel instance,
   // which now writes through to the behavior.budgetAlertUsd config key
   // so the background budget-breach notifier reads the same value. The env
@@ -221,7 +221,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     openPanel: (panelId: string) => { services.panelManager.open(panelId); },
     knowledgeApi,
     // Fleet acts (pick / conflict / discard) surface receipts through the command
-    // context's print and reuse its one-key jump affordance — both late-bound
+    // context's print and reuse its one-key jump affordance, both late-bound
     // (the command context is assigned to commandContextRef after bootstrap, and
     // main.ts patches armFixSessionAttach onto it).
     fleetActsNotify: (message: string) => { commandContextRef?.print?.(message); requestRender(); },
@@ -239,7 +239,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     },
     {
       // Suppress stale WRFC replay re-notifications for chains that can no
-      // longer act — gone (killed/removed → getChain null) or terminal
+      // longer act, gone (killed/removed → getChain null) or terminal
       // (passed/failed). (item 1c.)
       isChainTerminal: (chainId) => {
         const chain = services.wrfcController.getChain(chainId);
@@ -286,7 +286,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     workspaceTrustManager: services.workspaceTrustManager,
     // Registration half is stateless (reads the shared registry on demand), so
     // it is constructed here for the command context rather than threaded through
-    // RuntimeServices — no early-load requirement like the trust gate has.
+    // RuntimeServices, no early-load requirement like the trust gate has.
     workspaceRegistrationManager: new WorkspaceRegistrationManager({ shellPaths: services.shellPaths }),
     memoryRegistry: services.memoryRegistry,
     integrationHelpers: services.integrationHelpers,
@@ -322,7 +322,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     isPassiveCodeInjectionFlagEnabled: () => services.featureFlags.isEnabled('agent-passive-code-injection'),
     featureFlagManager: services.featureFlags,
     // Expose the MAIN session's per-turn passive-injection ring
-    // so `/recall injections` (no agent id) renders it — see recall-review.ts.
+    // so `/recall injections` (no agent id) renders it, see recall-review.ts.
     getMainSessionTurnInjections: () => orchestrator.getTurnInjections(),
     changeTracker: services.sessionChangeTracker,
     planManager: services.planManager,
@@ -347,7 +347,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     activatePlan: (_planId, task) => {
       setTimeout(() => {
         void (async () => {
-          // Refresh the recall snapshot before this plan-driven turn — see
+          // Refresh the recall snapshot before this plan-driven turn, see
           // the matching comment in main.ts's submitInput.
           await refreshMemoryRecallSnapshot(services);
           orchestrator.handleUserInput(task).catch((err) => {
@@ -370,7 +370,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
   }).catch(() => { /* non-fatal */ });
   // FIX 2: the header's git segment otherwise only refreshes on
   // TURN_COMPLETED/TOOL_SUCCEEDED/TOOL_FAILED (see turn-event-wiring.ts's
-  // refreshGit()) — if the user runs `git init` externally and never submits
+  // refreshGit()), if the user runs `git init` externally and never submits
   // another turn, the header stays stuck on the startup-time fallback
   // indefinitely. Poll at the same 5s cadence GitPanel already uses for its
   // own self-poll (git-panel.ts) so the two mechanisms are cadence-consistent.

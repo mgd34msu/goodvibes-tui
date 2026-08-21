@@ -1,5 +1,5 @@
 /**
- * Composition-parity gate — pins the wiring facts this app's composition root
+ * Composition-parity gate, pins the wiring facts this app's composition root
  * must keep, now that it is a CLIENT of the daemon rather than a second copy of
  * one.
  *
@@ -8,9 +8,9 @@
  * value to inspect, so a source pin is the honest, deterministic way to catch a
  * composition that silently drops one of them.
  *
- * The daemon-side half of this gate — that the standalone daemon observes
+ * The daemon-side half of this gate, that the standalone daemon observes
  * foreign agents, opts into the real host power seam, and provisions the wake
- * model at boot — went with the daemon to its own repository, where those
+ * model at boot, went with the daemon to its own repository, where those
  * compositions now live. What is pinned here is the client posture: this
  * process observes nothing, serves nothing, and composes its turn over the
  * SDK's client shape.
@@ -41,8 +41,8 @@ function createRuntimeServicesCallArgs(source: string): string {
   throw new Error('unbalanced createRuntimeServices call braces');
 }
 
-describe('composition parity — observed foreign-agent detection is daemon-side only', () => {
-  test('nothing in this repository observes foreign agents — that scan is the daemon\'s', () => {
+describe('composition parity: observed foreign-agent detection is daemon-side only', () => {
+  test('nothing in this repository observes foreign agents; that scan is the daemon\'s', () => {
     // Observed detection scans the real process table and tmux. Two processes
     // doing it produces two rows for one agent, which is why it was always
     // daemon-only; with the daemon extracted, this repository must not carry
@@ -56,13 +56,13 @@ describe('composition parity — observed foreign-agent detection is daemon-side
   });
 
   test('this composition passes the fleet helper no observed-agent source at all', () => {
-    // The helper still SUPPORTS the opt-in — the daemon composes it — but this
+    // The helper still SUPPORTS the opt-in, the daemon composes it, but this
     // client must never pass it, or one agent is counted twice.
     expect(read('src/runtime/services.ts')).not.toContain('observeExternalAgents:');
   });
 });
 
-describe('composition parity — the durability helper is fed what its sweep needs', () => {
+describe('composition parity: the durability helper is fed what its sweep needs', () => {
   test('services.ts feeds the durability helper the sweep roots', () => {
     const services = read('src/runtime/services.ts');
     expect(services).toContain('surfaceRoot:');
@@ -70,7 +70,7 @@ describe('composition parity — the durability helper is fed what its sweep nee
   });
 });
 
-describe('composition parity — memory governance is composed (governor default ON, real caches, pausable jobs)', () => {
+describe('composition parity: memory governance is composed (governor default ON, real caches, pausable jobs)', () => {
   const services = read('src/runtime/services.ts');
 
   test('the CacheRegistry, PauseController and the deferrable job ids are built EARLY (before the schedulers that consult them)', () => {
@@ -90,7 +90,7 @@ describe('composition parity — memory governance is composed (governor default
     // ops.memory.get is answered by the DAEMON's governor, over the wire. This
     // process keeps a governor of its own because it holds real caches (the
     // knowledge stores, the session broker) and has to defend its own
-    // footprint — but it never advertises one.
+    // footprint, but it never advertises one.
     expect(services).not.toContain('attachWsOnlyGatewayVerbHandlers(');
   });
 
@@ -121,9 +121,9 @@ describe('composition parity — memory governance is composed (governor default
   });
 });
 
-describe('composition parity — host power seam is opt-in (non-spawning default)', () => {
+describe('composition parity: host power seam is opt-in (non-spawning default)', () => {
   // SDK 1.9.0's wireRuntimePower defaults an ABSENT seam to the real host seam
-  // (createHostPowerSeam — spawns systemd-inhibit + a dbus-monitor sleep-edge
+  // (createHostPowerSeam, spawns systemd-inhibit + a dbus-monitor sleep-edge
   // watcher). That host-level spawn must never fire on a test-constructed
   // runtime, so the fork mirrors the SDK's own createRuntimeServices: default to
   // the non-spawning unavailable seam, and only the real long-lived compositions
@@ -134,7 +134,7 @@ describe('composition parity — host power seam is opt-in (non-spawning default
     expect(services).toContain('powerSeam: options.powerSeam');
   });
 
-  test('this app opts into the real host seam too — a long-lived terminal inhibits idle for its own turns', () => {
+  test('this app opts into the real host seam too; a long-lived terminal inhibits idle for its own turns', () => {
     // The daemon's opt-in went with the daemon. This one stays: a running turn
     // in this terminal is exactly as much a reason not to suspend the machine.
     expect(createRuntimeServicesCallArgs(read('src/runtime/bootstrap-core.ts'))).toContain('powerSeam: createHostPowerSeam()');
@@ -146,10 +146,10 @@ describe('composition parity — host power seam is opt-in (non-spawning default
   });
 });
 
-describe('composition parity — wake-model boot provisioning is opt-in, like the power seam', () => {
+describe('composition parity: wake-model boot provisioning is opt-in, like the power seam', () => {
   // The wake-word model arrives with the installation, and the daemon retries at
   // boot for whatever the install could not get. That retry does network I/O and
-  // starts an hourly recovery sweep, so it must be an explicit opt-in — the same
+  // starts an hourly recovery sweep, so it must be an explicit opt-in, the same
   // treatment the host power seam gets, for the same reason: a test composing this
   // graph, and a one-shot CLI command, must fetch nothing and start no timer.
   test('the wake model is provisioned by whoever LISTENS, which is this process', () => {
@@ -158,7 +158,7 @@ describe('composition parity — wake-model boot provisioning is opt-in, like th
     expect(createRuntimeServicesCallArgs(read('src/runtime/bootstrap-core.ts'))).toContain('provisionWakeModelsAtBoot: true');
   });
 
-  test('the embedded interactive runtime opts in — it IS the daemon in that topology', () => {
+  test('the embedded interactive runtime opts in; it IS the daemon in that topology', () => {
     expect(createRuntimeServicesCallArgs(read('src/runtime/bootstrap-core.ts'))).toContain('provisionWakeModelsAtBoot: true');
   });
 

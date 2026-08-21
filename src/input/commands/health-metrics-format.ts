@@ -28,12 +28,12 @@ export function renderMetricMap(label: string, map: Record<string, unknown> | un
 
 /**
  * When a telemetry verb fails because the companion token lacks the required
- * scope, say exactly that — never render zeros in place of missing authority.
+ * scope, say exactly that, never render zeros in place of missing authority.
  * Returns the honest line, or null when the error is not a scope refusal.
  */
 export function telemetryScopeRefusalLine(error: unknown, what: string): string | null {
   if (error instanceof GoodVibesSdkError && (error.status === 401 || error.status === 403)) {
-    return `  ${what}: unavailable — the companion token lacks the read:telemetry scope this data requires (daemon returned ${error.status}).`;
+    return `  ${what}: unavailable; the companion token lacks the read:telemetry scope this data requires (daemon returned ${error.status}).`;
   }
   return null;
 }

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// fleet-attempt-badge.test.ts — a best-of-N sibling node renders its group
+// fleet-attempt-badge.test.ts, a best-of-N sibling node renders its group
 // badge on the fleet row (attempt index/total + held state).
 // ---------------------------------------------------------------------------
 

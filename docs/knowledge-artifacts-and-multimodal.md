@@ -1,4 +1,4 @@
-# Knowledge, Artifacts, and Multimodal
+# Knowledge, artifacts, and multimodal
 
 ## Context layers
 
@@ -52,11 +52,11 @@ The knowledge runtime supports:
 - consolidation candidates and reports
 - source-backed semantic ask answers with returned sources, facts, linked objects, gaps, confidence, and synthesized state
 
-The system is designed as a reviewed, self-improving knowledge substrate for future task context.
+The system is designed as a reviewed, self-improving knowledge store for future task context.
 
 Regular Knowledge/Wiki and Home Assistant Home Graph are separate runtime instances. Regular knowledge routes use the default Knowledge/Wiki store. Home Graph data is accessed through `/api/homeassistant/home-graph/*` and lives in the Home Graph store. Do not use `includeAllSpaces` as a way to browse Home Graph from the regular Knowledge/Wiki surface; Home Graph has its own browse, map, pages, ask, refinement, and review routes.
 
-## Semantic Ask
+## Semantic ask
 
 The SDK owns semantic question answering through:
 
@@ -78,7 +78,7 @@ TUI rendering should display the answer object returned by the SDK:
 
 Do not reformat search results into local answer snippets. The SDK response is the answer contract; the TUI only presents it.
 
-## Durable Refinement
+## Durable refinement
 
 SDK 0.28.0 adds durable semantic refinement tasks for the base knowledge layer. Refinement records preserve the gap, subject, state, trace, source assessments, blocked reasons, accepted facts, rejected evidence, and follow-up state so clients can explain what the knowledge system attempted instead of only reporting "skipped".
 
@@ -103,7 +103,7 @@ Use these SDK routes directly for task inspection and manual repair runs. Do not
 
 The TUI daemon runtime wires SDK semantic refinement to the SDK web gap repairer. Gap repair uses the configured GoodVibes web search providers for source discovery and the knowledge ingest service for accepted repair sources. If web search providers are unavailable or disabled, tasks may still become blocked by search/provider readiness, but they should not report `No semantic gap repairer is configured`.
 
-## Issue Review
+## Issue review
 
 Knowledge issues can be reviewed through the local TUI command and the daemon/operator surfaces:
 
@@ -167,7 +167,7 @@ running binary. Every install channel ships it:
 - **The pure-binary installer** (`curl -fsSL https://goodvibes.sh/install.sh | sh`)
   downloads the platform's addon as a checksum-verified release asset
   (`sqlite-vec-<os>-<arch>.<suffix>`, covered by `SHA256SUMS.txt`) and places it
-  in `lib/` next to `goodvibes`, `goodvibes-daemon`, and `goodvibes-agent` — one
+  in `lib/` next to `goodvibes`, `goodvibes-daemon`, and `goodvibes-agent`. One
   copy serves all three. `/update` refreshes it in the same download-verify-swap
   pass as the binaries, so it never goes stale beside a new build. Set
   `GOODVIBES_VECTOR=0` to skip installing it.
@@ -177,7 +177,7 @@ ships with extension loading disabled. The addon is still installed for
 consistency (and would work if a future runtime lifts the limit), but the
 runtime reports the vector index as unavailable and memory search degrades to
 literal matching. This is a permanent platform capability limit, not a
-packaging defect — `/recall vector status` names the reason plainly. Linux
+packaging defect. `/recall vector status` names the reason plainly. Linux
 (including WSL2) has no such restriction.
 
 ## GraphQL and projections

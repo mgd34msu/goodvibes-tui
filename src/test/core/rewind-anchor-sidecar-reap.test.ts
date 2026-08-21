@@ -1,5 +1,5 @@
 /**
- * Tests for reapOrphanedAnchorSidecars — the owner of a `<id>.anchors.json`
+ * Tests for reapOrphanedAnchorSidecars, the owner of a `<id>.anchors.json`
  * sidecar is the `<id>.jsonl` session file beside it. Deleting a session
  * removed the JSONL but nothing ever removed the sidecar, so anchors for
  * sessions that no longer exist used to persist forever.
@@ -48,7 +48,7 @@ function ageTo(path: string, msAgo: number): void {
 
 /**
  * Write a valid sidecar for `sessionId`, optionally with its owning session
- * file. Aged past the settle window by default so it is a reap candidate — a
+ * file. Aged past the settle window by default so it is a reap candidate, a
  * freshly written sidecar is deliberately out of the sweep's reach.
  */
 function putSidecar(sessionId: string, withSessionFile: boolean, ageMs = ANCHOR_SIDECAR_SETTLE_MS + 60_000): string {

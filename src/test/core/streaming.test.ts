@@ -49,7 +49,7 @@ describe('ConversationManager streaming block lifecycle', () => {
     cm.startStreamingBlock();
     expect(cm.getMessagesForLLM()).toHaveLength(2);
     cm.finalizeStreamingBlock();
-    // Only the user message remains — placeholder removed
+    // Only the user message remains, placeholder removed
     expect(cm.getMessagesForLLM()).toHaveLength(1);
   });
 

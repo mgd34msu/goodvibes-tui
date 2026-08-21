@@ -65,11 +65,11 @@ export type { OrchestratorUsageTotals };
 /**
  * sumConversationUsage - Fold every assistant message's per-turn usage into
  * running totals, plus the *last* assistant message's own input-token figure
- * (context-window occupancy — not a running sum).
+ * (context-window occupancy, not a running sum).
  *
  * TUI-side counterpart to SDK Orchestrator.usage: after a session resume
  * replays historical messages into a freshly-constructed Orchestrator (whose
- * `usage` starts at all zeros — bootstrap.ts always constructs a fresh
+ * `usage` starts at all zeros, bootstrap.ts always constructs a fresh
  * instance, see), this lets the caller hydrate the footer's token
  * counters from messages that already carry real usage data instead of
  * waiting for the first new turn to populate them.
@@ -118,9 +118,9 @@ export class ConversationManager extends SdkConversationManager {
   protected blockRegistry: BlockMeta[] = [];
   /**
    * Absolute message index -> first rendered line index in the history buffer.
-   * Keyed by the message's ABSOLUTE position in the full (unsliced) snapshot —
+   * Keyed by the message's ABSOLUTE position in the full (unsliced) snapshot,
    * appendConversationMessages writes `messageLineRegistry[absoluteIdx]`, not the
-   * slice-relative loop counter — so transcript-event navigation
+   * slice-relative loop counter, so transcript-event navigation
    * (next/prevTranscriptEventLine), whose event.messageIndex is absolute, resolves
    * correctly even after clearDisplay() renders only a tail slice. Holes (indices
    * not currently rendered) read back as undefined and are filtered out by consumers.
@@ -131,10 +131,10 @@ export class ConversationManager extends SdkConversationManager {
    * navigable (error-navigation worthy).
    *
    * Kind → navigable mapping:
-   *   - 'system'      YES — generic/catch-all messages (failures, provider errors,
+   *   - 'system'      YES, generic/catch-all messages (failures, provider errors,
    *                         session events); the default for any un-prefixed message
-   *   - 'wrfc'        YES — WRFC chain events (failures matter for navigation)
-   *   - 'operational' NO  — noisy tool/scan/plugin/MCP status; not worth jumping to
+   *   - 'wrfc'        YES, WRFC chain events (failures matter for navigation)
+   *   - 'operational' NO , noisy tool/scan/plugin/MCP status; not worth jumping to
    *
    * This replaces the old /error/i substring test, which missed failure phrases
    * like "request failed" / "rate limited" and false-positived on benign info
@@ -237,7 +237,7 @@ export class ConversationManager extends SdkConversationManager {
   /**
    * addTypedSystemMessage - System message with an explicit kind tag, stored
    * in messageKindRegistry. `isUserReceipt` (conversation-user-receipts.ts)
-   * additionally marks it for rebuildHistory()'s splash check — only for a
+   * additionally marks it for rebuildHistory()'s splash check, only for a
    * direct receipt to an explicit user action, never ambient boot chatter.
    */
   public addTypedSystemMessage(content: string, kind: SystemMessageKind, opts?: { isUserReceipt?: boolean }): void {
@@ -303,7 +303,7 @@ export class ConversationManager extends SdkConversationManager {
 
   /**
    * updateStreamingBlock - Update the in-progress streaming block with accumulated content.
-   * Called per-delta during streaming. Does NOT trigger a full rebuild — instead it
+   * Called per-delta during streaming. Does NOT trigger a full rebuild, instead it
    * directly updates the history buffer from streamingStartLine onward.
    */
   public override updateStreamingBlock(content: string): void {
@@ -445,7 +445,7 @@ export class ConversationManager extends SdkConversationManager {
   /**
    * getLineCacheSize - Number of per-message Line[] entries currently retained.
    * The cache mark-and-sweeps to the visible message set on every rebuild, so
-   * this is bounded by what is on screen — exposed for memory-hygiene assertions.
+   * this is bounded by what is on screen, exposed for memory-hygiene assertions.
    */
   public getLineCacheSize(): number {
     return this.lineCache.size;
@@ -471,7 +471,7 @@ export class ConversationManager extends SdkConversationManager {
     // During streaming, the in-progress placeholder (always the last message) is
     // rendered here as EMPTY; the incremental streaming path (updateStreamingBlock)
     // owns its content. This keeps streamingStartLine valid across width-change
-    // rebuilds — otherwise the placeholder would be re-rendered with its content at
+    // rebuilds, otherwise the placeholder would be re-rendered with its content at
     // the new width while streamingStartLine still pointed into the old buffer.
     const lastMsg = snapshot[snapshot.length - 1];
     const isStreaming = this.streamingStartLine >= 0 && lastMsg?.role === 'assistant';
@@ -480,7 +480,7 @@ export class ConversationManager extends SdkConversationManager {
       : snapshot;
 
     // When _displayFromMessageIndex > 0, clearDisplay() was called. Only render
-    // messages added after the clear — the pre-clear history stays off-screen.
+    // messages added after the clear, the pre-clear history stays off-screen.
     const displayStart = this._displayFromMessageIndex;
     const visibleSnapshot = displayStart > 0 ? renderSnapshot.slice(displayStart) : renderSnapshot;
 
@@ -657,14 +657,14 @@ export class ConversationManager extends SdkConversationManager {
 
   /** First rendered line for message `absoluteIdx` (undefined if never
    *  rendered). For a folded tool-group member this is the group's own
-   *  header line, not the following message's position — see
+   *  header line, not the following message's position, see
    *  messageLineRegistry's doc. Flushes history if dirty. */
   public getMessageLine(absoluteIdx: number): number | undefined {
     this.flushHistory();
     return this.messageLineRegistry[absoluteIdx];
   }
 
-  /** Set a collapseKey's state directly, bypassing block lookup — needed for
+  /** Set a collapseKey's state directly, bypassing block lookup, needed for
    *  a key with no BlockMeta yet (a folded tool-group member's own
    *  `msg_<idx>` key only becomes a real block once its group expands). */
   public setCollapsed(collapseKey: string, collapsed: boolean): void {
@@ -726,7 +726,7 @@ export class ConversationManager extends SdkConversationManager {
     this.markDirty();
   }
 
-  /** Retire the splash for the run — any submission does it (SplashGateState). */
+  /** Retire the splash for the run, any submission does it (SplashGateState). */
   public dismissSplash(): void {
     if (this.splashGate.dismiss()) this.markDirty();
   }
@@ -772,7 +772,7 @@ export class ConversationManager extends SdkConversationManager {
    *
    * Contract:
    * - getDisplayBlocks() returns an empty array immediately after this call.
-   * - getMessageSnapshot() is unaffected — full LLM history is preserved.
+   * - getMessageSnapshot() is unaffected, full LLM history is preserved.
    * - resetAll() (which clears both display and messages) continues to work.
    * - rebuildHistory() can be called by callers that need a full display rebuild.
    */
@@ -792,7 +792,7 @@ export class ConversationManager extends SdkConversationManager {
     this._displayFromMessageIndex = this.getMessageSnapshot().length;
     this.appendedUpTo = this._displayFromMessageIndex;
     this.dirty = false;
-    // Do NOT re-render here — display stays blank until the next message is added.
+    // Do NOT re-render here, display stays blank until the next message is added.
     // The lastRenderedWidth is kept so subsequent appends use the correct width.
   }
 }

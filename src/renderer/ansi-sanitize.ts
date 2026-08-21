@@ -3,13 +3,13 @@
  *
  * The TUI grid renders content character-by-character via writeStyledText,
  * which already drops zero-width characters (including ESC \x1b) by checking
- * display width. However, that is incidental protection — not a contract.
+ * display width. However, that is incidental protection, not a contract.
  * This module provides explicit, intentional sanitization.
  *
  * Strategy:
  * - STRIP all non-SGR escape sequences (cursor moves, OSC, BEL, alt-screen,
  *   DECSET/private mode, and any other CSI/ESC sequences).
- * - PRESERVE SGR color/style codes (\x1b[<params>m) — used legitimately by
+ * - PRESERVE SGR color/style codes (\x1b[<params>m), used legitimately by
  *   the TUI's own colorized output paths.
  * - STRIP bare BEL (\x07) characters.
  *
@@ -46,11 +46,10 @@ const BEL = /\x07/g;
  * @returns Sanitized string safe for grid rendering
  */
 export function stripDangerousAnsi(input: string): string {
-  // Step 1: Extract and preserve SGR sequences by replacing them with placeholders,
-  // then strip all other escape sequences, then restore SGR sequences.
-  // This approach avoids complex negative lookahead regexes.
+  // SGR sequences are extracted to placeholders before the other escape
+  // sequences are stripped, then restored, to avoid complex negative
+  // lookahead regexes.
 
-  // Collect SGR sequences and replace with unique markers
   const sgrTokens: string[] = [];
   const withPlaceholders = input.replace(SGR_PATTERN, (match) => {
     const idx = sgrTokens.length;

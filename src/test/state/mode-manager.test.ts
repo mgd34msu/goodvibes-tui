@@ -94,7 +94,7 @@ describe('ModeManager', () => {
       });
     });
 
-    test('listModes returns a copy — mutating it does not affect internal state', () => {
+    test('listModes returns a copy: mutating it does not affect internal state', () => {
       const modes = mgr.listModes();
       modes.push({ name: 'injected', description: 'bad', verbosityDefaults: {}, enforcement: 'advisory' });
       expect(mgr.listModes()).toHaveLength(3);
@@ -138,7 +138,7 @@ describe('ModeManager', () => {
       expect(defaults.exec).toBe('minimal');
     });
 
-    test('returns a copy — mutating it does not affect subsequent calls', () => {
+    test('returns a copy: mutating it does not affect subsequent calls', () => {
       const d1 = mgr.getVerbosityDefaults();
       d1.write = 'verbose';
       const d2 = mgr.getVerbosityDefaults();

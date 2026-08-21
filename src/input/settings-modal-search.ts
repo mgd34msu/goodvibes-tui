@@ -1,5 +1,5 @@
 /**
- * settings-modal-search — ranked search over the settings workspace.
+ * settings-modal-search, ranked search over the settings workspace.
  *
  * Split out of settings-modal-data.ts, which had reached its 800-line ceiling.
  * Scoring and search are a self-contained unit: they read a SettingEntry and a
@@ -11,7 +11,7 @@
 import type { SettingEntry, SettingsCategory } from './settings-modal-types.ts';
 
 // ---------------------------------------------------------------------------
-// fuzzyScoreSettingEntry — score an entry against a query for ranked search
+// fuzzyScoreSettingEntry, score an entry against a query for ranked search
 // ---------------------------------------------------------------------------
 
 /**
@@ -40,20 +40,20 @@ export function fuzzyScoreSettingEntry(
   const label = getLabel(entry).toLowerCase();
   const description = (entry.setting.description ?? '').toLowerCase();
 
-  // Tier 1: key substring — base 3000, position bonus up to 999
+  // Tier 1: key substring, base 3000, position bonus up to 999
   // A key match at position 0 scores 3999; at position 999 scores 3000.
   const keyIdx = key.indexOf(lq);
   if (keyIdx !== -1) return 3000 + Math.max(0, 999 - keyIdx);
 
-  // Tier 2: label substring — base 2000, position bonus up to 999
+  // Tier 2: label substring, base 2000, position bonus up to 999
   const labelIdx = label.indexOf(lq);
   if (labelIdx !== -1) return 2000 + Math.max(0, 999 - labelIdx);
 
-  // Tier 3: description substring — base 1000, position bonus up to 999
+  // Tier 3: description substring, base 1000, position bonus up to 999
   const descIdx = description.indexOf(lq);
   if (descIdx !== -1) return 1000 + Math.max(0, 999 - descIdx);
 
-  // Tier 4: subsequence across concatenated key + label + description — 1..99
+  // Tier 4: subsequence across concatenated key + label + description, 1..99
   const haystack = `${key} ${label} ${description}`;
   let qi = 0;
   let score = 0;

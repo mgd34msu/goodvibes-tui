@@ -68,7 +68,7 @@ describe('DiscordIntegration hex validation', () => {
   const discord = new DiscordIntegration();
 
   test('returns false for odd-length hex string (public key)', async () => {
-    // 63 hex chars — odd length
+    // 63 hex chars, odd length
     const oddHex = 'a'.repeat(63);
     const result = await discord.verifySignature('body', oddHex, 'timestamp', 'a'.repeat(64));
     expect(result).toBe(false);

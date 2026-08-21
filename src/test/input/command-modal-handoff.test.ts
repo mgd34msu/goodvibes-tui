@@ -394,7 +394,7 @@ describe('command modal handoff', () => {
 
   // item 1a: the command path ("/panel open <id>" and every other
   // command that opens a panel) leaves keyboard focus in the composer by
-  // default now — "the user is mid-command-flow". This used to force
+  // default now, "the user is mid-command-flow". This used to force
   // panelFocused=true unconditionally; the evaluator's ranked friction catalog
   // treats an implicit focus grab from a typed command as the same class of
   // bug as chords silently absorbing typed text.
@@ -451,7 +451,7 @@ describe('command modal handoff', () => {
       name: 'panel',
       description: 'Open panel',
       handler: (_args, ctx) => {
-        // Reconciled signature: (panelId, pane, target, opts) — the deep-link
+        // Reconciled signature: (panelId, pane, target, opts), the deep-link
         // target sits at arg 3, so the focus opt-in moves to arg 4 (opts).
         ctx.showPanel?.('git', undefined, undefined, { focus: true });
       },
@@ -629,7 +629,7 @@ describe('command modal handoff', () => {
   // The '/' -> commandMode transition (handlePromptTextToken) fired
   // exactly once, gated on `state.commandRegistry` being non-null at that
   // exact instant. commandRegistry can be transiently null during a modal/
-  // overlay handoff (e.g. the help overlay closing while a chain runs) — if
+  // overlay handoff (e.g. the help overlay closing while a chain runs), if
   // the registry reattaches even one tick later, the one-shot window has
   // already been missed and every subsequent keystroke is processed as plain
   // chat text with no way to recover.
@@ -665,7 +665,7 @@ describe('command modal handoff', () => {
   // Safety net: if commandMode somehow still ends up false (registry
   // desync, or any future regression upstream) but the submitted text is
   // literally slash-prefixed, the enter-key handler must never hand it to
-  // submitInput as ordinary chat — it re-derives command intent from the
+  // submitInput as ordinary chat, it re-derives command intent from the
   // text itself and dispatches through commandContext.executeCommand.
   test('a stray slash-prefixed submission with commandMode false is never sent to submitInput as chat', async () => {
     const submitCalls: string[] = [];
@@ -729,7 +729,7 @@ describe('command modal handoff', () => {
   });
 
   // Regression coverage: the commandPromise chain in handleCommandModeToken
-  // used to be a bare `.then(...)` with no `.catch()` — any handler that
+  // used to be a bare `.then(...)` with no `.catch()`, any handler that
   // threw or awaited a rejected promise became a silent unhandled rejection
   // (dead command, nothing rendered). This is defense in depth for EVERY
   // command, so a generic throwing handler is enough to exercise it.
@@ -844,7 +844,7 @@ describe('command modal handoff', () => {
   // rather than the per-feed layer (handler.ts). handleGlobalShortcutToken's
   // 'escape' branch calls context.handleEscape(), which mutates the handler
   // AND immediately syncs the live context (see handler.ts's
-  // syncFeedContextMutableFields comment) — but the caller in handler-feed.ts
+  // syncFeedContextMutableFields comment), but the caller in handler-feed.ts
   // used to unconditionally copy back a `shortcutState` snapshot taken
   // *before* that call, stomping the just-cleared prompt/commandMode back to
   // their stale pre-escape values and even re-arming the autocomplete query.
@@ -883,7 +883,7 @@ describe('command modal handoff', () => {
 
   // Convention for the "typed past the slash" case (fzf-style): once there's
   // real content beyond the bare '/', Esc's job is only to dismiss the ghost-
-  // suggestion overlay — the typed text is real composer content the user
+  // suggestion overlay, the typed text is real composer content the user
   // asked for and is kept, just no longer treated as an in-progress command.
   test('Esc on "/help" (typed past the slash) closes the palette but keeps the typed text', async () => {
     const history = new InfiniteBuffer();

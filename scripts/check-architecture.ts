@@ -1,5 +1,5 @@
 /**
- * Architecture Check — static analysis gate run in CI via `bun run architecture:check`.
+ * Architecture Check, static analysis gate run in CI via `bun run architecture:check`.
  *
  * What this checks:
  *   1. Source-file line-count gate (non-test files ≤ 800 lines)
@@ -8,9 +8,9 @@
  *   4. Test discipline (no mock.module())
  *   5. Required-snippet presence (foundation artifacts)
  *   6. SDK contract catalog invariants
- *   7. **Import-cycle detection** — Tarjan SCC over the src/ import graph
- *   8. **Layer-boundary rules** — codified allowed dependency directions
- *   9. **Hex-literal ratchet** — bans raw #RRGGBB literals in
+ *   7. **Import-cycle detection**, Tarjan SCC over the src/ import graph
+ *   8. **Layer-boundary rules**, codified allowed dependency directions
+ *   9. **Hex-literal ratchet**, bans raw #RRGGBB literals in
  *      src/panels/**\/*.ts and src/renderer/**\/*.ts except ui-primitives.ts,
  *      theme.ts and syntax-highlighter.ts; a seeded baseline
  *      (scripts/hex-literal-baseline.json) may only shrink, never grow
@@ -25,7 +25,7 @@
  *                       state, templates, tools, verification, voice, watchers,
  *                       web-search, widget, work-plans, workflow, agents
  * Layer 1  domain       core
- * Layer 2  runtime      runtime  (bootstrap files are composition roots — they
+ * Layer 2  runtime      runtime  (bootstrap files are composition roots, they
  *                       legitimately import shell-UI to wire everything together)
  * Layer 3  shell-UI     input, renderer, panels  (mutually coupled; form one UI layer)
  * Layer 4  entrypoint   cli, daemon
@@ -143,7 +143,7 @@ function isGenericObjectSchema(schema: Record<string, unknown> | undefined): boo
  *
  * Coverage note: Only relative imports (beginning with ".") are resolved.
  * Path-alias imports (e.g. `@/runtime/index.ts`, `@pellux/…`) are NOT
- * followed — they are invisible to the cycle detector and layer-boundary
+ * followed, they are invisible to the cycle detector and layer-boundary
  * checker. In practice `@/`-routed imports are mostly `import type` (erased
  * at runtime) and the codebase uses them deliberately to break cycles (e.g.
  * `SystemMessageKind` is imported via `@/runtime/index.ts` to avoid a
@@ -213,7 +213,7 @@ function buildImportGraph(files: string[]): Map<string, Set<string>> {
 }
 
 /**
- * Tarjan's Strongly Connected Components — finds all cycles.
+ * Tarjan's Strongly Connected Components, finds all cycles.
  * Returns arrays of SCCs with size > 1 (those are cycles).
  */
 function findCycles(graph: Map<string, Set<string>>): string[][] {
@@ -323,7 +323,7 @@ type LayerBoundaryRule = {
   /** Short rule name, used in violation messages. */
   readonly name: string;
   /**
-   * Rationale: why this boundary exists — becomes part of the violation message
+   * Rationale: why this boundary exists, becomes part of the violation message
    * so engineers know what to fix rather than just "you violated a rule".
    */
   readonly rationale: string;
@@ -351,7 +351,7 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
   },
   {
     // Rationale: input handles keystrokes and user interactions; it must not pull in
-    // CLI argument parsing or daemon lifecycle — those are entrypoint concerns.
+    // CLI argument parsing or daemon lifecycle, those are entrypoint concerns.
     name: 'input-no-entrypoints',
     rationale: 'input is a pure event-handling layer and must not depend on the CLI entrypoint',
     fromLayers: new Set(['input']),
@@ -510,8 +510,8 @@ const rules: readonly Rule[] = [
     message: 'reusable code must not discover cwd/home implicitly; composition roots must pass owned roots explicitly',
   },
   {
-    // Rationale: this exact combination — a directory created straight under
-    // the real OS temp dir, cleaned up only via afterEach/afterAll/finally —
+    // Rationale: this exact combination, a directory created straight under
+    // the real OS temp dir, cleaned up only via afterEach/afterAll/finally,
     // is what exhausted /tmp (1,048,436 of 1,048,576 inodes in use on one
     // host): that cleanup never runs when the test process is killed by a
     // signal (a `timeout 300` wrapper, the runner killing a hung file, an
@@ -521,7 +521,7 @@ const rules: readonly Rule[] = [
     // by the age-gated sweep in scripts/stale-tmp-sweep.ts. A handful of
     // tests legitimately need a real path under the OS temp dir for
     // behavioral reasons (proving a boundary check accepts/rejects the real
-    // temp root, or a "not inside a repo" check) — none of those call
+    // temp root, or a "not inside a repo" check), none of those call
     // mkdtemp/mkdtempSync to do it, so this rule bans only the exact
     // dir-creation shape, not every mention of tmpdir().
     name: 'no-raw-mkdtemp-under-os-tmpdir-in-tests',
@@ -535,7 +535,7 @@ const rules: readonly Rule[] = [
     //    dir unredirected, which is the leak this rule exists to stop.
     //  - helpers/temp-cleanup.test.ts spawns child `bun test` processes on
     //    GENERATED fixture files whose source calls mkdtempSync(join(tmpdir(),…))
-    //    on purpose: that call is the behaviour under test — inside the child the
+    //    on purpose: that call is the behaviour under test, inside the child the
     //    preload has already repointed tmpdir(), and the assertion is that the
     //    directories land in the isolated root. The scratch this file creates for
     //    itself does go through makeProjectTempDir; only the fixture SOURCE
@@ -545,7 +545,7 @@ const rules: readonly Rule[] = [
       'src/test/helpers/temp-cleanup.test.ts',
     ],
     pattern: /\bmkdtemp(Sync)?\s*\([^)]*\btmpdir\s*\(\s*\)/,
-    message: 'do not mkdtemp/mkdtempSync directly under the real OS temp dir (tmpdir()/os.tmpdir()) in a test — use makeProjectTempDir from src/test/helpers/project-temp.ts instead, so a signal-killed process leaks into the swept .test-tmp root, not the real /tmp',
+    message: 'do not mkdtemp/mkdtempSync directly under the real OS temp dir (tmpdir()/os.tmpdir()) in a test: use makeProjectTempDir from src/test/helpers/project-temp.ts instead, so a signal-killed process leaks into the swept .test-tmp root, not the real /tmp',
   },
   {
     name: 'one-goodvibes-home-meaning',
@@ -562,9 +562,9 @@ const rules: readonly Rule[] = [
     // daemon carried a byte-identical copy, and one meaning cannot live in two
     // repositories. Reading the raw variable anywhere here is how a second
     // meaning gets reintroduced, so it is refused rather than discouraged in a
-    // comment — and with the resolvers out of this repo there is no local file
+    // comment, and with the resolvers out of this repo there is no local file
     // left to exempt. Writing it (the systemd unit's Environment= block in
-    // src/cli/service-posture.ts) is untouched — this bans reads.
+    // src/cli/service-posture.ts) is untouched, this bans reads.
     files: [...nonTestFiles, ...scriptFiles],
     allow: [],
     pattern: /\benv(?:ironment)?\s*(?:\[\s*['"]GOODVIBES_HOME['"]\s*\]|\.GOODVIBES_HOME\b)/,
@@ -730,7 +730,7 @@ const internalIdentifierCandidates = [
   ...allSourceFiles,
   ...scriptFiles,
   ...walkMarkdown(join(ROOT, 'docs')),
-  // The root changelog is in-repo, outward-facing text — it is scanned too, so a
+  // The root changelog is in-repo, outward-facing text, it is scanned too, so a
   // planning codename can never land in a release note.
   ...(existsSync(join(ROOT, 'CHANGELOG.md')) ? [join(ROOT, 'CHANGELOG.md')] : []),
   ...(existsSync(join(ROOT, 'action.yml')) ? [join(ROOT, 'action.yml')] : []),
@@ -743,7 +743,7 @@ for (const v of checkNoInternalIdentifiers(internalIdentifierCandidates)) {
 // ─── Rules that guard nothing ─────────────────────────────────────────────────
 
 // A layer is a top-level src/ directory. A boundary rule naming one that is not
-// there matches nothing — the same vacuous-pass class as a missing rule target,
+// there matches nothing, the same vacuous-pass class as a missing rule target,
 // reached through the other half of the engine.
 const liveLayers = new Set(
   readdirSync(SRC_ROOT, { withFileTypes: true })
@@ -754,7 +754,7 @@ for (const rule of LAYER_BOUNDARY_RULES) {
   for (const layer of [...rule.fromLayers, ...rule.toLayers]) {
     if (!liveLayers.has(layer)) {
       violations.push(
-        `[${rule.name}] names the layer "${layer}", which is not a directory under src/ —`
+        `[${rule.name}] names the layer "${layer}", which is not a directory under src/;`
         + ' the rule matches nothing; remove the layer (and the rule, if nothing live is left)',
       );
     }
@@ -766,7 +766,7 @@ for (const stale of checkAllowEntries(rules)) {
 }
 for (const target of [...missingRuleTargets].sort()) {
   violations.push(
-    `a rule is scoped to "${target}", which does not exist — the rule matches nothing and passes vacuously;`
+    `a rule is scoped to "${target}", which does not exist; the rule matches nothing and passes vacuously;`
     + ' remove the path (and the rule, if it has no live paths left) or correct it',
   );
 }

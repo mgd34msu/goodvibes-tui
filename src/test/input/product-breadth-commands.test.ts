@@ -40,7 +40,7 @@ import { trackDisposables } from '../helpers/disposables.ts';
 disposeTestRuntimeServicesAfterAll();
 
 /**
- * A composed runtime graph starts a dozen pollers while it builds — the fleet
+ * A composed runtime graph starts a dozen pollers while it builds, the fleet
  * registry tick, the config-file watch, the memory governor, the knowledge
  * scheduler, the cross-session sweep, the orchestration snapshot writer, the
  * push-subscription sweep and the snapshot / retention / consolidation
@@ -83,7 +83,7 @@ describe('product breadth commands', () => {
   const originalPath = process.env.PATH;
   const originalFetch = globalThis.fetch;
   // Service-registry token env vars that must not leak in from the ambient
-  // environment (e.g. GITHUB_TOKEN from gh auth) — otherwise the `services
+  // environment (e.g. GITHUB_TOKEN from gh auth), otherwise the `services
   // resolve github` assertion ("has no resolvable auth headers") flips.
   const SERVICE_TOKEN_ENV_VARS = ['GITHUB_TOKEN', 'GH_TOKEN', 'SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN'];
   const savedServiceTokens: Record<string, string | undefined> = {};
@@ -403,7 +403,7 @@ describe('product breadth commands', () => {
       memory: createMemoryApi(memoryRegistry),
     };
     // /memory-sync export and /incident capture route through the memory
-    // spine now, not knowledgeApi.memory — see recall-query.ts's
+    // spine now, not knowledgeApi.memory, see recall-query.ts's
     // getMemorySpine. This fake only backs the ops these tests actually
     // exercise (add, exportBundle, importBundle, reviewQueue); every other
     // verb honestly returns empty/null, matching a store with nothing in it.
@@ -524,9 +524,9 @@ describe('product breadth commands', () => {
         policyRuntimeState: runtimeServices.policyRuntimeState,
         // extensions.memoryRegistry expects the SDK's real MemoryRegistry class
         // (private fields, no structural fake possible). None of the commands
-        // exercised in this file read it directly — memory access here goes
+        // exercised in this file read it directly, memory access here goes
         // through knowledgeApi.memory and memorySpineLocal below, both backed
-        // by the memoryRegistry fake — so the optional field is left unset.
+        // by the memoryRegistry fake, so the optional field is left unset.
         integrationHelpers,
         knowledgeService,
         pluginManager: runtimeServices.pluginManager,
@@ -1894,7 +1894,7 @@ describe('product breadth commands', () => {
     await update!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('Update Review');
     expect(out.join('\n')).toContain('install kind:');
-    // The decorative release.channel subcommand was removed — nothing
+    // The decorative release.channel subcommand was removed, nothing
     // downstream ever read the value it wrote, so /update review no longer
     // mentions a channel at all.
     expect(out.join('\n')).not.toContain('channel:');

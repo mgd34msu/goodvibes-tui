@@ -25,11 +25,11 @@ export interface CliStatusOptions {
   readonly workspace?: CliWorkspaceStatus;
   /** Per-command exec sandbox availability, host-probed by the caller. */
   readonly sandbox?: CliSandboxStatus;
-  /** Outbound relay reachability posture (config + feature-flag gate only — a one-shot CLI process has no live connection to inspect). */
+  /** Outbound relay reachability posture (config + feature-flag gate only, a one-shot CLI process has no live connection to inspect). */
   readonly relay?: CliRelayStatus;
 }
 
-/** Config-derived relay posture. No live socket check — see doctor's other surfaces for the same honesty bar. */
+/** Config-derived relay posture. No live socket check, see doctor's other surfaces for the same honesty bar. */
 export interface CliRelayStatus {
   readonly configEnabled: boolean;
   readonly featureEnabled: boolean;
@@ -138,7 +138,7 @@ export interface CliStatusSnapshot {
 /**
  * Per-surface exposure report row: what a network surface binds to, how it
  * authenticates callers, and what cross-origin allowlist (if any) applies.
- * A plain report — it changes no behavior and writes no config.
+ * A plain report, it changes no behavior and writes no config.
  */
 export interface CliExposureSurface {
   readonly id: RuntimeEndpointId;
@@ -205,7 +205,7 @@ function renderWorkspaceSection(workspace: CliWorkspaceStatus | null): string[] 
   ];
 }
 
-/** The `Exec sandbox:` block — honest host-probed availability of the per-command boundary. */
+/** The `Exec sandbox:` block, honest host-probed availability of the per-command boundary. */
 function renderSandboxSection(sandbox: CliSandboxStatus | null): string[] {
   if (!sandbox) return [];
   const active = sandbox.configEnabled && sandbox.featureEnabled && sandbox.available;
@@ -228,7 +228,7 @@ function renderSandboxSection(sandbox: CliSandboxStatus | null): string[] {
 }
 
 /**
- * The `Relay:` block — config + feature-flag gate only. The live registration
+ * The `Relay:` block, config + feature-flag gate only. The live registration
  * state lives in the running daemon's memory and no verb exposes it, so no
  * client reads it: this CLI reports the gate, and `/relay status` in the
  * terminal app reports the same gate plus an honest "not readable here" for the
@@ -245,7 +245,7 @@ function renderRelaySection(relay: CliRelayStatus | null): string[] {
     `  url: ${relay.url || '(not set)'}`,
     `  rendezvousId: ${relay.rendezvousId || '(not yet minted)'}`,
     `  requireStepUpForMutations: ${yesNo(relay.requireStepUpForMutations)}`,
-    '  Threat model: the relay operator sees only ciphertext and connection metadata — self-host your own relay for full control.',
+    '  Threat model: the relay operator sees only ciphertext and connection metadata; self-host your own relay for full control.',
     '',
   ];
 }
@@ -296,7 +296,7 @@ const EXPOSURE_SURFACES: readonly { readonly id: RuntimeEndpointId; readonly lab
 
 /**
  * Build the per-surface exposure report (bind address, auth mode, origin
- * allowlist) for every network surface. Pure over the status options — a
+ * allowlist) for every network surface. Pure over the status options, a
  * report only, no behavior change.
  */
 export function buildCliExposureReport(options: CliStatusOptions): readonly CliExposureSurface[] {
@@ -343,7 +343,7 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
   const findings: CliDoctorFinding[] = [];
 
   // An unrecognized hostMode has NO binding the SDK can produce (its bind
-  // resolver has no default case — the daemon throws before binding), so it
+  // resolver has no default case, the daemon throws before binding), so it
   // is surfaced as a doctor finding on every endpoint that carries one,
   // instead of the fallback loopback binding being presented as fact.
   for (const [endpointId, endpointLabel, endpointBinding] of [
@@ -535,7 +535,7 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
 /**
  * The doctor command's exit code. Advisory findings (`severity: 'warning'`)
  * are notes on an otherwise-usable install and must never make a healthy
- * install report failure — only a must-fix (`severity: 'risk'`) finding
+ * install report failure, only a must-fix (`severity: 'risk'`) finding
  * exits non-zero. `strict` (for CI) flips warnings to failures too, so a
  * pipeline can require a fully clean report instead of just "usable".
  */
@@ -666,7 +666,7 @@ export function renderCliStatus(options: CliStatusOptions): string {
     ...renderWorkspaceSection(snapshot.workspace),
     ...renderSandboxSection(snapshot.sandbox),
     ...renderRelaySection(snapshot.relay),
-    'Exposure (report only — no changes made):',
+    'Exposure (report only: no changes made):',
     ...snapshot.exposure.flatMap((surface) => [
       `  ${surface.label}: ${yesNo(surface.enabled)} · ${surface.reach}${surface.networkFacing ? ' · network-facing' : ''}`,
       `    bind: ${surface.bind}`,

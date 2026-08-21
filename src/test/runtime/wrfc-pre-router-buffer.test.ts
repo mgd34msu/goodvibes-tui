@@ -164,7 +164,7 @@ describe('WrfcPreRouterBuffer', () => {
 
       const firstFlushCount = calls.length;
 
-      // Second overflow batch — fresh overflow counter
+      // Second overflow batch, fresh overflow counter
       for (let i = 0; i < 101; i++) buf.push(`b-${i}`, 'low');
       buf.flush(router);
 

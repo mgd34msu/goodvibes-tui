@@ -1,20 +1,20 @@
 /**
- * Session permission mode — the small vocabulary and cycle logic shared by the
+ * Session permission mode, the small vocabulary and cycle logic shared by the
  * Shift+Tab mode-cycle key, the `/plan` toggle, and the footer mode pill.
  *
  * The SDK owns the permission mode: it lives at config key `permissions.mode`
  * and is read by the SDK's PermissionManager.getMode() (which the orchestrator
  * consults for the standing plan-mode instruction). Setting the config value is
- * the SDK-sanctioned way to change the mode — the SDK's mode-change emitter then
+ * the SDK-sanctioned way to change the mode, the SDK's mode-change emitter then
  * broadcasts PERMISSION_MODE_CHANGED on the runtime bus so every attached
  * surface can reflect it. This module only maps and cycles the values; it never
  * owns the state.
  *
  * Two vocabularies exist and must not be confused:
  *  - the CONFIG values ('prompt' | 'allow-all' | 'custom' | 'plan' |
- *    'accept-edits') — what is stored and what this module operates on.
+ *    'accept-edits'), what is stored and what this module operates on.
  *  - the user-facing LABELS ('normal' | 'auto' | 'custom' | 'plan' |
- *    'accept-edits') — what the pill shows.
+ *    'accept-edits'), what the pill shows.
  */
 
 /** The config `permissions.mode` values, exactly as the SDK schema defines them. */
@@ -23,7 +23,7 @@ export type PermissionModeValue = 'prompt' | 'allow-all' | 'custom' | 'plan' | '
 /**
  * The Shift+Tab cycle order over the four named SESSION modes. `custom` is a
  * per-rule policy, not a session posture, so it is deliberately excluded from
- * the cycle — cycling FROM custom starts at the first entry (normal).
+ * the cycle, cycling FROM custom starts at the first entry (normal).
  *
  * Order (matches the settled convention: escalating autonomy, then wrap):
  *   normal → accept-edits → plan → auto → normal

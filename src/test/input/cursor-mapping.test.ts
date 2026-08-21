@@ -115,7 +115,7 @@ describe('Cursor mapping through word-wrap', () => {
     const lineBefore = infoBefore.cursorWrappedLine;
     const colBefore = infoBefore.cursorCol;
 
-    // Simulate moveCursorVertical(1) — we test via the public method indirectly
+    // Simulate moveCursorVertical(1), we test via the public method indirectly
     // by checking segment mapping consistency
     const targetLine = lineBefore + 1;
     if (targetLine < infoBefore.segments.length) {

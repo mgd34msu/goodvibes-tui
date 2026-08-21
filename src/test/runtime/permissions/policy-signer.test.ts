@@ -1,5 +1,5 @@
 /**
- * GC-PERM-011 — Tests for policy signing and verification.
+ * GC-PERM-011, Tests for policy signing and verification.
  *
  * Covers:
  *   - canonicalise(): deterministic serialisation

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { decodeFirstOpenChoice, buildFirstOpenItems, selfRecordWorkspaceRegistration } from '../../cli/tui-startup.ts';
 
 describe('buildFirstOpenItems', () => {
-  it('offers a trust-only choice — the registration half is gone (registration self-records instead)', () => {
+  it('offers a trust-only choice: the registration half is gone (registration self-records instead)', () => {
     const { title, items } = buildFirstOpenItems();
     expect(title).toContain('trust');
     expect(items.map((i) => i.id)).toEqual(['trusted', 'restricted']);

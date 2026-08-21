@@ -100,7 +100,7 @@ export class ModelPickerModal {
    * spec carries a caveat. Null outside effort mode.
    */
   public effortPresentation: EffortPresentation | null = null;
-  /** Entries for PickerMode 'embeddingProvider' — the 'embeddings' target's own tiny item list. */
+  /** Entries for PickerMode 'embeddingProvider', the 'embeddings' target's own tiny item list. */
   public embeddingProviders: EmbeddingProviderPickerEntry[] = [];
   /** Mode to restore when navigating the targets rail away from 'embeddings'. */
   private nonEmbeddingMode: PickerMode = 'model';
@@ -124,11 +124,11 @@ export class ModelPickerModal {
   public availableOnly = true;
   /** Set of provider names that have a configured key (used for availableOnly filter). */
   public configuredProviders: Set<string> = new Set();
-  /** How each provider is configured — drives badge display in provider mode. */
+  /** How each provider is configured, drives badge display in provider mode. */
   public configuredViaMap: Map<string, 'env' | 'secrets' | 'subscription' | 'anonymous'> = new Map();
-  /** IDs of pinned/favorite models — shown at top of list. */
+  /** IDs of pinned/favorite models, shown at top of list. */
   public pinnedIds: Set<string> = new Set();
-  /** IDs of recently used models — shown after pinned, before the rest. */
+  /** IDs of recently used models, shown after pinned, before the rest. */
   public recentIds: string[] = [];
   /** Benchmark score sort order. */
   public benchmarkSort: BenchmarkSort = 'none';
@@ -274,13 +274,13 @@ export class ModelPickerModal {
   }
 
   /**
-   * Open showing all models — entry point for /model.
+   * Open showing all models, entry point for /model.
    *
    * Search starts FOCUSED. A live tmux repro showed the actual
-   * friction wasn't the filter itself (it already works — fuzzy multi-word
+   * friction wasn't the filter itself (it already works, fuzzy multi-word
    * substring over id/displayName/provider) but that with search unfocused by
    * default, typing a search term went character-by-character into single-key
-   * shortcuts instead (g=group, c=capability, a=available-only, b=benchmark) —
+   * shortcuts instead (g=group, c=capability, a=available-only, b=benchmark),
    * e.g. typing "claude" silently cycled the capability filter (on 'c') and
    * toggled available-only off (on 'a') while the visible list never
    * filtered, with no error and no indication anything happened. Reaching
@@ -307,7 +307,7 @@ export class ModelPickerModal {
     this.scrollOffset = 0;
   }
 
-  /** Open showing providers first — entry point for /provider. Search starts focused — see openAllModels(). */
+  /** Open showing providers first, entry point for /provider. Search starts focused, see openAllModels(). */
   openProviders(providers: string[], currentProvider: string): void {
     this.previousMode = null;
     this.providers = providers;
@@ -327,9 +327,9 @@ export class ModelPickerModal {
   }
 
   /**
-   * Open the embedding-provider list — entry point for the 'embeddings' target.
+   * Open the embedding-provider list, entry point for the 'embeddings' target.
    * Deliberately NOT routed through openAllModels (ModelDefinition-shaped) or
-   * openProviders (LLM-provider label resolution) — embedding providers are a
+   * openProviders (LLM-provider label resolution), embedding providers are a
    * flat {id, label, dimensions, configured} list with no model concept, and
    * reusing either existing opener would mislabel or drop unrecognized ids.
    */
@@ -356,7 +356,7 @@ export class ModelPickerModal {
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
-    // User explicitly chose this provider — disable availability filter so synthetic
+    // User explicitly chose this provider, disable availability filter so synthetic
     // models (which have no real API key) are not filtered out.
     this.availableOnly = false;
     this.selectedIndex = 0;
@@ -521,8 +521,8 @@ export class ModelPickerModal {
    * Used for inserting group headers in getItems().
    *
    * For synthetic provider models with groupBy 'provider', returns sub-group keys:
-   * - 'Top Models'   — benchmark composite score ≥ 0.65 (A-tier or S-tier)
-   * - 'All Synthetic' — remaining synthetic models
+   * - 'Top Models'  , benchmark composite score ≥ 0.65 (A-tier or S-tier)
+   * - 'All Synthetic', remaining synthetic models
    */
   getModelGroupKey(model: ModelDefinition): string {
     return getModelGroupKey(model, this.groupBy, this.providerRegistry, this.benchmarkStore);
@@ -555,7 +555,7 @@ export class ModelPickerModal {
       return result;
     }
     if (this.mode === 'embeddingProvider') {
-      // Tiny list (typically 2-4 entries) — no caching infrastructure needed.
+      // Tiny list (typically 2-4 entries), no caching infrastructure needed.
       // Unconfigured providers are shown honestly (isConfigured: false), never hidden.
       return this.embeddingProviders.map((provider) => ({
         id: provider.id,
@@ -577,7 +577,7 @@ export class ModelPickerModal {
   }
 
   /**
-   * Move selection up (stops at 0 — no wrap to avoid going off-screen).
+   * Move selection up (stops at 0, no wrap to avoid going off-screen).
    * Updates scrollOffset to keep selection visible.
    */
   moveUp(maxVisible = 20): void {
@@ -587,7 +587,7 @@ export class ModelPickerModal {
       this.selectedIndex--;
       this._scrollToSelection(maxVisible);
     }
-    // At index 0 — stop. Do NOT wrap to count-1 (that puts selection off-screen).
+    // At index 0, stop. Do NOT wrap to count-1 (that puts selection off-screen).
   }
 
   /**
@@ -632,10 +632,10 @@ export class ModelPickerModal {
    */
   _scrollToSelection(maxVisible: number): void {
     if (this.selectedIndex < this.scrollOffset) {
-      // Selection moved above viewport — scroll up
+      // Selection moved above viewport, scroll up
       this.scrollOffset = this.selectedIndex;
     } else if (this.selectedIndex >= this.scrollOffset + maxVisible) {
-      // Selection moved below viewport — scroll down
+      // Selection moved below viewport, scroll down
       this.scrollOffset = this.selectedIndex - maxVisible + 1;
     }
   }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Release Gate Runner — Phase 9, Section 10
+ * Release Gate Runner, Phase 9, Section 10
  *
  * Executes all 5 release gate test suites and reports pass/fail per gate.
  * Each gate must pass in full for a release to proceed.
@@ -9,11 +9,11 @@
  *   bun run scripts/release-gate.ts [--gate <name>] [--verbose]
  *
  * Gates:
- *   safety        — Permission + tool safety paths auditable and fail-closed
- *   determinism   — Replay + reconnect avoid duplicate side effects
- *   performance   — SLO + budget gates pass under representative load
- *   operability   — Diagnostics, replay, forensics are operator-usable
- *   product       — All post-v3 capabilities activatable + coherent
+ *   safety       , Permission + tool safety paths auditable and fail-closed
+ *   determinism  , Replay + reconnect avoid duplicate side effects
+ *   performance  , SLO + budget gates pass under representative load
+ *   operability  , Diagnostics, replay, forensics are operator-usable
+ *   product      , All post-v3 capabilities activatable + coherent
  */
 
 import { spawnSync } from 'child_process';
@@ -119,7 +119,7 @@ function formatResult(r: GateResult): string {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 console.log('='.repeat(80));
-console.log('Release Gate Runner — goodvibes-tui');
+console.log('Release Gate Runner: goodvibes-tui');
 console.log(`Running ${gatesToRun.length} gate(s)`);
 console.log('='.repeat(80));
 console.log();
@@ -169,10 +169,10 @@ console.log(`Result: ${passed}/${total} gates passed`);
 console.log();
 
 if (anyFailed) {
-  console.error('Release Gate: FAILED — one or more gates did not pass.');
+  console.error('Release Gate: FAILED; one or more gates did not pass.');
   console.error('All gates must pass before release.');
   process.exit(1);
 } else {
-  console.log('Release Gate: PASSED — all gates cleared. Release is safe to proceed.');
+  console.log('Release Gate: PASSED; all gates cleared. Release is safe to proceed.');
   process.exit(0);
 }

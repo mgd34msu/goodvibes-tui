@@ -1,5 +1,5 @@
 /**
- * Panel resource contracts — backward-compat shim.
+ * Panel resource contracts, backward-compat shim.
  *
  * Re-exports the SDK's component contract types and helpers. TUI code that
  * previously used local `ComponentResourceContract` / `ComponentHealthState`

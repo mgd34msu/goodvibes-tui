@@ -3,7 +3,7 @@
 // Pure rendering functions for a FleetPanel session
 // tab's content: the live/frozen agent transcript, the wrfc-chain member
 // summary, and the on-disk ledger fallback for an evicted/never-registered
-// conversation snapshot. Isolated from FleetPanel/keyboard input — see
+// conversation snapshot. Isolated from FleetPanel/keyboard input, see
 // fleet-panel.test.ts for the integration-level "attach a tab and render it"
 // coverage.
 // ---------------------------------------------------------------------------
@@ -86,13 +86,13 @@ describe('renderFleetAgentTranscript', () => {
 
   test('a height so tight the notice alone fills the budget still tail-slices the body to empty, instead of returning the full untrimmed history for the caller to head-clip', () => {
     const messages = Array.from({ length: 40 }, (_, i) => ({ role: 'user' as const, content: `message ${i}` }));
-    // The frozen notice renders as a single row at width 80 — a height of 1
+    // The frozen notice renders as a single row at width 80, a height of 1
     // leaves a budgetHeight of exactly 0 for the body.
     const result = renderFleetAgentTranscript(messages, /* isTerminal */ true, new MessageLineCache(), 80, 1, null);
     expect(result.lines).toHaveLength(1);
     const text = linesToText(result.lines);
     expect(text.some((l) => l.includes('Read-only'))).toBe(true);
-    // No room for any history line — in particular NOT the oldest message,
+    // No room for any history line, in particular NOT the oldest message,
     // which is what a full-history-then-head-clip bug would surface instead.
     expect(text.some((l) => l.includes('message 0'))).toBe(false);
   });
@@ -155,9 +155,9 @@ describe('renderFleetChainSummary', () => {
 
   test('d3: an empty member list on a completed/pruned chain reads "chain completed", not "yet"', () => {
     // A completed chain prunes its wrapper node, so zero members means finished,
-    // not not-started — the honest wording must not say "yet".
+    // not not-started, the honest wording must not say "yet".
     const lines = linesToText(renderFleetChainSummary([], 80, true));
-    expect(lines.some((l) => l.includes('chain completed — members no longer tracked'))).toBe(true);
+    expect(lines.some((l) => l.includes('chain completed: members no longer tracked'))).toBe(true);
     expect(lines.some((l) => l.includes('yet'))).toBe(false);
   });
 });
@@ -277,17 +277,17 @@ describe('renderFleetLedgerFallback', () => {
 });
 
 // ---------------------------------------------------------------------------
-// — a real fixture matching the SDK writer's exact message vocabulary
+//, a real fixture matching the SDK writer's exact message vocabulary
 // (goodvibes-sdk packages/sdk/src/platform/agents/session.ts's `meta` message
 // and orchestrator-runner.ts's session_config/llm_request/llm_response/
-// tool_execution/session_end messages — see this test's fixture file for the
+// tool_execution/session_end messages, see this test's fixture file for the
 // exact field names each type carries). Exercises parseAgentLedger +
 // renderFleetLedgerFallback end-to-end against on-disk content rather than
 // only hand-built entry objects, so a real drift between the writer's shape
 // and this reader's assumptions would show up here.
 // ---------------------------------------------------------------------------
 
-describe('ledger fallback — real fixture (writer-shape regression)', () => {
+describe('ledger fallback: real fixture (writer-shape regression)', () => {
   test('parses every line of a realistic multi-turn agent ledger', () => {
     const raw = readFileSync(LEDGER_FIXTURE_PATH, 'utf-8');
     const entries = parseAgentLedger(raw);
@@ -306,24 +306,24 @@ describe('ledger fallback — real fixture (writer-shape regression)', () => {
     expect(text).toContain('Read-only');
     expect(text).toContain('Full transcript unavailable');
 
-    // meta — model/provider.
+    // meta, model/provider.
     expect(text).toContain('claude-sonnet-5');
     expect(text).toContain('anthropic');
 
-    // session_config — the task.
+    // session_config, the task.
     expect(text).toContain('Fix the flaky retry test');
 
-    // llm_request/llm_response — per-turn counts (request/response accounting).
+    // llm_request/llm_response, per-turn counts (request/response accounting).
     expect(text).toContain('turn 1');
     expect(text).toContain('turn 2');
 
-    // tool_execution — success WITH preview, and failure WITH preview + "(failed)".
+    // tool_execution, success WITH preview, and failure WITH preview + "(failed)".
     expect(text).toContain('Read');
     expect(text).toContain("import { retry }");
     expect(text).toContain('Edit (failed)');
     expect(text).toContain('old_string not found');
 
-    // session_end — honest final status + timing, not fabricated.
+    // session_end, honest final status + timing, not fabricated.
     expect(text).toContain('failed');
     expect(text).toMatch(/\d+(\.\d+)?s/); // formatElapsed(2700ms) renders a seconds-based duration
   });

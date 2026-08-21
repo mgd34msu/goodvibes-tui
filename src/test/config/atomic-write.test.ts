@@ -88,7 +88,7 @@ describe('atomicWriteFileSync', () => {
     atomicWriteFileSync(path, 'original content');
 
     // Trigger a write failure on a different target via ENOTDIR (parent is a
-    // file) — uid-independent, unlike chmod which root bypasses.
+    // file), uid-independent, unlike chmod which root bypasses.
     const blocker = join(tmpDir, 'blocker2');
     writeFileSync(blocker, 'x');
 
@@ -98,7 +98,7 @@ describe('atomicWriteFileSync', () => {
     expect(readFileSync(path, 'utf-8')).toBe('original content');
   });
 
-  test('tmp file naming includes pid and timestamp — only destination file remains', () => {
+  test('tmp file naming includes pid and timestamp; only destination file remains', () => {
     const path = join(tmpDir, 'named.json');
     atomicWriteFileSync(path, 'named test');
     const files = readdirSync(tmpDir);

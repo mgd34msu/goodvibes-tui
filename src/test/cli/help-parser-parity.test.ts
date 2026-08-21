@@ -7,7 +7,7 @@
  * table must correspond to a parseable flag.
  *
  * This test fails fast when flags drift between parser.ts, help.ts, and
- * completions/generate.ts — preventing silent documentation rot.
+ * completions/generate.ts, preventing silent documentation rot.
  */
 
 import { describe, expect, test } from 'bun:test';
@@ -20,7 +20,7 @@ import { GLOBAL_FLAGS } from '../../cli/completions/generate.ts';
 //
 // Derived by walking parser.ts branch-by-branch. Each entry is one long-form
 // token the parser handles directly (aliases listed separately). When adding
-// a flag to parser.ts, add it here too — the parity test will then enforce
+// a flag to parser.ts, add it here too, the parity test will then enforce
 // that help and completions are updated.
 // ---------------------------------------------------------------------------
 
@@ -80,7 +80,7 @@ const PARSER_SHORT_TO_LONG: ReadonlyMap<string, string> = new Map([
 /**
  * Every flag token this terminal's CLI vocabulary declares, read off the
  * catalog the parser is driven by. This is the ground truth the hand-lists
- * below are checked against — a declared token IS what the parser accepts, so
+ * below are checked against, a declared token IS what the parser accepts, so
  * there is nothing to scrape and nothing that can be true of the source text
  * and false of the parse.
  */
@@ -108,7 +108,7 @@ const SOURCE_SHORT_FLAGS = new Set([...PARSER_SOURCE_FLAGS].filter((f) => f.star
 // Guard: hand-list set-equality vs. extracted set
 //
 // A flag added to parser.ts must also be added to the hand-list here, or this
-// test will fail. That is the intended behaviour — the hand-list is the human
+// test will fail. That is the intended behaviour, the hand-list is the human
 // cross-check; this assertion is what makes it drift-proof.
 // ---------------------------------------------------------------------------
 
@@ -241,7 +241,7 @@ describe('help-parser parity: --help text contains every parser flag', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. GLOBAL_FLAGS completions table — no ghost flags (must be parseable)
+// 4. GLOBAL_FLAGS completions table, no ghost flags (must be parseable)
 // ---------------------------------------------------------------------------
 
 describe('help-parser parity: GLOBAL_FLAGS completions has no ghost flags', () => {
@@ -271,7 +271,7 @@ describe('help-parser parity: GLOBAL_FLAGS completions has no ghost flags', () =
 });
 
 // ---------------------------------------------------------------------------
-// 5. GLOBAL_FLAGS completions table — no missing flags (every parser flag present)
+// 5. GLOBAL_FLAGS completions table, no missing flags (every parser flag present)
 // ---------------------------------------------------------------------------
 
 describe('help-parser parity: GLOBAL_FLAGS completions contains all parser flags', () => {
@@ -309,7 +309,7 @@ describe('deprecation warnings', () => {
     expect(result.warnings).toContain(
       '--output-format is deprecated; use --output (or -o) instead.',
     );
-    // Still works — parses the value correctly
+    // Still works, parses the value correctly
     expect(result.flags.outputFormat).toBe('json');
     // Not a hard error
     expect(result.errors).toHaveLength(0);

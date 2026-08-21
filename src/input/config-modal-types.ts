@@ -1,14 +1,14 @@
 import type { ModalSectionStyle } from '../renderer/modal-factory.ts';
 
 /**
- * Config-modal host — the shared seam every MIGRATE-TO-MODAL surface
+ * Config-modal host, the shared seam every MIGRATE-TO-MODAL surface
  * (provider-health, services, subscription, remote, local-auth, settings-sync,
  * sandbox, and the ecosystem/governance set) is expressed through.
  *
  * A surface is PURE DATA + ACTIONS: it hands the host a `buildView()` that maps
  * live read-models to a tabbed, list-structured view, plus a declarative action
  * table. The host owns all key routing (tab switch, list nav, Esc, confirm) and
- * the stable-layout liveness contract — the surface never touches the input
+ * the stable-layout liveness contract, the surface never touches the input
  * system directly (the charter's "do not invent a parallel input system").
  *
  * Liveness doctrine (charter: "live data, stable layout"): `buildView()` is
@@ -41,7 +41,7 @@ export interface ConfigModalRow {
 
 /** One tab (section) of a surface. Tabs are switched with left/right or Tab. */
 export interface ConfigModalTab {
-  /** Stable id — preserves the active tab across refresh + re-open. */
+  /** Stable id, preserves the active tab across refresh + re-open. */
   readonly id: string;
   /** Tab-strip label. */
   readonly label: string;
@@ -61,7 +61,7 @@ export interface ConfigModalView {
   readonly title: string;
   readonly tabs: readonly ConfigModalTab[];
   /**
-   * Non-null when the read-model is unavailable/degraded — the host renders a
+   * Non-null when the read-model is unavailable/degraded, the host renders a
    * banner and still shows whatever tabs/rows are present (honest degraded
    * state rather than a blank or a throw).
    */
@@ -79,7 +79,7 @@ export interface ConfigModalActionContext {
   /** Print a line to the conversation transcript. */
   readonly print: (message: string) => void;
   /**
-   * Execute a slash command — the same seam panels used via
+   * Execute a slash command, the same seam panels used via
    * `PanelIntegrationContext.executeCommand`. This is how a migrated action
    * preserves parity: the mutation still runs through its existing, tested
    * command (e.g. `/settings-sync resolve`, `/local-auth delete-user`).
@@ -87,14 +87,14 @@ export interface ConfigModalActionContext {
   readonly executeCommand?: (name: string, args: string[]) => Promise<unknown>;
   /** Open another named modal surface (cross-surface navigation, e.g. the
    *  services surface jumping to the subscription surface). Swaps the active
-   *  surface in place — the same seam ctx.openModal uses. */
+   *  surface in place, the same seam ctx.openModal uses. */
   readonly openModal?: (name: string) => void;
   /**
-   * Submit text to the chat/model as a real user turn — the same composer
+   * Submit text to the chat/model as a real user turn, the same composer
    * submission seam `handleUserInput` uses (threaded from CommandContext.submitInput).
    * Generic across surfaces (any modal may hand free-form input to the model).
    *
-   * ORDERING GUARD: a turn must never start while a modal owns the keyboard —
+   * ORDERING GUARD: a turn must never start while a modal owns the keyboard,
    * that is the modal-liveness hazard (a live turn painting under a modal that
    * still captures keys). Callers MUST `close()` the modal BEFORE invoking
    * `submitInput`. The planning modal's free-form submit follows this ordering.
@@ -107,11 +107,11 @@ export interface ConfigModalActionContext {
   /** Close the modal (focus returns to whatever opened it). */
   readonly close: () => void;
   /**
-   * Switch the active tab and select a row within it, by id — the in-surface
+   * Switch the active tab and select a row within it, by id, the in-surface
    * "jump" affordance (e.g. the Memory modal's Proposals tab jumping to an
    * affected record in the Review Queue tab, rather than opening a second
    * modal). Host-owned, populated by ConfigModal itself (like `close`/
-   * `setStatus`) — a surface's `onAction` calls it, never constructs it. A
+   * `setStatus`), a surface's `onAction` calls it, never constructs it. A
    * no-op if either id is not present in the surface's current structure; the
    * surface should check reachability itself and print an honest status line
    * when it isn't, rather than relying on a silent no-op.
@@ -124,10 +124,10 @@ export interface ConfigModalAction {
   /**
    * Trigger key: a single printable char ('r', 'd') or a named key ('enter').
    * Must not collide with the host-reserved nav keys (up/down/left/right/tab/
-   * j/k/escape/'/') — those are consumed by the host before actions are
+   * j/k/escape/'/'), those are consumed by the host before actions are
    * consulted. '/' arms the host's type-to-filter (item 1); while
    * filtering, EVERY printable key (not just j/k) is captured by the query
-   * instead of firing an action — see handleConfigModalToken.
+   * instead of firing an action, see handleConfigModalToken.
    */
   readonly key: string;
   /** Action id passed to `onAction`. */
@@ -149,23 +149,23 @@ export interface ConfigModalAction {
 }
 
 /**
- * A named config-modal surface. Pure seam — the host knows nothing about the
+ * A named config-modal surface. Pure seam, the host knows nothing about the
  * surface's data. Built once (closing over its read-models) and registered on
  * PanelManager via `registerModalSurface`; opened by name from a panel-id
  * redirect hit or `ctx.openModal(name)`.
  */
 export interface ConfigModalSurface {
-  /** Modal name — the key `registerModalRedirect` / `ctx.openModal` use. */
+  /** Modal name, the key `registerModalRedirect` / `ctx.openModal` use. */
   readonly name: string;
   /** Fallback title (buildView().title wins per tick). */
   readonly title: string;
   /**
    * Build the current view from live read-models. Called on open, on every
-   * interaction boundary, AND on every render tick. MUST be pure and cheap —
+   * interaction boundary, AND on every render tick. MUST be pure and cheap,
    * snapshot reads only, no async, no mutation.
    */
   buildView(): ConfigModalView;
-  /** Declarative action table (optional — a read-only surface has none). */
+  /** Declarative action table (optional, a read-only surface has none). */
   readonly actions?: readonly ConfigModalAction[];
   /** Handle an action fired by its key. */
   onAction?(actionId: string, ctx: ConfigModalActionContext): void;

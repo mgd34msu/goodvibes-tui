@@ -1,5 +1,5 @@
 /**
- * fleet-union.test.ts — the Fleet panel shows everything running.
+ * fleet-union.test.ts, the Fleet panel shows everything running.
  *
  * The failure this guards is not a crash. It is a panel that shows half the
  * fleet and looks complete: this terminal's own agents present, the daemon's
@@ -7,9 +7,9 @@
  * saying so. That is strictly worse than showing nothing, because a user reads
  * an empty-looking row list as "nothing else is running".
  *
- * So what is pinned here is the union and its precedence — local wins on a
+ * So what is pinned here is the union and its precedence, local wins on a
  * shared id, because the local copy is live and actionable while the daemon's
- * arrives over a poll — plus the two degrade paths that must not lose rows.
+ * arrives over a poll, plus the two degrade paths that must not lose rows.
  */
 import { describe, expect, test } from 'bun:test';
 import { createFleetUnionReadModel } from '../../runtime/client/fleet-union.ts';
@@ -78,7 +78,7 @@ describe('the Fleet panel reads local rows union the daemon\'s', () => {
     });
     await union.refresh();
     const rows = union.getSnapshot().rows;
-    // One row, not two — and the label from the half that is live and can be
+    // One row, not two, and the label from the half that is live and can be
     // interrupted, steered and killed from here.
     expect(rows).toHaveLength(1);
     expect(rows[0]?.node.label).toBe('live local label');

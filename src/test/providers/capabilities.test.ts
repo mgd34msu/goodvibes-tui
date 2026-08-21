@@ -34,10 +34,10 @@ type ProviderCapabilityRegistryTestAccess = {
 };
 
 // ---------------------------------------------------------------------------
-// ProviderCapabilityRegistry — merge order
+// ProviderCapabilityRegistry, merge order
 // ---------------------------------------------------------------------------
 
-describe('ProviderCapabilityRegistry.getCapability — merge order', () => {
+describe('ProviderCapabilityRegistry.getCapability: merge order', () => {
   let registry: ProviderCapabilityRegistry;
 
   beforeEach(() => {
@@ -67,7 +67,7 @@ describe('ProviderCapabilityRegistry.getCapability — merge order', () => {
     const selfDeclared: ProviderWithCapabilities = {
       capabilities: { toolCalling: false } as Partial<ProviderCapability>,
     };
-    // anthropic has toolCalling: true — self-declared false should win
+    // anthropic has toolCalling: true, self-declared false should win
     const cap = registry.getCapability('anthropic', 'claude-3-haiku-20240307', selfDeclared);
     expect(cap.toolCalling).toBe(false);
   });
@@ -76,7 +76,7 @@ describe('ProviderCapabilityRegistry.getCapability — merge order', () => {
     // What this test is for is PRECEDENCE. It used to pin the override's literal
     // numbers (maxOutputTokens: 32_000), which made it a second copy of the sdk's
     // model table and went stale the moment that model's output ceiling was
-    // raised — a red test that said nothing about precedence. So the override's
+    // raised, a red test that said nothing about precedence. So the override's
     // own answer is read first, and the self-declared call is compared to it.
     const overridden = registry.getCapability('anthropic', 'claude-opus-4-5');
     expect(overridden.reasoningControls).toBe(true);
@@ -114,7 +114,7 @@ describe('ProviderCapabilityRegistry.getCapability — merge order', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ProviderCapabilityRegistry — canHandle
+// ProviderCapabilityRegistry, canHandle
 // ---------------------------------------------------------------------------
 
 describe('ProviderCapabilityRegistry.canHandle', () => {
@@ -180,7 +180,7 @@ describe('ProviderCapabilityRegistry.canHandle', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ProviderCapabilityRegistry — getRouteExplanation
+// ProviderCapabilityRegistry, getRouteExplanation
 // ---------------------------------------------------------------------------
 
 describe('ProviderCapabilityRegistry.getRouteExplanation', () => {

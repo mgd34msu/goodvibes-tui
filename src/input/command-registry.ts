@@ -55,7 +55,7 @@ export interface CommandRuntimeState {
   sessionId: string;
   /**
    * Cumulative count of direct terminal writes the output guard intercepted
-   * this session — surfaced by /debug. Optional so the SDK's MutableRuntimeState
+   * this session, surfaced by /debug. Optional so the SDK's MutableRuntimeState
    * (which has no such field) stays assignable; the guard sets it lazily on the
    * shared runtime object. (item 1a.)
    */
@@ -83,7 +83,7 @@ export interface CommandUiActions {
   };
   /**
    * Read-only view of pending `[TEXT: pN, M lines]` fold markers currently
-   * sitting in the composer (registerPaste in handler-content-actions.ts) —
+   * sitting in the composer (registerPaste in handler-content-actions.ts),
    * backs /pastes, which previews a folded paste's actual content before the
    * user submits it. A paste over the fold threshold is otherwise invisible
    * until the LLM sees it.
@@ -95,7 +95,7 @@ export interface CommandUiActions {
   cancelGeneration?: () => void;
   /**
    * Cancel JUST the currently-running tool call (the live transcript row),
-   * leaving the turn to continue — the local-session equivalent of the
+   * leaving the turn to continue, the local-session equivalent of the
    * sessions.toolCalls.cancel wire verb over the in-process orchestrator.
    * Returns true when a running call was found and cancelled.
    */
@@ -114,7 +114,7 @@ export interface CommandUiActions {
    * terminal delivers key events and never key-release state.
    */
   toggleVoiceInput?: () => void;
-  /** The current host sleep-ownership projection (power.status.get, flattened) — chip, held-because, lid-split. */
+  /** The current host sleep-ownership projection (power.status.get, flattened), chip, held-because, lid-split. */
   getPowerState?: () => import('../core/power-status.ts').PowerSurfaceState;
   /** Set the daemon-held keep-awake toggle (power.keepAwake.set), acquiring/releasing the inhibitor live; returns the new state. */
   setKeepAwake?: (enabled: boolean) => Promise<import('../core/power-status.ts').PowerSurfaceState>;
@@ -128,7 +128,7 @@ export interface CommandUiActions {
     /** Which config target to write the selected model to. Defaults to 'main'. */
     target?: import('./model-picker.ts').ModelPickerTarget;
     /**
-     * True only when `effort` came from the picker's effort STEP — an explicit
+     * True only when `effort` came from the picker's effort STEP, an explicit
      * user choice, which is the only thing allowed to update the stored
      * preference `provider.reasoningEffort`. The model-only and context-cap
      * commit routes pass a level merely carried over from the previous model;
@@ -139,7 +139,7 @@ export interface CommandUiActions {
   /**
    * Commit an embedding-provider selection from the model picker's
    * 'embeddingProvider' mode (the 'embeddings' target). Deliberately separate
-   * from completeModelSelection — embedding providers are not
+   * from completeModelSelection, embedding providers are not
    * ModelDefinition-shaped, so routing them through the same commit path
    * would require fabricating a fake model object.
    */
@@ -157,7 +157,7 @@ export interface CommandUiActions {
    * Force a full-screen repaint on the next frame (reuses Compositor.resetDiff(),
    * the same call resize/bootstrap already use). Defense-in-depth for command
    * handlers whose spawned subprocess may have written to the real tty (e.g. a
-   * stderr-capture regression) — nulls the diff buffers so the next composite()
+   * stderr-capture regression), nulls the diff buffers so the next composite()
    * repaints over any stray output instead of leaving it until an unrelated resize.
    */
   requestFullRepaint?: () => void;
@@ -175,7 +175,7 @@ export interface CommandShellUiOpeners {
   jumpToBookmark?: (key: string) => void;
   scrollToLine?: (line: number) => void;
   openHelpOverlay?: () => void;
-  /** Toggle the transcript search overlay (same action as Ctrl+F) — backs /find. */
+  /** Toggle the transcript search overlay (same action as Ctrl+F), backs /find. */
   openTranscriptSearch?: () => void;
   openSelection?: (
     title: string,
@@ -185,7 +185,7 @@ export interface CommandShellUiOpeners {
   ) => void;
   openSettingsModal?: (target?: string) => void;
   /**
-   * Open a MIGRATE-TO-MODAL surface by name (purge skeleton — B
+   * Open a MIGRATE-TO-MODAL surface by name (purge skeleton, B
    * command runtimes call this instead of openCommandPanel once their panel
    * is converted to a ModalFactory config). Threaded from ui-openers.ts the
    * same way openSettingsModal is.
@@ -197,7 +197,7 @@ export interface CommandShellUiOpeners {
   getScrollTop?: () => number;
   openPanelPicker?: () => void;
   /**
-   * Open the fuzzy command palette — a searchable picker over every registered
+   * Open the fuzzy command palette, a searchable picker over every registered
    * slash command (generated live from the registry). Bound to Ctrl+K and the
    * /palette command. Selecting a command pre-fills it into the composer.
    */
@@ -207,16 +207,16 @@ export interface CommandShellUiOpeners {
    * truth as the generated command reference (categorizeBuiltinCommands),
    * memoized by the shell. Lets registry-driven surfaces built inside command
    * handlers (/help) group by category without importing the aggregation
-   * module — a static import there would cycle (commands.ts registers those
+   * module, a static import there would cycle (commands.ts registers those
    * very handlers).
    */
   getCommandCategories?: () => ReadonlyMap<string, string>;
   /**
    * Open (and optionally focus) a panel. focus rule: the command path is
-   * "the user is mid-command-flow" — opening a panel this way leaves keyboard
+   * "the user is mid-command-flow", opening a panel this way leaves keyboard
    * focus in the composer by default. Pass `{ focus: true }` for a caller that
    * genuinely wants to grab focus (chords use panelManager.focusPanels()
-   * directly instead of this method, so no current call site needs it — but
+   * directly instead of this method, so no current call site needs it, but
    * the intent is explicit rather than implicit here). `target` is a
    * fleet deep-link jump target forwarded to PanelManager.open.
    */
@@ -265,17 +265,17 @@ export interface CommandSessionServices {
    * fresh Orchestrator's zeroed default.
    */
   readonly hydrateSessionUsage?: () => void;
-  /** The orchestration engine's command-facing facade — see runtime/workstream-services.ts. */
+  /** The orchestration engine's command-facing facade, see runtime/workstream-services.ts. */
   readonly workstreamEngine?: import('@pellux/goodvibes-sdk/platform/orchestration').WorkstreamCommandService;
-  /** The repo source-tree code index — see runtime/code-index-services.ts. */
+  /** The repo source-tree code index, see runtime/code-index-services.ts. */
   readonly codeIndexStore?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexStore;
-  /** Tool-site reindex scheduler — `/codebase status` reports its last activity. */
+  /** Tool-site reindex scheduler, `/codebase status` reports its last activity. */
   readonly codeIndexReindexScheduler?: import('@pellux/goodvibes-sdk/platform/state').CodeIndexReindexScheduler;
-  /** Whether the (default-off) `agent-passive-code-injection` flag is on — for `/codebase status`. */
+  /** Whether the (default-off) `agent-passive-code-injection` flag is on, for `/codebase status`. */
   readonly isPassiveCodeInjectionFlagEnabled?: () => boolean;
   /**
    * The MAIN interactive session's per-turn passive-injection
-   * honesty ring — `Orchestrator.getTurnInjections()`, the main-session
+   * honesty ring, `Orchestrator.getTurnInjections()`, the main-session
    * counterpart to `AgentRecord.turnInjections`. `/recall injections`
    * with no agent id reads this. Optional so command contexts built without an
    * orchestrator (headless, tests) fall back to the honest empty state.
@@ -297,8 +297,8 @@ export interface CommandProviderServices {
 export interface CommandWorkspaceUiServices {
   /**
    * The app's declare-once session-storage handle (runtime/services.ts). Every
-   * command that reads or writes session state — resume, save, the liveness
-   * markers, the rewind anchor sidecar — takes its paths from here instead of
+   * command that reads or writes session state, resume, save, the liveness
+   * markers, the rewind anchor sidecar, takes its paths from here instead of
    * re-deriving a scope from shellPaths, so a command can never land on a
    * different directory than the runtime that wrote the file.
    */
@@ -306,7 +306,7 @@ export interface CommandWorkspaceUiServices {
   keybindingsManager?: KeybindingsManager;
   fileUndoManager?: FileUndoManager;
   workspaceCheckpointManager?: WorkspaceCheckpointManager;
-  /** In-process gateway catalog — the /review hunk-revert flow invokes checkpoints.revertHunk(Preview) over it. */
+  /** In-process gateway catalog, the /review hunk-revert flow invokes checkpoints.revertHunk(Preview) over it. */
   gatewayMethods?: GatewayMethodCatalog;
   workspaceTrustManager?: import('@pellux/goodvibes-sdk/platform/runtime/operations').WorkspaceTrustManager;
   workspaceRegistrationManager?: import('@pellux/goodvibes-sdk/platform/runtime/operations').WorkspaceRegistrationManager;
@@ -325,15 +325,15 @@ export interface CommandWorkspaceServices
 export interface CommandPlatformConfigServices {
   readonly config: DeepReadonly<GoodVibesConfig>;
   readonly configManager: ConfigManager;
-  /** Per-device pairing tokens — backs the /devices command family. */
+  /** Per-device pairing tokens, backs the /devices command family. */
   readonly pairingTokens?: import('@pellux/goodvibes-sdk/platform/pairing').PairingTokenManager;
-  /** Capability gate runtime — feature states derive from domain settings keys; surfaces read live/pending state here. */
+  /** Capability gate runtime, feature states derive from domain settings keys; surfaces read live/pending state here. */
   readonly featureFlagManager?: FeatureFlagManager;
   readonly voiceProviderRegistry?: VoiceProviderRegistry;
   readonly voiceService?: VoiceService;
   /** Direct-command consumer (`/search`) alongside the existing agent-tool consumer. */
   readonly webSearchService?: import('@pellux/goodvibes-sdk/platform/web-search').WebSearchService;
-  /** Direct-command consumer (`/image`) — first production caller of `.generate()`. */
+  /** Direct-command consumer (`/image`), first production caller of `.generate()`. */
   readonly mediaProviders?: import('@pellux/goodvibes-sdk/platform/media').MediaProviderRegistry;
   readonly artifactStore?: import('@pellux/goodvibes-sdk/platform/artifacts').ArtifactStore;
   /** Background daemon/HTTP-listener/relay controller. Mutable: main.ts patches it in post-bootstrap (see bootstrap-command-parts.ts ordering note). */
@@ -378,8 +378,8 @@ export interface CommandContext
     readonly knowledgeApi?: KnowledgeApi;
     /**
      * The cross-surface memory spine client (SDK 1.2.0 full-detach). `/recall`'s
-     * browse/link/queue/export/import subcommands read and write through this —
-     * not `knowledgeApi.memory` — so they fully detach from the local store file
+     * browse/link/queue/export/import subcommands read and write through this,
+     * not `knowledgeApi.memory`, so they fully detach from the local store file
      * when a daemon has been adopted, per
      * docs/decisions/2026-07-06-memory-wire-full-detach.md in the SDK repo.
      * `explain` and the `vector` diagnostic subcommand stay on `knowledgeApi.memory`
@@ -403,9 +403,9 @@ export interface CommandContext
 /**
  * palette curation (item 4): the "common" first tier the slash-command
  * autocomplete dropdown shows before the alphabetical rest when it opens with
- * no filter typed yet (bare '/') — the "132-command palette unranked"
+ * no filter typed yet (bare '/'), the "132-command palette unranked"
  * evaluator finding. Typed filtering (any non-empty query) is completely
- * unaffected — fuzzyMatch still searches every registered command exactly as
+ * unaffected, fuzzyMatch still searches every registered command exactly as
  * before; this only reorders the empty-query case. Curated for breadth across
  * the product's main workflows rather than raw usage frequency: help/config
  * (orientation), panel/model (workspace + provider), recall/codebase/search
@@ -446,7 +446,7 @@ export class CommandRegistry {
   /**
    * Register a command. Also indexes all aliases for O(1) lookup.
    * Throws if the primary name or any alias collides with an existing
-   * registration — silent last-write-wins previously shadowed whole
+   * registration, silent last-write-wins previously shadowed whole
    * commands, so collisions must fail fast at startup (and are caught
    * statically by the alias lint test).
    */
@@ -454,9 +454,9 @@ export class CommandRegistry {
     // Every registered command is rendered with its description in /help, the
     // command palette, and the generated reference (docs/commands-reference.md).
     // A blank description would ship an unexplained row in all three, so it
-    // fails fast here — the release gate red-tests this invariant.
+    // fails fast here, the release gate red-tests this invariant.
     if (!command.description || command.description.trim().length === 0) {
-      throw new Error(`Command registration for "${command.name}" has no description — every command must describe itself.`);
+      throw new Error(`Command registration for "${command.name}" has no description: every command must describe itself.`);
     }
     const existingByName = this.commands.get(command.name) ?? this.aliasIndex.get(command.name);
     if (existingByName) {
@@ -527,7 +527,7 @@ export class CommandRegistry {
 
       if (bestScore > 0 || q === '') {
         // with no query yet, rank the curated common tier (score 2)
-        // ahead of everything else (score 1) — the tie-break below then sorts
+        // ahead of everything else (score 1), the tie-break below then sorts
         // each tier alphabetically, so the result is "common tier, then the
         // alphabetical rest" rather than one flat alphabetical list.
         const score = q === '' ? (COMMON_COMMAND_NAMES.has(cmd.name) ? 2 : 1) : bestScore;

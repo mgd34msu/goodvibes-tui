@@ -5,7 +5,7 @@
  * one shipped in a form that could not fail: it accepted a workflow if `'on' in
  * doc` OR `true in doc`, and a JS `in` with a boolean key looks for the string
  * key "true", which no workflow has. The comment above it asserted that YAML
- * parses `on:` as the boolean true — Bun.YAML.parse does not; it keeps the
+ * parses `on:` as the boolean true, Bun.YAML.parse does not; it keeps the
  * string key "on". So the second half of the condition was dead, and nothing
  * said so.
  *
@@ -72,7 +72,7 @@ describe('check-workflows', () => {
   test('accepts the YAML 1.1 `true:` spelling of the trigger key', () => {
     // The alternation that made the check unfalsifiable was `true in doc`, which
     // tests for a key named "true". A parser that folds `on:` to a boolean lands
-    // exactly that key, so the alternation is kept in that form — and this case
+    // exactly that key, so the alternation is kept in that form, and this case
     // is what stops it from being dead code nobody notices again.
     const folded = VALID_WORKFLOW.replace('on:\n', "'true':\n");
     const res = runGate({ 'ci.yml': folded });

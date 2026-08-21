@@ -4,14 +4,14 @@
  * handlePanelFocusToken.
  *
  * Invariant B: paste-ness is per-TOKEN, not a per-feed char sum. The tokenizer
- * emits a bracketed paste as ONE multi-char 'text' token; discrete keystrokes —
- * even several batched into one feed() by tick latency — arrive as separate
+ * emits a bracketed paste as ONE multi-char 'text' token; discrete keystrokes,
+ * even several batched into one feed() by tick latency, arrive as separate
  * 1-char tokens. Invariant A: focus never silently flips to the composer; a
  * paste into a focused non-capturing panel is DROPPED (with a one-shot hint),
  * focus unchanged.
  *
  * The old per-feed char-SUM burst guard flagged two quick nav keystrokes in one
- * feed() as a burst and yanked focus, leaking the keys to the composer — the
+ * feed() as a burst and yanked focus, leaking the keys to the composer, the
  * exact bug this suite now pins closed.
  */
 import { describe, test, expect, mock } from 'bun:test';

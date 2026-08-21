@@ -169,7 +169,7 @@ describe('handleUndo', () => {
       ih.cursorPos = i;
       saveUndo(ih);
     }
-    // Now undo MAX+1 times — redo stack should be bounded
+    // Now undo MAX+1 times, redo stack should be bounded
     for (let i = 0; i < MAX + 1; i++) {
       doUndo(ih);
     }
@@ -421,7 +421,7 @@ describe('autocomplete reset on space in command mode', () => {
     asTestAccess(ih).commandRegistry = registry;
     asTestAccess(ih).autocomplete = new AutocompleteEngine(registry);
 
-    // Simulate having typed '/plan' — autocomplete is active
+    // Simulate having typed '/plan', autocomplete is active
     ih.commandMode = true;
     ih.prompt = '/plan';
     ih.cursorPos = 5;
@@ -429,7 +429,7 @@ describe('autocomplete reset on space in command mode', () => {
     asTestAccess(ih).autocomplete?.update('plan');
     expect(asTestAccess(ih).autocomplete?.isActive).toBe(true);
 
-    // Feed a space character — should reset autocomplete
+    // Feed a space character, should reset autocomplete
     ih.feed(' ');
 
     // Autocomplete should no longer be active after space
@@ -447,14 +447,14 @@ describe('autocomplete reset on space in command mode', () => {
     asTestAccess(ih).commandRegistry = registry;
     asTestAccess(ih).autocomplete = new AutocompleteEngine(registry);
 
-    // Simulate typing '/pla' — autocomplete should update but stay active
+    // Simulate typing '/pla', autocomplete should update but stay active
     ih.commandMode = true;
     ih.prompt = '/pla';
     ih.cursorPos = 4;
     asTestAccess(ih).autocomplete?.update('pla');
     expect(asTestAccess(ih).autocomplete?.isActive).toBe(true);
 
-    // Feed 'n' — no space, autocomplete should remain active
+    // Feed 'n', no space, autocomplete should remain active
     ih.feed('n');
 
     // Autocomplete should still be active (no space typed)

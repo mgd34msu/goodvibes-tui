@@ -5,7 +5,7 @@ import type { SandboxProfile, SandboxSession, SandboxSessionRegistry } from '@/r
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { toneStyle, statusGlyph, pad, postureLine, kv, type Tone } from './modal-surface-helpers.ts';
 
-/** SandboxSessionRegistry has no event subscription — poll at the same 3s
+/** SandboxSessionRegistry has no event subscription, poll at the same 3s
  *  cadence the retired panel used (POLL_INTERVAL_MS in sandbox-panel.ts). */
 const POLL_INTERVAL_MS = 3_000;
 
@@ -32,7 +32,7 @@ function sessionIdOf(row: ConfigModalRow | null): string | null {
  * (buildSandboxReview, listSandboxProfiles, sessions.list) are synchronous, so
  * buildView reads them live each tick. The panel's single profile+session
  * selectable list becomes two real tabs. s/x/e call the SandboxSessionRegistry
- * directly (these were never slash commands) — start/execute are wrapped so a
+ * directly (these were never slash commands), start/execute are wrapped so a
  * rejection surfaces via ctx.setStatus instead of an unhandled rejection,
  * matching the panel's try/catch + setError behaviour.
  */

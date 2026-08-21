@@ -41,7 +41,7 @@ describe('resolveTheme', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Token completeness — every key must be a non-empty string
+// Token completeness, every key must be a non-empty string
 // ---------------------------------------------------------------------------
 
 describe('ThemeTokens completeness', () => {
@@ -82,7 +82,7 @@ describe('ThemeTokens completeness', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Dark mode spot checks — expected historical values
+// Dark mode spot checks, expected historical values
 // ---------------------------------------------------------------------------
 
 describe('dark mode token values', () => {
@@ -146,7 +146,7 @@ describe('dark mode token values', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Light mode values — must be clearly different from dark for readability
+// Light mode values, must be clearly different from dark for readability
 // ---------------------------------------------------------------------------
 
 describe('light mode token values differ from dark', () => {
@@ -183,12 +183,12 @@ describe('light mode token values differ from dark', () => {
 //
 // Verifies that markdown.ts, compositor.ts, and conversation-rendering.ts
 // no longer contain the specific hex literals that were replaced by tokens.
-// This is a lint-style regression guard — it will fail if someone re-introduces
+// This is a lint-style regression guard, it will fail if someone re-introduces
 // a hardcoded colour at one of those call sites.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// resolveUiTones() — chrome-token mode dimension
+// resolveUiTones(), chrome-token mode dimension
 //
 // UI_TONES (ui-primitives.ts) is the dark entry; dark resolution must stay
 // byte-identical (same reference) to that constant. The light entry must be
@@ -262,7 +262,7 @@ describe('no hardcoded hex literals at replaced call sites', () => {
 
   // Per-file hex guard lists.
   // NOTE: conversation-rendering.ts retains '#00ffff' in addConversationSplashScreen
-  // (an intentional color-interpolation gradient — not a replaced call site).
+  // (an intentional color-interpolation gradient, not a replaced call site).
   const GUARDS: Array<{ file: string; blockedHex: string[] }> = [
     {
       file: path.join(root, 'renderer/markdown.ts'),

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// rewind-runtime-command.test.ts — the unified message-anchored /rewind, plus
+// rewind-runtime-command.test.ts, the unified message-anchored /rewind, plus
 // /undo rewind and /redo rewind reversals.
 //
 // Uses the real WorkspaceCheckpointManager against a scratch workspace (turn
@@ -104,7 +104,7 @@ describe('rewind-runtime registration', () => {
   });
 });
 
-describe('/rewind — recent-turns picker', () => {
+describe('/rewind: recent-turns picker', () => {
   test('bare /rewind with no recorded turns explains the current-run limitation', async () => {
     const dir = makeScratchWorkspace();
     const { conv } = makeFakeConversation(2);
@@ -129,7 +129,7 @@ describe('/rewind — recent-turns picker', () => {
   });
 });
 
-describe('/rewind both — files + conversation confirm flow', () => {
+describe('/rewind both: files + conversation confirm flow', () => {
   test('previews, confirms, restores files, truncates the conversation, and renders a [Rewind] receipt', async () => {
     const dir = makeScratchWorkspace();
     writeFileSync(join(dir, 'a.txt'), 'v1');
@@ -170,7 +170,7 @@ describe('/rewind both — files + conversation confirm flow', () => {
   });
 });
 
-describe('/rewind conversation — no checkpoint required', () => {
+describe('/rewind conversation: no checkpoint required', () => {
   test('rewinds conversation only, then /undo rewind restores and /redo rewind re-applies', async () => {
     const dir = makeScratchWorkspace();
     const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
@@ -209,7 +209,7 @@ describe('/rewind conversation — no checkpoint required', () => {
   });
 });
 
-describe('/rewind — checkpoint-only fallback (no completed turns recorded this run)', () => {
+describe('/rewind: checkpoint-only fallback (no completed turns recorded this run)', () => {
   test('bare /rewind with real checkpoints on disk but zero turn anchors lists checkpoints, not the dead-end message', async () => {
     const dir = makeScratchWorkspace();
     writeFileSync(join(dir, 'a.txt'), 'v1');
@@ -248,7 +248,7 @@ describe('/rewind — checkpoint-only fallback (no completed turns recorded this
     writeFileSync(join(dir, 'a.txt'), 'v1');
     const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
     await mgr.create({ kind: 'manual', label: 'checkpoint one', retentionClass: 'standard' });
-    writeFileSync(join(dir, 'a.txt'), 'v2 — drifted after the checkpoint');
+    writeFileSync(join(dir, 'a.txt'), 'v2: drifted after the checkpoint');
 
     const fake = makeFakeConversation(3);
     const { ctx, printed, opened, getDiffPanel } = makeCtx(dir, mgr, fake.conv);
@@ -266,7 +266,7 @@ describe('/rewind — checkpoint-only fallback (no completed turns recorded this
     await waitFor(() => fake.systemMessages.length > 0);
 
     expect(readFileSync(join(dir, 'a.txt'), 'utf-8')).toBe('v1');
-    // Conversation is completely untouched — still the original 3 messages.
+    // Conversation is completely untouched, still the original 3 messages.
     expect(fake.getMessages().length).toBe(3);
     const receipt = fake.systemMessages[0]!;
     expect(receipt).toContain('[Rewind]');
@@ -292,7 +292,7 @@ describe('/rewind — checkpoint-only fallback (no completed turns recorded this
   });
 });
 
-describe('/rewind — single-use confirm token', () => {
+describe('/rewind: single-use confirm token', () => {
   test('a stale plan cannot be applied twice (token consumed on first confirm)', async () => {
     const dir = makeScratchWorkspace();
     const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });

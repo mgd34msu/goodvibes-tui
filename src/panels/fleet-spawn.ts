@@ -2,14 +2,14 @@
 // fleet-spawn.ts
 //
 // The Fleet panel's ACP spawn affordance: 'n' on the fleet surface lists the
-// third-party coding agents the daemon discovered (acp.agents.list — read-only,
+// third-party coding agents the daemon discovered (acp.agents.list, read-only,
 // quiet when none), you pick one, then pick a working directory from the known
-// candidates (the registered workspaces + the current dir — no free-text path
+// candidates (the registered workspaces + the current dir, no free-text path
 // retyping where a known dir exists), and acp.sessions.create hosts it as a
 // long-lived daemon session. The new row shows up on the next fleet snapshot as
 // kind 'acp-agent' and steers/stops/flags-for-attention like any other row.
 //
-// A structured spawn failure ({binary, stage, message}) is surfaced verbatim —
+// A structured spawn failure ({binary, stage, message}) is surfaced verbatim,
 // never a hung row: the daemon bounds the handshake and returns a 'failed'
 // record, and this controller reports its three honest fields.
 //
@@ -34,7 +34,7 @@ import {
 
 /** One discovered third-party ACP agent (acp.agents.list). */
 export type AcpDiscoveredAgent = OperatorMethodOutput<'acp.agents.list'>['agents'][number];
-/** acp.sessions.create output — the hosted record + whether it started. */
+/** acp.sessions.create output, the hosted record + whether it started. */
 export type AcpSpawnResult = OperatorMethodOutput<'acp.sessions.create'>;
 /** One registered workspace root (workspaces.registrations.list). */
 export type AcpWorkspaceRegistration = OperatorMethodOutput<'workspaces.registrations.list'>['workspaces'][number];
@@ -47,13 +47,13 @@ export interface AcpDirCandidate {
 }
 
 /**
- * The async verb surface the spawn flow drives — real daemon round-trips in
+ * The async verb surface the spawn flow drives, real daemon round-trips in
  * production (createAcpSpawnGateway), a mocked shape in tests.
  */
 export interface AcpSpawnGateway {
   /** Discovered third-party agents (read-only; empty is a quiet, honest absence). */
   listAgents(): Promise<readonly AcpDiscoveredAgent[]>;
-  /** The registered workspace roots — the known-dir candidates for the picker. */
+  /** The registered workspace roots, the known-dir candidates for the picker. */
   listWorkspaces(): Promise<readonly AcpWorkspaceRegistration[]>;
   /** Host a discovered agent in a directory as a long-lived daemon session. */
   createSession(input: { readonly agentId: string; readonly cwd: string }): Promise<AcpSpawnResult>;
@@ -69,7 +69,7 @@ export interface AcpSpawnGatewayDeps {
 }
 
 /**
- * Build the live ACP spawn gateway over the generic operator invoke path — the
+ * Build the live ACP spawn gateway over the generic operator invoke path, the
  * same daemon resolution the fleet acts use. Honest unavailable reason when no
  * daemon is reachable, so the spawn key refuses cleanly instead of throwing.
  */
@@ -88,7 +88,7 @@ export function createAcpSpawnGateway(deps: AcpSpawnGatewayDeps): AcpSpawnGatewa
 export interface FleetSpawnDeps {
   /** Resolve a live gateway per action (a daemon that comes up mid-session is seen). */
   readonly resolveGateway: () => AcpSpawnGatewayResolution;
-  /** The current working directory — always a candidate dir (labeled "current directory"). */
+  /** The current working directory, always a candidate dir (labeled "current directory"). */
   readonly currentDirectory: () => string;
   /** Surface a result/receipt/error line to the operator (system message). */
   readonly notify: (message: string) => void;
@@ -204,10 +204,10 @@ export class FleetSpawn {
       const result = await gateway.createSession({ agentId, cwd });
       const hosted = result.hosted;
       if (hosted.error) {
-        // Structured failure rendered verbatim — never a hung row.
-        this.deps.notify(`[Fleet] Could not host ${hosted.title || agentId}: ${hosted.error.stage} stage failed for ${hosted.error.binary} — ${hosted.error.message}`);
+        // Structured failure rendered verbatim, never a hung row.
+        this.deps.notify(`[Fleet] Could not host ${hosted.title || agentId}: ${hosted.error.stage} stage failed for ${hosted.error.binary}; ${hosted.error.message}`);
       } else {
-        this.deps.notify(`[Fleet] Hosting ${hosted.title || agentId} in ${cwd} — it appears as an acp-agent row; steer and stop it like any agent.`);
+        this.deps.notify(`[Fleet] Hosting ${hosted.title || agentId} in ${cwd}; it appears as an acp-agent row; steer and stop it like any agent.`);
       }
     } catch (err) {
       this.deps.notify(`ACP session create failed: ${summarizeError(err)}`);
@@ -225,10 +225,10 @@ export class FleetSpawn {
     const lines: Line[] = [];
     if (this.creating) {
       lines.push(buildPanelLine(width, [[' Hosting the agent…', P.dim]]));
-      return buildPanelWorkspace(width, height, { title: 'Fleet — Host an agent', sections: [{ lines }], footerLines: [], palette: P });
+      return buildPanelWorkspace(width, height, { title: 'Fleet: Host an agent', sections: [{ lines }], footerLines: [], palette: P });
     }
     if (this.mode.step === 'agent') {
-      lines.push(buildPanelLine(width, [[' Host a third-party coding agent — pick one, then a directory.', P.dim]]));
+      lines.push(buildPanelLine(width, [[' Host a third-party coding agent; pick one, then a directory.', P.dim]]));
       lines.push(buildPanelLine(width, [['', P.dim]]));
       this.mode.agents.forEach((agent, i) => {
         const selected = i === (this.mode as AgentStep).index;
@@ -239,7 +239,7 @@ export class FleetSpawn {
         ]));
       });
     } else {
-      lines.push(buildPanelLine(width, [[` Directory for ${this.mode.agent.title} — a known dir, no path to type.`, P.dim]]));
+      lines.push(buildPanelLine(width, [[` Directory for ${this.mode.agent.title}: a known dir, no path to type.`, P.dim]]));
       lines.push(buildPanelLine(width, [['', P.dim]]));
       this.mode.candidates.forEach((cand, i) => {
         const selected = i === (this.mode as DirStep).index;
@@ -255,7 +255,7 @@ export class FleetSpawn {
       { keys: 'Enter', label: this.mode.step === 'agent' ? 'pick agent' : 'host here' },
       { keys: 'Esc', label: 'cancel' },
     ], P)];
-    return buildPanelWorkspace(width, height, { title: 'Fleet — Host an agent', sections: [{ lines }], footerLines, palette: P });
+    return buildPanelWorkspace(width, height, { title: 'Fleet: Host an agent', sections: [{ lines }], footerLines, palette: P });
   }
 
   private requireGateway(): AcpSpawnGateway | null {

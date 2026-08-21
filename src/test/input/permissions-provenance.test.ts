@@ -39,7 +39,7 @@ describe('permission provenance', () => {
 
   test('a runtime --config override is labelled not-recorded-on-disk, not mis-attributed', () => {
     const cm = new ConfigManager({ workingDir: root, homeDir: root, surfaceRoot: 'tui' });
-    // Mutates the in-memory config WITHOUT persisting — exactly what CLI --config does.
+    // Mutates the in-memory config WITHOUT persisting, exactly what CLI --config does.
     applyRuntimeConfigValue(cm as never, 'permissions.mode', 'allow-all');
     const mode = findRow(buildPermissionProvenance(cm), 'permissions.mode');
     expect(mode.value).toBe('allow-all');
@@ -67,7 +67,7 @@ describe('permission provenance', () => {
     expect(rule).toBeDefined();
     expect(rule!.effect).toBe('deny');
     expect(rule!.pathPatterns.length).toBeGreaterThan(0);
-    // Not a ConfigKey row — no shipped rule id should collide with a PERMISSION_KEYS entry.
+    // Not a ConfigKey row, no shipped rule id should collide with a PERMISSION_KEYS entry.
     expect(prov.rows.some((r) => r.key === rule!.id)).toBe(false);
 
     const text = renderPermissionProvenance(prov);

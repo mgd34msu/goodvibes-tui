@@ -46,7 +46,7 @@ interface LeakRecord {
 }
 
 /**
- * The frame that actually created the timer — the single most useful field when
+ * The frame that actually created the timer, the single most useful field when
  * deciding what a test must dispose, because it names the class that owns it.
  */
 function parseSite(stack: string): string {
@@ -71,7 +71,7 @@ const REPO_FILE = /([^\s()]+\.(?:ts|tsx|mjs|js)):\d+:\d+/;
 
 /**
  * The test file whose stack we most recently saw. Bun runs test files serially,
- * so a timer created from an async continuation (no test frame on its stack —
+ * so a timer created from an async continuation (no test frame on its stack,
  * a rescheduling poller, a promise callback) still belongs to whichever file
  * was executing. That makes the heuristic a reliable owner, not a guess.
  */
@@ -275,7 +275,7 @@ if (ENABLED) {
     const intervals = leaks.filter((l) => l.kind === 'interval');
     // Intervals are the actionable number: they repeat forever and run inside
     // every later test file. A still-pending one-shot timeout is usually just a
-    // sleep that had not elapsed when the run ended — it fires once and clears
+    // sleep that had not elapsed when the run ended, it fires once and clears
     // itself, so it cannot pollute a later test the way a poller does.
     lines.push(`  of which intervals (pollers): ${intervals.length}   <-- the actionable number`);
     lines.push(`  one-shot timeouts still pending: ${leaks.length - intervals.length}`);
@@ -283,7 +283,7 @@ if (ENABLED) {
     lines.push(`  callbacks fired by still-live handles: ${totalFires}`);
     lines.push('');
 
-    // Creation sites, pollers first — this names the class that must be disposed.
+    // Creation sites, pollers first, this names the class that must be disposed.
     const bySite = new Map<string, { live: number; fired: number; kinds: Set<string> }>();
     for (const leak of leaks) {
       const entry = bySite.get(leak.site) ?? { live: 0, fired: 0, kinds: new Set<string>() };

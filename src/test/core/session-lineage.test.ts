@@ -5,8 +5,8 @@
  *
  * Note: the tracker's `format()` helper was removed in goodvibes-sdk 0.34.1
  * (it duplicated the canonical buildSessionLineage). These tests verify the
- * data API the TUI actually consumes — getOriginalTask / getEntries /
- * getCompactionCount — rather than a rendered string.
+ * data API the TUI actually consumes, getOriginalTask / getEntries /
+ * getCompactionCount, rather than a rendered string.
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core';
@@ -28,7 +28,7 @@ describe('SessionLineageTracker', () => {
       expect(tracker.getOriginalTask()).toBe('build the thing');
     });
 
-    it('silently ignores second call (overwrite guard — idempotent)', () => {
+    it('silently ignores second call (overwrite guard; idempotent)', () => {
       tracker.setOriginalTask('first task');
       tracker.setOriginalTask('second task');
       expect(tracker.getOriginalTask()).toBe('first task');

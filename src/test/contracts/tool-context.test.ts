@@ -8,7 +8,7 @@ import { RuntimeEventBus } from '@/runtime/index.ts';
 import type { PhaseResult, ToolExecutionPhase } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
-// Minimal stubs — test structural invariants without real implementations
+// Minimal stubs, test structural invariants without real implementations
 // ---------------------------------------------------------------------------
 
 function makeStoreAccess(): RuntimeStoreAccess {

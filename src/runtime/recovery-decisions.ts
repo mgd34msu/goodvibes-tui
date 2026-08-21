@@ -1,11 +1,11 @@
 /**
- * recovery-decisions.ts — a durable record of the recovery snapshots the user
+ * recovery-decisions.ts, a durable record of the recovery snapshots the user
  * has already said "Remove" to.
  *
  * The defect this exists for: answering Remove deletes the snapshot file, and
  * that was the whole memory of the decision. Anything that puts the file back
- * — a session still running on an older build rewriting its snapshot every
- * 60s, a restored backup, a synced directory — produced the same question
+ *, a session still running on an older build rewriting its snapshot every
+ * 60s, a restored backup, a synced directory, produced the same question
  * again on the next launch, and again after the next removal, with no way for
  * the user to make it stop. A decision the product forgets the instant it acts
  * on it is not a decision the user gets to make.
@@ -17,7 +17,7 @@
  * run.
  *
  * WHERE IT LIVES, and why not under `surface.stateDir`:
- * `<homeDirectory>/.goodvibes/<surfaceRoot>/recovery-decisions.json` — home-
+ * `<homeDirectory>/.goodvibes/<surfaceRoot>/recovery-decisions.json`, home-
  * anchored, matching session-liveness-marker.ts, and deliberately NOT the
  * project-anchored `surface.stateDir`. The snapshots this defends against
  * include the ones in the SDK's legacy shared recovery directory, which is
@@ -38,7 +38,7 @@ import type { SessionSurface } from '@/runtime/index.ts';
 /** One "the user removed this snapshot" decision. */
 export interface RecoveryRemovalRecord {
   readonly sessionId: string;
-  /** The project the decision was made in. Provenance — matching is on sessionId alone. */
+  /** The project the decision was made in. Provenance, matching is on sessionId alone. */
   readonly workspace: string;
   readonly removedAt: number;
 }
@@ -51,12 +51,12 @@ export interface RecoveryRemovalRecord {
  * Note what is deliberately NOT the pruning rule: "drop records whose snapshot
  * file no longer exists". Every record in here describes a file that was just
  * deleted, so that rule would empty the ledger immediately and reinstate the
- * exact defect it was written to fix — the point is precisely to still
+ * exact defect it was written to fix, the point is precisely to still
  * remember once the file comes back. Age and count are the honest bounds.
  *
- * Both bounds are enforced wherever records actually leave the disk —
+ * Both bounds are enforced wherever records actually leave the disk,
  * pruneRecoveryDecisions (once per boot) and recordRecoveryRemoval (every
- * write) — and both DISCLOSE what they discarded. A deletion nobody reports is
+ * write), and both DISCLOSE what they discarded. A deletion nobody reports is
  * indistinguishable from data loss, so the counts go in the log with the ledger
  * path, the TTL and the cap alongside them.
  */
@@ -93,8 +93,8 @@ interface LedgerLoad {
 }
 
 /**
- * Load and filter the ledger. Validation is by CONTENT — the file is parsed and
- * every entry is shape-checked — so a torn, truncated or zero-byte ledger left
+ * Load and filter the ledger. Validation is by CONTENT, the file is parsed and
+ * every entry is shape-checked, so a torn, truncated or zero-byte ledger left
  * by a crash reads as "no decisions recorded" instead of being trusted because
  * it exists. Never throws: a corrupt file must not be able to take a boot down,
  * and the worst outcome of losing it is that the user is asked once more.
@@ -127,7 +127,7 @@ function loadLedger(surface: SessionSurface, nowMs: number): LedgerLoad {
  * a corrupt file must not be able to take a boot down, and the worst outcome
  * of losing it is that the user is asked once more.
  *
- * This is a filtered READ — it discards nothing from disk, so it stays silent.
+ * This is a filtered READ, it discards nothing from disk, so it stays silent.
  * Disclosure belongs to the calls that actually delete: {@link pruneRecoveryDecisions}
  * and {@link recordRecoveryRemoval}.
  */
@@ -139,8 +139,8 @@ export function readRecoveryRemovals(surface: SessionSurface, nowMs: number = Da
  * Write `records` to the ledger through a temp file and an atomic rename.
  *
  * A plain `writeFileSync` onto the live path truncates first and fills after,
- * so a crash — or a second TUI in another terminal writing the same home-
- * anchored ledger at the same moment — could leave a half-written array that a
+ * so a crash, or a second TUI in another terminal writing the same home-
+ * anchored ledger at the same moment, could leave a half-written array that a
  * later boot reads as an empty or corrupt ledger, silently forgetting every
  * decision the user made. `rename` is atomic on the same filesystem: a reader
  * sees either the whole old ledger or the whole new one. The temp name carries
@@ -180,7 +180,7 @@ export interface RecoveryDecisionsPruneOutcome {
  * Apply both bounds to the on-disk ledger and say what was discarded.
  *
  * `readRecoveryRemovals` filters in memory on every call, so the expired
- * records were already inert — but they stayed on disk until the next time the
+ * records were already inert, but they stayed on disk until the next time the
  * user happened to answer "Remove", which on a machine where that never happens
  * again is never. This makes the reap explicit and, crucially, VISIBLE: a
  * silent deletion is indistinguishable from data loss, so every pass that drops
@@ -189,7 +189,7 @@ export interface RecoveryDecisionsPruneOutcome {
  * Idempotent and safe to run from two processes at once: it is a pure function
  * of the file's content plus `nowMs`, the rewrite is a temp-file-plus-rename,
  * and a second run over an already-pruned ledger drops nothing and writes
- * nothing. Best-effort — a ledger that cannot be pruned is left exactly as it
+ * nothing. Best-effort, a ledger that cannot be pruned is left exactly as it
  * was and never breaks a boot.
  */
 export function pruneRecoveryDecisions(surface: SessionSurface, nowMs: number = Date.now()): RecoveryDecisionsPruneOutcome {
@@ -209,7 +209,7 @@ export function pruneRecoveryDecisions(surface: SessionSurface, nowMs: number = 
     // Do NOT rewrite: an unreadable ledger might be a transient read failure,
     // and replacing it with `[]` would turn "could not read" into "forgot every
     // decision the user made". Say so and leave it alone.
-    logger.warn('recovery decisions: ledger present but unreadable — left untouched, decisions may be re-asked', {
+    logger.warn('recovery decisions: ledger present but unreadable; left untouched, decisions may be re-asked', {
       ledger: path,
     });
     return outcome;
@@ -246,7 +246,7 @@ export function isRecoveryRemovalRecorded(surface: SessionSurface, sessionId: st
 }
 
 /**
- * Record that the user chose Remove for `sessionId`. Idempotent — a repeat
+ * Record that the user chose Remove for `sessionId`. Idempotent, a repeat
  * removal of a snapshot that came back refreshes the existing record's
  * timestamp rather than adding a second one, so the ledger cannot grow by one
  * entry per reappearance.
@@ -265,7 +265,7 @@ export function recordRecoveryRemoval(surface: SessionSurface, sessionId: string
       // Appending onto an unreadable ledger would rewrite it as a one-record
       // array, silently discarding whatever the user decided before. Say so
       // rather than quietly resetting their history.
-      logger.warn('recovery decisions: ledger unreadable — recording this removal replaces it', {
+      logger.warn('recovery decisions: ledger unreadable; recording this removal replaces it', {
         ledger: path,
         sessionId,
       });
@@ -290,6 +290,6 @@ export function recordRecoveryRemoval(surface: SessionSurface, sessionId: string
       });
     }
   } catch {
-    // Best-effort by construction — see the doc comment above.
+    // Best-effort by construction, see the doc comment above.
   }
 }

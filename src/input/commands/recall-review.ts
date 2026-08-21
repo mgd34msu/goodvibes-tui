@@ -40,7 +40,7 @@ export async function handleRecallQueue(args: string[], context: CommandContext)
   }
   context.print(`[recall] Review queue (${queue.length}):`);
   for (const record of queue) {
-    const reason = record.staleReason ? ` — ${record.staleReason}` : '';
+    const reason = record.staleReason ? `: ${record.staleReason}` : '';
     context.print(`  ${record.id} [${record.scope}/${record.cls}] ${record.reviewState} ${record.confidence}%  ${record.summary}${reason}${temporalStatusLabel(record)}`);
   }
 }
@@ -107,13 +107,13 @@ export function handleRecallExplain(args: string[], context: CommandContext): vo
  * Per-turn passive knowledge injection inspectability.
  *
  * With an explicit agent id, reads `AgentRecord.turnInjections`
- * via `context.ops.agentManager.exportState()` — the CommandContext-exposed
+ * via `context.ops.agentManager.exportState()`, the CommandContext-exposed
  * `ShellAgentManagerService` doesn't have a `getStatus`/`list` pair, but
  * `exportState()` returns the same full `AgentRecord[]` (it's what
  * compactConversation() already uses for the same reason).
  *
  * With NO agent id (wiring), renders the MAIN interactive session's own
- * per-turn injection ring — `Orchestrator.getTurnInjections()`, threaded onto
+ * per-turn injection ring, `Orchestrator.getTurnInjections()`, threaded onto
  * the command context as `session.getMainSessionTurnInjections`. As of the
  * main session DOES route through the passive-injection engine, so this is the
  * honest main-session default (previously there was no record source, so the

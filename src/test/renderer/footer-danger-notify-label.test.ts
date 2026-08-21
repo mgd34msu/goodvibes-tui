@@ -1,7 +1,7 @@
 /**
  * The footer's `hitl:${hitlMode}` context-line label shared
  * vocabulary with tool-approval risk, but /mode (aliased /hitl) only governs
- * UX notification verbosity (quiet/balanced/operator) — not auto-approval.
+ * UX notification verbosity (quiet/balanced/operator), not auto-approval.
  * A user with hitlMode: 'operator' (careful supervision) could see
  * "! DANGER MODE - ALL CHANGES AUTO-APPROVED" rendered right next to a label
  * that reads as if it's about the same axis. Renamed to `notify:` so it no

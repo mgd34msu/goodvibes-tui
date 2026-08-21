@@ -25,7 +25,7 @@ const setPermissionTool = (
   cm.setDynamic(key, action);
 };
 
-describe('PermissionManager — config-driven modes', () => {
+describe('PermissionManager: config-driven modes', () => {
   let manager: PermissionManager;
   let configManager: ConfigManager;
   let tempDir: string;

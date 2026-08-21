@@ -4,7 +4,7 @@
  * The SDK adopt-or-start path now reports a distinct `incompatible` host-service
  * mode: a GoodVibes daemon holds the configured port but speaks a wire version
  * this surface cannot adopt, so the TUI neither adopted it nor started a
- * competing daemon. These tests pin the TUI's honest surfacing of that mode —
+ * competing daemon. These tests pin the TUI's honest surfacing of that mode,
  * it must never be mislabeled as an adopted/embedded ("running") service, must
  * report the port as occupied, and must not be treated as an active endpoint.
  */
@@ -30,7 +30,7 @@ function incompatibleStatus(): HostServiceStatus {
     authenticated: true,
     status: 'running',
     reason:
-      'A GoodVibes daemon (version 0.35.0) is running on 127.0.0.1:3421, but this surface (version 0.38.0) speaks an incompatible wire version — not adopting, and not starting a second daemon on the occupied port.',
+      'A GoodVibes daemon (version 0.35.0) is running on 127.0.0.1:3421, but this surface (version 0.38.0) speaks an incompatible wire version; not adopting, and not starting a second daemon on the occupied port.',
   };
 }
 

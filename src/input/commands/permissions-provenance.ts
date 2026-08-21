@@ -9,7 +9,7 @@ import { SHIPPED_CREDENTIAL_READ_RULES } from '@pellux/goodvibes-sdk/platform/pe
 // Shows every permission-relevant setting in effect AND where each value came
 // from. Provenance is taken from the platform's own ConfigManager.
 // describeConfigKeySource (the recorded on-disk tier: shared / project / global
-// / default) — never a guess. Because CLI --config overrides mutate the config
+// / default), never a guess. Because CLI --config overrides mutate the config
 // in memory WITHOUT touching any file, we additionally compare the live value
 // against the recorded on-disk / built-in-default value: when they diverge, the
 // value was changed at runtime and its true origin is NOT recorded on disk, so
@@ -34,7 +34,7 @@ export interface PermissionProvenanceRow {
   readonly note?: string;
 }
 
-/** A shipped (SDK-managed, code-embedded) policy rule — not driven by any config key, so it has no ConfigKey-based tier. */
+/** A shipped (SDK-managed, code-embedded) policy rule, not driven by any config key, so it has no ConfigKey-based tier. */
 export interface ShippedPolicyRuleRow {
   readonly id: string;
   readonly effect: 'allow' | 'deny';
@@ -50,8 +50,8 @@ export interface PermissionProvenance {
   /**
    * Shipped managed policy rules baked into the SDK's PermissionManager
    * (currently: default-deny reads of well-known credential stores). These
-   * are NOT config-key-driven — there is no on/off setting and no file they
-   * could be recorded in — so they cannot use the shared/project/global/
+   * are NOT config-key-driven, there is no on/off setting and no file they
+   * could be recorded in, so they cannot use the shared/project/global/
    * default tier model above. Listed separately with an honest "shipped
    * default" origin rather than force-fit into a ConfigKey row.
    */
@@ -165,7 +165,7 @@ function buildRow(
   } else if (originPath) {
     const fv = fileValue(originPath, key);
     if (!fv || !fv.present) {
-      // The tier says this file carries the key, but we could not read it back —
+      // The tier says this file carries the key, but we could not read it back,
       // do not guess; report the origin as unrecorded.
       return { ...base, origin: `origin not recorded (${tier} config file could not be read back)`, originPath, recorded: false, overridden: false };
     }
@@ -221,7 +221,7 @@ function displayValue(value: unknown): string {
 /** Render the provenance panel as plain lines for the command surface. */
 export function renderPermissionProvenance(provenance: PermissionProvenance): string {
   const lines: string[] = [
-    'Permissions — settings in effect and where each came from',
+    'Permissions: settings in effect and where each came from',
     `  session mode: ${provenance.sessionMode} (${provenance.sessionModeLabel})`,
     '',
     'Every line is traceable to its recorded origin. A value changed at runtime',
@@ -248,7 +248,7 @@ export function renderPermissionProvenance(provenance: PermissionProvenance): st
 
   if (provenance.shippedRules.length > 0) {
     lines.push('');
-    lines.push('Shipped policy rules — baked into the SDK, not driven by any config key');
+    lines.push('Shipped policy rules: baked into the SDK, not driven by any config key');
     lines.push('(origin: shipped default; a user allow-rule always wins over these):');
     for (const rule of provenance.shippedRules) {
       lines.push(`  ${rule.id}  [${rule.effect}]  tools: ${rule.toolPattern}`);

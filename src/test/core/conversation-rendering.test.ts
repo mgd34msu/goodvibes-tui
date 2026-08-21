@@ -6,7 +6,7 @@
 //     consulted (always rendered in full regardless of collapse state).
 //     Now collapsed by default to one line, and the toggle actually toggles.
 //   - "N lines" badges: computed from raw message content, not what
-//     expansion actually renders — a JSON blob that pretty-prints to many
+//     expansion actually renders, a JSON blob that pretty-prints to many
 //     lines used to show "1 line" while collapsed. Now the badge always
 //     names the post-expansion line count, for both single tool results and
 //     folded tool-result groups.
@@ -23,7 +23,7 @@ function textOf(cm: ConversationManager): string {
 describe('thinking block collapse', () => {
   function buildWithThinking(): ConversationManager {
     const cm = new ConversationManager(() => 80);
-    // showThinking defaults to false unless configManager says otherwise —
+    // showThinking defaults to false unless configManager says otherwise,
     // wire a stub that turns display.showThinking on, same as main.ts does
     // via setConfigManager() after construction.
     cm.setConfigManager({
@@ -38,7 +38,7 @@ describe('thinking block collapse', () => {
     const cm = buildWithThinking();
     const text = textOf(cm);
     // One row: the label and the ▸ size badge, the same collapse affordance
-    // every other folded block carries. No preview — reasoning text stays
+    // every other folded block carries. No preview, reasoning text stays
     // behind the toggle.
     expect(text).toContain('thinking  ▸ 3 lines');
     expect(text).not.toContain('step one');
@@ -65,7 +65,7 @@ describe('tool-result "N lines" badge honesty', () => {
   test('the badge counts the EXPANDED (pretty-printed JSON) line count, not the raw one-line content', () => {
     const cm = new ConversationManager(() => 80);
     // Deliberately long (>200 chars) and an unrecognized tool family, so
-    // summarizeToolResult returns null and the block collapses by default —
+    // summarizeToolResult returns null and the block collapses by default,
     // exercising the "still says the true expanded count while collapsed"
     // path rather than the isShort-always-expanded path.
     const padding: Record<string, number> = {};
@@ -78,7 +78,7 @@ describe('tool-result "N lines" badge honesty', () => {
 
     const block = cm.getBlockRegistry().find((b) => b.type === 'tool');
     expect(block).toBeDefined();
-    // Collapsed by default (long/unsummarizable JSON) — the header badge
+    // Collapsed by default (long/unsummarizable JSON), the header badge
     // must still name what Tab would reveal, not "1 line" (raw JSON has no
     // newlines).
     expect(cm.isCollapsed(block!.blockIndex)).toBe(true);
@@ -89,7 +89,7 @@ describe('tool-result "N lines" badge honesty', () => {
     const claimedLines = Number(collapsedMatch![1]);
     expect(claimedLines).toBeGreaterThan(1); // NOT the raw "1 line" lie
 
-    // The claimed count must match what expansion ACTUALLY renders — the
+    // The claimed count must match what expansion ACTUALLY renders, the
     // same invariant tool-result-expanded-lines.ts is the shared source of
     // truth for (both the badge and conversation-turn-structure.ts's group
     // totals compute from it).
@@ -118,7 +118,7 @@ describe('tool-result "N lines" badge honesty', () => {
 
     // There is no longer a synthetic group total to be honest about: each
     // result hangs under its own call and carries its own badge. The honesty
-    // guarantee that survives — and is what the badge is FOR — is that each
+    // guarantee that survives, and is what the badge is FOR, is that each
     // badge names the post-render line count expanding it actually reveals,
     // not the raw content's line count.
     const turnBlock = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
@@ -129,7 +129,7 @@ describe('tool-result "N lines" badge honesty', () => {
     const text = textOf(cm);
     expect(text).toContain(`${expectedA} lines`);
     expect(text).toMatch(new RegExp(`${expectedB} lines?`));
-    // A one-line raw JSON blob pretty-prints to many lines — the badge must
+    // A one-line raw JSON blob pretty-prints to many lines, the badge must
     // report the revealed count, so these must differ.
     expect(expectedA).toBeGreaterThan(1);
   });

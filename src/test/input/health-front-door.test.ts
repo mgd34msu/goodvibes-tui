@@ -1,5 +1,5 @@
 /**
- * item 3 (report-vs-modal front doors) — /health has no single modal
+ * item 3 (report-vs-modal front doors), /health has no single modal
  * that owns its data (it genuinely spans settings/accounts/auth/sandbox/
  * services/etc.), so bare `/health` and `/health report` stay a transcript
  * report; only a hint line was added pointing at the providers domain's real
@@ -8,12 +8,12 @@
  * The bare/default report path itself pulls from ~10 subsystems (service
  * registry, skills discovery, security snapshot, provider API, subscription
  * manager, sandbox review, the managed-hooks file, operator client, settings
- * snapshot, read-models — see buildSetupReviewSnapshot in
+ * snapshot, read-models, see buildSetupReviewSnapshot in
  * local-setup-review.ts) that would need a large, brittle mock to exercise
  * end-to-end and were not touched by this item's one-line change, so this
  * file covers the part that changed cheaply and reliably: the `provider`/
  * `open`/`panel` subcommands' unchanged modal jump. The hint line itself is
- * a static, unconditional line in the report array — verified by direct
+ * a static, unconditional line in the report array, verified by direct
  * source reading (see health-runtime.ts, right under the 'Health Review'
  * title) rather than by a heavy end-to-end mock.
  */

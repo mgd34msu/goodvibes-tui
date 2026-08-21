@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// websearch-runtime.test.ts — /search
+// websearch-runtime.test.ts, /search
 //
 // Pure command-layer test: a fake WebSearchService on ctx.platform (no real
 // network calls), following the project's existing runtime-command test
@@ -70,7 +70,7 @@ describe('/search command registration', () => {
   });
 });
 
-describe('/search — honest degradation', () => {
+describe('/search: honest degradation', () => {
   test('prints an honest message when webSearchService is not available', async () => {
     const registry = new CommandRegistry();
     registerWebSearchRuntimeCommands(registry);
@@ -107,7 +107,7 @@ describe('/search — honest degradation', () => {
   });
 });
 
-describe('/search — results rendering', () => {
+describe('/search: results rendering', () => {
   test('renders ranked results with a source label', async () => {
     const registry = new CommandRegistry();
     registerWebSearchRuntimeCommands(registry);

@@ -6,7 +6,7 @@
 //   1. Exactly one registration for session work: /session (alias: sess).
 //   2. session-mgmt and smgmt are NOT registered (removed in TASK-032).
 //   3. Every lifecycle subcommand routes through handleSessionWorkflowCommand
-//      without relying on fallthrough — the switch is exhaustive for known subs.
+//      without relying on fallthrough, the switch is exhaustive for known subs.
 //   4. Every orchestration subcommand routes to the correct handler.
 //   5. Unknown subcommand prints usage (both domains documented).
 //   6. No-arg invocation shows current session info (delegates to lifecycle handler).
@@ -342,10 +342,10 @@ describe('session-command-routing (TASK-032)', () => {
   // ── /sessions resume <id> hygiene ───────────────────────────────────────
   //
   // The plural /sessions command used to take (_args, ctx) and ignore args
-  // entirely — it always just listed sessions, silently dropping a resume
+  // entirely, it always just listed sessions, silently dropping a resume
   // subcommand + id on the floor. The singular /session command is what
   // actually implements `resume` (also reachable, more discoverably, via the
-  // bare /resume picker — see session.ts). /sessions now forwards any args
+  // bare /resume picker, see session.ts). /sessions now forwards any args
   // to /session's own handler instead of listing.
 
   test('/sessions resume <id> forwards to /session\'s resume handling instead of silently listing', async () => {
@@ -357,7 +357,7 @@ describe('session-command-routing (TASK-032)', () => {
 
     const output = ctx.printed.join('\n');
     // The stub sessionManager has no saved sessions, so /session resume's own
-    // "not found" message is the proof the subcommand was actually routed —
+    // "not found" message is the proof the subcommand was actually routed,
     // the old behavior printed the flat "Saved sessions:" list instead and
     // never looked at 'resume'/'nonexistent-session-id' at all.
     expect(output).toContain('Session not found: nonexistent-session-id');
@@ -436,7 +436,7 @@ describe('session-command-routing (TASK-032)', () => {
     expect(output).not.toContain('more)');
   });
 
-  test('/sessions excludes subagent transcripts (agent-* names) from the listing — mixed fixture', async () => {
+  test('/sessions excludes subagent transcripts (agent-* names) from the listing; mixed fixture', async () => {
     const registryForSessions = new CommandRegistry();
     registerBuiltinCommands(registryForSessions);
     const ctx = makeCtx({

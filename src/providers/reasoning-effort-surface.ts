@@ -1,5 +1,5 @@
 /**
- * reasoning-effort-surface.ts — the TUI's single reading of the SDK's
+ * reasoning-effort-surface.ts, the TUI's single reading of the SDK's
  * per-model reasoning-effort spec.
  *
  * Every effort-shaped surface (the `/effort` command, the model picker's
@@ -12,12 +12,12 @@
  * The honest presentation differs per spec kind, so the wording is generated
  * here rather than templated at each call site:
  *
- *   - `effort`        — the model names its levels; offer exactly those.
- *   - `budget_tokens` — the model takes a thinking-token budget, so each level
+ *   - `effort`       , the model names its levels; offer exactly those.
+ *   - `budget_tokens`, the model takes a thinking-token budget, so each level
  *                       is shown with the budget it sends.
- *   - `toggle`        — reasoning is on or off only; say so, and do not imply
+ *   - `toggle`       , reasoning is on or off only; say so, and do not imply
  *                       that the levels in between mean anything.
- *   - `unavailable`   — nothing is configurable; the picker says that instead
+ *   - `unavailable`  , nothing is configurable; the picker says that instead
  *                       of presenting an empty list.
  *
  * A `fallback`-sourced spec is a labelled guess: neither the live catalog nor
@@ -176,7 +176,7 @@ export function effortPresentationForModel(model: EffortModelLike): EffortPresen
       headline = `${name} takes a thinking-token budget; each level below sends the budget shown.`;
       break;
     case 'toggle':
-      headline = `${name} only exposes reasoning on or off — there is no depth to choose.`;
+      headline = `${name} only exposes reasoning on or off; there is no depth to choose.`;
       break;
     case 'unavailable':
       headline = `${name} has no configurable reasoning level; it runs at its own fixed depth.`;
@@ -212,7 +212,7 @@ export function describeEffortForModel(model: EffortModelLike, current: string |
   }
 
   if (resolved.value === undefined) {
-    lines.push(`  Sent on the wire: nothing — ${model.displayName ?? model.id} runs at its own default.`);
+    lines.push(`  Sent on the wire: nothing; ${model.displayName ?? model.id} runs at its own default.`);
   } else if (spec.kind === 'budget_tokens') {
     lines.push(`  Sent on the wire: ${wire} = ${budgetTokensForLevel(resolved.value, spec).toLocaleString()}`);
   } else {
@@ -256,16 +256,16 @@ export function describeConfiguredEffort(registryKey: string, configured: string
   const resolved = resolveEffortForModelSurface(configured === '' ? undefined : configured, model);
   const wire = describeReasoningWire(spec, providerId);
 
-  if (spec.kind === 'unavailable') return `not sent — ${modelId} has no configurable reasoning level`;
+  if (spec.kind === 'unavailable') return `not sent: ${modelId} has no configurable reasoning level`;
   if (spec.source === 'fallback') {
-    return `${resolved.value ?? '(model default)'} — unverified: ${modelId} is not in the model catalog, so some providers send nothing for it`;
+    return `${resolved.value ?? '(model default)'}: unverified: ${modelId} is not in the model catalog, so some providers send nothing for it`;
   }
-  if (resolved.value === undefined) return `not sent — ${modelId} applies its own default`;
+  if (resolved.value === undefined) return `not sent: ${modelId} applies its own default`;
   if (spec.kind === 'budget_tokens') {
     return `${resolved.value} (${wire} = ${budgetTokensForLevel(resolved.value, spec).toLocaleString()})`;
   }
   if (resolved.value !== configured && configured !== '') {
-    return `${resolved.value} (${wire}) — '${configured}' is not available on ${modelId}`;
+    return `${resolved.value} (${wire}): '${configured}' is not available on ${modelId}`;
   }
   return `${resolved.value} (${wire})`;
 }
@@ -273,7 +273,7 @@ export function describeConfiguredEffort(registryKey: string, configured: string
 /**
  * Re-resolve a configured level against a model that is about to serve, for
  * the model-switch and failover paths. Returns the level to use and, when it
- * had to change, the SDK's own sentence explaining why — printed verbatim so
+ * had to change, the SDK's own sentence explaining why, printed verbatim so
  * the wording cannot drift from the resolution that produced it.
  */
 export function remapEffortForServingModel(

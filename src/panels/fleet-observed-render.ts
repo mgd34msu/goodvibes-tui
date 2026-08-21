@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// fleet-observed-render.ts — the fleet-pane rows for observed FOREIGN coding
+// fleet-observed-render.ts, the fleet-pane rows for observed FOREIGN coding
 // agents (kind 'observed-external').
 //
-// goodvibes did NOT spawn these — they are externally-launched Claude Code /
+// goodvibes did NOT spawn these, they are externally-launched Claude Code /
 // Codex / opencode sessions, detected read-only from OS signals. The row's
 // FIRST job is visibility ("it's in claude or codex"): goodvibes never presents
 // itself as the foreign session's cockpit. So an observed row:
@@ -44,7 +44,7 @@ function livenessGlyph(state: ProcessObserved['liveness']['state']): string {
 /**
  * One observed-external row. Deliberately NOT the standard fleet row: no cost/
  * token/steer-badge columns (a foreign session has no LLM turn we account for),
- * no stop marker — just the glyph, an "observed" tag, the session label, its
+ * no stop marker, just the glyph, an "observed" tag, the session label, its
  * external kind, and its liveness state.
  */
 export function renderObservedRowLine(node: ObservedNode, width: number, palette: PanelPalette = DEFAULT_PANEL_PALETTE): Line {
@@ -53,7 +53,7 @@ export function renderObservedRowLine(node: ObservedNode, width: number, palette
   const glyph = livenessGlyph(observed.liveness.state);
   const kindLabel = observedKindLabel(observed.externalKind);
   // The label is width-budgeted so the trailing "kind · state" tell never
-  // overflows the row (the tell is the honesty signal — it must survive).
+  // overflows the row (the tell is the honesty signal, it must survive).
   const tell = `${kindLabel} · ${observed.liveness.state}`;
   const labelBudget = Math.max(4, width - tell.length - 14);
   return buildPanelLine(width, [
@@ -68,15 +68,15 @@ export function renderObservedRowLine(node: ObservedNode, width: number, palette
 
 /**
  * The detail block for a selected observed-external row. States the foreign
- * facts (external kind, pid, cwd, liveness meaning), then the steer affordance —
+ * facts (external kind, pid, cwd, liveness meaning), then the steer affordance,
  * a DRILL-IN: where a real channel exists it names the action; where steer.kind
- * is 'none' it states the honest reason. It NEVER shows a stop affordance —
+ * is 'none' it states the honest reason. It NEVER shows a stop affordance,
  * observing a foreign session is not owning its lifecycle.
  */
 /**
  * Render the observed-row detail. When `steerDraft` is a string the drill-in
  * steer composer is open on THIS row: an active input line replaces the passive
- * "s: steer" hint. A channel-less row never shows an input (owner ruling) — its
+ * "s: steer" hint. A channel-less row never shows an input (owner ruling), its
  * detail states the honest reason and stops there.
  */
 export function renderObservedDetailLines(node: ObservedNode, width: number, palette: PanelPalette = DEFAULT_PANEL_PALETTE, steerDraft: string | null = null): Line[] {
@@ -96,17 +96,17 @@ export function renderObservedDetailLines(node: ObservedNode, width: number, pal
   if (observed.cwd) {
     lines.push(buildPanelLine(width, [[' cwd ', C.label], [truncateDisplay(observed.cwd, Math.max(0, width - 6)), C.dim]]));
   }
-  // Liveness meaning, verbatim — honest about what 'quiet' can and cannot tell.
+  // Liveness meaning, verbatim, honest about what 'quiet' can and cannot tell.
   for (const segment of wrapText(observed.liveness.detail, Math.max(1, width - 2))) {
     lines.push(buildPanelLine(width, [[' ', C.dim], [segment, C.dim]]));
   }
   // Steer is a drill-in: a real channel is named here (a message sent from this
-  // detail travels over it — fleet.observed.steer), and where none exists the
+  // detail travels over it, fleet.observed.steer), and where none exists the
   // honest reason is stated instead of a dead action. Wrapped so a long reason
   // is never clipped at a narrow width.
   const steerText = observed.steer.kind === 'tmux'
     ? `available via tmux pane ${observed.steer.paneId} (send-keys)`
-    : `unavailable — ${observed.steer.reason}`;
+    : `unavailable: ${observed.steer.reason}`;
   const steerFg = observed.steer.kind === 'tmux' ? (C.info ?? DEFAULT_PANEL_PALETTE.info) : C.dim;
   const steerSegments = wrapText(steerText, Math.max(1, width - 8));
   steerSegments.forEach((segment, i) => {
@@ -123,6 +123,6 @@ export function renderObservedDetailLines(node: ObservedNode, width: number, pal
     }
   }
   // Visibility, not a cockpit: there is no stop here, by design.
-  lines.push(buildPanelLine(width, [[' stop ', C.label], ['not offered — goodvibes only observes this foreign session', C.dim]]));
+  lines.push(buildPanelLine(width, [[' stop ', C.label], ['not offered: goodvibes only observes this foreign session', C.dim]]));
   return lines;
 }

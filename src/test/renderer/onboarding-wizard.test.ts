@@ -102,7 +102,7 @@ describe('renderOnboardingWizard', () => {
 
     // Wide layout renders the same hint in its center column, alongside an
     // independent left-hand step rail and right-hand summary panel on the
-    // same terminal rows — so a plain full-row join interleaves rail/summary
+    // same terminal rows, so a plain full-row join interleaves rail/summary
     // text between wrapped hint lines. Checking the sentence's opening and
     // closing fragments both survive is enough to prove neither end was
     // clipped (the collapsed-layout assertion above already proves the

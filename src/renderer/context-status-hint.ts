@@ -1,5 +1,5 @@
 /**
- * Context status hint — TASK-056.
+ * Context status hint, TASK-056.
  *
  * Produces a short, dismissible status-line hint when the session maintenance
  * level indicates compaction is recommended or repair is needed.  The hint is
@@ -15,11 +15,11 @@
  *
  * Evidence policy (why the guards below exist)
  * ────────────────────────────────────────────
- * A fresh boot printed "Context high (0% used) — auto-compact will run before
+ * A fresh boot printed "Context high (0% used), auto-compact will run before
  * the next turn." before a single token had been counted. The evaluator was
  * not at fault: `evaluateSessionMaintenance` reaches 'suggest-compact' when
  * `remainingTokens <= 15_000`, and at boot the resolved window is still the
- * SDK's DEFAULT_CONTEXT_WINDOW fallback (8,192 — the "8.2k" the footer meter
+ * SDK's DEFAULT_CONTEXT_WINDOW fallback (8,192, the "8.2k" the footer meter
  * shows before the real window arrives), so 8,192 free tokens tripped that
  * rule instantly. Arithmetically consistent; factually false. No context had
  * been consumed and no auto-compact was imminent.
@@ -31,7 +31,7 @@
  *   2. The window is one the provider vouched for, not the fallback constant.
  *      A model whose real window happens to equal the fallback is
  *      indistinguishable from "not resolved yet", and in that ambiguity
- *      staying quiet is the honest choice — the Tokens panel and /context
+ *      staying quiet is the honest choice, the Tokens panel and /context
  *      still show the real numbers either way.
  * Neither guard touches 'compacting', which reports work that is provably
  * running rather than a prediction about headroom.
@@ -69,8 +69,8 @@ function hasRealContextNumbers(
  * Build the passive status-line hint text for context pressure.
  *
  * Returns null when no hint is warranted (stable / watch / unknown), and also
- * when a pressure level is not yet backed by real numbers — see the evidence
- * policy above. The caller renders this as a dim informational line — no
+ * when a pressure level is not yet backed by real numbers, see the evidence
+ * policy above. The caller renders this as a dim informational line, no
  * prompts, no blocking, no confirmation required.
  */
 function buildContextStatusHint(options: ContextStatusHintOptions): string | null {
@@ -79,17 +79,17 @@ function buildContextStatusHint(options: ContextStatusHintOptions): string | nul
   switch (level) {
     case 'needs-repair':
       if (!hasRealContextNumbers(options)) return null;
-      return `  Context pressure critical (${usagePct}% used) — compaction needs attention. Run /compact or /health review.`;
+      return `  Context pressure critical (${usagePct}% used); compaction needs attention. Run /compact or /health review.`;
 
     case 'suggest-compact':
       if (!hasRealContextNumbers(options)) return null;
       if (autoCompactEnabled) {
-        return `  Context high (${usagePct}% used) — auto-compact will run before the next turn.`;
+        return `  Context high (${usagePct}% used): auto-compact will run before the next turn.`;
       }
-      return `  Context high (${usagePct}% used) — run /compact to recover headroom.`;
+      return `  Context high (${usagePct}% used): run /compact to recover headroom.`;
 
     case 'compacting':
-      return `  Compacting context — freeing headroom...`;
+      return `  Compacting context: freeing headroom...`;
 
     default:
       return null;

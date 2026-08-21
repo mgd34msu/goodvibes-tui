@@ -282,7 +282,7 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
       ].join('\n'));
     }
     if (subOrFilter === 'chain' || subOrFilter === 'chains') {
-      // List synthetic model fallback ladders — backend composition for each synthetic model.
+      // List synthetic model fallback ladders, backend composition for each synthetic model.
       const canonicalModels = services.providerRegistry.getSyntheticCanonicalModels();
       if (canonicalModels.length === 0) {
         return formatJsonOrText(runtime.cli)([], 'No synthetic models found in the current catalog.');
