@@ -73,7 +73,7 @@ jobs:
       contents: read
       actions: read
       checks: read
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-release-verify.yml@e6475abe6d7a06ab5ea6ae600d9c4c7049f412c1 # sdk 2.0.18 release
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-release-verify.yml@2d2056dc3c3905694a02bd5c7144fad9a63a038c # sdk 2.0.19 release
     with:
       sha: ${{ github.sha }}
       workflow: ci.yml
@@ -83,7 +83,7 @@ jobs:
       # would otherwise resolve whatever npm calls latest at that moment, so a
       # toolchain published mid-release could change the gate that validates it.
       # Same version as package.json devDependencies (see toolchain.config.json).
-      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.17"
+      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.19"
       bun-version: "1.3.14"
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
@@ -104,7 +104,7 @@ jobs:
         (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'release') ||
         needs.release-verify.result == 'success'
       )
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@e6475abe6d7a06ab5ea6ae600d9c4c7049f412c1 # sdk 2.0.18 release
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-binary-matrix.yml@2d2056dc3c3905694a02bd5c7144fad9a63a038c # sdk 2.0.19 release
     with:
       # Smoke legs must name their own built artifact (binary is required when
       # smoke is true, each leg only builds its own suffixed artifact, so the
@@ -118,7 +118,7 @@ jobs:
       artifact-glob: |
         dist/goodvibes-*
         dist/lib
-      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.17"
+      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.19"
       bun-version: "1.3.14"
 
   # ── TUI-specific native-arm64 banner smoke on macos-14. ───────────────────
@@ -304,7 +304,7 @@ jobs:
     # The called workflow's job requests contents:write (release creation).
     permissions:
       contents: write
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-gh-release.yml@e6475abe6d7a06ab5ea6ae600d9c4c7049f412c1 # sdk 2.0.18 release
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-gh-release.yml@2d2056dc3c3905694a02bd5c7144fad9a63a038c # sdk 2.0.19 release
     with:
       tag: ${{ github.ref_name }}
       artifact-name: release-assets
@@ -316,7 +316,7 @@ jobs:
       # file exists at the tagged ref (docs/releases/<version>.md, no v prefix ,
       # the same resolution the old validate-release used).
       notes-file: docs/releases/${{ needs.stage-release-assets.outputs.version }}.md
-      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.17"
+      toolchain-spec: "@pellux/goodvibes-toolchain@2.0.19"
       bun-version: "1.3.14"
 
   # ── Publish platform binary packages to npmjs (BEFORE the main package). ──
@@ -368,14 +368,14 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-npm-publish.yml@e6475abe6d7a06ab5ea6ae600d9c4c7049f412c1 # sdk 2.0.18 release
+    uses: mgd34msu/goodvibes-sdk/.github/workflows/reusable-npm-publish.yml@2d2056dc3c3905694a02bd5c7144fad9a63a038c # sdk 2.0.19 release
     with:
       package-name: "@pellux/goodvibes-tui"
       environment: production
       registry: "https://registry.npmjs.org"
       # reusable-npm-publish takes no toolchain-spec input; the pin rides in the
       # publish command itself so this step cannot float to a newer toolchain.
-      publish-command: "GOODVIBES_SKIP_NPM_AUTH_CHECK=1 bun run publish:check && bun run package:install-check && bunx @pellux/goodvibes-toolchain@2.0.17 goodvibes-publish-package --poll"
+      publish-command: "GOODVIBES_SKIP_NPM_AUTH_CHECK=1 bun run publish:check && bun run package:install-check && bunx @pellux/goodvibes-toolchain@2.0.19 goodvibes-publish-package --poll"
       bun-version: "1.3.14"
     secrets:
       npm-token: ${{ secrets.NPM_TOKEN }}

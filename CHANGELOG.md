@@ -4,6 +4,41 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.15] - 2026-08-21
+
+### Changes
+
+- **Wake-word WASM assets are written by the SDK's own atomic writer**
+  (platform runtime 2.0.19): `atomicWriteFileSync` now accepts raw bytes,
+  not just strings, so the onnxruntime glue and WASM files this terminal
+  extracts to disk go through the same temp-file-then-rename-and-fsync path
+  as every other file this client writes, instead of a hand-rolled copy
+  inlined in the wake module. Same content check, same target names, same
+  crash-safety guarantee, one less code path to keep correct.
+- **Release publishing is gated before a tag exists, not after.** The
+  sdk-pin check now runs in CI on every push instead of only after a
+  GitHub Release was already cut, the GitHub Packages mirror publish is
+  ordered behind the npmjs publish and carries the same kill switch, and
+  the release workflow verifies the git tag matches the package version as
+  its first job. CI now builds through the real toolchain and runs the
+  compiled binary's smoke test on pull requests too, not just a bare
+  compile. The four sdk reusable-workflow references are pinned to a
+  commit sha instead of floating on the sdk's default branch, so a commit
+  to the sdk repository can no longer change what runs against this
+  repository's publish credentials without a deliberate pin bump here.
+- Comment and documentation prose across the source tree had its em dashes
+  removed and its narration comments trimmed; a handful of command
+  descriptions changed wording to match, so the regenerated command
+  reference and eighteen golden UI frames moved with them. No command
+  behavior changed.
+- Bundled platform runtime moves to 2.0.19, the checkout-seam/wake-fix
+  cycle. Execution plans this terminal writes round-trip through their own
+  markdown again now that the emitter and parser agree on a separator.
+- Bundled daemon moves to 1.28.21, which serves the repaired
+  `voice.wake.model.get` verb. That fix reaches this surface directly: the
+  wake feature fetches its models from that same verb, and the request
+  failed against every daemon build before this pin.
+
 ## [2.0.14] - 2026-08-15
 
 ### Changes
