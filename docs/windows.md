@@ -12,7 +12,7 @@ the Linux release binaries and every code path apply unchanged:
 curl -fsSL https://goodvibes.sh/install.sh | sh
 # or, with Bun already installed:
 bun add -g @pellux/goodvibes-tui
-bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
+bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-daemon
 ```
 
 The `linux-x64` (or `linux-arm64`) binaries run natively in WSL2. This is the

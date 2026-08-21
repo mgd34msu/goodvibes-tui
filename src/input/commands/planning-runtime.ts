@@ -9,7 +9,7 @@ import { openModalCommand, requirePlanManager, requireSessionLineageTracker } fr
 import { togglePlanMode, permissionModeLabel, type PermissionModeValue } from '../../core/permission-mode.ts';
 
 /**
- * Single-token verbs that look like a `/plan` subcommand but are not real ones.
+ * Single-token verbs that look like a `/project-plan` subcommand but are not real ones.
  * A lone one of these is refused rather than seeded as a goal, so a stray verb
  * can never overwrite the project goal with itself.
  *
@@ -165,7 +165,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
       if (args[0] === 'show') {
         const id = args[1];
         if (!id) {
-          ctx.print('Usage: /plan show <plan-id>');
+          ctx.print('Usage: /project-plan show <plan-id>');
           return;
         }
         const plans = planManager.list();
@@ -178,16 +178,16 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      // /plan dismiss, archive the current plan. Dismisses the active
+      // /project-plan dismiss, archive the current plan. Dismisses the active
       // execution plan (ExecutionPlanManager.dismiss, honest per-state) AND
       // deactivates the project-planning interview state shown in the modal so a
-      // later /plan <goal> starts fresh. Mid-execution is refused outright.
+      // later /project-plan <goal> starts fresh. Mid-execution is refused outright.
       if (args[0] === 'dismiss') {
         const dismissal = planManager.dismiss(ctx.session.runtime.sessionId);
         if (dismissal.outcome === 'requires-cancel') {
           ctx.print(
             `Plan "${dismissal.blockedBy?.title ?? 'active plan'}" is mid-execution and was not dismissed. ` +
-            `Run /workstream cancel to stop it first, then /plan dismiss.`,
+            `Run /workstream cancel to stop it first, then /project-plan dismiss.`,
           );
           return;
         }
@@ -213,7 +213,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         if (dismissal.outcome === 'dismissed') {
           ctx.print(
             `Dismissed plan "${dismissal.plan?.title ?? 'active plan'}" ` +
-            `(archived as dismissed; retained in /plan list; /plan <goal> starts fresh).${planningNote}`,
+            `(archived as dismissed; retained in /project-plan list; /project-plan <goal> starts fresh).${planningNote}`,
           );
         } else if (planningNote) {
           ctx.print(`No active execution plan to dismiss.${planningNote}`);
@@ -223,7 +223,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      // /plan answer <n|question-id> <text>, record a real answer to an
+      // /project-plan answer <n|question-id> <text>, record a real answer to an
       // open planning question (moves open → answered, consumed on next refine).
       if (args[0] === 'answer') {
         if (!projectPlanningService || !projectId) {
@@ -233,7 +233,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         const ref = args[1];
         const answerText = args.slice(2).join(' ').trim();
         if (!ref || !answerText) {
-          ctx.print('Usage: /plan answer <question-number|question-id> <your answer>');
+          ctx.print('Usage: /project-plan answer <question-number|question-id> <your answer>');
           return;
         }
         const asNum = Number(ref);
@@ -243,7 +243,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         const answerResult = await projectPlanningService.answerQuestion({ projectId, ...selector, answer: answerText });
         if (!answerResult.answered) {
           if (answerResult.reason === 'no-state') {
-            ctx.print('No project planning state exists yet. Seed it with /plan <goal>.');
+            ctx.print('No project planning state exists yet. Seed it with /project-plan <goal>.');
           } else if (answerResult.reason === 'question-not-found') {
             const open = answerResult.openQuestions;
             const listing = open.length > 0
@@ -251,7 +251,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
               : '  (no open questions)';
             ctx.print(`No open question matched "${ref}". Open questions:\n${listing}`);
           } else {
-            ctx.print('Usage: /plan answer <question-number|question-id> <your answer>');
+            ctx.print('Usage: /project-plan answer <question-number|question-id> <your answer>');
           }
           return;
         }
@@ -273,8 +273,8 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
       // corrupting the goal.
       if (args.length === 1 && PSEUDO_SUBCOMMAND_VERBS.has(args[0].toLowerCase())) {
         ctx.print(
-          `Unknown /plan subcommand "${args[0]}": did you mean panel, approve, list, show, or status? ` +
-          `To seed a planning goal, use /plan <a real sentence describing the change>.`,
+          `Unknown /project-plan subcommand "${args[0]}": did you mean panel, approve, list, show, or status? ` +
+          `To seed a planning goal, use /project-plan <a real sentence describing the change>.`,
         );
         return;
       }
@@ -289,7 +289,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         state: {
           goal: taskDescription,
           knownContext: [
-            `Workspace planning was seeded from the TUI /plan command.`,
+            `Workspace planning was seeded from the TUI /project-plan command.`,
           ],
           metadata: {
             active: true,

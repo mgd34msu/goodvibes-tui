@@ -79,7 +79,7 @@ function makeContext(
   return {
     print: (message: string) => out.push(message),
     showPanel: (panelId: string) => { opened.push(panelId); },
-    // /plan open now routes to the 'planning' modal via ctx.openModal.
+    // /project-plan open now routes to the 'planning' modal via ctx.openModal.
     openModal: (name: string) => { opened.push(name); },
     session: {
       runtime: {
@@ -206,7 +206,7 @@ describe('submitInput plan-keyword regression (coordinator removed)', () => {
   });
 });
 
-describe('/plan project planning runtime command', () => {
+describe('/project-plan project planning runtime command', () => {
   test('seeding a plan persists the first SDK next question as open state', async () => {
     const registry = new CommandRegistry();
     registerPlanningRuntimeCommands(registry);
@@ -224,7 +224,7 @@ describe('/plan project planning runtime command', () => {
 
   // `dismiss` and `answer` are REAL subcommands now, they must NOT be
   // refused as pseudo-verbs, and they must never seed a goal named after themselves.
-  test('/plan dismiss with no active plan and no interview state → honest no-op, never seeded', async () => {
+  test('/project-plan dismiss with no active plan and no interview state → honest no-op, never seeded', async () => {
     const registry = new CommandRegistry();
     registerPlanningRuntimeCommands(registry);
     const out: string[] = [];
@@ -235,7 +235,7 @@ describe('/plan project planning runtime command', () => {
 
     expect(fake.state()).toBeNull(); // never seeded — the goal is not overwritten with "dismiss"
     expect(out.join('\n')).toContain('No active plan or planning state to dismiss.');
-    expect(out.join('\n')).not.toContain('Unknown /plan subcommand');
+    expect(out.join('\n')).not.toContain('Unknown /project-plan subcommand');
   });
 
   test('/plan dismiss deactivates an active project-planning interview state', async () => {
@@ -251,7 +251,7 @@ describe('/plan project planning runtime command', () => {
     expect(out.join('\n')).toContain('Project planning interview marked inactive.');
   });
 
-  test('/plan dismiss refuses a mid-execution plan and points at /workstream cancel', async () => {
+  test('/project-plan dismiss refuses a mid-execution plan and points at /workstream cancel', async () => {
     const registry = new CommandRegistry();
     registerPlanningRuntimeCommands(registry);
     const out: string[] = [];
@@ -266,7 +266,7 @@ describe('/plan project planning runtime command', () => {
     expect(fake.state()?.metadata?.['active']).toBe(true);
   });
 
-  test('/plan answer <index> <text> records a real answer and clears its open-question gap', async () => {
+  test('/project-plan answer <index> <text> records a real answer and clears its open-question gap', async () => {
     const registry = new CommandRegistry();
     registerPlanningRuntimeCommands(registry);
     const out: string[] = [];
@@ -294,7 +294,7 @@ describe('/plan project planning runtime command', () => {
     expect(opened).toContain('planning-modal');
   });
 
-  test('/plan answer with a bad question ref reports honestly (no seed)', async () => {
+  test('/project-plan answer with a bad question ref reports honestly (no seed)', async () => {
     const registry = new CommandRegistry();
     registerPlanningRuntimeCommands(registry);
     const out: string[] = [];
@@ -322,7 +322,7 @@ describe('/plan project planning runtime command', () => {
       const fake = makeService();
       await registry.execute('project-plan', [verb], makeContext(fake.service, out, []));
       expect(fake.state()).toBeNull();
-      expect(out.join('\n')).toContain(`Unknown /plan subcommand "${verb}"`);
+      expect(out.join('\n')).toContain(`Unknown /project-plan subcommand "${verb}"`);
     }
   });
 

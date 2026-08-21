@@ -1,7 +1,7 @@
 {
   "name": "@pellux/goodvibes-tui-linux-arm64",
   "version": "1.27.1",
-  "description": "Prebuilt goodvibes and goodvibes-daemon binaries for linux-arm64. Installed automatically as an optional dependency of @pellux/goodvibes-tui; do not install directly.",
+  "description": "Prebuilt goodvibes terminal binary for linux-arm64, with the matching sqlite-vec native addon (vec0.so). Installed automatically as an optional dependency of @pellux/goodvibes-tui; do not install directly.",
   "license": "MIT",
   "os": [
     "linux"

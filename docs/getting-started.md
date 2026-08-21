@@ -14,19 +14,18 @@ Install from the npm registry with Bun on Linux, macOS, or WSL:
 
 ```sh
 bun add -g @pellux/goodvibes-tui
-bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
+bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-daemon
 goodvibes
 ```
 
-Bun blocks lifecycle scripts for untrusted global packages. `@pellux/goodvibes-tui` needs trusting so its postinstall can place the matching TUI binary, and `goodvibes-daemon` needs trusting so its postinstall can place the daemon binary. `goodvibes-daemon` is a dependency of this package, so one install brings both commands. Nothing else needs trusting. The TUI binary comes from the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package with registry integrity, and the tree-sitter grammar packages ship their `.wasm` files as plain files (the app never loads the native bindings their `install` scripts would build). Verify the install with:
+Bun blocks lifecycle scripts for untrusted global packages. `@pellux/goodvibes-tui` needs trusting so its postinstall can place the matching TUI binary, and `@pellux/goodvibes-daemon` needs trusting so its postinstall can place the daemon binary (use the full scoped name; the bare `goodvibes-daemon` matches nothing and trusts nothing). `@pellux/goodvibes-daemon` is a dependency of this package, so one install brings both commands. Nothing else needs trusting for the install to work. Verify the install with:
 
 ```sh
-bun pm -g untrusted
 goodvibes --version
 goodvibes-daemon --version
 ```
 
-`bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
+`bun pm -g untrusted` will still list a handful of transitive packages with blocked scripts (the tree-sitter grammar packages, `protobufjs`, and `core-js`). That is expected and harmless: the app loads the grammars as plain `.wasm` files and never the native bindings their `install` scripts would build, and the other two scripts are non-essential housekeeping. Leave them untrusted.
 
 `npm install -g` is also supported when Bun is already installed and on `PATH`:
 

@@ -33,7 +33,7 @@ Before a chunk reaches the synthesizer, markdown formatting is stripped so the v
 | Links | The link text; bare autolink URLs get a speakable form |
 | Images | The alt text |
 | Inline code | The code content with the backticks removed |
-| Fenced code blocks (``` or ~~~) | Skipped entirely; code is unreadable aloud |
+| Fenced code blocks (backtick or tilde fences) | Skipped entirely; code is unreadable aloud |
 | Raw HTML tags | Removed |
 | Horizontal rules and table separator rows | Skipped entirely |
 | Table data rows | The cells joined by commas; pipes carry no spoken meaning |

@@ -113,12 +113,12 @@ Install behavior:
 - Bun global installs require trusting the app package and the daemon package it depends on, so both postinstalls can place their binaries:
 
   ```sh
-  bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
+  bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-daemon
   ```
 
-  No other dependency needs trusting. The TUI binary arrives through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files. `@pellux/goodvibes-daemon` is a regular dependency, so installing this package always brings the daemon along, and its own postinstall places the `goodvibes-daemon` binary the same way this package's postinstall places `goodvibes`.
+  Both names must be the full scoped package names; a bare `goodvibes-daemon` argument matches nothing and trusts nothing. No other dependency needs trusting for the install to work. The TUI binary arrives through the platform-specific `@pellux/goodvibes-tui-<os>-<arch>` package (registry integrity, no lifecycle script), and the tree-sitter grammar packages contribute only their prebuilt `.wasm` files. `@pellux/goodvibes-daemon` is a regular dependency, so installing this package always brings the daemon along, and its own postinstall places the `goodvibes-daemon` binary the same way this package's postinstall places `goodvibes`.
 
-- `bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
+- after trusting those two, `bun pm -g untrusted` still lists a handful of transitive packages with blocked scripts (the tree-sitter grammar packages, `protobufjs`, `core-js`); their scripts are native-binding builds and housekeeping the app never needs, so they stay untrusted by design.
 - the main package declares four `@pellux/goodvibes-tui-<os>-<arch>` payload packages as `optionalDependencies` with `os`/`cpu` fields (the esbuild pattern), so the package manager installs exactly the one that matches the host, verified against the registry integrity hash. This is why plain `npm`/`pnpm` installs work, not just Bun.
 - `postinstall` prefers the platform package's binary (a plain copy into `vendor/`, no download) and falls back to the version-matched GitHub Release download (checksum-verified against `SHA256SUMS.txt`) only when no platform package is present. The `bin/goodvibes` launcher also resolves the platform package directly, so the binary runs even if the postinstall was skipped. This package ships one bin entry, `goodvibes`; the `goodvibes-daemon` binary and its launcher belong to the separate `@pellux/goodvibes-daemon` package.
 - npm and pnpm installs still require `bun` to be on `PATH` for the from-source fallback; the preinstall check fails clearly if it is missing.

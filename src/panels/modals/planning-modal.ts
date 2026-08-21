@@ -219,11 +219,11 @@ class PlanningModalSurface implements ConfigModalSurface {
 
   onAction(id: string, ctx: ConfigModalActionContext): void {
     if (id === 'refresh') { this.refresh(); ctx.setStatus('Reloading project planning state…'); return; }
-    if (id === 'approve') { void ctx.executeCommand?.('plan', ['approve']); ctx.setStatus('Dispatched /plan approve.'); return; }
+    if (id === 'approve') { void ctx.executeCommand?.('project-plan', ['approve']); ctx.setStatus('Dispatched /project-plan approve.'); return; }
     if (id === 'dismiss') {
       // First-class, confirmed (host two-press) mutating dismiss.
-      void ctx.executeCommand?.('plan', ['dismiss']);
-      ctx.setStatus('Dispatched /plan dismiss.');
+      void ctx.executeCommand?.('project-plan', ['dismiss']);
+      ctx.setStatus('Dispatched /project-plan dismiss.');
       ctx.close();
       return;
     }
@@ -232,18 +232,18 @@ class PlanningModalSurface implements ConfigModalSurface {
     if (!question || actions.length === 0) return;
     const action = ctx.row ? actions.find((a) => a.id === ctx.row!.id) : undefined;
     if (!action || action.disabled) { ctx.print('Choose an answer option.'); return; }
-    if (action.kind === 'approve') { void ctx.executeCommand?.('plan', ['approve']); ctx.setStatus('Dispatched /plan approve.'); return; }
+    if (action.kind === 'approve') { void ctx.executeCommand?.('project-plan', ['approve']); ctx.setStatus('Dispatched /project-plan approve.'); return; }
 
     const answerText = action.answer.trim();
     if (!answerText) { ctx.print('Choose a non-empty answer, or type an answer for the custom row.'); return; }
 
-    // A canned answer to a REAL open question records structurally via /plan answer.
+    // A canned answer to a REAL open question records structurally via /project-plan answer.
     const isOpenQuestion = this.snapshot?.state?.openQuestions.some(
       (q) => q.id === question.id && (q.status ?? 'open') === 'open',
     ) ?? false;
     if (action.id !== 'custom' && isOpenQuestion) {
-      void ctx.executeCommand?.('plan', ['answer', question.id, ...answerText.split(/\s+/)]);
-      ctx.setStatus('Dispatched /plan answer for the current question.');
+      void ctx.executeCommand?.('project-plan', ['answer', question.id, ...answerText.split(/\s+/)]);
+      ctx.setStatus('Dispatched /project-plan answer for the current question.');
       return;
     }
 

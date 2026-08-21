@@ -25,11 +25,11 @@ Or install from the npm registry with [Bun](https://bun.sh):
 
 ```sh
 bun add -g @pellux/goodvibes-tui
-bun pm trust -g @pellux/goodvibes-tui goodvibes-daemon
+bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-daemon
 goodvibes
 ```
 
-Bun blocks lifecycle scripts for untrusted global packages, so the second line lets both postinstalls run: `@pellux/goodvibes-tui`'s own, which places the TUI binary, and `goodvibes-daemon`'s, which places the daemon binary. `goodvibes-daemon` is a real dependency of this package, so one install brings both commands. No other dependency needs trusting. If you skip that step, the `goodvibes` launcher still self-heals on first run by fetching and checksum-verifying its own binary. `npm install -g @pellux/goodvibes-tui` also works when `bun` is already on `PATH`.
+Bun blocks lifecycle scripts for untrusted global packages, so the second line lets both postinstalls run: `@pellux/goodvibes-tui`'s own, which places the TUI binary, and `@pellux/goodvibes-daemon`'s, which places the daemon binary (both names must be the full scoped names). `@pellux/goodvibes-daemon` is a real dependency of this package, so one install brings both commands. No other dependency needs trusting for the install to work. If you skip that step, the `goodvibes` launcher still self-heals on first run by fetching and checksum-verifying its own binary. `npm install -g @pellux/goodvibes-tui` also works when `bun` is already on `PATH`.
 
 Then point it at a model. An environment variable is the fastest path:
 
