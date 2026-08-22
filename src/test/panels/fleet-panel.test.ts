@@ -1186,7 +1186,7 @@ describe('FleetPanel: f toggles follow', () => {
     const { model, setSnapshot, fireDirty } = makeMutableReadModel(before);
     const panel = new FleetPanel(model);
 
-    panel.handleInput('f'); // follow on — selects the only running row ('old-running')
+    panel.handleInput('f'); // follow on, selects the only running row ('old-running')
 
     const after = buildFleetSnapshot([
       makeNode({ id: 'old-running', state: 'streaming', startedAt: NOW - 5_000 }),
@@ -1457,7 +1457,7 @@ describe('FleetPanel: receiveDeepLink (item 4)', () => {
     });
     const first = manager.open('fleet');
     const again = manager.open('fleet', undefined, { id: 'agent-2', kind: 'agent' });
-    expect(again).toBe(first); // same instance — the existing-pane reuse path, not a fresh panel
+    expect(again).toBe(first); // same instance, the existing-pane reuse path, not a fresh panel
     const selectedLine = linesText((again as FleetPanel).render(100, 24)).split('\n').find((l) => l.includes('▸'));
     expect(selectedLine).toContain('agent-2');
     manager.close('fleet');

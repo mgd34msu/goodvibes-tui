@@ -184,7 +184,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       for (const [id, content] of pending) {
         const contentLines = content.split('\n');
         const preview = contentLines[0].slice(0, 80);
-        lines.push(`  ${id} — ${contentLines.length} lines — ${preview}${contentLines.length > 1 || preview.length < contentLines[0].length ? '…' : ''}`);
+        lines.push(`  ${id} (${contentLines.length} lines): ${preview}${contentLines.length > 1 || preview.length < contentLines[0].length ? '…' : ''}`);
       }
       lines.push('', 'Full text: /pastes <id>');
       ctx.print(lines.join('\n'));
@@ -220,7 +220,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         // every item here is a command, and picking one RUNS it, label
         // the verb "Run" (matching the slash-command palette) instead of the
         // generic "Select" default.
-        ctx.openSelection('Help  —  Commands', items, { allowSearch: true, primaryVerbLabel: 'Run' }, (result) => {
+        ctx.openSelection('Help: Commands', items, { allowSearch: true, primaryVerbLabel: 'Run' }, (result) => {
           if (!result) return;
           const name = result.item.id;
           void (ctx.executeCommand?.(name, []) ?? registry.execute(name, [], ctx));

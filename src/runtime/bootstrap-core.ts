@@ -708,7 +708,7 @@ export async function initializeBootstrapCore(
         sandboxExecAskDepsFromRuntime(configManager, featureFlags),
         (request) => services.requestApproval({ request }),
       ),
-      () => trustPromptRef.requestTrustDecision(), // indirection through the ref, not bound early — main.ts patches the real impl in later
+      () => trustPromptRef.requestTrustDecision(), // indirection through the ref, not bound early. main.ts patches the real impl in later
     ),
     createPermissionConfigReader(configManager),
     policyRuntimeState,

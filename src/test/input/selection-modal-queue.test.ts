@@ -70,7 +70,7 @@ describe('InputHandler.openSelection: queueing overlapping calls', () => {
     input.feed('\r');
     expect(resultsA).toHaveLength(1);
     expect(resultsA[0]?.item.id).toBe('a-0');
-    expect(resultsB).toHaveLength(0); // drain is deferred — B hasn't opened yet
+    expect(resultsB).toHaveLength(0); // drain is deferred, B hasn't opened yet
 
     await flushMicrotasks();
 

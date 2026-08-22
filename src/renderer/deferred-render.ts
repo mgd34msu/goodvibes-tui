@@ -9,8 +9,8 @@
  * surfacing as an unhandled rejection that killed whatever bootstrap step was
  * mid-flight. The firing path has to be a callback some installer in that
  * window invokes synchronously with the rejection crossing a promise boundary
- * on the way out — the window contains no await, so no timer or scan callback
- * can interleave into it — and this indirection removes the entire class
+ * on the way out. The window contains no await, so no timer or scan callback
+ * can interleave into it, and this indirection removes the entire class
  * rather than the one caller: a closure that fires before {@link
  * DeferredRender.set} runs gets a no-op, and main()'s unconditional first
  * paint after wiring covers everything deferred.

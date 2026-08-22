@@ -33,7 +33,7 @@ describe('reopenPanelsFromReturnContext: modal-redirect restore honesty (W6 revi
     const reopened = reopenPanelsFromReturnContext(makeCtx(pm, out), makeSummary(['sessions']));
 
     expect(reopened).toEqual([]); // not counted as a reopened panel
-    expect(opened).toEqual([]); // restore never fires the modal open — no phantom picker pop mid-resume
+    expect(opened).toEqual([]); // restore never fires the modal open, no phantom picker pop mid-resume
     expect(out.join('\n')).toContain('sessions moved to a modal; reopen via its command instead of as a panel.');
   });
 

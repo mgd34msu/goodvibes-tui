@@ -382,7 +382,7 @@ public render(width: number, height: number): Line[] {
 
 ```ts
 public handleInput(key: string): boolean {
-  // Panel-specific action key — guarded so it still types into the filter
+  // Panel-specific action key, guarded so it still types into the filter
   // query while the filter is active (modal '/' filter coexists
   // with single-letter action keys).
   if (!this.filterActive && key === 'r') {
@@ -408,10 +408,10 @@ Raw hex colors must never appear inline inside `renderItem()`, `buildHeader()`, 
 3. Override `getPalette()` to return `C` so `renderList()` picks up the domain colors.
 
 ```ts
-// BAD — inline hex
+// BAD: inline hex
 buildPanelLine(width, [[skill.name, '#38bdf8']]);
 
-// GOOD — palette reference
+// GOOD: palette reference
 buildPanelLine(width, [[skill.name, C.project]]);
 ```
 
@@ -496,7 +496,7 @@ if (result === 'absorbed') return true;
 // In render:
 if (this.confirm) {
   const lines = buildPanelWorkspace(width, height, {
-    title: 'Panel — confirm action',
+    title: 'Panel: confirm action',
     sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirm) }],
     palette: C,
   });
@@ -592,7 +592,7 @@ if the panel has a filter), then call `super.handleInput(key)` for the rest:
 
 ```ts
 public handleInput(key: string): boolean {
-  // Panel-specific keys FIRST — guard on !this.filterActive if this panel
+  // Panel-specific keys FIRST. Guard on !this.filterActive if this panel
   // has an opt-in filter, so the key still types into the query while active.
   if (!this.filterActive && key === 'r') { this.refresh(); return true; }
   if (!this.filterActive && key === 'd') { this.confirmDelete(); return true; }

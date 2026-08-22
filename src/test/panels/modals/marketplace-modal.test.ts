@@ -34,9 +34,9 @@ describe('marketplace modal surface', () => {
     try {
       const view = open(createMarketplaceModalSurface({ ecosystemPaths: paths }));
       const labels = tabRows(view, 'catalog').map((r) => r.label);
-      // Byte-for-byte: the exact locked copy (curly quotes, em-dashes, alignment spacing).
+      // Byte-for-byte: the exact locked copy (straight quotes, em-dash separators, alignment spacing).
       expect(labels).toContain('This is your local plugin, skill, hook-pack, and policy-pack catalog; not a remote store.');
-      expect(labels).toContain('It’s empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle.');
+      expect(labels).toContain("It's empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle.");
       expect(labels).toContain('Populate it');
       expect(labels).toContain('/marketplace publish <kind> <path>  — publish local plugins/skills into the catalog');
       expect(labels).toContain('/marketplace bundle import <path>   — import a catalog bundle from disk');
@@ -48,7 +48,7 @@ describe('marketplace modal surface', () => {
 
   test('degraded (no catalog roots) states roots are not wired', () => {
     const view = open(createMarketplaceModalSurface({ readModel: fixedReadModel({ startupIssues: [], recommendations: [] }) }));
-    expect(tabText(view, 'catalog')).toContain('aren’t wired into this session');
+    expect(tabText(view, 'catalog')).toContain("aren't wired into this session");
     // No selectable catalog rows.
     expect(tabRows(view, 'catalog').every((r) => r.selectable === false)).toBe(true);
   });

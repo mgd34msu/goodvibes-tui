@@ -9,7 +9,7 @@
  * Covered: providers-modal (the charter's live-modal exemplar, REQUIRED; its
  * async inspect cache is driven deterministically), remote-modal (a second
  * group-A surface, read-model backed), AND memory-modal (a group-B ported
- * surface —): a values-only mutation of a non-selected record's live label
+ * surface): a values-only mutation of a non-selected record's live label
  * repaints in place through the real host path.
  */
 import { describe, test, expect } from 'bun:test';

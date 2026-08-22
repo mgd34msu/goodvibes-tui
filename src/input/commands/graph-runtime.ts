@@ -26,7 +26,7 @@ export function registerGraphRuntimeCommands(registry: CommandRegistry): void {
     async handler(args, ctx) {
       const workstreamId = (args[0] ?? '').trim();
       if (!workstreamId) {
-        ctx.print('Usage: /graph <workstreamId>  — renders that workstream\'s task graph (nodes, edges, states, pool).');
+        ctx.print("Usage: /graph <workstreamId> renders that workstream's task graph (nodes, edges, states, pool).");
         return;
       }
       const rpc = getOperatorRpc(ctx);

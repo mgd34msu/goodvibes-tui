@@ -219,7 +219,7 @@ describe('forwarded-IP spoofing: trustProxy OFF (headers ignored for rate bucket
       configManager,
       userAuth,
       loginRateLimit: 3,
-      trustProxy: false, // explicit OFF — the default
+      trustProxy: false, // explicit OFF, the default
     }));
   });
 
@@ -514,7 +514,7 @@ describe('empty/whitespace password rejection', () => {
         port: nextPort(),
         configManager,
         userAuth,
-        loginRateLimit: 20, // high limit — we don't want rate-limiting to interfere
+        loginRateLimit: 20, // high limit, we don't want rate-limiting to interfere
       }));
     });
 

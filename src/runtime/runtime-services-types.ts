@@ -305,5 +305,5 @@ export interface RuntimeServices {
    * rather than preserved.
    */
   cancelHostedAgentRuns(): number;
-  dispose(): void; // Stop every poller this graph started; best-effort, total, idempotent. This surface owns its graph — see disposal-wiring.ts.
+  dispose(): void; // Stop every poller this graph started; best-effort, total, idempotent. This surface owns its graph, see disposal-wiring.ts.
 }

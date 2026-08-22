@@ -44,7 +44,7 @@ const INTERNAL_IDENTIFIER_PATTERNS: readonly RegExp[] = [
   /\bW[0-9]{1,2}\.[0-9]{1,2}\b/g, // wave.item id: a capital W, 1-2 digits, a dot, 1-2 digits
   /\bwo[0-9]{3,4}\b/gi, // numeric work-order id: lowercase "wo" followed by 3-4 digits
   /\bWO-[A-Z]\b/g, // lettered work-order id: "WO-" followed by one capital letter
-  /\bWO-[0-9]{1,4}[A-Za-z]*\b/g, // numbered work-order id: "WO-" then 1-4 digits, with an optional letter suffix — catches digit-then-letter shapes whose trailing letter otherwise defeats a digits-only \b anchor
+  /\bWO-[0-9]{1,4}[A-Za-z]*\b/g, // numbered work-order id: "WO-" then 1-4 digits, with an optional letter suffix. Catches digit-then-letter shapes whose trailing letter otherwise defeats a digits-only \b anchor
   /\bDEBT-[0-9]+\b/g, // debt-register id: "DEBT-" followed by digits
   /\bUX-[A-Z]\b/g, // UX-workstream id: "UX-" followed by one capital letter
   /\bWave[- ][0-9]+\b/g, // wave word-form: "Wave" plus a hyphen or space plus digits
@@ -56,7 +56,7 @@ const INTERNAL_IDENTIFIER_PATTERNS: readonly RegExp[] = [
   // versions are the doctrine's sanctioned provenance, so only the worded
   // shape is banned.
   /\b(?:plan\s+)?item\s+[0-9]+\.[0-9]+(?:\.[0-9]+)?\b/gi,
-  /\([A-E][0-9]{1,2}\)/g, // a lettered finding id (A-E, one or two digits) alone inside parentheses — F excluded (function keys)
+  /\([A-E][0-9]{1,2}\)/g, // a lettered finding id (A-E, one or two digits) alone inside parentheses, F excluded (function keys)
   /\b(?:describe|test|it)\(\s*['"][A-E][0-9]{1,2}\s*(?::|—)/g, // a test/describe/it title starting with a lettered finding id, immediately followed by a colon or an em-dash
   /\b[A-E][0-9]{1,2}(?:\/[A-E][0-9]{1,2}){1,}\b/g, // two or more lettered finding ids chained by forward slashes
 ];

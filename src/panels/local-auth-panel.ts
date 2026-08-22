@@ -255,7 +255,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     if (key === 'enter' || key === 'return') {
       // Submit: call the auth API if a non-empty password was entered.
       if (state.buffer.length === 0) {
-        return true; // no-op — require at least one character
+        return true; // no-op, require at least one character
       }
       const password = state.buffer;
       const { kind, username, auth } = state;

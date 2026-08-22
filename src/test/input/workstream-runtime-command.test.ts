@@ -771,7 +771,7 @@ describe('workstream-runtime: list / status / insert-phase / cancel', () => {
 
     await registry.execute('workstream', ['cancel', 'ws-cancel'], ctx);
 
-    expect(service.engine.killedIds).toEqual(['item-a']); // 'passed' item-b is already terminal — never targeted
+    expect(service.engine.killedIds).toEqual(['item-a']); // 'passed' item-b is already terminal, never targeted
     expect(printed.at(-1)).toContain('Cancelled 1 of 1');
   });
 
@@ -913,6 +913,6 @@ describe('workstream-runtime: list / status / insert-phase / cancel', () => {
     expect(output).toContain('custom: "security audit"');
     expect(output).toContain('engineer template');
     // Must not render the free text as if it were a real phase role like "custom, security audit".
-    expect(output).not.toContain('custom — security audit');
+    expect(output).not.toContain('custom, security audit');
   });
 });

@@ -98,7 +98,7 @@ describe('planning modal surface', () => {
       close: () => order.push('close'),
       submitInput: (t) => { order.push('submit'); submission.text = t; },
     }));
-    expect(cap.calls).toEqual([]); // no /project-plan command — this is a real chat turn
+    expect(cap.calls).toEqual([]); // no /project-plan command ; this is a real chat turn
     expect(submission.text).toBe('Use a focused first-pass scope for this goal.');
     expect(order).toEqual(['close', 'submit']); // close BEFORE the turn starts
   });

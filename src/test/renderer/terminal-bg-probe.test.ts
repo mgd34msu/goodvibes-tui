@@ -177,8 +177,8 @@ describe('TerminalBackgroundProbe.feed', () => {
   test('a bare ESC keystroke is held one chunk then released (no OSC 11 follows)', () => {
     const out: ProbeResolution[] = [];
     const probe = makeProbe(out);
-    expect(probe.feed('\x1b')).toBe('');       // could be the start of \x1b]11; — held
-    expect(probe.feed('[A')).toBe('\x1b[A');    // disambiguated as an arrow key — released
+    expect(probe.feed('\x1b')).toBe('');       // could be the start of \x1b]11;, held
+    expect(probe.feed('[A')).toBe('\x1b[A');    // disambiguated as an arrow key, released
     expect(out.length).toBe(0);
     expect(probe.active).toBe(true);
   });

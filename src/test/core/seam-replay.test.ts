@@ -483,7 +483,7 @@ describe('seam-replay: seq-collision authoritative-record selection (T30)', () =
         stale(1, base + 200),
         stale(2, base + 300), // sorts LAST by seq, but is STALE
         fresh(0, base + 1000, 2),
-        fresh(1, base + 1100, 3), // NEWEST ts — authoritative
+        fresh(1, base + 1100, 3), // NEWEST ts, authoritative
         '',
       ].join('\n'),
       'utf-8',

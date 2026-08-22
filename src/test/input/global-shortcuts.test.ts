@@ -172,7 +172,7 @@ describe('handleGlobalShortcutToken', () => {
 
     expect(handled).toBe(true);
     expect(intercepted).toBe(true);
-    expect(closed).toHaveLength(0); // the panel stayed open — Ctrl+X was consumed for the in-panel detach instead
+    expect(closed).toHaveLength(0); // the panel stayed open, Ctrl+X was consumed for the in-panel detach instead
     // item 1b: a consumed detach still hands focus back to the composer,
     // it used to leave panelFocused untouched (the evaluator's "Ctrl+X detach
     // landed focus in the panel and a typed question became nav keys").

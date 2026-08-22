@@ -233,7 +233,7 @@ describe('/project-plan project planning runtime command', () => {
 
     await registry.execute('project-plan', ['dismiss'], makeContext(fake.service, out, opened));
 
-    expect(fake.state()).toBeNull(); // never seeded — the goal is not overwritten with "dismiss"
+    expect(fake.state()).toBeNull(); // never seeded, the goal is not overwritten with "dismiss"
     expect(out.join('\n')).toContain('No active plan or planning state to dismiss.');
     expect(out.join('\n')).not.toContain('Unknown /project-plan subcommand');
   });

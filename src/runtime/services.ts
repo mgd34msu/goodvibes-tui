@@ -453,7 +453,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     configManager, secretsManager, providerRegistry, memoryDbPath, codeIndexDbPath: codeIndexDbPath(workingDirectory, GOODVIBES_TUI_SURFACE_ROOT), surface, shellPaths,
     ...(options.currentSessionId ? { currentSessionId: options.currentSessionId } : {}),
   });
-  const { processRegistry } = createFleetServices({ // Shared archive-aware fleet registry — see fleet-services.ts
+  const { processRegistry } = createFleetServices({ // Shared archive-aware fleet registry, see fleet-services.ts
     agentManager, wrfcController,
     orchestrationEngine,
     codeIndexService: codeIndexStore,

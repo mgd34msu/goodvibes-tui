@@ -14,7 +14,7 @@ function makeCtx(providerApi: unknown): { ctx: CommandContext; printed: string[]
 }
 
 describe('/refresh-models live model discovery', () => {
-  test('renders each provider’s discovery delta ("N new, M retired")', async () => {
+  test('renders each provider\'s discovery delta ("N new, M retired")', async () => {
     const registry = new CommandRegistry();
     registerLocalRuntimeCommands(registry);
     const forced: Array<{ force?: boolean } | undefined> = [];

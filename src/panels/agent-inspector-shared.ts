@@ -127,7 +127,7 @@ export function agentKindStyle(kind: AgentInspectorEntryKind, colors: Record<str
 }
 
 // ---------------------------------------------------------------------------
-// Inspector filter modes (ported from the merged agent-logs console —)
+// Inspector filter modes (ported from the merged agent-logs console)
 // ---------------------------------------------------------------------------
 
 export type AgentInspectorFilterType = 'all' | 'assistant' | 'tool' | 'error';
@@ -256,7 +256,7 @@ export function buildWrfcCostSegments(
 }
 
 // ---------------------------------------------------------------------------
-// Agent lifecycle event subscriptions (ported from agent-logs —)
+// Agent lifecycle event subscriptions (ported from agent-logs)
 // ---------------------------------------------------------------------------
 
 export interface AgentActivityHooks {

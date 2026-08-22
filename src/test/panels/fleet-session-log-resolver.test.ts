@@ -86,7 +86,7 @@ describe('resolveSessionLogPath: real ShellPathService wiring (operations.ts sha
 
       const readModel = createStaticFleetReadModel(buildFleetSnapshot([makeDoneAgentNode(agentId)], NOW));
       const actions: Partial<FleetActionCallbacks> = {
-        getConversationSnapshot: () => [], // evicted/never-registered — forces the ledger fallback path
+        getConversationSnapshot: () => [], // evicted/never-registered, forces the ledger fallback path
         resolveSessionLogPath,
       };
       const panel = new FleetPanel(readModel, actions);

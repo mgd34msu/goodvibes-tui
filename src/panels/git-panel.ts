@@ -366,7 +366,7 @@ export class GitPanel extends BasePanel {
     }
     if (isPanelSearchCommit(key)) {
       const message = (this.commitMessage ?? '').trim();
-      if (!message) return true; // absorb — require a non-empty message before confirming
+      if (!message) return true; // absorb, require a non-empty message before confirming
       this.confirm = { subject: { kind: 'commit', message }, label: message, verb: 'Commit' };
       this.commitMessage = null;
       this.markDirty();

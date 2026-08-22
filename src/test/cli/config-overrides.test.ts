@@ -120,7 +120,7 @@ describe('applyRuntimeConfigDefault', () => {
     // Ensure global settings file does NOT contain the key
     const globalPath = manager.configPath;
     if (typeof globalPath === 'string') {
-      writeSettingsFile(globalPath, {}); // empty — key absent globally
+      writeSettingsFile(globalPath, {}); // empty, key absent globally
     }
     // Write explicit false to the PROJECT settings file
     writeSettingsFile(projectConfigPath, { display: { stream: false } });

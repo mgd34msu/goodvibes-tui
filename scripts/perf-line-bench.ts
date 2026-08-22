@@ -388,7 +388,7 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
     const seed = buildMixedConversation(transcriptMessages);
     const cm = new ConversationManager(() => width);
     cm.fromJSON({ messages: seed as never[] });
-    cm.getDisplayBlocks(); // cold build — warms the cache for indices 0..N-1
+    cm.getDisplayBlocks(); // cold build, warms the cache for indices 0..N-1
     let n = 0;
     const appendOne = (): Line[] => {
       cm.addUserMessage(`appended probe message ${n++}`);

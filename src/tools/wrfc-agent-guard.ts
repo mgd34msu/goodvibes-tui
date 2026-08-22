@@ -48,7 +48,7 @@ type AgentTaskArgs = {
  * Emitted whenever the guard changes the effective routing decision:
  *   - 'spawn-forced-wrfc'     , implementation-like spawn promoted to WRFC
  *   - 'spawn-suppressed-wrfc' , spawn judged read-only; WRFC suppressed
- *   - 'batch-collapsed-to-wrfc'— batch-spawn collapsed into a single WRFC owner chain
+ *   - 'batch-collapsed-to-wrfc', batch-spawn collapsed into a single WRFC owner chain
  */
 export type WrfcGuardTraceKind =
   | 'spawn-forced-wrfc'

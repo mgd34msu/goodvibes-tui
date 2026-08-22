@@ -95,7 +95,7 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   // boundaries, tokenizer branches) the wrapper's tests don't isolate.
   'src/renderer/overlay-viewport.ts#getOverlayWidthClass', // wired via getOverlaySurfaceMetrics; width-band boundaries also pinned by a release-gate test
   'src/renderer/panel-composite.ts#renderPanel', // wired via buildPanelCompositeData; dedicated cache/dirty-flag test suite
-  'src/renderer/theme.ts#resolveTheme', // documented future call site — markdown.ts's own comment says "replace with resolveTheme(mode) when mode detection lands"
+  'src/renderer/theme.ts#resolveTheme', // documented future call site. markdown.ts's own comment says "replace with resolveTheme(mode) when mode detection lands"
   'src/renderer/theme.ts#resolveUiTones', // mode-explicit resolver: activeUiTones delegates to it internally; light/dark token derivations pinned directly by theme + batch-refutation tests
   'src/renderer/system-message.ts#classifySystemMessage', // wired via renderSystemMessage's default typeOverride; ~30 branch-classification cases tested directly
   'src/renderer/markdown.ts#renderInlineMarkdown', // wired via renderMarkdown/renderMarkdownTracked (called internally); tokenizer branch tests exercise it directly

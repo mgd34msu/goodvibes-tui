@@ -172,7 +172,7 @@ function renderChangeNames(result: ProfileWriteResultView): string[] {
  * forgetting something that was not there reports that it was not there.
  *
  * `ok: true` with an empty change list is also not a success line. The daemon
- * returns an empty disclosure when nothing changed, and inventing "Noted —"
+ * returns an empty disclosure when nothing changed, and inventing "Noted:"
  * over the top of it would be the false receipt the design forbids.
  */
 export function renderProfileWriteResult(result: ProfileWriteResultView): string {

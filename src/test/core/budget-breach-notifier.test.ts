@@ -38,7 +38,7 @@ describe('budget-breach-notifier', () => {
 
   test('fires exactly once on the false->true crossing, not again while still over budget', () => {
     const tracker = new FocusTracker();
-    tracker.setFocused(false); // unfocused — alert allowed
+    tracker.setFocused(false); // unfocused, alert allowed
     const notifier = makeSpyNotifier();
     const checker = createBudgetBreachNotifier({
       focusTracker: tracker,
@@ -77,7 +77,7 @@ describe('budget-breach-notifier', () => {
 
     expect(checker.check(over, PRICED_MODEL, 1)).toBe(true);
     expect(checker.check(under, PRICED_MODEL, 1)).toBe(false); // dropped back under (re-arms)
-    expect(checker.check(over, PRICED_MODEL, 1)).toBe(true); // breaches again — fires again
+    expect(checker.check(over, PRICED_MODEL, 1)).toBe(true); // breaches again, fires again
     expect(notifier.send).toHaveBeenCalledTimes(2);
   });
 
@@ -137,7 +137,7 @@ describe('budget-breach-notifier', () => {
 
   test('suppressed when the terminal is focused (default gating)', () => {
     const tracker = new FocusTracker();
-    tracker.setFocused(true); // focused — alert suppressed by default
+    tracker.setFocused(true); // focused, alert suppressed by default
     const notifier = makeSpyNotifier();
     const checker = createBudgetBreachNotifier({
       focusTracker: tracker,

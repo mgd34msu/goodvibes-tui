@@ -160,7 +160,7 @@ describe('handleSettingsModalToken: reset-confirm gate', () => {
   test('Shift+R: absorbed keys keep the gate open', () => {
     const state = makeState();
     handleSettingsModalToken(state, keyToken('r', { shift: true }));
-    // Up arrow is not a confirm key—should be absorbed by the gate
+    // Up arrow is not a confirm key. It should be absorbed by the gate
     const consumed = handleSettingsModalToken(state, keyToken('up'));
     expect(consumed).toBe(true);
     // Gate still armed

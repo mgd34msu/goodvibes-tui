@@ -153,7 +153,7 @@ describe('ComponentHealthMonitor: render cost enforcement', () => {
       throttleIntervalMs: 50,
       degradeAfterViolations: 2,
       degradedIntervalMs: 500,
-      maxUpdatesPerSecond: 100, // no rate limit — isolate render cost test
+      maxUpdatesPerSecond: 100, // no rate limit, isolate render cost test
     });
     // All renders are very expensive
     for (let i = 0; i < 20; i++) {

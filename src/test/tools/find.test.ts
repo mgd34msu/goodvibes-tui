@@ -88,7 +88,7 @@ describe('files mode', () => {
     expect(r.files.every((f: string) => f.endsWith('.ts'))).toBe(true);
   });
 
-  test('basic glob — matches .tsx files', async () => {
+  test('basic glob: matches .tsx files', async () => {
     const results = await find({
       queries: [{ id: 'tsx', mode: 'files', patterns: ['**/*.tsx'], path: dir }],
     });
@@ -607,7 +607,7 @@ describe('expand_to', () => {
 // ---------------------------------------------------------------------------
 
 describe('references mode', () => {
-  test('fallback grep — finds references by symbol name', async () => {
+  test('fallback grep: finds references by symbol name', async () => {
     // No LSP available in test env, so falls back to grep-based search.
     // The temp dir has files that import/use the symbol name.
     const results = await find({
@@ -628,7 +628,7 @@ describe('references mode', () => {
     expect(r.locations.every((l) => typeof l.file === 'string' && typeof l.line === 'number')).toBe(true);
   });
 
-  test('fallback grep — symbol with no matches returns empty locations', async () => {
+  test('fallback grep: symbol with no matches returns empty locations', async () => {
     // Use a symbol that is guaranteed not to appear anywhere in the codebase.
     // Prefix with __TEST__ and a random hex suffix to avoid false positives.
     const unique = `__TEST_NOSYM_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;

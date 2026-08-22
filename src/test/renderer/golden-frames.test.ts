@@ -326,7 +326,7 @@ function renderContextMeterSurface(): Line[] {
     '> Ask me anything',
     { up: 1024, down: 512 },
     false,          // showExitNotice
-    0,              // lastCopyTime — frozen
+    0,              // lastCopyTime, frozen
     'claude-opus-4',
     7,              // toolCount
     undefined,      // cursorPos
@@ -635,7 +635,7 @@ function renderSplashSurface(width: number): Line[] {
   return lines;
 }
 
-describe('golden-frames — splash (constraint 4)', () => {
+describe('golden-frames : splash (constraint 4)', () => {
   for (const width of [60, 100, 140]) {
     const surface = `splash-${width}`;
 
@@ -766,7 +766,7 @@ function renderToolResultDiffExpandedSurface(): Line[] {
   return lines;
 }
 
-describe('golden-frames — conversation: tool result (plain)', () => {
+describe('golden-frames : conversation: tool result (plain)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderToolResultPlainSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -779,7 +779,7 @@ describe('golden-frames — conversation: tool result (plain)', () => {
   });
 });
 
-describe('golden-frames — conversation: tool result (diff, collapsed)', () => {
+describe('golden-frames : conversation: tool result (diff, collapsed)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderToolResultDiffCollapsedSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -792,7 +792,7 @@ describe('golden-frames — conversation: tool result (diff, collapsed)', () => 
   });
 });
 
-describe('golden-frames — conversation: tool result (diff, expanded)', () => {
+describe('golden-frames : conversation: tool result (diff, expanded)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderToolResultDiffExpandedSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -879,7 +879,7 @@ function renderToolGroupExpandedSurface(): Line[] {
   return lines;
 }
 
-describe('golden-frames — conversation: assistant turn (collapsed)', () => {
+describe('golden-frames : conversation: assistant turn (collapsed)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderToolGroupCollapsedSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -900,7 +900,7 @@ describe('golden-frames — conversation: assistant turn (collapsed)', () => {
   });
 });
 
-describe('golden-frames — conversation: assistant turn (expanded)', () => {
+describe('golden-frames : conversation: assistant turn (expanded)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderToolGroupExpandedSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -933,7 +933,7 @@ function renderCodeBlockFallbackSurface(): Line[] {
   return renderCodeBlock(CODE_BLOCK_FALLBACK_LINES, 'yaml', NORMAL_W);
 }
 
-describe('golden-frames — conversation: fenced code block (regex-fallback path)', () => {
+describe('golden-frames : conversation: fenced code block (regex-fallback path)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderCodeBlockFallbackSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -969,7 +969,7 @@ const CODE_BLOCK_TREE_SITTER_LINES = [
   '}',
 ];
 
-describe('golden-frames — conversation: fenced code block (tree-sitter path)', () => {
+describe('golden-frames : conversation: fenced code block (tree-sitter path)', () => {
   test.skipIf(!wasmAvailable() || !tsGrammarAvailable())(
     'matches committed golden snapshot once the background parse lands',
     async () => {
@@ -1008,7 +1008,7 @@ function renderThinkingBlockSurface(): Line[] {
   return renderThinkingBlock(THINKING_BLOCK_TEXT, NORMAL_W);
 }
 
-describe('golden-frames — conversation: thinking block', () => {
+describe('golden-frames : conversation: thinking block', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderThinkingBlockSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -1041,7 +1041,7 @@ function renderStreamingPartialSurface(): Line[] {
   return renderMarkdown(STREAMING_PARTIAL_MARKDOWN, NORMAL_W, { isStreaming: true });
 }
 
-describe('golden-frames — conversation: streaming partial frame', () => {
+describe('golden-frames : conversation: streaming partial frame', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderStreamingPartialSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -1073,7 +1073,7 @@ function describeOverlayGolden(
   render: (width: number, height: number) => Line[],
   variants: readonly OverlaySizeVariant[] = OVERLAY_SIZES,
 ): void {
-  describe(`golden-frames — ${groupName}`, () => {
+  describe(`golden-frames : ${groupName}`, () => {
     for (const variant of variants) {
       const surface = `${groupName}-${variant.label}`;
       test(`${variant.label} size matches committed golden snapshot`, () => {
@@ -1403,7 +1403,7 @@ function renderFleetLedgerTabSurface(width: number, height: number): Line[] {
   const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
   const readModel = createStaticFleetReadModel(snapshot);
   const panel = new FleetPanel(readModel, {
-    getConversationSnapshot: () => [], // evicted/never-registered — forces the ledger fallback
+    getConversationSnapshot: () => [], // evicted/never-registered, forces the ledger fallback
   });
   panel.handleInput('enter'); // row 0 is 'agent-done-01' (terminal) by default selection
   const tab = panel.getTabsState().tabs[0]!;
@@ -1443,7 +1443,7 @@ function renderHistorySearchSurface(width: number): Line[] {
   return renderHistorySearchOverlay(hs, width);
 }
 
-describe('golden-frames — history-search-overlay', () => {
+describe('golden-frames : history-search-overlay', () => {
   const variants: ReadonlyArray<{ label: 'normal' | 'hostile'; width: number }> = [
     { label: 'normal', width: NORMAL_W },
     { label: 'hostile', width: HOSTILE_W },
@@ -1484,7 +1484,7 @@ describeOverlayGolden('selection-modal-overlay', renderSelectionModalSurface);
 // tui-startup.ts). Rendered at a normal width and a narrow one, asserting
 // every item's FULL detail text survives, never ellipsized, clipped, or
 // overflow-hidden.
-describe('golden-frames — consequence-time trust modal (full detail text never clipped)', () => {
+describe('golden-frames : consequence-time trust modal (full detail text never clipped)', () => {
   const widths: ReadonlyArray<{ readonly label: string; readonly width: number }> = [
     { label: 'normal', width: 80 },
     { label: 'narrow', width: 60 },
@@ -1541,7 +1541,7 @@ function renderShellFooterCompactSurface(): Line[] {
   return result.lines;
 }
 
-describe('golden-frames — shell-footer (compact)', () => {
+describe('golden-frames : shell-footer (compact)', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderShellFooterCompactSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -1582,7 +1582,7 @@ function renderShellFooterVoiceSurface(indicator: 'statusline' | 'banner'): Line
 }
 
 for (const indicator of ['statusline', 'banner'] as const) {
-  describe(`golden-frames — shell-footer (voice ${indicator})`, () => {
+  describe(`golden-frames : shell-footer (voice ${indicator})`, () => {
     const surface = `shell-footer-voice-${indicator}`;
     test('matches committed golden snapshot', () => {
       const lines = renderShellFooterVoiceSurface(indicator);
@@ -1803,7 +1803,7 @@ function underLight<T>(fn: () => T): T {
   }
 }
 
-describe('golden-frames — light theme', () => {
+describe('golden-frames : light theme', () => {
   test('markdown transcript (light) matches committed golden snapshot', () => {
     const lines = underLight(() => renderMarkdownTranscriptSurface());
     expect(lines.length).toBeGreaterThan(0);
@@ -1861,7 +1861,7 @@ function renderChromeHeaderFooterSurface(): Line[] {
     '> Ask me anything',
     { up: 1024, down: 512 },
     false,          // showExitNotice
-    0,              // lastCopyTime — frozen
+    0,              // lastCopyTime, frozen
     'claude-opus-4',
     7,              // toolCount
     undefined,      // cursorPos
@@ -1890,7 +1890,7 @@ function renderChromeThinkingSurface(): Line[] {
   return UIFactory.createThinkingFragment(W, '⠋', 0, undefined, undefined, 1000, 2000);
 }
 
-describe('golden-frames — chrome light/dark flip (ux/light-chrome)', () => {
+describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
   test('chrome (light) matches committed golden snapshot', () => {
     const lines = underLight(() => renderChromeHeaderFooterSurface());
     expect(lines.length).toBeGreaterThan(0);
@@ -1977,7 +1977,7 @@ function renderSandboxEscalationPromptSurface(): Line[] {
   return PermissionPromptUI.createPromptLines(NORMAL_W, request, undefined, true);
 }
 
-describe('golden-frames — permission prompt: exec sandbox escalation', () => {
+describe('golden-frames : permission prompt: exec sandbox escalation', () => {
   test('matches committed golden snapshot', () => {
     const lines = renderSandboxEscalationPromptSurface();
     expect(lines.length).toBeGreaterThan(0);
@@ -2020,7 +2020,7 @@ function renderAttributedPromptSurface(attribution: Parameters<typeof resolveApp
   return PermissionPromptUI.createPromptLines(NORMAL_W, request, undefined, false, requestedBy);
 }
 
-describe('golden-frames — permission prompt: mcp-server elicitation attribution', () => {
+describe('golden-frames : permission prompt: mcp-server elicitation attribution', () => {
   function render(): Line[] {
     return renderAttributedPromptSurface({ kind: 'mcp-server', serverName: 'figma' });
   }
@@ -2037,7 +2037,7 @@ describe('golden-frames — permission prompt: mcp-server elicitation attributio
   });
 });
 
-describe('golden-frames — permission prompt: sandbox-escalation attribution (broker-routed)', () => {
+describe('golden-frames : permission prompt: sandbox-escalation attribution (broker-routed)', () => {
   function render(): Line[] {
     return renderAttributedPromptSurface({ kind: 'sandbox-escalation', sandbox: 'exec-sandbox', escalations: ['wants-network'] });
   }

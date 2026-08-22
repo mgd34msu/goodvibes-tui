@@ -249,7 +249,7 @@ export function handleGlobalShortcutToken(
     }
 
     case 'panel-ops': {
-      // Ctrl+O: TOGGLE the Fleet panel (— same semantics as F2 above; see
+      // Ctrl+O: TOGGLE the Fleet panel (same semantics as F2 above; see
       // toggleFleetPanel's doc comment). The former Ops Control panel was
       // retired to an 'ops-control' -> 'fleet' alias; rather than route
       // through the now-aliased openOpsPanel callback (which opens without

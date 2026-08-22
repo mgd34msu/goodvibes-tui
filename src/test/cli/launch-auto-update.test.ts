@@ -161,7 +161,7 @@ describe('runLaunchAutoUpdate', () => {
 
   test('an apply that outlives its own (generous) budget is deferred, not left hanging launch forever', async () => {
     const { options, printed } = baseOptions({
-      apply: () => new Promise(() => { /* never resolves — simulates a stalled download */ }),
+      apply: () => new Promise(() => { /* never resolves, simulates a stalled download */ }),
       applyTimeoutMs: 10,
     });
     const outcome = await runLaunchAutoUpdate(options);

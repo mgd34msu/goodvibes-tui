@@ -114,7 +114,7 @@ describe('atomicWriteFileSync', () => {
     const subDir = join(tmpDir, 'subdir');
     mkdirSync(subDir);
     const path = join(subDir, 'a'.repeat(240) + '.json'); // 245 chars < 255
-    writeFileSync(path, 'original content'); // plain write — fits under NAME_MAX
+    writeFileSync(path, 'original content'); // plain write, fits under NAME_MAX
 
     expect(() => atomicWriteFileSync(path, 'new content that should not land')).toThrow();
 

@@ -122,7 +122,7 @@ const SIZES = [
 ] as const;
 
 for (const entry of GOLDEN_MODALS) {
-  describe(`group-B modal golden (host-rendered) — ${entry.name}`, () => {
+  describe(`group-B modal golden (host-rendered): ${entry.name}`, () => {
     for (const size of SIZES) {
       const surfaceName = `${entry.name}-${size.label}`;
       test(`${size.label} width matches committed golden`, async () => {

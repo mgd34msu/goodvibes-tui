@@ -6,7 +6,7 @@
 |    │   policy-pack         |
 |    │   catalog; not a      |
 |    │   remote store.       |
-|    │   It’s empty because  |
+|    │   It's empty because  |
 |    │   nothing has been    |
 |    │   published or        |
 |    │   imported into this  |

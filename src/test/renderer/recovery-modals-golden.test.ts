@@ -139,7 +139,7 @@ function findChoiceRow(rows: readonly string[], label: string): number {
 }
 
 for (const entry of RECOVERY_MODALS) {
-  describe(`recovery modal golden — ${entry.name}`, () => {
+  describe(`recovery modal golden: ${entry.name}`, () => {
     for (const size of SIZES) {
       const surfaceName = `${entry.name}-${size.label}`;
 

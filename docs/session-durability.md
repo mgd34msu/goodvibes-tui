@@ -63,8 +63,8 @@ the old session would replay the wrong conversation into it.
 The journal is NDJSON (one JSON object per line):
 
 ```
-line 0  — header:  { "version": 1, "sessionId": "...", "createdAt": <epochMs> }
-line 1+ — records: { "type": "...", "seq": <n>, "ts": <epochMs>, "messages": [...] }
+line 0 is the header: { "version": 1, "sessionId": "...", "createdAt": <epochMs> }
+line 1+ are records: { "type": "...", "seq": <n>, "ts": <epochMs>, "messages": [...] }
 ```
 
 Four record types appear in a journal, each written at a different durable moment:

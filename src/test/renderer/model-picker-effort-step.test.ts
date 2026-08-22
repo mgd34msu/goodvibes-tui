@@ -49,8 +49,8 @@ function renderEffortStep(spec: ReasoningEffortSpec | undefined, current = 'medi
   return linesToText(renderModelWorkspace(picker, W, H)).join('\n');
 }
 
-describe('the effort step renders the selected model’s own options', () => {
-  test('named levels: exactly the model’s levels, each with a description', () => {
+describe("the effort step renders the selected model's own options", () => {
+  test("named levels: exactly the model's levels, each with a description", () => {
     const text = renderEffortStep({
       kind: 'effort',
       values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],

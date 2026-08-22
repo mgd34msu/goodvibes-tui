@@ -20,7 +20,7 @@ describe('classifySystemMessage', () => {
     });
 
     test('spawning a fix agent → warning', () => {
-      expect(classifySystemMessage('[WRFC] Score 6/10 — spawning a fix agent')).toBe('warning');
+      expect(classifySystemMessage('[WRFC] Score 6/10, spawning a fix agent')).toBe('warning');
     });
 
     test('cascade abort → error', () => {

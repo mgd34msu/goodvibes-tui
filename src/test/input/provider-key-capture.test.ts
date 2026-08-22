@@ -44,7 +44,7 @@ function record(providerId: string, over: Partial<OnboardingProviderAccountRecor
 }
 
 describe('provider key capture helpers', () => {
-  test('readProviderApiKeyEnvVar reads the provider’s first declared auth env var', () => {
+  test("readProviderApiKeyEnvVar reads the provider's first declared auth env var", () => {
     const registry = registryOf({ acme: providerWithEnvVars(['ACME_API_KEY', 'ACME_TOKEN']), local: providerWithEnvVars([]) });
     expect(readProviderApiKeyEnvVar(registry, 'acme')).toBe('ACME_API_KEY');
     expect(readProviderApiKeyEnvVar(registry, 'local')).toBeUndefined();

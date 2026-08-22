@@ -77,6 +77,6 @@ describe('AutocompleteEngine.commonCount (item 4)', () => {
     expect(engine.getState().commonCount).toBe(3); // help, model, quit
 
     engine.update('a');
-    expect(engine.getState().commonCount).toBe(0); // typed filter — tiering does not apply
+    expect(engine.getState().commonCount).toBe(0); // typed filter, tiering does not apply
   });
 });

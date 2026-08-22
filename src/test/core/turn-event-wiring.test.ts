@@ -191,7 +191,7 @@ describe('wireTurnEventHandlers: TURN_COMPLETED notification integration', () =>
     wireTurnEventHandlers(opts);
 
     opts.emitTurn('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'turn-fail-1', prompt: 'test' });
-    clockValue = 5000 + 90_000; // 90s elapsed — above threshold
+    clockValue = 5000 + 90_000; // 90s elapsed, above threshold
 
     // stopReason 'empty_response' → fail
     opts.emitTurn('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 'turn-fail-1', response: '', stopReason: 'empty_response' });
@@ -214,7 +214,7 @@ describe('wireTurnEventHandlers: TURN_COMPLETED notification integration', () =>
     wireTurnEventHandlers(opts);
 
     opts.emitTurn('TURN_SUBMITTED', { type: 'TURN_SUBMITTED', turnId: 'turn-short-1', prompt: 'quick' });
-    clockValue = 1000 + 30_000; // 30s — below 60s threshold
+    clockValue = 1000 + 30_000; // 30s, below 60s threshold
 
     opts.emitTurn('TURN_COMPLETED', { type: 'TURN_COMPLETED', turnId: 'turn-short-1', response: 'done', stopReason: 'completed' });
 
@@ -281,7 +281,7 @@ describe('wireTurnEventHandlers: budget-breach alert', () => {
 
   function makeBudgetOptions(overrides: Partial<WireTurnEventHandlersOptions> = {}) {
     const tracker = new FocusTracker();
-    tracker.setFocused(false); // unfocused — alerts allowed
+    tracker.setFocused(false); // unfocused, alerts allowed
     return makeMinimalOptions({
       focusTracker: tracker,
       providerRegistry: {

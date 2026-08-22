@@ -157,7 +157,7 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
       // Recognized kinds (auth, rate-limit, network...) keep their specific
       // line. A generic rejection used to be captioned "Provider error",
       // which sent a startup UI crash out dressed as a model-backend
-      // problem — but the reverse lie matters too: the classifier has no
+      // problem. The reverse lie matters too: the classifier has no
       // 5xx rule, so a provider outage also classifies generic, and calling
       // THAT a GoodVibes bug blames us for OpenAI's downtime. The
       // discriminator is whether the reason carries provider markers

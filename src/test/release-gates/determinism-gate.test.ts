@@ -37,7 +37,7 @@ describe('determinism gate: in-flight deduplication', () => {
   test('second submission while in-flight returns in-flight (blocked)', () => {
     const store = makeStore();
     const key = store.generateKey(BASE_CTX);
-    store.checkAndRecord(key); // first — in-flight
+    store.checkAndRecord(key); // first, in-flight
     const second = store.checkAndRecord(key);
     expect(second.status).toBe('in-flight');
   });

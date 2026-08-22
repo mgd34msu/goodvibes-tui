@@ -284,7 +284,7 @@ async function main(): Promise<void> {
   // --- Save baseline (local auto-capture or explicit flag) ---
   if (saveBaseline || (!baseline && !isCI)) {
     const newBaseline: PerfBaseline = {
-      _comment: `Perf baseline — generated ${new Date().toISOString().slice(0, 10)} on ${process.platform}-${process.arch}. Ratchet rule: budgets set at ceil(measured_max × 2) for startup, and at the stated SLO for frame timing (p95 ≤ 16ms). Regenerate with: bun run perf:baseline`,
+      _comment: `Perf baseline generated ${new Date().toISOString().slice(0, 10)} on ${process.platform}-${process.arch}. Rule: budgets are set at ceil(measured_max × 2) for startup, and at the stated SLO for frame timing (p95 ≤ 16ms). Regenerate with: bun run perf:baseline`,
       startup: {
         renderer_load_ms: {
           measured_max_ms: Math.ceil(startupMs),

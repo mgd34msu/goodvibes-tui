@@ -126,7 +126,7 @@ describe('SessionSpineClient dormant-until-activated', () => {
 describe('SessionSpineClient fire-and-forget latency contract', () => {
   test('register/reopen/heartbeat/close return synchronously even with a slow-resolving backend (no interactive stall)', () => {
     const fake = makeFakeSessionsClient();
-    fake.mode = 'pending'; // never resolves during this test — proves no await on the call site
+    fake.mode = 'pending'; // never resolves during this test, proves no await on the call site
     const client = new SessionSpineClient({ participant: TUI_SPINE_PARTICIPANT, recordKind: 'tui', log: { debug: () => {}, info: () => {} } });
     client.activate(createTuiSpineTransport(fake.client));
 
@@ -145,7 +145,7 @@ describe('SessionSpineClient fire-and-forget latency contract', () => {
     // descheduling on a busy host. Widened to a value that still separates
     // "returned immediately" from any real wire round trip.
     expect(elapsedMs).toBeLessThan(1_000);
-    expect(client.status()).toBe('unknown'); // network has not settled — no premature 'online'
+    expect(client.status()).toBe('unknown'); // network has not settled, no premature 'online'
     client.dispose();
   });
 

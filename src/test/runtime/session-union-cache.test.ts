@@ -129,7 +129,7 @@ describe('SessionUnionCache: honest cross-surface read facade', () => {
     const wire = wireReader({ rows: [record('wire-1')] });
     const cache = new SessionUnionCache({ local, scheduler: noopScheduler, log: silent });
     cache.activate(wire.reader);
-    await cache.refresh(); // one good sync — cache now holds wire-1
+    await cache.refresh(); // one good sync, cache now holds wire-1
 
     expect(cache.listSessions().map((r) => r.id).sort()).toEqual(['local-1', 'wire-1']);
 

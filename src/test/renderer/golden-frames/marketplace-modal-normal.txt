@@ -2,7 +2,7 @@
 |    ┌─Marketplace──────────────────────────────────────────────────────────────┐                    |
 |    │   This is your local plugin, skill, hook-pack, and policy-pack catalog;  │                    |
 |    │   not a remote store.                                                    │                    |
-|    │   It’s empty because nothing has been published or imported into this    │                    |
+|    │   It's empty because nothing has been published or imported into this    │                    |
 |    │   workspace yet. Entries appear here once you publish a local component  │                    |
 |    │   or import a bundle.                                                    │                    |
 |    │   Populate it                                                            │                    |

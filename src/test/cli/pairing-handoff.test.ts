@@ -111,8 +111,8 @@ describe('formatPairingOffers copy', () => {
     expect(LAN_PLAIN_HTTP_NOTICE).toContain('unencrypted on your LAN');
   });
   test('capability labels are plain-language, no jargon', () => {
-    const posture = { origin: 'http://box.local', scheme: 'http' as const, privateNetwork: true, secureContext: false, notice: LAN_PLAIN_HTTP_NOTICE, capabilities: [{ capability: 'push' as const, available: false, reason: 'needs https — available via tailscale' }] };
+    const posture = { origin: 'http://box.local', scheme: 'http' as const, privateNetwork: true, secureContext: false, notice: LAN_PLAIN_HTTP_NOTICE, capabilities: [{ capability: 'push' as const, available: false, reason: 'needs https, available via tailscale' }] };
     const lines = formatPostureCapabilities(posture);
-    expect(lines[0]).toBe('  Push notifications, needs https — available via tailscale');
+    expect(lines[0]).toBe('  Push notifications, needs https, available via tailscale');
   });
 });

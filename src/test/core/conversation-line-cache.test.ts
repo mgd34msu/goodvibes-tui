@@ -282,7 +282,7 @@ describe('cache-vs-cold equivalence', () => {
     cm.addAssistantMessage('reading it now', {
       toolCalls: [{ id: 'call-1', name: 'Read', arguments: { path: 'foo.ts' } }],
     });
-    cm.getDisplayBlocks(); // warm — assistant turn cached with its tool-call block
+    cm.getDisplayBlocks(); // warm, assistant turn cached with its tool-call block
 
     // The tool result arrives as a new tool message on the existing turn.
     cm.addToolResults([{ callId: 'call-1', success: true, output: 'file contents\nline two\nline three' }]);
@@ -311,7 +311,7 @@ describe('cache-vs-cold equivalence', () => {
         { id: 'call-3', name: 'Read', arguments: { path: 'c.ts' } },
       ],
     });
-    cm.getDisplayBlocks(); // warm — cached with all three calls pending
+    cm.getDisplayBlocks(); // warm, cached with all three calls pending
 
     // Count CALL rows only. A settled result row also carries ✓ in the shared
     // status gutter, so a whole-transcript glyph count would conflate the two.
@@ -348,7 +348,7 @@ describe('cache-vs-cold equivalence', () => {
     const cm = new ConversationManager(() => 100);
     cm.addUserMessage('shared prefix');
     cm.addAssistantMessage('original assistant content that will be replaced');
-    cm.getDisplayBlocks(); // warm — index 1 cached with the original content
+    cm.getDisplayBlocks(); // warm, index 1 cached with the original content
 
     // Truncate the last message (cache NOT cleared) and re-add a different one at
     // the SAME index. The content signature must invalidate the stale entry.
@@ -394,7 +394,7 @@ describe('cache-vs-cold equivalence', () => {
   test('cache is bounded to the visible set via mark-and-sweep', () => {
     const cm = new ConversationManager(() => 100);
     cm.fromJSON({ messages: buildMixed(200) as never[] });
-    cm.getDisplayBlocks(); // warm — one entry per visible message
+    cm.getDisplayBlocks(); // warm, one entry per visible message
     expect(cm.getLineCacheSize()).toBe(200);
 
     // clearDisplay hides all current messages; the next rebuild renders only the

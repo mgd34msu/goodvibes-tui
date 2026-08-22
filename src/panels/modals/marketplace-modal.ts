@@ -124,10 +124,10 @@ class MarketplaceModalSurface implements ConfigModalSurface {
     }
     if (this.rows.length === 0) {
       if (!this.deps.ecosystemPaths) {
-        rows.push(infoRow('empty:unwired', 'Marketplace catalog roots aren’t wired into this session, so there’s nothing to read yet.'));
+        rows.push(infoRow('empty:unwired', "Marketplace catalog roots aren't wired into this session, so there's nothing to read yet."));
       } else {
         rows.push(infoRow('empty:0', 'This is your local plugin, skill, hook-pack, and policy-pack catalog; not a remote store.'));
-        rows.push(infoRow('empty:1', 'It’s empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle.'));
+        rows.push(infoRow('empty:1', "It's empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle."));
       }
       rows.push(infoRow('empty:title', 'Populate it', { bold: true }));
       rows.push(infoRow('empty:publish', '/marketplace publish <kind> <path>  — publish local plugins/skills into the catalog', { dim: true }));
@@ -167,7 +167,7 @@ class MarketplaceModalSurface implements ConfigModalSurface {
     if (recommendations.length > 0) {
       rows.push(infoRow('rec:title', 'Recommended', { bold: true }));
       for (const [i, rec] of recommendations.slice(0, 3).entries()) {
-        rows.push(infoRow(`rec:${i}`, `${rec.title} — ${rec.command}`, { dim: true }));
+        rows.push(infoRow(`rec:${i}`, `${rec.title}: ${rec.command}`, { dim: true }));
       }
     }
 

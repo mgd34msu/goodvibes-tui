@@ -605,7 +605,7 @@ export class TokenBudgetPanel extends BasePanel {
     ];
 
     for (const [lbl, val, color] of rows) {
-      if (lines.length >= 8) break; // guard — don't overflow the section
+      if (lines.length >= 8) break; // guard, don't overflow the section
       lines.push(buildStyledPanelLine(width, [
         { text: lbl, fg: C.label },
         { text: fmtTok(val), fg: color, bold: lbl.includes('Total') },

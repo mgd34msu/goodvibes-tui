@@ -166,7 +166,7 @@ describe('ConversationManager', () => {
 
     test('an ambient system message (no isUserReceipt) never displaces the splash', () => {
       const c = new ConversationManager(() => 120);
-      c.addTypedSystemMessage('Provider anthropic registered — from last session', 'system');
+      c.addTypedSystemMessage('Provider anthropic registered, from last session', 'system');
       const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
       expect(frame).toContain('██████╗');
       expect(frame).not.toContain('Provider anthropic registered');
@@ -193,8 +193,8 @@ describe('ConversationManager', () => {
       c.undo(); // removes the last turn ('second' + the receipt) as one unit
       c.addTypedSystemMessage('Provider anthropic registered', 'system'); // recycles the freed index, ambient (no isUserReceipt)
       const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
-      expect(frame).not.toContain('██████╗'); // 'first'/'reply' remain — real content, splash stays hidden regardless
-      expect(frame).not.toContain('Recovery point kept'); // undone — gone from the transcript entirely
+      expect(frame).not.toContain('██████╗'); // 'first'/'reply' remain, real content, splash stays hidden regardless
+      expect(frame).not.toContain('Recovery point kept'); // undone, gone from the transcript entirely
     });
   });
 
@@ -221,7 +221,7 @@ describe('ConversationManager', () => {
       c.getDisplayBlocks();
       c.dismissSplash();
       c.setSplashSuppressed(true);  // panel workspace opened
-      c.setSplashSuppressed(false); // …and closed again — the per-frame posture is back to "allowed"
+      c.setSplashSuppressed(false); // …and closed again, the per-frame posture is back to "allowed"
       const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
       expect(frame).not.toContain('██████╗');
     });

@@ -219,7 +219,7 @@ describe('handlePanelFocusToken', () => {
     // whole pasted string (see InputTokenizer, tokenizer.js:18-28).
     const result = handlePanelFocusToken(state, { type: 'text', value: 'hello world' });
     expect(received).toEqual([]);              // not exploded into per-char hotkeys
-    expect(result.handled).toBe(true);          // consumed here — never reaches the composer
+    expect(result.handled).toBe(true);          // consumed here, never reaches the composer
     expect(result.panelFocused).toBe(true);     // focus NOT flipped to the composer
     expect(hints).toEqual(['fleet']);           // one-shot hint names the focused panel
     expect(state.requestRender).toHaveBeenCalled();
@@ -247,7 +247,7 @@ describe('handlePanelFocusToken', () => {
     });
     const result = handlePanelFocusToken(state, { type: 'text', value: 'abc' });
     expect(received).toEqual(['a', 'b', 'c']);
-    expect(hints).toEqual([]);                  // capture consumed it — no drop hint
+    expect(hints).toEqual([]);                  // capture consumed it, no drop hint
     expect(result.handled).toBe(true);
     expect(result.panelFocused).toBe(true);
   });
@@ -272,7 +272,7 @@ describe('handlePanelFocusToken', () => {
       });
       const result = handlePanelFocusToken(state, { type: 'text', value: '/' });
       expect(received).toEqual([]);            // never dispatched to the panel as a keystroke
-      expect(result.handled).toBe(false);       // falls through — the composer's text route arms it
+      expect(result.handled).toBe(false);       // falls through, the composer's text route arms it
       expect(result.panelFocused).toBe(false);  // focus already flipped back here
     });
 
@@ -372,7 +372,7 @@ describe('handlePanelFocusToken: paste flood guard (item 5)', () => {
       result = handlePanelFocusToken({ ...state, now: t0 + i }, { type: 'text', value: 'K' });
     }
     expect(received.length).toBeLessThanOrEqual(8);
-    expect(hints).toEqual(['fleet']); // one-shot — not shown 12 more times
+    expect(hints).toEqual(['fleet']); // one-shot, not shown 12 more times
     expect(result!.panelFocused).toBe(true); // never flipped to the composer
   });
 
@@ -448,6 +448,6 @@ describe('handlePanelFocusToken: paste flood guard (item 5)', () => {
     expect(received.length).toBe(dispatchedFromFirstBurst + 1);
 
     for (let i = 0; i < 12; i++) handlePanelFocusToken({ ...state, now: t1 + 20 + i }, { type: 'text', value: 'c' }); // second burst
-    expect(hints).toEqual(['fleet', 'fleet']); // re-armed — a later burst gets its own one-shot hint
+    expect(hints).toEqual(['fleet', 'fleet']); // re-armed, a later burst gets its own one-shot hint
   });
 });

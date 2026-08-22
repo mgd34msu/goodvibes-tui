@@ -72,7 +72,7 @@ describe('render-scheduler: same-tick coalescing', () => {
     expect(composites).toBe(1);
 
     q.drain();     // the queued flush now runs
-    expect(composites).toBe(1); // still 1 — the pending flush was already satisfied
+    expect(composites).toBe(1); // still 1, the pending flush was already satisfied
   });
 
   test('immediate paint then a later schedule still yields one more composite', () => {

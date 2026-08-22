@@ -364,7 +364,7 @@ export class ConversationManager extends SdkConversationManager {
     this.messageKindRegistry = new Map();
     this.userReceiptIndices.clear();
     this.streamingStartLine = -1;
-    this._displayFromMessageIndex = 0; // full reset — show everything on next render
+    this._displayFromMessageIndex = 0; // full reset, show everything on next render
   }
 
   /**

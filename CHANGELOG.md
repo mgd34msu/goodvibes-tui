@@ -28,7 +28,7 @@ All notable changes to GoodVibes TUI.
 
 - **Session start no longer crashes behind the scenes.** Every session
   opened with "[Error] Provider error: Cannot access 'render' before
-  initialization" — a startup crash inside the TUI's own wiring, mislabeled
+  initialization", a startup crash inside the TUI's own wiring, mislabeled
   as a provider problem, that killed whatever bootstrap step was mid-flight.
   Render requests that arrive before the renderer exists are now deferred
   into the first paint instead of throwing.
@@ -36,7 +36,7 @@ All notable changes to GoodVibes TUI.
   session ended server-side used to surface as "the provider rejected your
   API key. Run /login to re-authenticate or check your API key", which reads
   as "your subscription isn't there" to a logged-in subscriber. It now says
-  the subscription session has ended and to sign in again — and with
+  the subscription session has ended and to sign in again. With
   platform runtime 2.0.21 underneath, a token OpenAI rotated early is
   refreshed and retried before anything is surfaced at all.
 - **Escaped errors are captioned honestly.** An unhandled rejection with no

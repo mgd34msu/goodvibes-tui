@@ -137,7 +137,7 @@ describe('tool-reconciliation helpers', () => {
     test('handles duplicate call ids gracefully', () => {
       const calls: ToolCall[] = [
         { id: 'dup', name: 'foo', arguments: {} },
-        { id: 'dup', name: 'bar', arguments: {} }, // same id — unusual but must not throw
+        { id: 'dup', name: 'bar', arguments: {} }, // same id, unusual but must not throw
       ];
       const results: ToolResult[] = [{ callId: 'dup', success: true }];
       // Both share the id, so both should be considered resolved

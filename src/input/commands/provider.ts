@@ -330,7 +330,7 @@ function handleFallbackTest(
         ? node.explanation.rejections.map((r) => r.code).join(', ')
         : '';
       context.print(
-        `    [${node.position}] ${node.providerId}/${node.modelId} — ${reasons || 'unknown'}`,
+        `    [${node.position}] ${node.providerId}/${node.modelId}: ${reasons || 'unknown'}`,
       );
     }
     if (rejected.length > 5) {

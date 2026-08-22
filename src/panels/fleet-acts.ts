@@ -127,7 +127,7 @@ export class FleetActs {
       const attention = fleetNodeAttention(node);
       if (attention?.reason === 'pick') { void this.beginPick(node); return true; }
       if (attention?.reason === 'conflict') { void this.resolveConflict(node); return true; }
-      return false; // not an act row — let attach handle it
+      return false; // not an act row, let attach handle it
     }
     if (key === 'D') {
       return this.discardWorktree(node);
@@ -364,7 +364,7 @@ export class FleetActs {
   public discardWorktree(node: ProcessNode): boolean {
     const item = workItemFromNode(node);
     const path = item?.worktreePath;
-    if (!path) return false; // not a worktree-owning row — let the key fall through
+    if (!path) return false; // not a worktree-owning row, let the key fall through
     const gateway = this.requireGateway();
     if (!gateway) return true;
     this.deps.diffSurface.armConfirm({
@@ -419,7 +419,7 @@ export class FleetActs {
         [selected ? ' ▸ ' : '   ', selected ? P.info : P.dim],
         [`${cand.attemptIndex + 1}. `, P.label],
         [cand.title, selected ? P.value : P.dim],
-        [`  — ${files}, ${cost}`, P.dim],
+        [`, ${files}, ${cost}`, P.dim],
       ]));
     });
     if (group.judgment?.proposedWinnerItemId) {

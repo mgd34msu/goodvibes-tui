@@ -235,7 +235,7 @@ export class FleetSpawn {
         lines.push(buildPanelLine(width, [
           [selected ? ' ▸ ' : '   ', selected ? P.info : P.dim],
           [agent.title, selected ? P.value : P.dim],
-          [`  — ${agent.binaryPath}`, P.dim],
+          [`, ${agent.binaryPath}`, P.dim],
         ]));
       });
     } else {
@@ -246,7 +246,7 @@ export class FleetSpawn {
         lines.push(buildPanelLine(width, [
           [selected ? ' ▸ ' : '   ', selected ? P.info : P.dim],
           [cand.label, selected ? P.value : P.dim],
-          [`  — ${cand.path}`, P.dim],
+          [`, ${cand.path}`, P.dim],
         ]));
       });
     }

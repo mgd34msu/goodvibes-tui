@@ -200,7 +200,7 @@ describe('/review reject action drives checkpoints.revertHunk with the token', (
     await waitFor(() => gateway.calls.some((c) => c.id === 'checkpoints.revertHunk'));
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(systemMessages.length).toBe(0); // no receipt — nothing was written
+    expect(systemMessages.length).toBe(0); // no receipt, nothing was written
     expect(getDiffPanel()).toBeNull(); // confirm closed
   });
 });

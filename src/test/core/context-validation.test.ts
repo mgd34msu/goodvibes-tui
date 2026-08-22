@@ -212,7 +212,7 @@ describe('context window pre-flight decision logic', () => {
         estimatedTokens,
         128_000,
         true,
-        estimatedTokens, // compact threw — token count unchanged
+        estimatedTokens, // compact threw, token count unchanged
       );
       expect(result).toBe('error');
       expect(compactTriggered).toBe(true);

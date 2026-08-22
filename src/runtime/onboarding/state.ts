@@ -100,7 +100,7 @@ function acquireLock(lp: string): boolean {
       if (Date.now() - st.mtimeMs >= LOCK_STALE_MS) {
         try { unlinkSync(lp); } catch { /* another process may have beaten us */ }
       }
-    } catch { /* lockfile does not exist — expected happy path */ }
+    } catch { /* lockfile does not exist, expected happy path */ }
 
     try {
       // 'wx' ≡ O_CREAT | O_EXCL | O_WRONLY, fails atomically if file exists.

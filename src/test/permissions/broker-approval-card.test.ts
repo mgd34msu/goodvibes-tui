@@ -124,7 +124,7 @@ describe('broker-originated approval cards', () => {
     });
 
     affordance('sess-xyz');
-    affordance('sess-xyz'); // repeat — no second notice/arm
+    affordance('sess-xyz'); // repeat, no second notice/arm
     expect(messages).toHaveLength(1);
     expect(armed).toEqual(['sess-xyz']);
     // The notice offers a one-key jump, never a command for the user to retype.

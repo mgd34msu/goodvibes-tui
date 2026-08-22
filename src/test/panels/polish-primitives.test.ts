@@ -13,7 +13,7 @@ import { lineToString } from '../setup.ts';
 import { getDisplayWidth } from '../../utils/terminal-width.ts';
 
 const P = DEFAULT_PANEL_PALETTE;
-const CJK = '世界'; // 世界 — 4 display columns, 2 code points
+const CJK = '世界'; // 世界, 4 display columns, 2 code points
 
 describe('buildAlignedRow', () => {
   const cols: ColumnSpec[] = [

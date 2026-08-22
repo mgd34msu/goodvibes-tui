@@ -123,7 +123,7 @@ export interface BuiltinPanelDeps {
   workPlanStore?: import('@pellux/goodvibes-sdk/platform/workflow').WorkPlanStore;
   /** Explicit UI-facing runtime services for agent/process/WRFC/remote panels and modals. */
   uiServices?: UiRuntimeServices;
-  /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface, — so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
+  /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface, so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
   pluginManager?: PluginManagerControls;
   /** Shared hook dispatcher for the hooks control-room panel. */
   hookDispatcher?: Pick<HookDispatcher, 'listHooks' | 'getChains'>;

@@ -181,7 +181,7 @@ export class Compositor {
     const borderFgForRow = (i: number): string => {
       if (!hasPanel || !panel!.separator || !panelFocused) return PANEL_BORDER_DIM;
       if (!hasBottomPane) return panel!.topFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
-      if (i === 0) return PANEL_FOCUS_ACCENT; // workspace bar — panel is focused
+      if (i === 0) return PANEL_FOCUS_ACCENT; // workspace bar, panel is focused
       if (i <= topPaneHeight) return panel!.topFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
       return panel!.bottomFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
     };

@@ -30,7 +30,7 @@ export const FRAME_BENCH_CONFIG = {
 /** Ratchet budgets, tighten when measured drops below budget/3. */
 export const FRAME_BUDGETS = {
   p95_ms: 16, // stated product SLO
-  p99_ms: 110, // ceil(measured p99 ~26.88ms × 4), rounded to 10ms — must match scripts/perf-baseline.json
+  p99_ms: 110, // ceil(measured p99 ~26.88ms × 4), rounded to 10ms. Must match scripts/perf-baseline.json
 } as const;
 
 /** Result of a single frame bench run. */

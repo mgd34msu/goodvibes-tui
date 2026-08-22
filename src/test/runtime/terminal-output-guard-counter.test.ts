@@ -20,7 +20,7 @@ describe('TUI terminal-output guard counter (1a)', () => {
       // intercepted (never reaches the real stream) and bumps the counter.
       (fakeStdout.write as (s: string) => boolean)('rogue direct stdout line\n');
       expect(captures).toEqual([1]);       // counter surfaced via onCapture
-      expect(written).toEqual([]);         // suppressed — not written through
+      expect(written).toEqual([]);         // suppressed, not written through
     } finally {
       guard.dispose();
     }

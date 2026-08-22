@@ -287,7 +287,7 @@ export class InputHandler implements InputHandlerLike {
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager, uiServices.sessions.sessionBroker, getSharedHostedSessionRoster(), () => this.requestRender()); // third source: the daemon-hosted roster
     this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
-    this.selectionQueue = attachSelectionModalQueue(this); // wires exitApp teardown too — see selection-modal-queue.ts
+    this.selectionQueue = attachSelectionModalQueue(this); // wires exitApp teardown too, see selection-modal-queue.ts
     this.initFeedContext();
   }
 

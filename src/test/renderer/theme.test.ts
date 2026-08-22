@@ -267,33 +267,33 @@ describe('no hardcoded hex literals at replaced call sites', () => {
     {
       file: path.join(root, 'renderer/markdown.ts'),
       blockedHex: [
-        '#00ffff',  // heading1/2 — moved to T.heading1 / T.heading2
-        '#ffcc00',  // inlineCodeFg — moved to T.inlineCodeFg
+        '#00ffff',  // heading1/2, moved to T.heading1 / T.heading2
+        '#ffcc00',  // inlineCodeFg, moved to T.inlineCodeFg
         '#1a1a1a',  // inline code bg hardcode removed (bg now inherited)
-        '#00aaff',  // link — moved to T.link
-        '#22c55e',  // checkboxChecked — moved to T.checkboxChecked
+        '#00aaff',  // link, moved to T.link
+        '#22c55e',  // checkboxChecked, moved to T.checkboxChecked
       ],
     },
     {
       file: path.join(root, 'renderer/compositor.ts'),
       blockedHex: [
-        '#ffff00',  // searchCurrentBg — moved to T.searchCurrentBg
-        '#806600',  // searchMatchBg — moved to T.searchMatchBg
-        '#ffffff',  // searchMatchFg — moved to T.searchMatchFg
-        '#000000',  // searchCurrentFg — moved to T.searchCurrentFg
+        '#ffff00',  // searchCurrentBg, moved to T.searchCurrentBg
+        '#806600',  // searchMatchBg, moved to T.searchMatchBg
+        '#ffffff',  // searchMatchFg, moved to T.searchMatchFg
+        '#000000',  // searchCurrentFg, moved to T.searchCurrentFg
       ],
     },
     {
       file: path.join(root, 'core/conversation-rendering.ts'),
       blockedHex: [
-        '#22d3ee',  // assistantHeader — moved to T.assistantHeader
-        '#a855f7',  // reasoningAccent — moved to T.reasoningAccent
-        '#38bdf8',  // toolAccent — moved to T.toolAccent
-        '#1a1a1a',  // collapsedBodyBg — moved to T.collapsedBodyBg
-        '#3a1a1a',  // errorBarBg — moved to T.errorBarBg
-        '#94a3b8',  // modelNameDim — moved to T.modelNameDim
-        '#e2e8f0',  // toolNameFg — moved to T.toolNameFg
-        '#f59e0b',  // diffAccent — moved to T.diffAccent
+        '#22d3ee',  // assistantHeader, moved to T.assistantHeader
+        '#a855f7',  // reasoningAccent, moved to T.reasoningAccent
+        '#38bdf8',  // toolAccent, moved to T.toolAccent
+        '#1a1a1a',  // collapsedBodyBg, moved to T.collapsedBodyBg
+        '#3a1a1a',  // errorBarBg, moved to T.errorBarBg
+        '#94a3b8',  // modelNameDim, moved to T.modelNameDim
+        '#e2e8f0',  // toolNameFg, moved to T.toolNameFg
+        '#f59e0b',  // diffAccent, moved to T.diffAccent
         // '#00ffff' is intentionally NOT blocked here:
         // addConversationSplashScreen uses it for color-interpolation gradient
       ],

@@ -202,10 +202,10 @@ function formatItemMergeState(item: WorkItem): string {
  * dependencies contributes nothing.
  */
 function formatItemDependencyNote(item: WorkItem, ws: Workstream): string {
-  if (item.state === 'blocked-dependency' && item.blockedReason) return `  — ${item.blockedReason}`;
+  if (item.state === 'blocked-dependency' && item.blockedReason) return `, ${item.blockedReason}`;
   if (item.dependsOn && item.dependsOn.length > 0) {
     const titleById = new Map(ws.items.map((i) => [i.id, i.title]));
-    return `  — after: ${item.dependsOn.map((d) => titleById.get(d) ?? shortId(d)).join(', ')}`;
+    return `, after: ${item.dependsOn.map((d) => titleById.get(d) ?? shortId(d)).join(', ')}`;
   }
   return '';
 }
@@ -339,9 +339,9 @@ function renderWorkstreamStatus(ws: Workstream): string {
   }
   lines.push('Items:');
   for (const item of ws.items) {
-    const mergeNote = isolated ? `  — ${formatItemMergeState(item)}` : '';
+    const mergeNote = isolated ? `, ${formatItemMergeState(item)}` : '';
     const depNote = formatItemDependencyNote(item, ws);
-    lines.push(`  ${shortId(item.id)}  [${item.state}]  ${item.title}  — phase: ${item.currentPhaseId ?? '—'}${depNote}${mergeNote}`);
+    lines.push(`  ${shortId(item.id)}  [${item.state}]  ${item.title}, phase: ${item.currentPhaseId ?? '—'}${depNote}${mergeNote}`);
   }
   if (isolated) {
     // Honest terminal-summary truth (never inferred from item.state alone,

@@ -286,7 +286,7 @@ describe('ConfigModal host', () => {
       });
       modal.open(surface);
       expect(modal.fireAction('v', ctxNoop())).toBe(true);
-      expect(modal.getActiveTabId()).toBe('a'); // unchanged — the target tab never existed
+      expect(modal.getActiveTabId()).toBe('a'); // unchanged, the target tab never existed
     });
 
     test('is a no-op when the target row id does not exist in the target tab', () => {
@@ -301,7 +301,7 @@ describe('ConfigModal host', () => {
       });
       modal.open(surface);
       expect(modal.fireAction('v', ctxNoop())).toBe(true);
-      expect(modal.getActiveTabId()).toBe('a'); // unchanged — the target row never existed on tab 'b'
+      expect(modal.getActiveTabId()).toBe('a'); // unchanged, the target row never existed on tab 'b'
     });
 
     test('is a no-op for a non-selectable row (a jump must land on something the user can act on)', () => {
@@ -315,7 +315,7 @@ describe('ConfigModal host', () => {
       });
       modal.open(surfaceWithBadJump);
       expect(modal.fireAction('v', ctxNoop())).toBe(true);
-      expect(modal.getActiveTabId()).toBe('a'); // unchanged — 'note' is not selectable
+      expect(modal.getActiveTabId()).toBe('a'); // unchanged, 'note' is not selectable
     });
   });
 
@@ -391,7 +391,7 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
     // characters ('j', 'k') that would otherwise be nav aliases.
     handleConfigModalToken(state, { type: 'text', value: 'j and k are text now' } as never);
     expect(modal.getFilterQuery()).toBe('j and k are text now');
-    expect(modal.active).toBe(true); // never closed — 'k' didn't leak through as a hotkey
+    expect(modal.active).toBe(true); // never closed, 'k' didn't leak through as a hotkey
   });
 
   test('backspace edits the query one character at a time', async () => {
@@ -416,7 +416,7 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
 
     handleConfigModalToken(state, escToken);
     expect(modal.getFilterQuery()).toBe('');
-    expect(modal.active).toBe(true); // NOT closed yet — the one documented exception
+    expect(modal.active).toBe(true); // NOT closed yet, the one documented exception
     expect(closed).toBe(false);
 
     handleConfigModalToken(state, escToken);
@@ -449,7 +449,7 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
     expect(modal.getRenderModel().scroll.total).toBe(2);
     const frameA = renderConfigModal(modal, 90, 24);
 
-    val = 999; // values-only tick — no keystroke
+    val = 999; // values-only tick, no keystroke
     const frameB = renderConfigModal(modal, 90, 24);
 
     expect(frameB.length).toBe(frameA.length);
@@ -467,7 +467,7 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
     modal.appendFilterText('alpha');
     expect(modal.getRenderModel().scroll.total).toBe(1);
     rows = [...rows, { id: 'r3', label: 'alpha three' }]; // a new matching row appears live
-    expect(modal.getRenderModel().scroll.total).toBe(1); // still frozen — no interaction yet
+    expect(modal.getRenderModel().scroll.total).toBe(1); // still frozen, no interaction yet
     modal.moveDown(); // any interaction boundary re-syncs, including under an active filter
     expect(modal.getRenderModel().scroll.total).toBe(2);
   });
@@ -532,7 +532,7 @@ describe('ConfigModal host: wrap-clamp overlay (item 2)', () => {
     label = 'this label has grown much longer than the wrap width now'; // no interaction yet
     const after = modal.getRenderModel(width);
     const afterLines = after.rows[0]!.label.split('\n');
-    expect(afterLines.length).toBe(beforeLineCount); // same line footprint — no structural growth
+    expect(afterLines.length).toBe(beforeLineCount); // same line footprint, no structural growth
     expect(afterLines[afterLines.length - 1]!.endsWith('…')).toBe(true);
 
     modal.moveDown(); // an interaction boundary re-freezes structure
@@ -626,8 +626,8 @@ describe('ConfigModal host: line-budget row windowing (modal sizing rule)', () =
     modal.open(makeSurface({
       view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [
         { id: 'r1', label: 'a label that wraps to two lines here' }, // 2 lines at width 20
-        { id: 'r2', label: 'second row' }, // 1 line — 2 + 1 = 3, exactly the budget
-        { id: 'r3', label: 'third row' }, // would push to 4 — deferred
+        { id: 'r2', label: 'second row' }, // 1 line: 2 + 1 = 3, exactly the budget
+        { id: 'r3', label: 'third row' }, // would push to 4, deferred
       ] }] }),
     }));
     const model = modal.getRenderModel(20);

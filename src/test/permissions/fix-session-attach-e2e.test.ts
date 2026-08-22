@@ -73,7 +73,7 @@ describe('CI fix-session attach: end-to-end against the linked SDK', () => {
 
     const attached: string[] = [];
     expect(handleFixSessionAttachKey('j', { armedFixSessionId: armed!, attach: (id) => attached.push(id), render: () => {} })).toBe(true);
-    expect(attached).toEqual([session.id]); // the machine resumes the real session — end to end
+    expect(attached).toEqual([session.id]); // the machine resumes the real session, end to end
   });
 
   test('a stamped failure carries fixSessionError and renders honestly with no jump armed', async () => {

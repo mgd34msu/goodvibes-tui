@@ -143,7 +143,7 @@ describe('ModalFactory.createModal', () => {
     }
   });
 
-  // Sections —————————————————————————————————————————————
+  // Sections -------------------------------------------------------------
 
   test('text section content appears in output', () => {
     const lines = ModalFactory.createModal({

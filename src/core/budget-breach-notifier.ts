@@ -70,7 +70,7 @@ export function createBudgetBreachNotifier(deps: BudgetBreachNotifierDeps): Budg
       const breached = computeBudgetBreach(sessionCost, budgetThresholdUsd);
 
       if (!breached) {
-        notified = false; // dropped back under budget — can re-fire on the next crossing
+        notified = false; // dropped back under budget, can re-fire on the next crossing
         return false;
       }
       if (notified) return false; // already alerted for this crossing

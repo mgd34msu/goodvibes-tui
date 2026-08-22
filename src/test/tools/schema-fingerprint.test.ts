@@ -150,7 +150,7 @@ describe('appendSchemaFingerprint: flag disabled (default)', () => {
     const featureFlags = createFeatureFlagManager();
     const result = appendSchemaFingerprint(original, 'find', 'files', { featureFlags });
 
-    expect(result).toBe(original); // reference equality — no copy
+    expect(result).toBe(original); // reference equality, no copy
     expect(result._meta).toBeUndefined();
   });
 

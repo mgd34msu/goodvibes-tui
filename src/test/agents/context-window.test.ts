@@ -193,7 +193,7 @@ describe('compactSmallWindow', () => {
       { role: 'assistant' as const, content: 'world' },
     ];
     const result = compactSmallWindow(messages, 10);
-    expect(result).toBe(messages); // reference equality — no copy
+    expect(result).toBe(messages); // reference equality, no copy
   });
 
   test('truncates to keepRecent messages plus 2 summary messages', () => {

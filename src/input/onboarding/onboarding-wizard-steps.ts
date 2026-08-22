@@ -249,7 +249,7 @@ export function buildDefaultModelStep(controller: OnboardingWizardControllerLike
       kind: 'modelPicker',
       id: 'default-model.primary-model',
       label: 'Default provider + model',
-      hint: 'Open the nested model picker for the shell’s main routing target.',
+      hint: "Open the nested model picker for the shell's main routing target.",
       target: 'main',
       defaultSelection: {
         providerId: normalizeText(routing?.primaryProviderId),
