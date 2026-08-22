@@ -4,6 +4,24 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.19] - 2026-08-22
+
+### Changes
+
+- **This terminal adopts the running daemon again.** The adoption gate had
+  compared the daemon's 1.28.x artifact version against the sdk's 2.x
+  version and refused every adoption since sdk 2.0.0, silently running
+  local-only with no session spine. It now band-checks the platform build
+  the daemon reports.
+- **A dead subscription login is stamped and shown as ended**, everywhere a
+  status renders; a near-expiry token refreshes silently before the send.
+- **A machine with no microphone is reported as that**, once, in plain
+  words, with a gentle retry every minute — not a wake-detector crash loop
+  spamming the transcript and latching off. A busy device keeps prompt
+  retries and the crash latch.
+- Pins move to sdk/terminal-shell/toolchain 2.0.22 and daemon 1.28.24;
+  reusable-workflow pins repoint to the 2.0.22 release commit.
+
 ## [2.0.18] - 2026-08-21
 
 ### Changes
