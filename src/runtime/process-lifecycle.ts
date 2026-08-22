@@ -21,7 +21,7 @@
 import { existsSync } from 'node:fs';
 import { flushActivityLogSync, logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { createTerminalLifecycle, TERMINAL_ESCAPES } from '@pellux/goodvibes-terminal-shell';
-import { formatUserFacingErrorLine } from '../core/format-user-error.ts';
+import { formatUserFacingError } from '../core/format-user-error.ts';
 import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 import { buildPersistedSessionContext, deleteRecoveryFile } from '@/runtime/index.ts';
 import type { SessionSurface } from '@/runtime/index.ts';
@@ -154,9 +154,29 @@ export function installProcessLifecycle(deps: ProcessLifecycleDeps): ProcessLife
         `[Critical] Multiple errors detected (${_unhandledRejectionCount} in 10s). If the issue persists, please restart. Latest: ${msg}`
       );
     } else {
-      const formatted = formatUserFacingErrorLine(reason);
-      ctx.systemMessageRouter.high(`[Error] ${formatted}`);
-      logger.error('unhandledRejection', { error: String(reason) });
+      // Recognized kinds (auth, rate-limit, network...) keep their specific
+      // line. A generic rejection used to be captioned "Provider error",
+      // which sent a startup UI crash out dressed as a model-backend
+      // problem — but the reverse lie matters too: the classifier has no
+      // 5xx rule, so a provider outage also classifies generic, and calling
+      // THAT a GoodVibes bug blames us for OpenAI's downtime. The
+      // discriminator is whether the reason carries provider markers
+      // (provider / statusCode, which every SDK AppError sets): with them,
+      // stay neutral; without them, it escaped from our own code and
+      // honesty says so.
+      const classified = formatUserFacingError(reason);
+      let line: string;
+      if (classified.kind !== 'generic') {
+        line = `[Error] ${classified.message} ${classified.action}`;
+      } else {
+        const record = typeof reason === 'object' && reason !== null ? reason as Record<string, unknown> : {};
+        const providerShaped = typeof record['provider'] === 'string' || typeof record['statusCode'] === 'number';
+        line = providerShaped
+          ? `[Error] Unexpected error: ${msg}. Retry your last message, or switch models with /model.`
+          : `[Error] Unexpected error: ${msg}. This is a GoodVibes bug, not a provider failure; if it repeats, restart the session.`;
+      }
+      ctx.systemMessageRouter.high(line);
+      logger.error('unhandledRejection', { error: String(reason), stack: reason instanceof Error ? reason.stack : undefined });
     }
     render();
   };

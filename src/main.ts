@@ -162,6 +162,22 @@ async function main() {
   const panelManager = ctx.services.panelManager;
   const buildSessionContinuityHints = createSessionContinuityHintsBuilder({ readModels: uiServices.readModels, panelManager });
 
+  // `render` is captured by dozens of closures declared before the renderer
+  // exists (the scheduler is built much further down, after the compositor
+  // and lifecycle it needs). A direct `const render` declared at the
+  // scheduler put every closure created above it in its temporal dead zone,
+  // and every session start crashed with "Cannot access 'render' before
+  // initialization" surfacing as an unhandled rejection that killed whatever
+  // bootstrap step was mid-flight. The firing path has to be a callback some
+  // installer in this window invokes synchronously with the rejection
+  // crossing a promise boundary on the way out — the window itself contains
+  // no await, so no timer or scan callback can interleave into it — and the
+  // indirection removes the entire class rather than the one caller: any
+  // closure that fires before the scheduler exists gets a no-op, and the
+  // unconditional first paint after wiring covers everything deferred.
+  let renderImpl: () => void = () => {};
+  const render = (): void => renderImpl();
+
   let pendingPermission: PendingPermissionState | null = null;
   // One-key jump/attach to a spawned CI fix-session: the affordance ARMS the id; the next 'j' runs the resume so the user never retypes it.
   let fixSessionAttachArmed: string | null = null;
@@ -649,7 +665,7 @@ async function main() {
     });
   };
   const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // coalescer; no frames after terminal restore
-  const render = (): void => renderScheduler.schedule(); // captured direct writes → activity log + quiet /debug counter, not repeated transcript lines (1a)
+  renderImpl = () => renderScheduler.schedule(); // from here on, render() actually schedules; see the indirection's declaration for why it exists
   const terminalOutputGuard = installFullScreenTerminalOutputGuard({ stdout, stderr: process.stderr, onCapture: (total) => { commandContext.session.runtime.terminalWritesIntercepted = total; render(); } });
 
   setRenderRequest(() => renderScheduler.flushNow()); // bootstrap's 16ms coalescer composites via the (restore-gated) scheduler

@@ -77,12 +77,15 @@ function probeString(err: unknown): string {
 export function classifyError(err: unknown): ErrorClass {
   const probe = probeString(err);
 
-  // Auth: 401 status, key/token invalidity, Unauthorized
+  // Auth: 401 status, key/token invalidity, Unauthorized, or a subscription
+  // session the provider's backend has ended (matched by message too, because
+  // a wrapper that re-throws can drop the 401 status on the way up).
   if (
     /\b401\b/.test(probe) ||
     /invalid.{0,10}(api.?key|key|token)/i.test(probe) ||
     /unauthorized/i.test(probe) ||
     /authentication/i.test(probe) ||
+    /subscription session has ended/i.test(probe) ||
     /api.?key.{0,20}(missing|not.?set|required|invalid)/i.test(probe)
   ) {
     return 'auth';
@@ -143,12 +146,24 @@ export function formatUserFacingError(err: unknown): UserFacingError {
   const kind = classifyError(err);
 
   switch (kind) {
-    case 'auth':
+    case 'auth': {
+      // A subscription-session death is not an API-key problem, and telling a
+      // subscriber to "check your API key" reads as "your subscription isn't
+      // there". The SDK's subscription providers phrase that failure
+      // distinctly; keep their meaning.
+      if (/subscription session has ended/i.test(probeString(err))) {
+        return {
+          kind,
+          message: 'Authentication failed: your provider subscription session has ended.',
+          action: 'Run /login to sign in to the provider again.',
+        };
+      }
       return {
         kind,
         message: 'Authentication failed: the provider rejected your API key.',
         action: 'Run /login to re-authenticate or check your API key.',
       };
+    }
 
     case 'rate-limit':
       return {

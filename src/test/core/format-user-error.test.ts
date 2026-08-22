@@ -71,6 +71,19 @@ describe('formatUserFacingError', () => {
     expect(result.action).toContain('/login');
   });
 
+  test('a dead subscription session is named as such, never as an API key problem', () => {
+    // The exact failure that shipped: the SDK's subscription provider says
+    // "subscription session has ended", and the fixed API-key wording told a
+    // logged-in subscriber their subscription was not there.
+    const result = formatUserFacingError(new Error(
+      'Your OpenAI subscription session has ended and could not be refreshed. Sign in to OpenAI again to keep using the subscription.',
+    ));
+    expect(result.kind).toBe('auth');
+    expect(result.message).toMatch(/subscription session has ended/i);
+    expect(result.message).not.toMatch(/api key/i);
+    expect(result.action).toContain('/login');
+  });
+
   test('rate-limit error has /model action', () => {
     const result = formatUserFacingError({ status: 429, message: 'Too Many Requests' });
     expect(result.kind).toBe('rate-limit');
