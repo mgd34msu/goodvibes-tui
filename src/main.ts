@@ -54,9 +54,7 @@ import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState, reportFatalStartupError } from './cli/tui-startup.ts';
 import { applyConfiguredHitlMode, applyRuntimeConfigValue, applyTerminalRuntimeConfigDefaults } from '@pellux/goodvibes-terminal-shell';
 import { renderToolCallBlock } from './renderer/tool-call.ts';
-import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { installVoiceCapture } from './shell/voice-capture-shell.ts';
-import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installFullScreenTerminalOutputGuard } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
 import { createRenderScheduler } from '@pellux/goodvibes-terminal-shell';
@@ -68,9 +66,7 @@ import { wireStreamEventMetrics, createStreamMetrics, type StreamMetrics, type W
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { resolveContextStatusHint } from './renderer/context-status-hint.ts';
 import { isEffectiveDangerMode } from '@pellux/goodvibes-sdk/platform/config';
-import { createScriptableStatusline } from './core/scriptable-statusline.ts';
 import { applyComposerCapture, applyAtModelDirective } from './input/composer-capture.ts';
-import { createSessionAutoTitler } from './core/session-auto-titler.ts';
 import { makeComposerEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration } from './core/turn-cancellation.ts';
@@ -80,6 +76,9 @@ import { fetchDaemonPowerState, installKeepAwakeRemoteForward } from './runtime/
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { createTerminalNotifier } from './core/terminal-notifier.ts';
 import { setPanelFrameRequester } from './panels/base-panel.ts';
+import { createDeferredRender } from './renderer/deferred-render.ts';
+import { wireSessionAmbience } from './runtime/session-ambience-wiring.ts';
+import { createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 
 import { ALT_SCREEN_ENTER, ALT_SCREEN_EXIT, MOUSE_ENABLE, MOUSE_DISABLE, CURSOR_HIDE, CURSOR_SHOW, CLEAR_SCREEN, KEYBOARD_EXT_ENABLE, KEYBOARD_EXT_DISABLE, PASTE_ENABLE, PASTE_DISABLE, FOCUS_ENABLE, FOCUS_DISABLE } from './renderer/terminal-escapes.ts';
 import { installBackgroundThemeProbe } from './renderer/terminal-bg-probe.ts';
@@ -162,21 +161,9 @@ async function main() {
   const panelManager = ctx.services.panelManager;
   const buildSessionContinuityHints = createSessionContinuityHintsBuilder({ readModels: uiServices.readModels, panelManager });
 
-  // `render` is captured by dozens of closures declared before the renderer
-  // exists (the scheduler is built much further down, after the compositor
-  // and lifecycle it needs). A direct `const render` declared at the
-  // scheduler put every closure created above it in its temporal dead zone,
-  // and every session start crashed with "Cannot access 'render' before
-  // initialization" surfacing as an unhandled rejection that killed whatever
-  // bootstrap step was mid-flight. The firing path has to be a callback some
-  // installer in this window invokes synchronously with the rejection
-  // crossing a promise boundary on the way out — the window itself contains
-  // no await, so no timer or scan callback can interleave into it — and the
-  // indirection removes the entire class rather than the one caller: any
-  // closure that fires before the scheduler exists gets a no-op, and the
-  // unconditional first paint after wiring covers everything deferred.
-  let renderImpl: () => void = () => {};
-  const render = (): void => renderImpl();
+  // Callable before the scheduler exists; see deferred-render.ts for why.
+  const deferredRender = createDeferredRender();
+  const render = deferredRender.render;
 
   let pendingPermission: PendingPermissionState | null = null;
   // One-key jump/attach to a spawned CI fix-session: the affordance ARMS the id; the next 'j' runs the resume so the user never retypes it.
@@ -275,30 +262,15 @@ async function main() {
     configGet: (k: string) => configManager.get(k as Parameters<typeof configManager.get>[0]),
   });
 
-  const spokenTurns = wireSpokenTurnRuntime({
-    voiceService: ctx.services.voiceService,
-    configManager,
-    events: uiServices.events,
-    notify: (message) => { systemMessageRouter.high(message); render(); },
+  // Spoken output, scriptable statusline, auto-titling, spoken-turn routing.
+  const ambience = wireSessionAmbience({
+    voiceService: ctx.services.voiceService, configManager, events: uiServices.events,
+    conversation, toolLLM: ctx.services.toolLLM, orchestrator, providerRegistry, workingDir,
+    notify: (message) => systemMessageRouter.high(message), render,
   });
-  // Exit-path stop: bounded drain of the audio already playing (see stopForExit).
-  stopSpokenOutputForExit = () => spokenTurns.stopForExit();
-  unsubs.push(...spokenTurns.unsubs);
-  // Scriptable status line: runs the user's `statusline.command` at turn boundaries.
-  const scriptableStatusline = createScriptableStatusline({ configManager, cwd: workingDir, turns: uiServices.events.turns, onChange: () => render() });
-  unsubs.push(...scriptableStatusline.unsubs);
-  // Auto-title an untitled session via the weak/fast tool model (session.autoTitle, off by default).
-  const sessionAutoTitler = createSessionAutoTitler({
-    conversation, model: ctx.services.toolLLM, configManager, turns: uiServices.events.turns,
-    onTitled: (title) => { systemMessageRouter.high(`[Session] Auto-titled: "${title}"`); render(); },
-  });
-  unsubs.push(...sessionAutoTitler.unsubs);
-  unsubs.push(attachSpokenTurnModelRouting({
-    orchestrator,
-    providerRegistry,
-    configManager,
-    notify: (message) => { systemMessageRouter.high(message); render(); },
-  }));
+  stopSpokenOutputForExit = ambience.stopSpokenOutputForExit;
+  const { spokenTurns, scriptableStatusline } = ambience;
+  unsubs.push(...ambience.unsubs);
   const submitInput = (text: string, content?: ContentPart[], options: { readonly spokenOutput?: boolean } = {}) => {
     input.clearModalStack();
     scrollLocked = true; // Re-lock on any user input
@@ -665,7 +637,7 @@ async function main() {
     });
   };
   const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // coalescer; no frames after terminal restore
-  renderImpl = () => renderScheduler.schedule(); // from here on, render() actually schedules; see the indirection's declaration for why it exists
+  deferredRender.set(() => renderScheduler.schedule()); // from here on, render() actually schedules
   const terminalOutputGuard = installFullScreenTerminalOutputGuard({ stdout, stderr: process.stderr, onCapture: (total) => { commandContext.session.runtime.terminalWritesIntercepted = total; render(); } });
 
   setRenderRequest(() => renderScheduler.flushNow()); // bootstrap's 16ms coalescer composites via the (restore-gated) scheduler
