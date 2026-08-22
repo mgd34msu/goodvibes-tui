@@ -16,7 +16,7 @@ All notable changes to GoodVibes TUI.
 - **A dead subscription login is stamped and shown as ended**, everywhere a
   status renders; a near-expiry token refreshes silently before the send.
 - **A machine with no microphone is reported as that**, once, in plain
-  words, with a gentle retry every minute — not a wake-detector crash loop
+  words, with a gentle retry every minute, not a wake-detector crash loop
   spamming the transcript and latching off. A busy device keeps prompt
   retries and the crash latch.
 - Pins move to sdk/terminal-shell/toolchain 2.0.22 and daemon 1.28.24;
