@@ -4,6 +4,20 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.16] - 2026-08-21
+
+### Changes
+
+- **The Planning panel drives the real planning command.** The modal invoked
+  `/project-plan`, a command that does not exist; it now runs the registered
+  planning command, and a guard test resolves every command the panels emit
+  against the live command registry so a phantom fails the build.
+- Platform runtime 2.0.20: the pin rides the payments boot-recovery sdk
+  cycle. No TUI code change was needed for it; the reusable-workflow and
+  toolchain pins repoint to the 2.0.20 release commit.
+- Docs verified against the code: install steps match a tested clean
+  install, and term enumerations became code-verified tables.
+
 ## [2.0.15] - 2026-08-21
 
 ### Changes
