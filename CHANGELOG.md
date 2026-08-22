@@ -4,6 +4,16 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.17] - 2026-08-21
+
+### Changes
+
+- **The bundled daemon is current again.** The daemon dependency moves to
+  1.28.22 (sdk 2.0.20 inside), so an install of this TUI no longer nests a
+  daemon built against the previous platform runtime. 2.0.16 shipped hours
+  earlier with the daemon still at 1.28.21; this release exists to correct
+  that.
+
 ## [2.0.16] - 2026-08-21
 
 ### Changes
