@@ -4,6 +4,21 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.20] - 2026-08-22
+
+### Changes
+
+- **`goodvibes pair` mints a pairing link again.** The command invoked the
+  CLI's own gateway catalog, which is deliberately empty in this surface,
+  so every attempt failed with "Gateway method has no internal handler".
+  Pairing and its tailscale lookup now route through the daemon, the same
+  path every other hosted command uses.
+- **`pair --name` actually names the token.** The option lookup dropped
+  the flag's dashes and never matched, so every token got the default
+  name. The lookup now takes the flag token verbatim, and a test pins it.
+
+---
+
 ## [2.0.19] - 2026-08-22
 
 ### Changes

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.0.15-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-2.0.20-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 GoodVibes is a terminal console for coding and operations work with an AI model. You run `goodvibes` in a project directory and get a full-screen terminal app where you talk to a model that can read and edit your files, run shell commands, search the web, and hand work off to background agents, asking your permission before anything that writes or executes.
 

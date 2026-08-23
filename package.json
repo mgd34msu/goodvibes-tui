@@ -1,6 +1,6 @@
 {
   "name": "@pellux/goodvibes-tui",
-  "version": "2.0.19",
+  "version": "2.0.20",
   "description": "Terminal-native GoodVibes client for coding, operations, knowledge and channel workflows; a pure client of the GoodVibes daemon.",
   "type": "module",
   "main": "src/main.ts",
