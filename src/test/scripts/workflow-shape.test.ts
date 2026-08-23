@@ -212,7 +212,7 @@ describe("release.yml: by-reference release on the reusable workflows", () => {
   // of floating on @main (see "Pin the sdk reusable workflows to a commit
   // SHA"); bumping the pin is a deliberate one-line change in release.yml,
   // mirrored here.
-  const SDK_PIN = "2e89f30deacfac0e507877ea003489b4d05e41b6";
+  const SDK_PIN = "b419249731bbecc16a8844e5022f401e19e51acb";
 
   test("the serialized validate-release re-run is gone", () => {
     expect(Object.keys(rel.jobs ?? {})).not.toContain("validate-release");

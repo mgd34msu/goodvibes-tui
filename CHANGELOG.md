@@ -4,6 +4,18 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.0.21] - 2026-08-23
+
+### Changes
+
+- **The pins move to sdk 2.0.23 and daemon 1.28.25.** The platform carries
+  honest calendar auth (a dead Google grant reads as an auth failure with a
+  re-authorize pointer), provider auth summaries that fold in their routes (a
+  usable subscription sign-in reads configured), derived api-key routes for
+  catalog providers that declared none, fixed non-model error hints, and the
+  new reasoning-effort surface on the model verbs. The reusable-workflow refs
+  repoint to the 2.0.23 release commit.
+
 ## [2.0.20] - 2026-08-22
 
 ### Changes

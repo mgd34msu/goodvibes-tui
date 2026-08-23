@@ -125,4 +125,4 @@ jobs:
         # and scans the artifact for top-level eager namespace reads. The old
         # step hand-rolled an exit-code plus banner-prefix check in pwsh and
         # caught none of the rest.
-        run: bunx @pellux/goodvibes-toolchain@2.0.22 goodvibes-post-build-smoke --binary dist/goodvibes-windows-x64.exe
+        run: bunx @pellux/goodvibes-toolchain@2.0.23 goodvibes-post-build-smoke --binary dist/goodvibes-windows-x64.exe
