@@ -397,14 +397,18 @@ export async function renderPairing(runtime: CliCommandRuntime): Promise<string>
     // lease change where a stable name exists. The verb re-derives the same origin
     // and returns its honest posture, so this call is a persistence side effect.
     ensurePublicBaseUrl(runtime.configManager);
-    const name = readOptionValue(runtime.cli.commandArgs, 'name') ?? defaultPairingTokenName();
-    // Mint through the canonical hand-off verb: it mints a fresh per-device token
-    // and returns the exact `#pair=<token>` deep link the web app consumes. The
-    // daemon filters the requested offer set down to what it can actually satisfy.
-    const result = (await services.gatewayMethods.invoke('pairing.handoff.create', {
-      body: { name, offers: [...PAIRING_HANDOFF_OFFER_KINDS] },
-      context: { principalId: 'admin', principalKind: 'user', admin: true },
-    })) as PairingHandoffCreateResult;
+    const name = readOptionValue(runtime.cli.commandArgs, '--name') ?? defaultPairingTokenName();
+    // Mint through the canonical hand-off verb ON THE DAEMON: the deep link
+    // pairs a device to the daemon-hosted web app, and the offer set (push,
+    // relay, passkey) is the daemon's to filter to what it can satisfy. The
+    // local `services.gatewayMethods` catalog is deliberately empty in this
+    // surface (see runtime/services.ts), so invoking it answered
+    // "no internal handler" for every verb; the daemon verb caller is the
+    // canonical route and refuses honestly when no daemon is reachable.
+    const result = await services.daemonVerbs.invoke<PairingHandoffCreateResult>(
+      'pairing.handoff.create',
+      { name, offers: [...PAIRING_HANDOFF_OFFER_KINDS] },
+    );
     const link = result.deepLink ?? result.fragment;
     const qr = renderQrToString(generateQrMatrix(link));
     const lines: string[] = [
@@ -445,10 +449,7 @@ interface TailscaleGetResult {
  */
 async function renderPairingTailscaleLines(services: RuntimeServices): Promise<string[]> {
   try {
-    const ts = (await services.gatewayMethods.invoke('tailscale.get', {
-      body: {},
-      context: { principalId: 'admin', principalKind: 'user', admin: true },
-    })) as TailscaleGetResult;
+    const ts = await services.daemonVerbs.invoke<TailscaleGetResult>('tailscale.get', {});
     if (!ts.available) return [];
     if (ts.httpsUrl) return ['', `Encrypted access (Tailscale): ${ts.httpsUrl}`];
     return ['', 'Tailscale detected: run it as a serve target for encrypted https access (see the pairing modal).'];
