@@ -17,7 +17,6 @@ export function renderThinkingBlock(text: string, width: number): Line[] {
     {
       accent: t.state.reasoning,
       text: t.chrome.faint,
-      dim: true,
       italic: true,
     },
     BORDERS.THINKING.char,

@@ -10,12 +10,8 @@ import {
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
+import { activeTokens } from './theme.ts';
 
-const BORDER_FG = DEFAULT_OVERLAY_PALETTE.borderFg;
-const TITLE_FG = DEFAULT_OVERLAY_PALETTE.titleFg;
-const BODY_FG = DEFAULT_OVERLAY_PALETTE.bodyFg;
-const MUTED_FG = DEFAULT_OVERLAY_PALETTE.mutedFg;
-const SELECTED_BG = DEFAULT_OVERLAY_PALETTE.selectedBg;
 
 interface CellStyle {
   fg: string;
@@ -60,7 +56,7 @@ export function renderAutocompleteOverlay(
   });
   const layout = createOverlayBoxLayout(width, metrics.margin, metrics.boxWidth);
 
-  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐', BORDER_FG));
+  lines.push(createOverlayBorderLine(width, layout, '┌', '─', '┐', DEFAULT_OVERLAY_PALETTE.borderFg));
 
   const titleLine = createOverlayContentLine(width, layout);
   const titleText = ' Commands';
@@ -68,13 +64,13 @@ export function renderAutocompleteOverlay(
   const queryWidth = Math.min(Math.floor(layout.innerWidth / 2), Math.max(8, layout.innerWidth - getDisplayWidth(titleText) - 2));
   const leftText = fitDisplay(titleText, Math.max(0, layout.innerWidth - queryWidth));
   const rightText = truncateDisplay(queryText, queryWidth);
-  putText(titleLine, layout.margin + 2, layout.innerWidth - queryWidth, leftText, { fg: TITLE_FG, bold: true });
+  putText(titleLine, layout.margin + 2, layout.innerWidth - queryWidth, leftText, { fg: DEFAULT_OVERLAY_PALETTE.titleFg, bold: true });
   putText(
     titleLine,
     layout.margin + 2 + layout.innerWidth - queryWidth,
     queryWidth,
     fitDisplay(rightText, queryWidth),
-    { fg: TITLE_FG, dim: true },
+    { fg: activeTokens().textMuted },
   );
   lines.push(titleLine);
 
@@ -149,39 +145,39 @@ export function renderAutocompleteOverlay(
   for (let i = startIdx; i < endIdx; i++) {
     if (hasCommonSeparator && i === state.commonCount) {
       const sepLine = createOverlayContentLine(width, layout);
-      putText(sepLine, layout.margin + 2, layout.innerWidth, '─'.repeat(layout.innerWidth), { fg: BORDER_FG, dim: true });
+      putText(sepLine, layout.margin + 2, layout.innerWidth, '─'.repeat(layout.innerWidth), { fg: activeTokens().borderSubtle });
       lines.push(sepLine);
     }
 
     const { command } = results[i];
     const isSelected = i === state.selectedIndex;
-    const bg = isSelected ? SELECTED_BG : '';
+    const bg = isSelected ? DEFAULT_OVERLAY_PALETTE.selectedBg : '';
     const indicator = isSelected ? '▸ ' : '  ';
     const commandText = fitDisplay(
       truncateDisplay(`/${command.name}`, maxCommandWidth),
       maxCommandWidth,
     );
 
-    const line = createOverlayContentLine(width, layout, BORDER_FG, bg);
+    const line = createOverlayContentLine(width, layout, DEFAULT_OVERLAY_PALETTE.borderFg, bg);
     let x = layout.margin + 2;
     putText(line, x, indicatorWidth, indicator, {
-      fg: isSelected ? TITLE_FG : MUTED_FG,
+      fg: isSelected ? DEFAULT_OVERLAY_PALETTE.titleFg : DEFAULT_OVERLAY_PALETTE.mutedFg,
       bg,
       bold: isSelected,
     });
     x += indicatorWidth;
     putText(line, x, maxCommandWidth, commandText, {
-      fg: isSelected ? TITLE_FG : BODY_FG,
+      fg: isSelected ? DEFAULT_OVERLAY_PALETTE.titleFg : DEFAULT_OVERLAY_PALETTE.bodyFg,
       bg,
       bold: isSelected,
     });
     x += maxCommandWidth;
 
     if (descriptionFitsInline(command.description)) {
-      putText(line, x, gapWidth, '  ', { fg: BODY_FG, bg });
+      putText(line, x, gapWidth, '  ', { fg: DEFAULT_OVERLAY_PALETTE.bodyFg, bg });
       x += gapWidth;
       putText(line, x, descWidth, fitDisplay(command.description, descWidth), {
-        fg: isSelected ? BODY_FG : MUTED_FG,
+        fg: isSelected ? DEFAULT_OVERLAY_PALETTE.bodyFg : DEFAULT_OVERLAY_PALETTE.mutedFg,
         bg,
         bold: false,
       });
@@ -191,9 +187,9 @@ export function renderAutocompleteOverlay(
       // its own line(s) below at the full row width, rather than clipping it.
       lines.push(line);
       for (const wrapped of wrapWithHangingIndent(command.description, wrapWidth, '')) {
-        const descLine = createOverlayContentLine(width, layout, BORDER_FG, bg);
+        const descLine = createOverlayContentLine(width, layout, DEFAULT_OVERLAY_PALETTE.borderFg, bg);
         putText(descLine, layout.margin + 2 + indicatorWidth, wrapWidth, fitDisplay(wrapped, wrapWidth), {
-          fg: isSelected ? BODY_FG : MUTED_FG,
+          fg: isSelected ? DEFAULT_OVERLAY_PALETTE.bodyFg : DEFAULT_OVERLAY_PALETTE.mutedFg,
           bg,
         });
         lines.push(descLine);
@@ -209,7 +205,7 @@ export function renderAutocompleteOverlay(
       layout.margin + 2 + Math.max(0, layout.innerWidth - getDisplayWidth(scrollText)),
       getDisplayWidth(scrollText),
       scrollText,
-      { fg: MUTED_FG, dim: true },
+      { fg: DEFAULT_OVERLAY_PALETTE.mutedFg },
     );
     lines.push(scrollLine);
   }
@@ -224,10 +220,10 @@ export function renderAutocompleteOverlay(
     layout.margin + 2,
     layout.innerWidth,
     fitDisplay(truncateDisplay(hints, layout.innerWidth), layout.innerWidth),
-    { fg: MUTED_FG, dim: true },
+    { fg: DEFAULT_OVERLAY_PALETTE.mutedFg },
   );
   lines.push(footerLine);
 
-  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', BORDER_FG));
+  lines.push(createOverlayBorderLine(width, layout, '└', '─', '┘', DEFAULT_OVERLAY_PALETTE.borderFg));
   return lines;
 }

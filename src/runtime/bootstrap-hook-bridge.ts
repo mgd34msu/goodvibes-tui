@@ -1,3 +1,4 @@
+import { activeTokens } from '../renderer/theme.ts';
 import type { ConversationManager } from '../core/conversation';
 import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { MutableRuntimeState } from '@/runtime/index.ts';
@@ -71,7 +72,7 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       // for the text path: never fork a session another terminal is holding
       // open without the operator saying so.
       if (options.confirmLiveResume && !(await options.confirmLiveResume(sessionId))) {
-        options.conversation.log('Resume cancelled: the session is still open in another terminal.', { fg: '244' });
+        options.conversation.log('Resume cancelled: the session is still open in another terminal.', { fg: activeTokens().textMuted });
         options.requestRender();
         return;
       }
@@ -106,26 +107,26 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       void options.sharedSessionBroker.reopenSession(sessionId).catch((err) => { logger.debug('session broker reopen session failed', { err }); });
       // Fire-and-forget spine mirror (reopen:true, the user resume verb).
       options.sessionSpine.reopen({ sessionId, project: options.project, title: options.conversation.title || meta.title });
-      options.conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
+      options.conversation.log(`Resumed session: ${sessionId}`, { fg: activeTokens().secondary });
       if (panels.movedToModal.length > 0) {
-        options.conversation.log(`Resume: ${panels.movedToModal.join(', ')} moved to a modal; reopen via its command instead of as a panel.`, { fg: '244' });
+        options.conversation.log(`Resume: ${panels.movedToModal.join(', ')} moved to a modal; reopen via its command instead of as a panel.`, { fg: activeTokens().textMuted });
       }
       if (panels.notReopened.length > 0) {
-        options.conversation.log(`Resume: …and ${panels.notReopened.length} more not reopened (/panels to open)`, { fg: '244' });
+        options.conversation.log(`Resume: …and ${panels.notReopened.length} more not reopened (/panels to open)`, { fg: activeTokens().textMuted });
       }
       const returnContextMode = getReturnContextMode(options.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {
         for (const line of formatReturnContextForDisplay(meta.returnContext)) {
-          options.conversation.log(`Resume: ${line}`, { fg: '244' });
+          options.conversation.log(`Resume: ${line}`, { fg: activeTokens().textMuted });
         }
         if (panels.reopened.length > 0) {
-          options.conversation.log(`Resume: Reopened panels: ${panels.reopened.join(', ')}`, { fg: '244' });
+          options.conversation.log(`Resume: Reopened panels: ${panels.reopened.join(', ')}`, { fg: activeTokens().textMuted });
         }
         if ((meta.returnContext.remoteRunners?.length ?? 0) > 0) {
-          options.conversation.log(`Resume: Remote re-entry -> /remote recover ${meta.returnContext.remoteRunners![0]}`, { fg: '244' });
+          options.conversation.log(`Resume: Remote re-entry -> /remote recover ${meta.returnContext.remoteRunners![0]}`, { fg: activeTokens().textMuted });
         }
         if ((meta.returnContext.worktreePaths?.length ?? 0) > 0) {
-          options.conversation.log('Resume: Worktree re-entry -> /worktree review', { fg: '244' });
+          options.conversation.log('Resume: Worktree re-entry -> /worktree review', { fg: activeTokens().textMuted });
         }
         if (returnContextMode === 'assisted') {
           const helperModel = new HelperModel({
@@ -134,7 +135,7 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
           });
           void maybeAssistReturnContextSummary(options.configManager, helperModel, meta.returnContext).then((assisted) => {
             if (!assisted.assistedNarrative) return;
-            options.conversation.log(`Resume: ${assisted.assistedNarrative}`, { fg: '244' });
+            options.conversation.log(`Resume: ${assisted.assistedNarrative}`, { fg: activeTokens().textMuted });
             options.requestRender();
           });
         }
@@ -153,7 +154,7 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       }));
     } catch (error) {
       logger.debug('resumeSession failed', { error: summarizeError(error) });
-      options.conversation.log('Failed to resume session.', { fg: '#ef4444' });
+      options.conversation.log('Failed to resume session.', { fg: activeTokens().error });
     }
     options.requestRender();
   };

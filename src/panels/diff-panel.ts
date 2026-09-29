@@ -7,7 +7,7 @@ import { createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platfor
 import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { GitService, type StructuredDiff, type StructuredDiffFile } from '@pellux/goodvibes-sdk/platform/git';
 import { BasePanel } from './base-panel.ts';
-import { UI_TONES, DIFF_TONES } from '../renderer/ui-primitives.ts';
+import { activeTokens, activeDiffTones, activeUiTones } from '../renderer/theme.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { PanelConfirmOverlay } from './panel-confirm-overlay.ts';
 import {
@@ -22,65 +22,43 @@ import {
 } from './polish.ts';
 
 // ---------------------------------------------------------------------------
-// Colour palette, dedicated diff-viewer scheme (like a mini syntax
-// highlighter). Each hex literal is named once and reused for every role
-// that shares it, including the workspace-chrome aliases (info/dim/value/
-// empty) so the raw-hex count never grows. The title band itself is NOT
-// overridden, buildPanelWorkspace always falls back to the canonical
-// DEFAULT_PANEL_PALETTE.headerBg (one title band everywhere).
+// Colour palette, dedicated diff-viewer scheme. Every color is read from the
+// active theme (diff tones, chrome tones, token table) and rebuilt on every
+// theme change. The title band itself is NOT overridden, buildPanelWorkspace
+// always falls back to the canonical DEFAULT_PANEL_PALETTE.headerBg.
 // ---------------------------------------------------------------------------
 
-// Hunk blue is the shared DIFF_TONES token, diff-view.ts (conversation)
-// and git-panel.ts's inline diff converge onto this file's pre-existing value.
-const HUNK_BLUE: string = DIFF_TONES.hunk;
-// Context rows and line-number gutter use the shared theme's muted/dim
-// foreground tones rather than dedicated gray hex literals.
-const CONTEXT_GRAY = UI_TONES.fg.muted;
-const FILENAME_WHITE = '#ffffff';
-// Add/del text colors are the shared DIFF_TONES tokens, whose values ARE this
-// panel's shipped colors, this panel is the reference diff look (diff-view
-// was unwired dead code until, so "majority of surfaces" was a mirage);
-// the conversation surface converges onto these, not the reverse.
-const ADD_GREEN: string = DIFF_TONES.add;
-const ADD_BG = '#001a0d';
-const DEL_RED: string = DIFF_TONES.del;
-const DEL_BG = '#1a0000';
-const HUNK_BG = '#0a0a1a';
-const MARKER_GRAY = '#aaaaaa';
-const LINE_NUM_GRAY = UI_TONES.fg.dim;
-const LINE_NUM_ADD = '#00aa55';
-const LINE_NUM_DEL = '#aa2222';
-const TAB_ACTIVE_BG = '#333333';
-const TAB_INACTIVE_GRAY = '#666666';
-const TAB_BG = '#222222';
-const STATUS_BAR_BG = '#444444';
+const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, () => {
+  const p = activeTokens();
+  const diff = activeDiffTones();
+  const ui = activeUiTones();
+  return {
+    // Workspace-chrome aliases (title band excluded, no headerBg override)
+    info:  diff.hunk,
+    dim:   ui.fg.muted,
+    value: p.text,
+    empty: ui.fg.muted,
 
-const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, {
-  // Workspace-chrome aliases (title band excluded, no headerBg override)
-  info:  HUNK_BLUE,
-  dim:   CONTEXT_GRAY,
-  value: FILENAME_WHITE,
-  empty: CONTEXT_GRAY,
-
-  // Domain accents
-  addition:    ADD_GREEN,
-  additionBg:  ADD_BG,
-  deletion:    DEL_RED,
-  deletionBg:  DEL_BG,
-  hunk:        HUNK_BLUE,
-  hunkBg:      HUNK_BG,
-  markerText:  MARKER_GRAY,
-  lineNum:     LINE_NUM_GRAY,
-  lineNumAdd:  LINE_NUM_ADD,
-  lineNumDel:  LINE_NUM_DEL,
-  filename:    FILENAME_WHITE,
-  tabActive:   FILENAME_WHITE,
-  tabActiveBg: TAB_ACTIVE_BG,
-  tabInactive: TAB_INACTIVE_GRAY,
-  tabBg:       TAB_BG,
-  context:     CONTEXT_GRAY,
-  statusBar:   STATUS_BAR_BG,
-} as const);
+    // Domain accents
+    addition:    diff.add,
+    additionBg:  p.diffAddedBg,
+    deletion:    diff.del,
+    deletionBg:  p.diffRemovedBg,
+    hunk:        diff.hunk,
+    hunkBg:      p.backgroundElement,
+    markerText:  p.textMuted,
+    lineNum:     ui.fg.dim,
+    lineNumAdd:  p.diffAdded,
+    lineNumDel:  p.diffRemoved,
+    filename:    p.text,
+    tabActive:   p.text,
+    tabActiveBg: p.backgroundSelected,
+    tabInactive: p.textFaint,
+    tabBg:       p.backgroundElement,
+    context:     ui.fg.muted,
+    statusBar:   p.backgroundFooter,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -248,10 +226,12 @@ function makeLine(
   const usedForNums = LEFT_W + 1 + LEFT_W + 1 + 2; // 14
   const contentWidth = Math.max(0, width - usedForNums);
   const truncated = truncateDisplay(content, contentWidth);
+  // Dim only the colored add/del gutters; the gray context gutter is already the faint token.
+  const numsColored = numFg !== COLOR.lineNum;
   return buildStyledPanelLine(width, [
-    { text: leftNum.padStart(LEFT_W), fg: numFg, bg, dim: true },
+    { text: leftNum.padStart(LEFT_W), fg: numFg, bg, dim: numsColored },
     { text: ' ', fg: '', bg },
-    { text: rightNum.padStart(LEFT_W), fg: numFg, bg, dim: true },
+    { text: rightNum.padStart(LEFT_W), fg: numFg, bg, dim: numsColored },
     { text: ' ', fg: '', bg },
     { text: '| ', fg: COLOR.lineNum, bg },
     { text: truncated, fg, bg, bold },

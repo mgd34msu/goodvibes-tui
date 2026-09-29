@@ -19,6 +19,8 @@
  *   - render width
  *   - the four display-config values the render reads (line-number mode,
  *     collapse threshold, showThinking, showReasoningSummary)
+ *   - the active theme's token table (identity), so a theme or mode change
+ *     re-renders every message in the new colours
  *   - the block-registry base at message start (the code-block collapseKey embeds
  *     the GLOBAL block index, `code_${msgIdx}_${blockIdx}`, so a shift in an
  *     earlier message's block count changes this message's keys)
@@ -59,6 +61,7 @@ import {
   type ToolCallOutcome,
 } from './conversation-rendering.ts';
 import { trailingBlankAfter } from './conversation-fold.ts';
+import { activeTokens } from '../renderer/theme.ts';
 import {
   buildRenderPlan,
   computeAssistantTurns,
@@ -78,6 +81,8 @@ interface RenderConfig {
   readonly collapseThreshold: number;
   readonly showThinking: boolean;
   readonly showReasoningSummary: boolean;
+  /** The active theme's token table (identity): a theme or mode change re-renders. */
+  readonly palette: object;
 }
 
 /**
@@ -107,6 +112,7 @@ interface KeyMeta {
   readonly collapseThreshold: number;
   readonly showThinking: boolean;
   readonly showReasoningSummary: boolean;
+  readonly palette: object;
   readonly blockBase: number;
   readonly kind: SystemMessageKind | undefined;
   /**
@@ -338,6 +344,7 @@ export class MessageLineCache {
       collapseThreshold: context.configManager?.get('display.collapseThreshold') ?? 30,
       showThinking: context.configManager?.get('display.showThinking') ?? false,
       showReasoningSummary: context.configManager?.get('display.showReasoningSummary') ?? false,
+      palette: activeTokens(),
     };
 
     // Tool calls with no matching tool-result message are still pending; the
@@ -429,6 +436,7 @@ export class MessageLineCache {
       k.collapseThreshold !== cfg.collapseThreshold ||
       k.showThinking !== cfg.showThinking ||
       k.showReasoningSummary !== cfg.showReasoningSummary ||
+      k.palette !== cfg.palette ||
       k.blockBase !== blockBase ||
       k.kind !== kind ||
       k.pendingToolKey !== pendingToolKey ||
@@ -512,6 +520,7 @@ export class MessageLineCache {
         collapseThreshold: cfg.collapseThreshold,
         showThinking: cfg.showThinking,
         showReasoningSummary: cfg.showReasoningSummary,
+        palette: cfg.palette,
         blockBase,
         kind,
         pendingToolKey,

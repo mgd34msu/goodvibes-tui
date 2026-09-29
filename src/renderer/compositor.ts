@@ -5,13 +5,13 @@ import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
 import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 import { probeTermCaps, type TermColorCaps } from './term-caps.ts';
-import { activeTheme } from './theme.ts';
-import { UI_TONES } from './ui-primitives.ts';
+import { activeTheme, activeTokens, activeUiTones } from './theme.ts';
 
 // Accent / dim colors for the panel focus border. The focused pane's left
 // border column is drawn in the accent tone; the unfocused pane stays dim.
-const PANEL_FOCUS_ACCENT = UI_TONES.state.active; // bright blue
-const PANEL_BORDER_DIM = '238';
+// Panel separator colours, read per call so they follow the active theme.
+function panelFocusAccent(): string { return activeUiTones().state.active; }
+function panelBorderDim(): string { return activeTokens().textFaint; }
 
 export interface SelectionInfo {
   isCellSelected: (col: number, absoluteRow: number) => boolean;
@@ -179,11 +179,11 @@ export class Compositor {
     const panelFocused = hasPanel && (panel!.topFocused || panel!.bottomFocused);
     // Per-row left-border color: the focused pane's rows get the accent tone.
     const borderFgForRow = (i: number): string => {
-      if (!hasPanel || !panel!.separator || !panelFocused) return PANEL_BORDER_DIM;
-      if (!hasBottomPane) return panel!.topFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
-      if (i === 0) return PANEL_FOCUS_ACCENT; // workspace bar, panel is focused
-      if (i <= topPaneHeight) return panel!.topFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
-      return panel!.bottomFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
+      if (!hasPanel || !panel!.separator || !panelFocused) return panelBorderDim();
+      if (!hasBottomPane) return panel!.topFocused ? panelFocusAccent() : panelBorderDim();
+      if (i === 0) return panelFocusAccent(); // workspace bar, panel is focused
+      if (i <= topPaneHeight) return panel!.topFocused ? panelFocusAccent() : panelBorderDim();
+      return panel!.bottomFocused ? panelFocusAccent() : panelBorderDim();
     };
 
     // Every body row is written every frame, including rows the caller did not
@@ -271,7 +271,7 @@ export class Compositor {
           } else if (i === hSepRow) {
             // Horizontal separator between the two panes. Accent when the bottom
             // pane has focus so the divider reinforces the focus border.
-            const focusFg = p.bottomFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
+            const focusFg = p.bottomFocused ? panelFocusAccent() : panelBorderDim();
             for (let x = 0; x < panelWidth; x++) {
               newBuffer.setCell(panelStartX + x, screenY, createStyledCell('─', { fg: focusFg }));
             }
@@ -295,7 +295,10 @@ export class Compositor {
         const absoluteRow = selection.scrollTop + (i - offset);
         for (let x = 0; x < leftWidth; x++) {
           if (selection.isCellSelected(x, absoluteRow)) {
-            newBuffer.setCell(x, screenY, { bg: '4', fg: '0', bold: false, dim: false });
+            // Mouse selection: the theme's selection fill with body text (the
+            // inverse selectedListItemText is unreadable on this fill).
+            const sel = activeTokens();
+            newBuffer.setCell(x, screenY, { bg: sel.backgroundSelected, fg: sel.text, bold: false, dim: false });
           }
         }
       }

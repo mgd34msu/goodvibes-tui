@@ -137,8 +137,8 @@ class SkillsModalSurface implements ConfigModalSurface {
     if (this.cached.length === 0) {
       rows.push(infoRow('empty:0', 'No skills discovered.'));
       rows.push(infoRow('empty:title', 'Next steps'));
-      rows.push(infoRow('empty:dir', '.goodvibes/skills       — place skill .md files here (project-local) or ~/.goodvibes/skills (global)', { dim: true }));
-      rows.push(infoRow('empty:registry', '/registry search skills — inspect the same skill directories from the shell', { dim: true }));
+      rows.push(infoRow('empty:dir', '.goodvibes/skills       — place skill .md files here (project-local) or ~/.goodvibes/skills (global)', { fg: MODAL_TONES.dim }));
+      rows.push(infoRow('empty:registry', '/registry search skills — inspect the same skill directories from the shell', { fg: MODAL_TONES.dim }));
       return { title: 'Skills', tabs: [{ id: 'skills', label: 'Skills', rows, emptyText: '' }] };
     }
 

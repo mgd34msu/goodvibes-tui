@@ -1,3 +1,4 @@
+import { activeTokens } from '../renderer/theme.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types';
@@ -42,15 +43,18 @@ interface TurnUsage {
 // Colors
 // ---------------------------------------------------------------------------
 
-const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  // Token data-series colors (input/output/cache), categorical, no shared equivalent
-  input: '#00ffff',
-  output: '#d000ff',
-  cacheRead: '#00d700',
-  cacheWrite: '#ffaf00',
-  // Progress-bar track shade and per-turn table sub-header gray
-  barBg: '236',
-  turnHeader: '242',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, () => {
+  const p = activeTokens();
+  return {
+    // Token data-series colors (input/output/cache) mapped onto theme tokens
+    input: p.primary,
+    output: p.secondary,
+    cacheRead: p.success,
+    cacheWrite: p.warning,
+    // Progress-bar track shade and per-turn table sub-header gray
+    barBg: p.backgroundElement,
+    turnHeader: p.textMuted,
+  };
 });
 
 // Warning thresholds for context window usage
@@ -455,7 +459,7 @@ export class TokenBudgetPanel extends BasePanel {
     ];
 
     if (status.reasons[0]) {
-      lines.push(this.paintTextLine(` ${status.reasons[0]}`, width, C.dim, { dim: true }));
+      lines.push(this.paintTextLine(` ${status.reasons[0]}`, width, C.dim));
     }
 
     if (status.guidanceMode !== 'off' && status.nextSteps.length > 0) {
@@ -491,7 +495,7 @@ export class TokenBudgetPanel extends BasePanel {
 
     const total = u.input + u.output + u.cacheRead + u.cacheWrite;
     if (total === 0) {
-      lines.push(this.paintTextLine('  (no data)', width, C.dim, { dim: true }));
+      lines.push(this.paintTextLine('  (no data)', width, C.dim));
       return lines;
     }
 

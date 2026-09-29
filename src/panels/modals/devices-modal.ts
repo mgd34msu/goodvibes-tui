@@ -62,7 +62,7 @@ class DevicesModalSurface implements ConfigModalSurface {
     const now = this.deps.now?.() ?? Date.now();
     const tokens = this.deps.pairingTokens.list();
     const rows: ConfigModalRow[] = [];
-    rows.push(infoRow('intro', 'Devices paired to this daemon. Each has its own token; revoke one without affecting the others.', { dim: true }));
+    rows.push(infoRow('intro', 'Devices paired to this daemon. Each has its own token; revoke one without affecting the others.', { fg: MODAL_TONES.dim }));
 
     if (tokens.length === 0) {
       rows.push(infoRow('empty', 'No devices paired yet: run /pair (or open the pairing QR) to add one.'));
@@ -78,7 +78,7 @@ class DevicesModalSurface implements ConfigModalSurface {
       legacyRevoked
         ? 'Legacy shared token: revoked.'
         : 'Legacy shared token: active; migrate a device off it (m), then revoke it (s).',
-      legacyRevoked ? { dim: true } : { fg: MODAL_TONES.reasoning },
+      legacyRevoked ? { fg: MODAL_TONES.dim } : { fg: MODAL_TONES.reasoning },
     ));
 
     return {

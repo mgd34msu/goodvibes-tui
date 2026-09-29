@@ -53,11 +53,6 @@ interface PlanningModalSnapshot {
 
 interface TextLine { readonly content: string; readonly fg?: string; }
 
-const GOOD = MODAL_TONES.good;
-const WARN = MODAL_TONES.warn;
-const BAD = MODAL_TONES.bad;
-const INFO = MODAL_TONES.info;
-
 function getCurrentQuestion(state: ProjectPlanningState, evaluation: ProjectPlanningEvaluation | null): ProjectPlanningQuestion | null {
   const open = state.openQuestions.find((question) => (question.status ?? 'open') === 'open');
   return open ?? evaluation?.nextQuestion ?? null;
@@ -65,7 +60,7 @@ function getCurrentQuestion(state: ProjectPlanningState, evaluation: ProjectPlan
 
 function buildStateLines(state: ProjectPlanningState, evaluation: ProjectPlanningEvaluation | null): TextLine[] {
   const readiness = evaluation?.readiness ?? state.readiness;
-  const readinessColor = readiness === 'executable' ? GOOD : readiness === 'needs-user-input' ? WARN : undefined;
+  const readinessColor = readiness === 'executable' ? MODAL_TONES.good : readiness === 'needs-user-input' ? MODAL_TONES.warn : undefined;
   const blockingGaps = (evaluation?.gaps ?? []).filter((gap) => gap.severity === 'blocking').length;
   const lines: TextLine[] = [
     { content: `readiness ${readiness}  approved ${state.executionApproved ? 'yes' : 'no'}  questions ${state.openQuestions.length} open / ${state.answeredQuestions.length} answered`, ...(readinessColor ? { fg: readinessColor } : {}) },
@@ -74,14 +69,14 @@ function buildStateLines(state: ProjectPlanningState, evaluation: ProjectPlannin
   ];
   if (state.scope) lines.push({ content: `scope: ${state.scope}` });
   if (state.knownContext.length) lines.push({ content: `known context: ${state.knownContext.join(' | ')}` });
-  if (evaluation?.nextQuestion) lines.push({ content: `next question: ${evaluation.nextQuestion.prompt}`, fg: INFO });
+  if (evaluation?.nextQuestion) lines.push({ content: `next question: ${evaluation.nextQuestion.prompt}`, fg: MODAL_TONES.info });
   return lines;
 }
 
 function buildGapsLines(evaluation: ProjectPlanningEvaluation | null): TextLine[] {
   const gaps = evaluation?.gaps ?? [];
-  if (gaps.length === 0) return [{ content: 'Readiness gaps: none.', fg: GOOD }];
-  return [{ content: 'Readiness gaps:' }, ...gaps.slice(0, 12).map((gap) => ({ content: `  ${gap.severity.toUpperCase()} ${gap.kind}: ${gap.message}`, fg: gap.severity === 'blocking' ? BAD : WARN }))];
+  if (gaps.length === 0) return [{ content: 'Readiness gaps: none.', fg: MODAL_TONES.good }];
+  return [{ content: 'Readiness gaps:' }, ...gaps.slice(0, 12).map((gap) => ({ content: `  ${gap.severity.toUpperCase()} ${gap.kind}: ${gap.message}`, fg: gap.severity === 'blocking' ? MODAL_TONES.bad : MODAL_TONES.warn }))];
 }
 
 function buildTasksLines(state: ProjectPlanningState): TextLine[] {
@@ -90,18 +85,18 @@ function buildTasksLines(state: ProjectPlanningState): TextLine[] {
     lines.push({ content: '  No decomposed tasks recorded yet.' });
   } else {
     for (const task of state.tasks) {
-      lines.push({ content: `  ${task.id}: ${task.title} [${task.status ?? 'pending'}]${task.canRunConcurrently ? ' - concurrent' : ''}`, ...(task.blockedOnUserInput ? { fg: WARN } : {}) });
+      lines.push({ content: `  ${task.id}: ${task.title} [${task.status ?? 'pending'}]${task.canRunConcurrently ? ' - concurrent' : ''}`, ...(task.blockedOnUserInput ? { fg: MODAL_TONES.warn } : {}) });
       if (task.dependencies?.length) lines.push({ content: `    dependencies: ${task.dependencies.join(', ')}` });
-      if (task.verification?.length) lines.push({ content: `    verification: ${task.verification.join(' | ')}`, fg: GOOD });
+      if (task.verification?.length) lines.push({ content: `    verification: ${task.verification.join(' | ')}`, fg: MODAL_TONES.good });
     }
   }
   if (state.verificationGates.length) {
     lines.push({ content: 'Verification gates:' });
-    for (const gate of state.verificationGates) lines.push({ content: `  ${gate.id}: ${gate.description} [${gate.status ?? 'pending'}]`, fg: gate.required === false ? undefined : GOOD });
+    for (const gate of state.verificationGates) lines.push({ content: `  ${gate.id}: ${gate.description} [${gate.status ?? 'pending'}]`, fg: gate.required === false ? undefined : MODAL_TONES.good });
   }
   if (state.agentAssignments.length) {
     lines.push({ content: 'Agent handoff candidates:' });
-    for (const assignment of state.agentAssignments) lines.push({ content: `  ${assignment.taskId}: ${assignment.agentType ?? 'none'}${assignment.canRunConcurrently ? ' - can run concurrently' : ''}`, fg: INFO });
+    for (const assignment of state.agentAssignments) lines.push({ content: `  ${assignment.taskId}: ${assignment.agentType ?? 'none'}${assignment.canRunConcurrently ? ' - can run concurrently' : ''}`, fg: MODAL_TONES.info });
   }
   return lines;
 }
@@ -111,7 +106,7 @@ function buildDecisionsLines(state: ProjectPlanningState, storedDecisions: reado
   for (const decision of [...storedDecisions, ...state.decisions]) byId.set(decision.id, decision);
   const decisions = [...byId.values()];
   if (decisions.length === 0) return [{ content: 'Decisions: none recorded yet.' }];
-  return [{ content: 'Decisions:' }, ...decisions.slice(0, 12).map((decision) => ({ content: `  ${decision.title}: ${decision.decision} [${decision.status ?? 'accepted'}]`, fg: decision.status === 'rejected' ? BAD : undefined }))];
+  return [{ content: 'Decisions:' }, ...decisions.slice(0, 12).map((decision) => ({ content: `  ${decision.title}: ${decision.decision} [${decision.status ?? 'accepted'}]`, fg: decision.status === 'rejected' ? MODAL_TONES.bad : undefined }))];
 }
 
 function buildLanguageLines(language: ProjectPlanningLanguageArtifact | null): TextLine[] {
@@ -119,9 +114,9 @@ function buildLanguageLines(language: ProjectPlanningLanguageArtifact | null): T
   const lines: TextLine[] = [{ content: 'Project language:' }];
   for (const term of language.terms.slice(0, 8)) {
     lines.push({ content: `  ${term.term}: ${term.definition}` });
-    if (term.avoid?.length) lines.push({ content: `    avoid: ${term.avoid.join(', ')}`, fg: BAD });
+    if (term.avoid?.length) lines.push({ content: `    avoid: ${term.avoid.join(', ')}`, fg: MODAL_TONES.bad });
   }
-  for (const ambiguity of language.ambiguities.slice(0, 8)) lines.push({ content: `  resolved ambiguity - ${ambiguity.phrase}: ${ambiguity.resolution}`, fg: INFO });
+  for (const ambiguity of language.ambiguities.slice(0, 8)) lines.push({ content: `  resolved ambiguity - ${ambiguity.phrase}: ${ambiguity.resolution}`, fg: MODAL_TONES.info });
   return lines;
 }
 
@@ -177,7 +172,7 @@ class PlanningModalSurface implements ConfigModalSurface {
 
   buildView(): ConfigModalView {
     if (!this.snapshot) {
-      return { title: 'Planning', tabs: [{ id: 'planning', label: 'Planning', rows: [infoRow('load', this.loading ? 'Loading project planning state...' : 'Project planning state unavailable.', { dim: true })] }], hints: ['r refresh'] };
+      return { title: 'Planning', tabs: [{ id: 'planning', label: 'Planning', rows: [infoRow('load', this.loading ? 'Loading project planning state...' : 'Project planning state unavailable.', { fg: MODAL_TONES.dim })] }], hints: ['r refresh'] };
     }
 
     const { status, state, evaluation, decisions, language } = this.snapshot;
@@ -197,9 +192,9 @@ class PlanningModalSurface implements ConfigModalSurface {
     const { question, actions } = this.currentAnswerActions();
     if (question) {
       line({ content: 'Answer Current Question' });
-      line({ content: question.prompt, fg: INFO });
+      line({ content: question.prompt, fg: MODAL_TONES.info });
       if (question.whyItMatters) line({ content: `Why this matters: ${question.whyItMatters}` });
-      if (question.recommendedAnswer && !isGenericRecommendation(question.recommendedAnswer)) line({ content: `Recommendation: ${question.recommendedAnswer}`, fg: GOOD });
+      if (question.recommendedAnswer && !isGenericRecommendation(question.recommendedAnswer)) line({ content: `Recommendation: ${question.recommendedAnswer}`, fg: MODAL_TONES.good });
       for (const action of actions) {
         rows.push({ id: action.id, label: `${action.label} - ${action.detail}`, ...(action.disabled ? { selectable: false } : {}) });
       }

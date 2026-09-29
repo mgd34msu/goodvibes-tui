@@ -6,7 +6,7 @@ import type { GitHeaderInfo } from './git-status.ts';
 import { renderHeaderLine } from './header-line.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
 import { GLYPHS } from './ui-primitives.ts';
-import { activeUiTones } from './theme.ts';
+import { activeTheme, activeTokens, activeUiTones } from './theme.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
@@ -81,7 +81,7 @@ export class UIFactory {
    */
   public static createMessageBar(
     width: number, text: string,
-    bgColor: string = '#2a2a2a', textColor: string = activeUiTones().fg.secondary, prefixStr: string = ' › ',
+    bgColor: string = activeTokens().backgroundElement, textColor: string = activeUiTones().fg.secondary, prefixStr: string = ' › ',
     strikethrough = false
   ): Line[] {
     // A historical user-message pill: it carries its own dark bodyBg, so its fg
@@ -106,8 +106,7 @@ export class UIFactory {
       prefix: ' (...) ',
       prefixFg: t.state.reasoning,
       text: t.fg.dim,
-      bodyBg: '#1a1a1a',
-      dim: true,
+      bodyBg: activeTheme().collapsedBodyBg,
     });
   }
 
@@ -165,8 +164,11 @@ export class UIFactory {
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
-    const TEXT_COLOR = promptFocused ? '252' : '246';
-    const BG_COLOR = promptFocused ? '#2a2a2a' : '#1f2430';
+    // Unfocused, the composer text reads faint (the faint token replaces the
+    // SGR dim this box used to apply).
+    const tk = activeTokens();
+    const TEXT_COLOR = promptFocused ? tk.text : tk.textFaint;
+    const BG_COLOR = promptFocused ? tk.backgroundInput : tk.backgroundPanel;
     const BORDER_COLOR = BG_COLOR;
     const boxMargin = 2; const boxWidth = width - (boxMargin * 2); const boxStartX = boxMargin;
     const createBaseLine = () => {
@@ -188,10 +190,10 @@ export class UIFactory {
         const char = (x >= 2 && x < boxWidth - 2) ? paddedText[x - 2] || ' ' : ' ';
         contentLine[boxStartX + x] = {
           char,
-          fg: (x < 5 && i === 0) ? (promptFocused ? '135' : '244') : TEXT_COLOR,
+          fg: (x < 5 && i === 0) ? (promptFocused ? tk.secondary : tk.textFaint) : TEXT_COLOR,
           bg: BG_COLOR,
           bold: false,
-          dim: !promptFocused,
+          dim: false,
           underline: false,
           italic: false,
           strikethrough: false,
@@ -211,8 +213,10 @@ export class UIFactory {
             // Invert: bright fg on the text bg, swap to make cursor visible
             contentLine[cursorX] = {
               char: cell.char === ' ' ? GLYPHS.surface.cursor : cell.char,
-              fg: cell.char === ' ' ? '252' : '#000000',
-              bg: cell.char === ' ' ? (promptFocused ? BG_COLOR : '#334155') : '#ffffff',
+              // Block cursor: the glyph on the box fill, or the character
+              // inverted (box fill on the text colour).
+              fg: cell.char === ' ' ? tk.text : BG_COLOR,
+              bg: cell.char === ' ' ? (promptFocused ? BG_COLOR : tk.borderSubtle) : tk.text,
               bold: false, dim: false, underline: false, italic: false, strikethrough: false
             };
           }
@@ -221,7 +225,7 @@ export class UIFactory {
         // No cursorPos provided, show block at end (fallback)
         const endX = boxStartX + 2 + prefix.length + text.length;
         if (endX < boxStartX + boxWidth - 2) {
-          contentLine[endX] = { char: GLYPHS.surface.cursor, fg: '252', bg: promptFocused ? BG_COLOR : '#334155', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+          contentLine[endX] = { char: GLYPHS.surface.cursor, fg: tk.text, bg: promptFocused ? BG_COLOR : tk.borderSubtle, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
         }
       }
 
@@ -235,7 +239,7 @@ export class UIFactory {
         let hx = hintStartX;
         for (const ch of hintText) {
           if (hx >= boxStartX + boxWidth - 2) break;
-          contentLine[hx] = { char: ch, fg: '244', bg: BG_COLOR, bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+          contentLine[hx] = { char: ch, fg: tk.textFaint, bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
           hx++;
         }
       }
@@ -267,7 +271,7 @@ export class UIFactory {
           let hx = hintStartX;
           for (const ch of hintText) {
             if (hx >= hintLimit) break;
-            contentLine[hx] = { char: ch, fg: '238', bg: BG_COLOR, bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+            contentLine[hx] = { char: ch, fg: tk.textFaint, bg: BG_COLOR, bold: false, dim: false, underline: false, italic: false, strikethrough: false };
             hx++;
           }
         }
@@ -284,7 +288,7 @@ export class UIFactory {
       let tx = boxStartX + boxWidth - lineCountTag.length - 2;
       for (const ch of lineCountTag) {
         if (tx >= boxStartX + boxWidth - 1) break;
-        bottomLine[tx] = { char: ch, fg: '244', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+        bottomLine[tx] = { char: ch, fg: tk.textFaint, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
         tx += 1;
       }
     }
@@ -302,8 +306,8 @@ export class UIFactory {
     // as caution (raised autonomy). Cycled by Shift+Tab, toggled by /plan.
     if (permissionMode) {
       const modeTone = permissionModeTone(permissionMode);
-      const modeFg = modeTone === 'caution' ? t.chrome.warn : modeTone === 'info' ? t.state.info : '244';
-      composerTokens.push({ text: ` mode:${permissionModeLabel(permissionMode)} `, fg: modeFg, bold: modeTone !== 'neutral', dim: modeTone === 'neutral' });
+      const modeFg = modeTone === 'caution' ? t.chrome.warn : modeTone === 'info' ? t.state.info : activeTokens().textFaint;
+      composerTokens.push({ text: ` mode:${permissionModeLabel(permissionMode)} `, fg: modeFg, bold: modeTone !== 'neutral' });
     }
     // Context-usage chip, always-visible compaction-pressure indicator so the
     // user sees compaction approaching before it happens. Colored by proximity
@@ -311,8 +315,8 @@ export class UIFactory {
     if (contextWindow && contextWindow > 0) {
       const ctxUsage = computeContextUsage(lastInputTokens ?? 0, contextWindow);
       const ctxThr = compactThreshold && compactThreshold > 0 ? compactThreshold : 0.85;
-      const ctxFg = ctxUsage.clampedRatio >= ctxThr ? t.chrome.bad : ctxUsage.clampedRatio >= ctxThr * 0.85 ? t.chrome.warn : '244';
-      composerTokens.push({ text: ` ctx:${ctxUsage.pct}% `, fg: ctxFg, bold: ctxUsage.clampedRatio >= ctxThr, dim: ctxUsage.clampedRatio < ctxThr * 0.85 });
+      const ctxFg = ctxUsage.clampedRatio >= ctxThr ? t.chrome.bad : ctxUsage.clampedRatio >= ctxThr * 0.85 ? t.chrome.warn : activeTokens().textFaint;
+      composerTokens.push({ text: ` ctx:${ctxUsage.pct}% `, fg: ctxFg, bold: ctxUsage.clampedRatio >= ctxThr });
     }
     if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: t.state.info, bold: true });
     if (composerPendingRisk && composerPendingRisk !== 'none') {
@@ -329,8 +333,8 @@ export class UIFactory {
     // danger-mode idiom (a persistent warn-tone indicator; the chip is the
     // safety mechanism, so there is no timer and no AC-only variant).
     if (powerKeepAwake) composerTokens.push({ text: ` ${SLEEP_DISABLED_CHIP} `, fg: t.chrome.warn, bold: true });
-    if (composerStatus && composerStatus !== 'idle') composerTokens.push({ text: ` state:${composerStatus} `, fg: '244', dim: true });
-    if (composerFlags && composerFlags.length > 0) composerTokens.push({ text: ` flags:${composerFlags.join(',')} `, fg: '244', dim: true });
+    if (composerStatus && composerStatus !== 'idle') composerTokens.push({ text: ` state:${composerStatus} `, fg: activeTokens().textFaint });
+    if (composerFlags && composerFlags.length > 0) composerTokens.push({ text: ` flags:${composerFlags.join(',')} `, fg: activeTokens().textFaint });
     if (!compact && composerTokens.length > 0) {
       const postureLine = createBaseLine();
       let px = 2;
@@ -404,7 +408,7 @@ export class UIFactory {
     const tokenLine = ` Token Usage [ Input: ${inpDisplay}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)}${costSegment} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
-    lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
+    lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? activeTokens().info : activeTokens().textMuted, bold: isRecentlyCopied }));
     // Context usage progress bar, suppressed in compact mode.
     if (!compact && contextWindow && contextWindow > 0) {
       const ctxTokens = lastInputTokens ?? 0;
@@ -459,11 +463,11 @@ export class UIFactory {
       const sep = `  ${GLYPHS.navigation.pipeSeparator}  `;
       const ctxBody = joinPrioritizedSegments(ctxParts, sep, width - 3);
       const ctxLine = '   ' + ctxBody;
-      lines.push(this.stringToLine(ctxLine, width, { fg: '240', dim: true }));
+      lines.push(this.stringToLine(ctxLine, width, { fg: activeTokens().textFaint }));
     }
     if (showExitNotice) {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;
-      lines.push(this.stringToLine(fitDisplay(notice, width), width, { fg: '196', bold: true }));
+      lines.push(this.stringToLine(fitDisplay(notice, width), width, { fg: activeTokens().error, bold: true }));
     } else {
       // Persistent discoverability tip. Rotates by context (agent-aware): the
       // process-monitor tip leads while a turn is in flight. See footer-tips.ts.
@@ -473,7 +477,7 @@ export class UIFactory {
       const dangerW = getDisplayWidth(dangerWarn);
       const spacerW = Math.max(0, width - helpW - dangerW);
       const combinedLine = help + ' '.repeat(spacerW) + dangerWarn;
-      const line = this.stringToLine(truncateDisplay(combinedLine, width), width, { fg: '240', dim: true });
+      const line = this.stringToLine(truncateDisplay(combinedLine, width), width, { fg: activeTokens().textFaint });
       // Overlay the danger warning in red bold
       if (dangerMode && dangerW > 0) {
         let col = helpW + spacerW;
@@ -588,7 +592,7 @@ export class UIFactory {
     if (inputTokens !== undefined || outputTokens !== undefined) {
       const inTok = inputTokens ?? 0;
       const outTok = outputTokens ?? 0;
-      segments.push({ text: ` in ${fmtNum(inTok)} `, fg: '243', dim: true });
+      segments.push({ text: ` in ${fmtNum(inTok)} `, fg: activeTokens().textFaint });
       segments.push({ text: `out ${fmtNum(outTok)}`, fg: tones.accent.brand });
     }
     const line = createEmptyLine(width);
@@ -645,10 +649,10 @@ export class UIFactory {
         if (charWidth <= 0 || px + charWidth > width) break;
         previewLine[px] = {
           char: ch,
-          fg: '243',
+          fg: activeTokens().textFaint,
           bg: '',
           bold: false,
-          dim: true,
+          dim: false,
           underline: false,
           italic: false,
           strikethrough: false,
@@ -689,11 +693,12 @@ export class UIFactory {
 
     // Color: when compactThreshold is provided, switch at the threshold;
     // otherwise fall back to legacy hardcoded 0.6 (green) / 0.85 (yellow) / red.
+    const tk = activeTokens();
     let color: string;
     if (compactThreshold !== undefined) {
-      color = pct < compactThreshold ? '82' : pct < 1.0 ? '220' : '196';
+      color = pct < compactThreshold ? tk.success : pct < 1.0 ? tk.warning : tk.error;
     } else {
-      color = pct < 0.6 ? '82' : pct < 0.85 ? '220' : '196';
+      color = pct < 0.6 ? tk.success : pct < 0.85 ? tk.warning : tk.error;
     }
 
     // Build bar with optional threshold marker.

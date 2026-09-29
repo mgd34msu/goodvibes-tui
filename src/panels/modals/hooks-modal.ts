@@ -68,11 +68,11 @@ class HooksModalSurface implements ConfigModalSurface {
     if (hooks.length === 0) {
       const rows: ConfigModalRow[] = [
         infoRow('empty:0', 'No hooks are currently registered.'),
-        infoRow('empty:1', `contracts ${contracts.length}  chains ${chains.length}  managed ${managedHooks.length}`, { dim: true }),
-        infoRow('empty:2', `hooks file: ${hooksFilePath}`, { dim: true }),
+        infoRow('empty:1', `contracts ${contracts.length}  chains ${chains.length}  managed ${managedHooks.length}`, { fg: MODAL_TONES.dim }),
+        infoRow('empty:2', `hooks file: ${hooksFilePath}`, { fg: MODAL_TONES.dim }),
         infoRow('empty:title', 'Next steps'),
-        infoRow('empty:hooks', '/hooks     — review hook contracts and managed authoring actions', { dim: true }),
-        infoRow('empty:settings', '/settings  — review hook/runtime behavior in the settings surface', { dim: true }),
+        infoRow('empty:hooks', '/hooks     — review hook contracts and managed authoring actions', { fg: MODAL_TONES.dim }),
+        infoRow('empty:settings', '/settings  — review hook/runtime behavior in the settings surface', { fg: MODAL_TONES.dim }),
       ];
       return { id: 'hooks', label: 'Hooks', rows, emptyText: '' };
     }
@@ -101,7 +101,7 @@ class HooksModalSurface implements ConfigModalSurface {
     const rows: ConfigModalRow[] = [];
     const recentActivity = this.deps.hookActivityTracker.listRecent(20);
     if (recentActivity.length === 0) {
-      rows.push(infoRow('act:none', 'No hook activity recorded yet.', { dim: true }));
+      rows.push(infoRow('act:none', 'No hook activity recorded yet.', { fg: MODAL_TONES.dim }));
     } else {
       recentActivity.forEach((record, i) => {
         const decisionText = record.ok ? (record.decision ?? 'ok') : 'error';
@@ -113,15 +113,15 @@ class HooksModalSurface implements ConfigModalSurface {
     rows.push(infoRow('auth:title', 'Authoring'));
     const recentAuthoring = this.deps.hookWorkbench.listRecentActions(3);
     if (recentAuthoring.length === 0) {
-      rows.push(infoRow('auth:none', 'No managed hook authoring actions recorded yet.', { dim: true }));
+      rows.push(infoRow('auth:none', 'No managed hook authoring actions recorded yet.', { fg: MODAL_TONES.dim }));
     } else {
-      recentAuthoring.forEach((action, i) => rows.push(infoRow(`auth:${i}`, `${action.kind.padEnd(14)} ${action.target}`, { dim: true })));
+      recentAuthoring.forEach((action, i) => rows.push(infoRow(`auth:${i}`, `${action.kind.padEnd(14)} ${action.target}`, { fg: MODAL_TONES.dim })));
     }
 
     const lastSimulation = this.deps.hookWorkbench.getLastSimulation();
     if (lastSimulation) {
       rows.push(infoRow('sim:path', `last simulation: ${lastSimulation.eventPath}`));
-      rows.push(infoRow('sim:matches', `matches: hooks=${lastSimulation.matchedHooks.length} chains=${lastSimulation.matchedChains.length}`, { dim: true }));
+      rows.push(infoRow('sim:matches', `matches: hooks=${lastSimulation.matchedHooks.length} chains=${lastSimulation.matchedChains.length}`, { fg: MODAL_TONES.dim }));
     }
     return { id: 'activity', label: 'Activity', rows, emptyText: 'No hook activity recorded yet.' };
   }

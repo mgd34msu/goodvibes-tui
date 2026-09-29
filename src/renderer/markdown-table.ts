@@ -41,7 +41,7 @@
 import { type Line, type Cell, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { activeTheme } from './theme.ts';
+import { activeTheme, activeTokens } from './theme.ts';
 import { renderInlineMarkdown } from './markdown-inline.ts';
 
 /** Width a column is given when the budget allows, even if its content is narrower. */
@@ -121,7 +121,7 @@ function flattenCellChars(raw: string, isHdr: boolean): StyledChar[] {
       style.fg = style.fg || T.heading1;
       style.bold = true;
     } else {
-      style.fg = style.fg || '252';
+      style.fg = style.fg || activeTokens().text;
     }
     for (const ch of token.text) out.push({ char: ch, style });
   }
@@ -203,7 +203,7 @@ function padLineToCells(lineChars: readonly StyledChar[], maxW: number, isHdr: b
     w += cw;
   }
   while (w < maxW) {
-    cells.push(createStyledCell(' ', isHdr ? { fg: T.heading1 } : { fg: '252' }));
+    cells.push(createStyledCell(' ', isHdr ? { fg: T.heading1 } : { fg: activeTokens().text }));
     w++;
   }
   return cells;
@@ -323,8 +323,8 @@ function renderStackedTable(
   // A header-only table still has to show its headers, so it renders as one
   // record with empty values rather than as nothing at all.
   const records: readonly string[][] = bodyRows.length > 0 ? bodyRows : [[]];
-  const separatorStyle: Partial<Cell> = { fg: '240' };
-  const rule = UIFactory.stringToLine(' '.repeat(indent) + '─'.repeat(availW), width, { fg: '240' });
+  const separatorStyle: Partial<Cell> = { fg: activeTokens().textFaint };
+  const rule = UIFactory.stringToLine(' '.repeat(indent) + '─'.repeat(availW), width, { fg: activeTokens().textFaint });
 
   for (let r = 0; r < records.length; r++) {
     if (r > 0) lines.push(rule);
@@ -395,7 +395,7 @@ export function renderTable(rows: string[], width: number, indent: number): Line
     return renderStackedTable(parsedRows, colCount, hasSeparator, width, indent);
   }
 
-  const bc = '240'; // border color
+  const bc = activeTokens().textFaint; // border color
 
   const makeBorder = (left: string, mid: string, right: string, horiz: string): Line => {
     let s = ' '.repeat(indent) + left;

@@ -1,3 +1,4 @@
+import { activeTokens } from '../renderer/theme.ts';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { enrichProviderAccountsSnapshot } from '../runtime/onboarding/provider-key-capture.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
@@ -91,7 +92,7 @@ export function handlePasteForHandler(handler: InputHandler): ReturnType<typeof 
   handler.nextPasteId = result.nextPasteId;
 
   if (!result.pasted) {
-    handler.conversationManager?.log('[Paste: clipboard does not contain supported text or image data]', { fg: '240' });
+    handler.conversationManager?.log('[Paste: clipboard does not contain supported text or image data]', { fg: activeTokens().textFaint });
     handler.requestRender();
   }
   return result;

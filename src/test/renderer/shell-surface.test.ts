@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { buildShellFooter, estimateShellFooterHeight } from '../../renderer/shell-surface.ts';
 import type { VoiceCaptureIndicatorState } from '../../core/voice-capture-status.ts';
 import { lineToString } from '../setup.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 
 describe('shell surface', () => {
   test('estimated footer height matches rendered footer height without context bar', () => {
@@ -150,8 +151,9 @@ describe('shell surface', () => {
     });
     expect(lineToString(focused.lines[1])).toContain('›');
     expect(lineToString(unfocused.lines[1])).toContain('›');
-    expect(focused.lines[1]![4]!.bg).toBe('#2a2a2a');
-    expect(unfocused.lines[1]![4]!.bg).toBe('#1f2430');
+    expect(focused.lines[1]![4]!.bg).toBe(activeTokens().backgroundInput);
+    expect(unfocused.lines[1]![4]!.bg).toBe(activeTokens().backgroundPanel);
+    expect(activeTokens().backgroundInput).not.toBe(activeTokens().backgroundPanel);
     expect(lineToString(unfocused.lines[1])).not.toContain('█');
   });
 
@@ -244,8 +246,8 @@ describe('shell surface', () => {
       indicatorFocused: false,
       panelFocused: false,
     });
-    expect(panelFocused.lines[1]![4]!.bg).toBe('#1f2430');
-    expect(neitherFocused.lines[1]![4]!.bg).toBe('#2a2a2a');
+    expect(panelFocused.lines[1]![4]!.bg).toBe(activeTokens().backgroundPanel);
+    expect(neitherFocused.lines[1]![4]!.bg).toBe(activeTokens().backgroundInput);
     expect(lineToString(panelFocused.lines[1])).not.toContain('█');
   });
 
@@ -268,7 +270,7 @@ describe('shell surface', () => {
       panelFocused: true,
       promptFocused: true,
     });
-    expect(result.lines[1]![4]!.bg).toBe('#2a2a2a');
+    expect(result.lines[1]![4]!.bg).toBe(activeTokens().backgroundInput);
   });
 
   // item 1c: an unfocused, EMPTY composer names the state and the way
@@ -357,8 +359,8 @@ describe('shell surface', () => {
 
     expect(topBorderCells.length).toBeGreaterThan(0);
     expect(bottomBorderCells.length).toBeGreaterThan(0);
-    expect(topBorderCells.every((cell) => cell.fg === '#1f2430')).toBe(true);
-    expect(bottomBorderCells.every((cell) => cell.fg === '#1f2430')).toBe(true);
+    expect(topBorderCells.every((cell) => cell.fg === activeTokens().backgroundPanel)).toBe(true);
+    expect(bottomBorderCells.every((cell) => cell.fg === activeTokens().backgroundPanel)).toBe(true);
   });
 });
 

@@ -15,13 +15,15 @@
 
 import { describe, it, expect } from 'bun:test';
 import { SyntaxHighlighter } from '../../renderer/syntax-highlighter.ts';
+import { syntaxStyles } from '../../renderer/syntax-theme.ts';
+import { setActiveThemeName } from '../../renderer/theme.ts';
 
 // Type cast helper: access private fields for test observation only.
 // scheduleParse() calls pending.add(key) synchronously before launching the
 // async microtask, so pending reflects scheduling decisions immediately.
 type HighlighterInternals = {
   pending: Set<string>;
-  cache: Map<string, unknown[]>;
+  cache: Map<string, unknown>;
 };
 function internals(hl: SyntaxHighlighter): HighlighterInternals {
   return hl as unknown as HighlighterInternals;
@@ -74,16 +76,39 @@ describe('SyntaxHighlighter streaming gate', () => {
     const { pending, cache } = internals(hl);
     expect(pending.size).toBe(1);
     const key = [...pending][0];
-    const fakeResult = [[{ text: 'console', fg: '#00ffff' }]];
-    cache.set(key, fakeResult);
+    // The cache holds syntax roles; colours resolve against the active theme.
+    cache.set(key, { roles: [[{ text: 'console', role: 'function' }]] });
     pending.clear(); // simulate parse completed
 
-    // isStreaming=true: cache hit still returned
-    expect(hl.highlight(code, 'js', true)).toBe(fakeResult);
-    // isStreaming=false: cache hit still returned
-    expect(hl.highlight(code, 'js', false)).toBe(fakeResult);
+    // isStreaming=true: cache hit still returned, coloured by the theme
+    const first = hl.highlight(code, 'js', true);
+    expect(first).toEqual([[{ text: 'console', fg: syntaxStyles().function.fg }]]);
+    // isStreaming=false: cache hit still returned (same resolved lines)
+    expect(hl.highlight(code, 'js', false)).toBe(first);
     // No new pending entries (cache hit path skips scheduling)
     expect(pending.size).toBe(0);
+  });
+
+  it('a cached block re-colours when the theme changes, without re-parsing', () => {
+    const hl = new SyntaxHighlighter();
+    const code = 'return 1;';
+    hl.highlight(code, 'js', false);
+    const { pending, cache } = internals(hl);
+    const key = [...pending][0];
+    cache.set(key, { roles: [[{ text: 'return', role: 'keyword' }]] });
+    pending.clear();
+    try {
+      setActiveThemeName('goodvibes-neon');
+      const neon = hl.highlight(code, 'js', false);
+      expect(neon?.[0]?.[0]?.fg).toBe(syntaxStyles().keyword.fg);
+      setActiveThemeName('nord');
+      const nord = hl.highlight(code, 'js', false);
+      expect(nord?.[0]?.[0]?.fg).toBe(syntaxStyles().keyword.fg);
+      expect(nord?.[0]?.[0]?.fg).not.toBe(neon?.[0]?.[0]?.fg);
+      expect(pending.size).toBe(0);
+    } finally {
+      setActiveThemeName('goodvibes');
+    }
   });
 
   it('unsupported language returns null regardless of isStreaming', () => {

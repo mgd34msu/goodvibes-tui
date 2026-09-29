@@ -9,7 +9,7 @@ import {
   putOverlayText,
 } from '../overlay-box.ts';
 import { clamp, drawVerticalRule, fillWidth } from '../fullscreen-primitives.ts';
-import { UI_TONES } from '../ui-primitives.ts';
+import { activeUiTones } from '../theme.ts';
 import {
   getOnboardingWizardBodyRows,
   getOnboardingWizardVisibleFieldCount,
@@ -46,40 +46,40 @@ function stepGlyph(
   stepIndex: number,
 ): { readonly glyph: string; readonly fg: string } {
   if (stepIndex === wizard.stepIndex) {
-    return { glyph: OVERLAY_GLYPHS.selected, fg: UI_TONES.state.active };
+    return { glyph: OVERLAY_GLYPHS.selected, fg: activeUiTones().state.active };
   }
 
   const total = wizard.getStepFieldCount(stepIndex);
   const completed = wizard.getCompletedFieldCount(stepIndex);
   if (wizard.isStepDirty(stepIndex)) {
-    return { glyph: '◈', fg: UI_TONES.state.warn };
+    return { glyph: '◈', fg: activeUiTones().state.warn };
   }
   if (total > 0 && completed === total) {
-    return { glyph: '✓', fg: UI_TONES.state.good };
+    return { glyph: '✓', fg: activeUiTones().state.good };
   }
-  return { glyph: '•', fg: UI_TONES.fg.muted };
+  return { glyph: '•', fg: activeUiTones().fg.muted };
 }
 
 function fieldBadgeTone(
   wizard: OnboardingWizardController,
   field: OnboardingWizardFieldDefinition,
 ): string {
-  if (field.kind === 'status') return UI_TONES.state.info;
-  if (field.kind === 'modelPicker') return UI_TONES.state.info;
+  if (field.kind === 'status') return activeUiTones().state.info;
+  if (field.kind === 'modelPicker') return activeUiTones().state.info;
   if (field.kind === 'acknowledgement') {
     const label = wizard.getFieldValueLabel(field);
-    return label === 'Accepted' ? UI_TONES.state.good : label === 'Pending' ? UI_TONES.state.warn : UI_TONES.fg.muted;
+    return label === 'Accepted' ? activeUiTones().state.good : label === 'Pending' ? activeUiTones().state.warn : activeUiTones().fg.muted;
   }
   if (field.kind === 'checklist') {
-    return wizard.getFieldValue(field) ? UI_TONES.state.good : UI_TONES.fg.muted;
+    return wizard.getFieldValue(field) ? activeUiTones().state.good : activeUiTones().fg.muted;
   }
-  if (field.kind === 'radio') return UI_TONES.state.active;
+  if (field.kind === 'radio') return activeUiTones().state.active;
   if (field.kind === 'text' || field.kind === 'masked') {
     const missingRequired = wizard.getFieldValueLabel(field) === 'Missing';
-    if (missingRequired) return UI_TONES.state.warn;
-    if (field.kind === 'masked') return UI_TONES.state.warn;
+    if (missingRequired) return activeUiTones().state.warn;
+    if (field.kind === 'masked') return activeUiTones().state.warn;
   }
-  return UI_TONES.fg.secondary;
+  return activeUiTones().fg.secondary;
 }
 
 function buildFieldRows(
@@ -214,16 +214,15 @@ function renderFieldRow(
 
   if (fieldRow.kind === 'moreAbove' || fieldRow.kind === 'moreBelow') {
     putOverlayText(line, startX + 1, width - 2, truncateDisplay(fieldRow.text, width - 2), {
-      fg: UI_TONES.fg.muted,
-      bg: UI_TONES.bg.base,
-      dim: true,
+      fg: activeUiTones().fg.dim,
+      bg: activeUiTones().bg.base,
     });
     return;
   }
 
   const selected = fieldRow.absoluteIndex === wizard.getSelectedFieldIndex();
   const field = fieldRow.field;
-  const fieldBg = selected ? DEFAULT_OVERLAY_PALETTE.selectedBg : UI_TONES.bg.base;
+  const fieldBg = selected ? DEFAULT_OVERLAY_PALETTE.selectedBg : activeUiTones().bg.base;
   fillWidth(line, startX, width, fieldBg);
 
   const badge = truncateDisplay(`[${wizard.getFieldValueLabel(field)}]`, Math.max(8, Math.floor(width * 0.34)));
@@ -232,7 +231,7 @@ function renderFieldRow(
   const prefix = fieldRowPrefix(wizard, field, selected);
 
   putOverlayText(line, startX + 1, labelWidth, truncateDisplay(`${prefix}${field.label}`, labelWidth), {
-    fg: UI_TONES.fg.primary,
+    fg: activeUiTones().fg.primary,
     bg: fieldBg,
     bold: selected,
   });
@@ -269,10 +268,10 @@ function renderWideLayout(
   const visibleFields = getOnboardingWizardVisibleFieldCount(viewportHeight);
   const currentStep = wizard.currentStep;
   const borderFg = DEFAULT_OVERLAY_PALETTE.borderFg;
-  const headerBg = UI_TONES.bg.title;
-  const railBg = UI_TONES.bg.section;
-  const bodyBg = UI_TONES.bg.base;
-  const summaryBg = UI_TONES.bg.summary;
+  const headerBg = activeUiTones().bg.title;
+  const railBg = activeUiTones().bg.section;
+  const bodyBg = activeUiTones().bg.base;
+  const summaryBg = activeUiTones().bg.summary;
   const innerLeft = layout.margin + 1;
   const availableInner = layout.innerWidth - 2;
   const leftWidthBase = layout.innerWidth >= 150 ? 32 : layout.innerWidth >= 108 ? 28 : 24;
@@ -326,13 +325,13 @@ function renderWideLayout(
     headerBg,
   );
   putOverlayText(topLine, layout.margin + 2, layout.width - 4, 'Onboarding Wizard', {
-    fg: UI_TONES.fg.primary,
+    fg: activeUiTones().fg.primary,
     bg: headerBg,
     bold: true,
   });
   const meta = `${modeLabel(wizard.mode)}  ${wizard.stepIndex + 1}/${wizard.steps.length}  ${changedScreensLabel(wizard)}`;
   putOverlayText(topLine, Math.max(layout.margin + 2, layout.margin + layout.width - getDisplayWidth(meta) - 3), layout.width - 4, meta, {
-    fg: UI_TONES.fg.secondary,
+    fg: activeUiTones().fg.secondary,
     bg: headerBg,
   });
   lines.push(topLine);
@@ -344,17 +343,17 @@ function renderWideLayout(
   drawVerticalRule(headerLine, leftSeparatorX, borderFg, headerBg);
   drawVerticalRule(headerLine, rightSeparatorX, borderFg, headerBg);
   putOverlayText(headerLine, leftStart + 1, leftWidth - 2, 'Steps', {
-    fg: UI_TONES.fg.secondary,
+    fg: activeUiTones().fg.secondary,
     bg: railBg,
     bold: true,
   });
   putOverlayText(headerLine, centerStart + 1, centerWidth - 2, truncateDisplay(currentStep.title, centerWidth - 2), {
-    fg: UI_TONES.state.active,
+    fg: activeUiTones().state.active,
     bg: headerBg,
     bold: true,
   });
   putOverlayText(headerLine, rightStart + 1, rightWidth - 2, 'Summary', {
-    fg: UI_TONES.fg.secondary,
+    fg: activeUiTones().fg.secondary,
     bg: summaryBg,
     bold: true,
   });
@@ -380,37 +379,37 @@ function renderWideLayout(
 
     if (row === 0) {
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(currentStep.title, centerWidth - 2), {
-        fg: UI_TONES.fg.primary,
+        fg: activeUiTones().fg.primary,
         bg: bodyBg,
         bold: true,
       });
     } else if (row === 1) {
       putOverlayText(line, centerStart + 1, centerWidth - 2, descriptionLines[0] ?? '', {
-        fg: UI_TONES.fg.secondary,
+        fg: activeUiTones().fg.secondary,
         bg: bodyBg,
       });
     } else if (row === 2) {
       putOverlayText(line, centerStart + 1, centerWidth - 2, descriptionLines[1] ?? '', {
-        fg: UI_TONES.fg.secondary,
+        fg: activeUiTones().fg.secondary,
         bg: bodyBg,
       });
     } else if (row === 3) {
       fillWidth(line, centerStart, centerWidth, railBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(controlsText(wizard), centerWidth - 2), {
-        fg: UI_TONES.state.info,
+        fg: activeUiTones().state.info,
         bg: railBg,
       });
     } else if (row === 4) {
       fillWidth(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(`Focus: ${selectedText.title.replace(/^Selected: /, '')}`, centerWidth - 2), {
-        fg: UI_TONES.fg.primary,
+        fg: activeUiTones().fg.primary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
         bold: true,
       });
     } else if (row < fieldStartRow) {
       fillWidth(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, hintLines[row - 5] ?? '', {
-        fg: UI_TONES.fg.secondary,
+        fg: activeUiTones().fg.secondary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
       });
     } else {
@@ -429,7 +428,7 @@ function renderWideLayout(
         bold: row === wizard.stepIndex,
       });
       putOverlayText(line, Math.max(leftStart + 1, leftStart + leftWidth - completionWidth - 2), completionWidth, completion, {
-        fg: wizard.isStepDirty(row) ? UI_TONES.state.warn : UI_TONES.fg.muted,
+        fg: wizard.isStepDirty(row) ? activeUiTones().state.warn : activeUiTones().fg.muted,
         bg: railBg,
       });
     }
@@ -437,10 +436,9 @@ function renderWideLayout(
     const summaryText = summaryLines[row];
     if (summaryText) {
       putOverlayText(line, rightStart + 1, rightWidth - 2, truncateDisplay(summaryText, rightWidth - 2), {
-        fg: row === 0 ? UI_TONES.state.info : UI_TONES.fg.secondary,
+        fg: row === 0 ? activeUiTones().state.info : activeUiTones().fg.muted,
         bg: summaryBg,
         bold: row === 0,
-        dim: row > 0,
       });
     }
 
@@ -467,9 +465,8 @@ function renderWideLayout(
     headerBg,
   );
   putOverlayText(footer, layout.margin + 2, layout.width - 4, truncateDisplay(footerText(wizard), layout.width - 4), {
-    fg: UI_TONES.fg.muted,
+    fg: activeUiTones().fg.dim,
     bg: headerBg,
-    dim: true,
   });
   lines.push(footer);
 
@@ -487,8 +484,8 @@ function renderCollapsedLayout(
   const visibleFields = getOnboardingWizardVisibleFieldCount(viewportHeight);
   const currentStep = wizard.currentStep;
   const borderFg = DEFAULT_OVERLAY_PALETTE.borderFg;
-  const headerBg = UI_TONES.bg.title;
-  const bodyBg = UI_TONES.bg.base;
+  const headerBg = activeUiTones().bg.title;
+  const bodyBg = activeUiTones().bg.base;
   const innerStart = layout.margin + 1;
   const innerWidth = layout.innerWidth;
   const innerTextWidth = Math.max(14, innerWidth - 2);
@@ -510,13 +507,13 @@ function renderCollapsedLayout(
     headerBg,
   );
   putOverlayText(topLine, layout.margin + 2, layout.width - 4, 'Onboarding Wizard', {
-    fg: UI_TONES.fg.primary,
+    fg: activeUiTones().fg.primary,
     bg: headerBg,
     bold: true,
   });
   const meta = `${wizard.stepIndex + 1}/${wizard.steps.length} • ${changedScreensLabel(wizard)}`;
   putOverlayText(topLine, Math.max(layout.margin + 2, layout.margin + layout.width - getDisplayWidth(meta) - 3), layout.width - 4, meta, {
-    fg: UI_TONES.fg.secondary,
+    fg: activeUiTones().fg.secondary,
     bg: headerBg,
   });
   lines.push(topLine);
@@ -524,7 +521,7 @@ function renderCollapsedLayout(
   const headerLine = createOverlayContentLine(width, layout, borderFg, headerBg);
   fillWidth(headerLine, innerStart, innerWidth, headerBg);
   putOverlayText(headerLine, innerStart + 1, innerWidth - 2, fitDisplay(`${modeLabel(wizard.mode)} • ${currentStep.shortLabel}`, innerWidth - 2), {
-    fg: UI_TONES.state.active,
+    fg: activeUiTones().state.active,
     bg: headerBg,
     bold: true,
   });
@@ -546,37 +543,37 @@ function renderCollapsedLayout(
 
     if (row === 0) {
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(currentStep.title, innerWidth - 2), {
-        fg: UI_TONES.fg.primary,
+        fg: activeUiTones().fg.primary,
         bg: bodyBg,
         bold: true,
       });
     } else if (row === 1) {
       putOverlayText(line, innerStart + 1, innerWidth - 2, descriptionLines[0] ?? '', {
-        fg: UI_TONES.fg.secondary,
+        fg: activeUiTones().fg.secondary,
         bg: bodyBg,
       });
     } else if (row === 2) {
       putOverlayText(line, innerStart + 1, innerWidth - 2, descriptionLines[1] ?? '', {
-        fg: UI_TONES.fg.secondary,
+        fg: activeUiTones().fg.secondary,
         bg: bodyBg,
       });
     } else if (row === 3) {
-      fillWidth(line, innerStart, innerWidth, UI_TONES.bg.section);
+      fillWidth(line, innerStart, innerWidth, activeUiTones().bg.section);
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(controlsText(wizard), innerWidth - 2), {
-        fg: UI_TONES.state.info,
-        bg: UI_TONES.bg.section,
+        fg: activeUiTones().state.info,
+        bg: activeUiTones().bg.section,
       });
     } else if (row === 4) {
       fillWidth(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(`Focus: ${selectedText.title.replace(/^Selected: /, '')}`, innerWidth - 2), {
-        fg: UI_TONES.fg.primary,
+        fg: activeUiTones().fg.primary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
         bold: true,
       });
     } else if (row < fieldStartRow) {
       fillWidth(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, innerStart + 1, innerWidth - 2, hintLines[row - 5] ?? '', {
-        fg: UI_TONES.fg.secondary,
+        fg: activeUiTones().fg.secondary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
       });
     } else {
@@ -606,9 +603,8 @@ function renderCollapsedLayout(
     headerBg,
   );
   putOverlayText(footer, layout.margin + 2, layout.width - 4, truncateDisplay(footerText(wizard), layout.width - 4), {
-    fg: UI_TONES.fg.muted,
+    fg: activeUiTones().fg.dim,
     bg: headerBg,
-    dim: true,
   });
   lines.push(footer);
 

@@ -9,6 +9,7 @@
  */
 import { describe, test, expect } from 'bun:test';
 import { UIFactory } from '../../renderer/ui-factory.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 import { linesToText, lineToString } from '../setup.ts';
 
 const W = 120;
@@ -179,21 +180,21 @@ function buildFooterBarLineFg(
 }
 
 describe('context meter fg color switches at threshold', () => {
-  test('usage just below threshold → green (82)', () => {
-    // 79% usage, threshold 0.8, pct (0.79) < compactThreshold (0.8) → color '82'
+  test('usage just below threshold → success', () => {
+    // 79% usage, threshold 0.8, pct (0.79) < compactThreshold (0.8) → success token
     const fg = buildFooterBarLineFg(79_000, 100_000, 0.8);
-    expect(fg).toBe('82');
+    expect(fg).toBe(activeTokens().success);
   });
 
-  test('usage at threshold → yellow (220)', () => {
-    // 80% usage, threshold 0.8, pct (0.8) >= compactThreshold (0.8), pct < 1.0 → color '220'
+  test('usage at threshold → warning', () => {
+    // 80% usage, threshold 0.8, pct (0.8) >= compactThreshold (0.8), pct < 1.0 → warning token
     const fg = buildFooterBarLineFg(80_000, 100_000, 0.8);
-    expect(fg).toBe('220');
+    expect(fg).toBe(activeTokens().warning);
   });
 
-  test('usage at 100% → red (196)', () => {
-    // 100% usage, pct (1.0) >= 1.0 → color '196'
+  test('usage at 100% → error', () => {
+    // 100% usage, pct (1.0) >= 1.0 → error token
     const fg = buildFooterBarLineFg(100_000, 100_000, 0.8);
-    expect(fg).toBe('196');
+    expect(fg).toBe(activeTokens().error);
   });
 });

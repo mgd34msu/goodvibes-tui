@@ -82,6 +82,7 @@ import { createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.
 
 import { ALT_SCREEN_ENTER, ALT_SCREEN_EXIT, MOUSE_ENABLE, MOUSE_DISABLE, CURSOR_HIDE, CURSOR_SHOW, CLEAR_SCREEN, KEYBOARD_EXT_ENABLE, KEYBOARD_EXT_DISABLE, PASTE_ENABLE, PASTE_DISABLE, FOCUS_ENABLE, FOCUS_DISABLE } from './renderer/terminal-escapes.ts';
 import { installBackgroundThemeProbe } from './renderer/terminal-bg-probe.ts';
+import { registerThemeRefresh } from './renderer/theme.ts';
 import { VERSION } from './version.ts';
 
 async function main() {
@@ -732,6 +733,8 @@ async function main() {
   // forced dark/light applies before first paint; auto (TTY only) fires the
   // OSC 11 probe and repaints once if light wins. probePalette adds OSC 10 + OSC 4;0..15 to the
   // same write (stored via terminal-palette.ts, nothing renders from it). filterInput strips replies from stdin.
+  // Transcript lines are cached per message: a theme or mode change marks them stale so the next paint re-renders them in the new colours.
+  registerThemeRefresh(() => conversation.clearLineCache());
   const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), env: process.env, writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); }, probePalette: true });
 
   // continueRecovery lets --continue/bare --resume check the target session for a live crash snapshot newer than its store before resuming (see tui-startup.ts).

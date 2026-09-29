@@ -19,16 +19,21 @@
  * golden suite are never left in light mode.
  */
 
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { renderToolCallBlock } from '../../renderer/tool-call.ts';
 import { renderProcessIndicator } from '../../renderer/process-indicator.ts';
 import { renderSystemMessage } from '../../renderer/system-message.ts';
 import { renderThinkingBlock } from '../../renderer/thinking.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
-import { setActiveThemeMode } from '../../renderer/theme.ts';
+import { setActiveThemeMode, setActiveThemeName } from '../../renderer/theme.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
+// These fixtures pin the historical palette's per-mode values, so the suite
+// runs under goodvibes-neon (the pre-2026-09 look); textFaint is the documented
+// #475569 -> #4e5c6f contrast nudge.
+beforeAll(() => setActiveThemeName('goodvibes-neon'));
+afterAll(() => setActiveThemeName('goodvibes'));
 afterEach(() => setActiveThemeMode('dark'));
 
 const W = 100;
@@ -130,11 +135,11 @@ describe('system-message border/text flip with themeMode', () => {
     expect(light.has('#f59e0b')).toBe(false);
   });
 
-  test('info border=state.info + text=chrome.faint: #38bdf8/#475569 dark, #0369a1/#94a3b8 light', () => {
+  test('info border=state.info + text=chrome.faint: #38bdf8/#4e5c6f dark, #0369a1/#94a3b8 light', () => {
     const dark = fgSet(renderSystemMessage('[Plan] step complete', W, 'info'));
     const light = fgSet(underLight(() => renderSystemMessage('[Plan] step complete', W, 'info')));
     expect(dark.has('#38bdf8')).toBe(true); // state.info (dark)
-    expect(dark.has('#475569')).toBe(true); // chrome.faint (dark) == fg.dim
+    expect(dark.has('#4e5c6f')).toBe(true); // chrome.faint (dark) == fg.dim
     expect(light.has('#0369a1')).toBe(true); // state.info (light)
     expect(light.has('#94a3b8')).toBe(true); // chrome.faint (light)
     expect(light.has('#38bdf8')).toBe(false);
@@ -145,11 +150,11 @@ describe('system-message border/text flip with themeMode', () => {
 describe('thinking block accent/text flip with themeMode', () => {
   const TEXT = 'Weighing the two approaches and going with the second one.';
 
-  test('accent=state.reasoning + text=chrome.faint: #a855f7/#475569 dark, #7c3aed/#94a3b8 light', () => {
+  test('accent=state.reasoning + text=chrome.faint: #a855f7/#4e5c6f dark, #7c3aed/#94a3b8 light', () => {
     const dark = fgSet(renderThinkingBlock(TEXT, W));
     const light = fgSet(underLight(() => renderThinkingBlock(TEXT, W)));
     expect(dark.has('#a855f7')).toBe(true); // state.reasoning (dark)
-    expect(dark.has('#475569')).toBe(true); // chrome.faint (dark)
+    expect(dark.has('#4e5c6f')).toBe(true); // chrome.faint (dark)
     expect(light.has('#7c3aed')).toBe(true); // state.reasoning (light)
     expect(light.has('#94a3b8')).toBe(true); // chrome.faint (light)
     expect(light.has('#a855f7')).toBe(false);

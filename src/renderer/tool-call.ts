@@ -5,7 +5,7 @@ import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { stripDangerousAnsi } from './ansi-sanitize.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { GLYPHS } from './ui-primitives.ts';
-import { activeUiTones } from './theme.ts';
+import { activeTokens, activeUiTones } from './theme.ts';
 import { treeContentCol, treeTextCol, writeTreeStatusMarker } from '@pellux/goodvibes-terminal-shell';
 
 const TOOL_NAME_MIN_WIDTH = 8;
@@ -92,18 +92,20 @@ function buildLeftSegments(
   }
 
   if (toolNameDisplay) {
-    segments.push({ text: toolNameDisplay, fg: '#00ffcc', bold: true });
+    segments.push({ text: toolNameDisplay, fg: activeTokens().accent, bold: true });
   }
   if (keyArgDisplay) {
     segments.push({ text: '  ', fg: t.fg.primary });
-    segments.push({ text: keyArgDisplay, fg: '252' });
+    segments.push({ text: keyArgDisplay, fg: activeTokens().text });
   }
   if (suffixDisplay) {
     segments.push({ text: '  ', fg: t.fg.primary });
     segments.push({
       text: suffixDisplay,
-      fg: suffixText.startsWith('- ') ? t.chrome.bad : '244',
-      dim: true,
+      // An error suffix stays dimmed red (deliberate de-emphasis of a status
+      // colour); the neutral suffix uses the faint token instead of SGR dim.
+      fg: suffixText.startsWith('- ') ? t.chrome.bad : activeTokens().textFaint,
+      dim: suffixText.startsWith('- '),
     });
   }
   return segments;
@@ -210,7 +212,7 @@ export function renderToolCallBlock(
   const iconColor = status === 'done' ? t.chrome.good
     : status === 'error' ? t.chrome.bad
     : status === 'cancelled' ? t.chrome.warn
-    : '244';
+    : activeTokens().textMuted;
   const rightText = (() => {
     if (durationMs !== undefined && status === 'done') {
       return formatElapsed(durationMs);
@@ -269,7 +271,7 @@ export function renderToolCallBlock(
   }
 
   if (rightText) {
-    writeStyledText(line, rightStart, contentEnd, rightText, { fg: '238', dim: true });
+    writeStyledText(line, rightStart, contentEnd, rightText, { fg: activeTokens().textFaint });
   }
 
   return [line];

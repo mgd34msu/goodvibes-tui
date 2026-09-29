@@ -130,9 +130,9 @@ class MarketplaceModalSurface implements ConfigModalSurface {
         rows.push(infoRow('empty:1', "It's empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle."));
       }
       rows.push(infoRow('empty:title', 'Populate it', { bold: true }));
-      rows.push(infoRow('empty:publish', '/marketplace publish <kind> <path>  — publish local plugins/skills into the catalog', { dim: true }));
-      rows.push(infoRow('empty:import', '/marketplace bundle import <path>   — import a catalog bundle from disk', { dim: true }));
-      rows.push(infoRow('empty:review', '/marketplace catalog review         — inspect the current local catalog posture', { dim: true }));
+      rows.push(infoRow('empty:publish', '/marketplace publish <kind> <path>  — publish local plugins/skills into the catalog', { fg: MODAL_TONES.dim }));
+      rows.push(infoRow('empty:import', '/marketplace bundle import <path>   — import a catalog bundle from disk', { fg: MODAL_TONES.dim }));
+      rows.push(infoRow('empty:review', '/marketplace catalog review         — inspect the current local catalog posture', { fg: MODAL_TONES.dim }));
       return {
         title: 'Marketplace',
         tabs: [{ id: 'catalog', label: 'Catalog', rows, emptyText: '' }],
@@ -167,7 +167,7 @@ class MarketplaceModalSurface implements ConfigModalSurface {
     if (recommendations.length > 0) {
       rows.push(infoRow('rec:title', 'Recommended', { bold: true }));
       for (const [i, rec] of recommendations.slice(0, 3).entries()) {
-        rows.push(infoRow(`rec:${i}`, `${rec.title}: ${rec.command}`, { dim: true }));
+        rows.push(infoRow(`rec:${i}`, `${rec.title}: ${rec.command}`, { fg: MODAL_TONES.dim }));
       }
     }
 

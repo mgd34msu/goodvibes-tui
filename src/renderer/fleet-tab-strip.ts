@@ -12,13 +12,8 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { FleetTabsState } from '../panels/fleet-tabs.ts';
 import { renderTabStrip, type TabHitRegion } from './tab-strip.ts';
-import { UI_TONES } from './ui-primitives.ts';
+import { activeUiTones } from './theme.ts';
 
-const ACTIVE_FG = UI_TONES.fg.primary;
-const ACTIVE_BG = UI_TONES.bg.selected;
-const INACTIVE_FG = UI_TONES.fg.muted;
-const SEPARATOR_FG = UI_TONES.fg.dim;
-const LABEL_FG = UI_TONES.fg.secondary;
 
 /**
  * Render the fleet session-tab strip, or `null` when there are no attached
@@ -31,6 +26,7 @@ export function renderFleetTabStrip(
   onLayout?: (regions: readonly TabHitRegion[]) => void,
 ): Line | null {
   if (state.tabs.length === 0) return null;
+  const t = activeUiTones();
   return renderTabStrip({
     width,
     onLayout,
@@ -43,14 +39,14 @@ export function renderFleetTabStrip(
     ],
     prefixLabel: ' SESSIONS ',
     style: {
-      activeFg: ACTIVE_FG,
-      activeBg: ACTIVE_BG,
+      activeFg: t.fg.primary,
+      activeBg: t.bg.selected,
       activeBold: true,
-      inactiveFg: INACTIVE_FG,
-      separatorFg: SEPARATOR_FG,
-      labelFg: LABEL_FG,
-      overflowFg: SEPARATOR_FG,
-      trailingFg: INACTIVE_FG,
+      inactiveFg: t.fg.muted,
+      separatorFg: t.fg.dim,
+      labelFg: t.fg.secondary,
+      overflowFg: t.fg.dim,
+      trailingFg: t.fg.muted,
     },
   });
 }

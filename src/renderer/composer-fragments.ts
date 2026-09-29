@@ -23,9 +23,9 @@ export function renderQueuedMessageList(width: number, items: readonly { readonl
   const bodyBg = activeTheme().collapsedBodyBg;
   const lines: Line[] = [];
   const header = `${items.length} queued: /queue edit·delete until delivered`;
-  lines.push(...renderConversationFragment(header, width, { prefix: ' ⧗ ', prefixFg: t.state.reasoning, text: t.fg.dim, bodyBg, dim: true }));
+  lines.push(...renderConversationFragment(header, width, { prefix: ' ⧗ ', prefixFg: t.state.reasoning, text: t.fg.dim, bodyBg }));
   items.forEach((item, index) => {
-    lines.push(...renderConversationFragment(item.text, width, { prefix: `   ${index + 1}. `, prefixFg: t.state.reasoning, text: t.fg.dim, bodyBg, dim: true }));
+    lines.push(...renderConversationFragment(item.text, width, { prefix: `   ${index + 1}. `, prefixFg: t.state.reasoning, text: t.fg.dim, bodyBg }));
   });
   return lines;
 }
@@ -54,7 +54,7 @@ export function renderMemoryProvenanceChip(width: number, count: number, entries
   const bodyBg = activeTheme().collapsedBodyBg;
   const noun = count === 1 ? 'memory' : 'memories';
   const header = expanded ? `used ${count} ${noun}: Alt+M to hide` : `used ${count} ${noun}: Alt+M to list`;
-  const lines: Line[] = renderConversationFragment(header, width, { prefix: ' ◆ ', prefixFg: t.state.info, text: t.fg.dim, bodyBg, dim: true });
+  const lines: Line[] = renderConversationFragment(header, width, { prefix: ' ◆ ', prefixFg: t.state.info, text: t.fg.dim, bodyBg });
   if (expanded) {
     entries.forEach((entry, index) => {
       const body = entry.record === undefined
@@ -62,7 +62,7 @@ export function renderMemoryProvenanceChip(width: number, count: number, entries
         : entry.record === null
           ? 'no longer available'
           : `${entry.record.summary}  ·  ${entry.record.cls}`;
-      lines.push(...renderConversationFragment(body, width, { prefix: `   ${index + 1}. `, prefixFg: t.state.info, text: t.fg.dim, bodyBg, dim: true }));
+      lines.push(...renderConversationFragment(body, width, { prefix: `   ${index + 1}. `, prefixFg: t.state.info, text: t.fg.dim, bodyBg }));
     });
   }
   return lines;

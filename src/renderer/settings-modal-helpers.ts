@@ -7,13 +7,7 @@
 import type { SettingEntry, McpEntry, SubscriptionEntry, SettingsCategory } from '../input/settings-modal-types.ts';
 import { SETTINGS_CATEGORIES } from '../input/settings-modal-types.ts';
 import { isSecretConfigKey, isSecretReferenceValue } from '../config/secret-config.ts';
-import { UI_TONES } from './ui-primitives.ts';
-
-/**
- * "Modified / active" accent for settings rows, cyan-green, no UI_TONES
- * role matches it (preserved byte-exact as a named constant).
- */
-const SETTINGS_ACCENT = '#00ffcc';
+import { activeTokens } from './theme.ts';
 
 function maskSecretValue(value: string): string {
   if (value.length === 0) return '(empty)';
@@ -43,8 +37,9 @@ export function formatValue(entry: SettingEntry): string {
 }
 
 export function valueColor(entry: SettingEntry): string {
-  if (!entry.isDefault) return SETTINGS_ACCENT; // cyan-green = modified
-  return '244';                                  // dim = default
+  // Modified values use the theme accent; defaults read muted.
+  if (!entry.isDefault) return activeTokens().accent;
+  return activeTokens().textMuted;
 }
 
 

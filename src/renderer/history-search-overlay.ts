@@ -3,6 +3,7 @@ import { fitDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import type { HistorySearch } from '../input/input-history.ts';
 import { createBottomBarLine, writeBottomBarText } from '@pellux/goodvibes-terminal-shell';
 import { formatHints } from './hint-grammar.ts';
+import { activeTokens } from './theme.ts';
 
 /**
  * Truncate `text` to at most `maxWidth` display columns, then pad with spaces
@@ -45,8 +46,9 @@ export function renderHistorySearchOverlay(
   ]);
   const full = truncateToWidth(`${label}${matchText}  ${hints}`, width);
 
-  const line = createBottomBarLine(width, { fg: '#000000', bg: '#00ffcc' });
-  writeBottomBarText(line, 0, width, full, { fg: '#000000', bg: '#00ffcc' });
+  const p = activeTokens();
+  const line = createBottomBarLine(width, { fg: p.selectedListItemText, bg: p.accent });
+  writeBottomBarText(line, 0, width, full, { fg: p.selectedListItemText, bg: p.accent });
 
   // Highlight the matched region in the match text with dim styling
   if (hasMatch && match) {
@@ -56,8 +58,8 @@ export function renderHistorySearchOverlay(
     const highlightWidth = Math.max(0, matchEndCol - matchStartCol);
     const matchedSlice = truncateToWidth(match.entry.slice(match.matchStart, match.matchStart + match.matchLength), highlightWidth);
     writeBottomBarText(line, matchStartCol, highlightWidth, matchedSlice, {
-      fg: '#000000',
-      bg: '#00ffcc',
+      fg: p.selectedListItemText,
+      bg: p.accent,
       bold: true,
       underline: true,
     });

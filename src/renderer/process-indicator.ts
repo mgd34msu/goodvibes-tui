@@ -1,8 +1,8 @@
 import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './ui-factory.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import { GLYPHS, UI_TONES } from './ui-primitives.ts';
-import { activeUiTones } from './theme.ts';
+import { GLYPHS } from './ui-primitives.ts';
+import { activeTokens, activeUiTones } from './theme.ts';
 import { formatHints } from './hint-grammar.ts';
 import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
 
@@ -36,10 +36,11 @@ export function renderProcessIndicator(
     [UIFactory.stringToLine(`   ${text}`, width, style)]
   );
   const renderFocusedStatus = (text: string): Line[] => {
-    const bg = '#31506f';
-    const fg = '#eefaff';
-    const markerFg = UI_TONES.accent.browser;
-    const line = UIFactory.stringToLine(' '.repeat(width), width, { fg: '238' });
+    const p = activeTokens();
+    const bg = p.backgroundSelected;
+    const fg = p.text;
+    const markerFg = activeUiTones().accent.browser;
+    const line = UIFactory.stringToLine(' '.repeat(width), width, { fg: p.textFaint });
     const prefix = `${GLYPHS.navigation.selected} `;
     const body = truncateDisplay(text, Math.max(0, width - 8), '');
     const highlighted = ` ${prefix}${body} `;
@@ -68,7 +69,7 @@ export function renderProcessIndicator(
   }
 
   if (total === 0) {
-    return renderPlainStatus('No background processes', { fg: '238', dim: true });
+    return renderPlainStatus('No background processes', { fg: activeTokens().textFaint });
   }
 
   // Build the label: "bg: 2 agents | Turn 3 | write - src/foo.ts"

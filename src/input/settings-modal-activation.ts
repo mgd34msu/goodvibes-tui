@@ -34,7 +34,7 @@ export interface ActivateSelectedContext {
   setEditBuffer(value: string): void;
   setMcpAllowAllConfirmationTarget(value: string | null): void;
   setSubscriptionLogoutConfirmationTarget(value: string | null): void;
-  setPendingSettingsPickerAction(value: 'tts-provider' | 'tts-voice' | null): void;
+  setPendingSettingsPickerAction(value: 'tts-provider' | 'tts-voice' | 'theme' | null): void;
   setPendingModelPickerTarget(value: ModelPickerTarget | null): void;
   setPendingProviderModelPickerTarget(value: ModelPickerTarget | null): void;
 }
@@ -72,6 +72,11 @@ export function activateSelected(ctx: ActivateSelectedContext): void {
   }
   if (setting.key === 'tts.voice') {
     ctx.setPendingSettingsPickerAction('tts-voice');
+    return;
+  }
+  // The theme row opens a picker with live preview instead of cycling values.
+  if (setting.key === 'display.theme') {
+    ctx.setPendingSettingsPickerAction('theme');
     return;
   }
 

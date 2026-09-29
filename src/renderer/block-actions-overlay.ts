@@ -13,6 +13,7 @@ import type { BlockActionsMenu } from './block-actions.ts';
 import { describeBlockForReceipt } from '../input/handler-content-actions.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 import { formatHints } from './hint-grammar.ts';
+import { activeTokens } from './theme.ts';
 
 export function renderBlockActionsMenu(
   menu: BlockActionsMenu,
@@ -31,7 +32,7 @@ export function renderBlockActionsMenu(
   });
 
   const sections: ModalSection[] = [
-    { type: 'text', content: `Target: ${summary}`, style: { dim: true } },
+    { type: 'text', content: `Target: ${summary}`, style: { fg: activeTokens().textFaint } },
     { type: 'separator' },
     {
       type: 'list',

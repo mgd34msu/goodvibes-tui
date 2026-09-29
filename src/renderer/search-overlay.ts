@@ -2,6 +2,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
 import { createBottomBarLine, writeBottomBarText } from '@pellux/goodvibes-terminal-shell';
+import { activeTokens } from './theme.ts';
 
 /**
  * Render the search bar as a single Line[] overlay at the bottom of the viewport.
@@ -65,13 +66,15 @@ export function renderSearchOverlay(
 
   // Build the full line text (match count embedded for positional tracking)
   const fullLine = truncatedLeft + matchStr + hints + ' ';
-  const line = createBottomBarLine(width, { fg: '#000000', bg: '#00ffcc' });
-  writeBottomBarText(line, 0, width, fitDisplay(truncateDisplay(fullLine, width), width), { fg: '#000000', bg: '#00ffcc' });
+  const p = activeTokens();
+  const line = createBottomBarLine(width, { fg: p.selectedListItemText, bg: p.accent });
+  writeBottomBarText(line, 0, width, fitDisplay(truncateDisplay(fullLine, width), width), { fg: p.selectedListItemText, bg: p.accent });
 
   // Overwrite match count segment with dim grey styling
   if (matchStr.length > 0) {
     const matchStart = getDisplayWidth(truncatedLeft);
-    writeBottomBarText(line, matchStart, matchStrW, matchStr, { fg: '#888888', bg: '#00ffcc', dim: true });
+    // dim kept: de-emphasis on the accent bar, where a faint grey would not read.
+    writeBottomBarText(line, matchStart, matchStrW, matchStr, { fg: p.selectedListItemText, bg: p.accent, dim: true });
   }
 
   return [line];

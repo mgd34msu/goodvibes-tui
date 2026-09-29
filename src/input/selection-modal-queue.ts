@@ -40,6 +40,8 @@ export interface SelectionOpenOpts {
   allowSearch?: boolean;
   customActions?: Map<string, SelectionAction>;
   primaryVerbLabel?: string;
+  /** Called with the highlighted row whenever the cursor lands on a different row (live preview). */
+  onHighlight?: (item: SelectionItem | null) => void;
 }
 
 export interface PendingSelectionRequest {

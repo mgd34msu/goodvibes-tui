@@ -7,7 +7,7 @@
  * architecture line-count gate; behaviour is unchanged.
  */
 
-import { activeTheme } from '../renderer/theme.ts';
+import { activeTheme, activeTokens } from '../renderer/theme.ts';
 import { renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderConversationEventLine, renderConversationFoldedRow } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
@@ -54,10 +54,10 @@ export function renderCompactionContinuationMessage(
     markerFg: T.toolAccent,
     label: 'compaction handoff',
     labelFg: T.toolAccent,
-    detailFg: '244',
+    detailFg: activeTokens().textMuted,
   };
   const details = [
-    { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
+    { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: activeTokens().textFaint },
   ];
 
   if (isCollapsed) {

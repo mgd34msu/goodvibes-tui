@@ -9,7 +9,7 @@ import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
 import { createSandboxContainmentNotice } from './daemon-attach-notices.ts';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
-import { Compositor } from '../renderer/compositor.ts';
+import { Compositor } from '../renderer/compositor.ts'; import { activeTokens } from '../renderer/theme.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core';
@@ -382,7 +382,7 @@ export async function initializeBootstrapCore(
     // Register context_accounting against OUR holder (the Orchestrator-backed source bound at bootstrap.ts). See runtime/context-accounting-source.ts.
     contextAccountingHolder: services.contextAccountingHolder,
     // First contained (sandboxed) command run announces "commands now run contained" once, recorded and surfaced now.
-    onSandboxedRun: createSandboxContainmentNotice({ configManager, notify: (text) => conversation.log(`[Sandbox] ${text}`, { fg: '135' }) }),
+    onSandboxedRun: createSandboxContainmentNotice({ configManager, notify: (text) => conversation.log(`[Sandbox] ${text}`, { fg: activeTokens().secondary }) }),
   }); registerClientPhoneTool(toolRegistry, services.devices); // the `phone` tool follows the LOOP, so it is registered here; the posture runtime it used to call is the daemon's now and this tool reaches it over the devices.* verbs (see the SDK's client/phone-tool.ts)
   // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined (further below) so the onTrace callback routes guard decisions through the pre-router buffer.
   services.agentOrchestrator.setDependencies({

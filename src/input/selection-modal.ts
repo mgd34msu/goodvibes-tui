@@ -44,6 +44,9 @@ export class SelectionModal {
    * the generic "Select".
    */
   public primaryVerbLabel: string | undefined = undefined;
+  /** Live-preview hook: called when the highlighted row changes (see open()). */
+  private onHighlight: ((item: SelectionItem | null) => void) | undefined = undefined;
+  private lastHighlightedId: string | null | undefined = undefined;
 
   /** Open the modal with items and title */
   open(
@@ -54,6 +57,11 @@ export class SelectionModal {
       allowSearch?: boolean;
       customActions?: Map<string, SelectionAction>;
       primaryVerbLabel?: string;
+      /**
+       * Called with the highlighted row right after open and whenever the
+       * cursor lands on a different row (move, search). Used for live preview.
+       */
+      onHighlight?: (item: SelectionItem | null) => void;
     }
   ): void {
     this.title = title;
@@ -73,9 +81,14 @@ export class SelectionModal {
     } else {
       this.selectedIndex = 0;
     }
+    this.onHighlight = opts?.onHighlight;
+    this.lastHighlightedId = undefined;
+    this.emitHighlight();
   }
 
   close(): void {
+    this.onHighlight = undefined;
+    this.lastHighlightedId = undefined;
     this.active = false;
     this.title = '';
     this.query = '';
@@ -93,6 +106,7 @@ export class SelectionModal {
     this.selectedIndex = this.selectedIndex > 0
       ? this.selectedIndex - 1
       : this.filteredItems.length - 1;
+    this.emitHighlight();
   }
 
   moveDown(): void {
@@ -100,6 +114,7 @@ export class SelectionModal {
     this.selectedIndex = this.selectedIndex < this.filteredItems.length - 1
       ? this.selectedIndex + 1
       : 0;
+    this.emitHighlight();
   }
 
   /** Update fuzzy search filter */
@@ -107,6 +122,7 @@ export class SelectionModal {
     this.query = query;
     this.selectedIndex = 0;
     this.filterItems();
+    this.emitHighlight();
   }
 
   canFocusSearch(): boolean {
@@ -125,6 +141,16 @@ export class SelectionModal {
   getSelected(): SelectionItem | null {
     if (this.filteredItems.length === 0) return null;
     return this.filteredItems[this.selectedIndex] ?? null;
+  }
+
+  /** Notify onHighlight when the highlighted row differs from the last one reported. */
+  private emitHighlight(): void {
+    if (!this.onHighlight) return;
+    const item = this.getSelected();
+    const id = item?.id ?? null;
+    if (id === this.lastHighlightedId) return;
+    this.lastHighlightedId = id;
+    this.onHighlight(item);
   }
 
   /** Fuzzy match items against query, resets filteredItems */

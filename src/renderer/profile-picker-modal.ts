@@ -13,6 +13,7 @@ import type { ProfilePickerModal } from '../input/profile-picker-modal.ts';
 import { formatTimestamp } from './modal-utils.ts';
 import { fitDisplay } from '../utils/terminal-width.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
+import { activeTokens } from './theme.ts';
 
 // ---------------------------------------------------------------------------
 // Renderer
@@ -47,12 +48,12 @@ export function renderProfilePickerModal(
     sections.push({
       type: 'text',
       content: 'No saved profiles.',
-      style: { fg: '244', dim: true },
+      style: { fg: activeTokens().textFaint },
     });
     sections.push({
       type: 'text',
       content: 'Press [s] to save the current settings as a profile.',
-      style: { fg: '240', dim: true },
+      style: { fg: activeTokens().textFaint },
     });
   } else {
     // Proportional column widths that adapt to the modal's content width:
@@ -70,7 +71,7 @@ export function renderProfilePickerModal(
     sections.push({
       type: 'text',
       content: `${nameHdr}  ${tsHdr}`,
-      style: { fg: '240', dim: true },
+      style: { fg: activeTokens().textFaint },
     });
     sections.push({ type: 'separator' });
 
@@ -92,7 +93,7 @@ export function renderProfilePickerModal(
       sections.push({
         type: 'text',
         content: `[${modal.scrollOffset + 1}-${Math.min(modal.profiles.length, modal.scrollOffset + visibleRows)} of ${modal.profiles.length}]`,
-        style: { fg: '244', dim: true },
+        style: { fg: activeTokens().textFaint },
       });
     }
   }
@@ -103,14 +104,14 @@ export function renderProfilePickerModal(
     sections.push({
       type: 'text',
       content: modal.statusMessage,
-      style: { fg: '#00ffcc' },
+      style: { fg: activeTokens().accent },
     });
   }
   if (modal.deleteConfirmationTarget) {
     sections.push({
       type: 'text',
       content: `Press [d] again to permanently delete ${modal.deleteConfirmationTarget}.`,
-      style: { fg: '#f59e0b', dim: true },
+      style: { fg: activeTokens().warning, dim: true },
     });
   }
 

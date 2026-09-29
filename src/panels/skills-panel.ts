@@ -14,13 +14,17 @@ import {
   extendPalette,
 } from './polish.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { activeTokens } from '../renderer/theme.ts';
 
 // Domain accents only; base chrome (header/headerBg/label/value/dim/empty/
 // selectBg) comes from DEFAULT_PANEL_PALETTE.
-const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  project: '#38bdf8',   // project-local skill origin
-  global:  '#a78bfa',   // global skill origin
-} as const);
+const C = extendPalette(DEFAULT_PANEL_PALETTE, () => {
+  const p = activeTokens();
+  return {
+    project: p.info,      // project-local skill origin
+    global:  p.secondary, // global skill origin
+  };
+});
 
 export type SkillOrigin = 'project-local' | 'global' | 'custom';
 

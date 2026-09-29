@@ -1,3 +1,4 @@
+import { MODAL_TONES } from './modal-theme.ts';
 import { infoRow } from './modal-surface-helpers.ts';
 import type {
   ConfigModalActionContext,
@@ -58,7 +59,7 @@ class KeybindingsModalSurface implements ConfigModalSurface {
   }
 
   private toolsTab(): ConfigModalTab {
-    if (!this.deps.toolRegistry) return { id: 'tools', label: 'Tools', rows: [infoRow('tools:none', 'Tool registry not wired into this session.', { dim: true })], emptyText: 'Tool registry not wired into this session.' };
+    if (!this.deps.toolRegistry) return { id: 'tools', label: 'Tools', rows: [infoRow('tools:none', 'Tool registry not wired into this session.', { fg: MODAL_TONES.dim })], emptyText: 'Tool registry not wired into this session.' };
     const tools = this.deps.toolRegistry.list();
     const rows: ConfigModalRow[] = tools.map((tool) => {
       const d = tool.definition;
@@ -74,7 +75,7 @@ class KeybindingsModalSurface implements ConfigModalSurface {
   }
 
   private modelsTab(): ConfigModalTab {
-    if (!this.deps.providerRegistry) return { id: 'models', label: 'Models', rows: [infoRow('models:none', 'Provider registry not wired into this session.', { dim: true })], emptyText: 'Provider registry not wired into this session.' };
+    if (!this.deps.providerRegistry) return { id: 'models', label: 'Models', rows: [infoRow('models:none', 'Provider registry not wired into this session.', { fg: MODAL_TONES.dim })], emptyText: 'Provider registry not wired into this session.' };
     const activeKey = this.deps.providerRegistry.getCurrentModel?.()?.registryKey;
     const rows: ConfigModalRow[] = this.sortedModels().map((model) => {
       const ctxK = model.contextWindow > 0 ? `${(model.contextWindow / 1000).toFixed(0)}k` : '?';
@@ -86,7 +87,7 @@ class KeybindingsModalSurface implements ConfigModalSurface {
 
   private shortcutsTab(): ConfigModalTab {
     const km = this.deps.keybindingsManager;
-    if (!km) return { id: 'shortcuts', label: 'Shortcuts', rows: [infoRow('sc:none', 'Keybindings manager not wired into this session.', { dim: true })], emptyText: 'Keybindings manager not wired into this session.' };
+    if (!km) return { id: 'shortcuts', label: 'Shortcuts', rows: [infoRow('sc:none', 'Keybindings manager not wired into this session.', { fg: MODAL_TONES.dim })], emptyText: 'Keybindings manager not wired into this session.' };
     const kb = (action: Parameters<KeybindingsManager['getComboLabel']>[0]) => km.getComboLabel(action);
     const rows: ConfigModalRow[] = [];
     let n = 0;

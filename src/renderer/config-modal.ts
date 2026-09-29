@@ -50,7 +50,7 @@ function renderConfigModalModel(model: ConfigModalRenderModel, width: number): L
   if (model.header.length > 0) sections.push({ type: 'separator' });
 
   if (model.rows.length === 0) {
-    sections.push({ type: 'text', content: model.emptyText ?? 'Nothing to show.', style: { fg: TONES.fg.muted, dim: true } });
+    sections.push({ type: 'text', content: model.emptyText ?? 'Nothing to show.', style: { fg: TONES.fg.dim } });
   } else {
     sections.push({
       type: 'list',
@@ -58,7 +58,7 @@ function renderConfigModalModel(model: ConfigModalRenderModel, width: number): L
         label: row.label,
         selected: row.selected,
         style: row.stale
-          ? { fg: TONES.fg.muted, dim: true }
+          ? { fg: TONES.fg.dim }
           : row.style,
       })),
     });

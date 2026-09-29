@@ -180,7 +180,14 @@ export interface CommandShellUiOpeners {
   openSelection?: (
     title: string,
     items: SelectionItem[],
-    opts: { preSelectId?: string; allowSearch?: boolean; customActions?: Map<string, SelectionAction>; primaryVerbLabel?: string } | undefined,
+    opts: {
+      preSelectId?: string;
+      allowSearch?: boolean;
+      customActions?: Map<string, SelectionAction>;
+      primaryVerbLabel?: string;
+      /** Live preview: called whenever the highlighted row changes. */
+      onHighlight?: (item: SelectionItem | null) => void;
+    } | undefined,
     callback: (result: SelectionResult | null) => void,
   ) => void;
   openSettingsModal?: (target?: string) => void;

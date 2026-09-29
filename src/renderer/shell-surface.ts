@@ -2,6 +2,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { renderProcessIndicator, renderVoiceCaptureIndicator } from './process-indicator.ts';
 import { UIFactory } from './ui-factory.ts';
 import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
+import { activeTokens } from './theme.ts';
 
 export interface ShellFooterBuildOptions {
   readonly width: number;
@@ -116,7 +117,6 @@ const COMPACT_FOOTER_BASE_ROWS = 4;
 
 // Dim slate foreground shared by the passive footer status lines (context
 // pressure hint and the scriptable status line).
-const DIM_STATUS_FG = '#64748b';
 
 /**
  * Real height of the most recently rendered footer, tagged with the compact
@@ -229,18 +229,18 @@ export function buildShellFooter(
     // Scriptable status line, dim informational line above the prompt. Unshifted
     // before the context hint so the context hint (if any) sits above it.
     if (options.scriptableStatusLine) {
-      lines.unshift(UIFactory.stringToLine(options.scriptableStatusLine, options.width, { fg: DIM_STATUS_FG }));
+      lines.unshift(UIFactory.stringToLine(options.scriptableStatusLine, options.width, { fg: activeTokens().textMuted }));
     }
     // Passive context status hint, rendered as a dim informational line before the prompt.
     if (options.contextStatusHint) {
-      const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: DIM_STATUS_FG });
+      const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: activeTokens().textMuted });
       lines.unshift(hintLine);
     }
     // Retry affordance, topmost of the passive hint lines while armed (an
     // actionable, time-bounded prompt outranks the passive status hints
     // below it); simply absent the instant it disarms.
     if (options.retryHint) {
-      const retryLine = UIFactory.stringToLine(options.retryHint, options.width, { fg: DIM_STATUS_FG, bold: true });
+      const retryLine = UIFactory.stringToLine(options.retryHint, options.width, { fg: activeTokens().textMuted, bold: true });
       lines.unshift(retryLine);
     }
   }

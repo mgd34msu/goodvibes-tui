@@ -1,6 +1,6 @@
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
-import { setActiveThemeMode, type ThemeMode } from '../../renderer/theme.ts';
+import { setActiveThemeMode, setActiveThemeName, type ThemeMode } from '../../renderer/theme.ts';
 import {
   buildGoodVibesSecretKey,
   defaultSecretBackedScope,
@@ -45,9 +45,15 @@ export function registerConfigCommand(registry: CommandRegistry): void {
           ctx.print(`Set ${key}: ${JSON.stringify(before)} → ${JSON.stringify(after)}`);
           // Forced theme modes apply immediately (matches the settings-modal
           // path); 'auto' re-probes on the next launch (stated honestly).
+          if (key === 'display.theme') {
+            const applied = setActiveThemeName(after);
+            ctx.requestFullRepaint?.();
+            ctx.print(`Theme applied: ${applied}.`);
+          }
           if (key === 'display.themeMode') {
             if (after === 'dark' || after === 'light') {
               setActiveThemeMode(after as ThemeMode);
+              ctx.requestFullRepaint?.();
               ctx.print('Theme applied. Note: transcript, modal, and header/footer/thinking chrome all flip; only the background colour follows your terminal.');
             } else {
               ctx.print('Theme mode "auto" probes the terminal background on the next launch.');

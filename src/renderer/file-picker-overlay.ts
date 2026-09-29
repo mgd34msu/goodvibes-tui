@@ -10,6 +10,7 @@ import {
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
+import { activeTokens } from './theme.ts';
 
 /**
  * Render the file picker modal as Line[] for overlay in the viewport.
@@ -55,7 +56,7 @@ export function renderFilePickerOverlay(
   // Results
   if (picker.results.length === 0) {
       const noResults = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
-    putOverlayText(noResults, layout.margin + 2, contentW, fitDisplay('No matching files', contentW), { fg: '244', dim: true });
+    putOverlayText(noResults, layout.margin + 2, contentW, fitDisplay('No matching files', contentW), { fg: activeTokens().textFaint });
     lines.push(noResults);
   } else {
     const maxVisible = metrics.contentRows;
@@ -94,7 +95,7 @@ export function renderFilePickerOverlay(
   // Bottom border with hints
   const hints = '[Up/Down] Navigate  [/] Search  [Enter] Select  [Esc] Cancel';
   const bottomLine = createOverlayFilledBorderLine(width, layout, OVERLAY_GLYPHS.bottomLeft, OVERLAY_GLYPHS.horizontal, OVERLAY_GLYPHS.bottomRight, borderFg, DEFAULT_OVERLAY_PALETTE.sectionBg);
-  putOverlayText(bottomLine, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), { fg: mutedFg, dim: true });
+  putOverlayText(bottomLine, layout.margin + 2, layout.width - 4, truncateDisplay(hints, layout.width - 4), { fg: mutedFg });
   lines.push(bottomLine);
 
   return lines;

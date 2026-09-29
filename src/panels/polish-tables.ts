@@ -1,6 +1,7 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
-import { GLYPHS, UI_TONES } from '../renderer/ui-primitives.ts';
+import { GLYPHS } from '../renderer/ui-primitives.ts';
+import { activeUiTones, registerThemeRefresh } from '../renderer/theme.ts';
 // Build on the leaf primitives in ./polish-core.ts (palette + base line
 // builders). polish-core has no back-edge to this file, so there is no cycle.
 import { buildSelectablePanelLine, DEFAULT_PANEL_PALETTE } from './polish-core.ts';
@@ -101,15 +102,23 @@ interface BadgeSpec {
   readonly label: string;
 }
 
-const STATUS_BADGES: Record<StatusBadgeKind, BadgeSpec> = {
-  pending:   { glyph: GLYPHS.status.pending, fg: DEFAULT_PANEL_PALETTE.info, label: 'Pending' },
-  running:   { glyph: GLYPHS.status.active,  fg: UI_TONES.state.active,      label: 'Running' },
-  completed: { glyph: GLYPHS.status.success, fg: DEFAULT_PANEL_PALETTE.good, label: 'Completed' },
-  failed:    { glyph: GLYPHS.status.failure, fg: DEFAULT_PANEL_PALETTE.bad,  label: 'Failed' },
-  cancelled: { glyph: GLYPHS.status.skipped, fg: DEFAULT_PANEL_PALETTE.dim,  label: 'Cancelled' },
-  blocked:   { glyph: GLYPHS.status.blocked, fg: UI_TONES.state.blocked,     label: 'Blocked' },
-  review:    { glyph: GLYPHS.status.review,  fg: DEFAULT_PANEL_PALETTE.info, label: 'Review' },
-};
+function buildStatusBadges(): Record<StatusBadgeKind, BadgeSpec> {
+  const tones = activeUiTones();
+  return {
+    pending:   { glyph: GLYPHS.status.pending, fg: DEFAULT_PANEL_PALETTE.info, label: 'Pending' },
+    running:   { glyph: GLYPHS.status.active,  fg: tones.state.active,         label: 'Running' },
+    completed: { glyph: GLYPHS.status.success, fg: DEFAULT_PANEL_PALETTE.good, label: 'Completed' },
+    failed:    { glyph: GLYPHS.status.failure, fg: DEFAULT_PANEL_PALETTE.bad,  label: 'Failed' },
+    cancelled: { glyph: GLYPHS.status.skipped, fg: DEFAULT_PANEL_PALETTE.dim,  label: 'Cancelled' },
+    blocked:   { glyph: GLYPHS.status.blocked, fg: tones.state.blocked,        label: 'Blocked' },
+    review:    { glyph: GLYPHS.status.review,  fg: DEFAULT_PANEL_PALETTE.info, label: 'Review' },
+  };
+}
+
+// Rebuilt in place on every theme change (registered after the base palette's
+// own refresher, so DEFAULT_PANEL_PALETTE already carries the new values).
+const STATUS_BADGES: Record<StatusBadgeKind, BadgeSpec> = buildStatusBadges();
+registerThemeRefresh(() => Object.assign(STATUS_BADGES, buildStatusBadges()));
 
 /**
  * Canonical status badge (glyph + label) with a consistent color per lifecycle

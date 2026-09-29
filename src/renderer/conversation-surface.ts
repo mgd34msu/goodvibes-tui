@@ -3,6 +3,7 @@ import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { foldPreviewText, treeBranchCol, treeContentCol } from '@pellux/goodvibes-terminal-shell';
+import { activeTokens } from './theme.ts';
 
 export interface ConversationSurfacePalette {
   readonly accent: string;
@@ -213,7 +214,7 @@ export function renderConversationFoldedRow(
   return renderConversationEventLine(
     width,
     tone,
-    [...details, { text: `${text} `, fg: tone.detailFg ?? '244', dim: true }],
+    [...details, { text: `${text} `, fg: activeTokens().textFaint }],
     indentCols,
   );
 }
@@ -248,7 +249,7 @@ export function renderConversationStatusLine(
   const markerWidth = getDisplayWidth(marker);
   if (markerCol >= 0 && markerCol < width && markerWidth > 0) {
     const markerStyle = {
-      fg: options.markerFg ?? '#64748b',
+      fg: options.markerFg ?? activeTokens().textMuted,
       bg: options.markerBg ?? options.bodyBg ?? '',
       bold: true,
     };

@@ -1,41 +1,65 @@
 /**
- * theme.ts, Semantic colour token layer.
+ * theme.ts, the TUI's theme runtime.
  *
- * Defines named tokens for every colour decision in the markdown/compositor/
- * conversation-rendering pipeline, resolved to concrete hex or ANSI-256 values
- * per background mode.
+ * Every colour the TUI paints comes from ONE resolved token table: the active
+ * theme (config `display.theme`) resolved for the active mode (config
+ * `display.themeMode`, or the terminal-background probe under `auto`). The
+ * theme data itself (bundled themes, the `system` theme generated from the
+ * terminal palette, the resolver and its derived fallbacks) lives in the SDK
+ * presentation contract; this module only holds the session state and the
+ * read paths the renderer uses:
  *
- * Dark mode values are the historically used colours. Light mode values are
- * consumed when the terminal-background probe (terminal-bg-probe.ts) resolves a
- * light background under `display.themeMode: auto`, or when the owner forces
- * light. A caller with no mode of its own passes 'dark', the safe default for a
- * terminal whose background is unknown.
+ *   activeTokens()    the full resolved table (SDK ThemeTokens shape)
+ *   activeTheme()     transcript tokens (markdown / conversation rendering)
+ *   activeUiTones()   chrome tokens in the legacy TONE_TOKENS shape
+ *   activeDiffTones() diff add/del/hunk in the legacy DIFF_TONES shape
  *
- * IMPORTANT: inline code has NO background token. The bg:#1a1a1a hardcode
- * that previously existed caused a near-black box on light terminals.
- * Differentiate inline code via inlineCodeFg + bold only; bg inherits terminal.
+ * Theme names: every bundled theme, 'system', and the legacy 'vaporwave'
+ * (an alias of 'goodvibes-neon', the pre-2026-09 look). Unknown names fall
+ * back to the default theme. 'system' falls back to the default theme until a
+ * terminal palette has been read (and stays there when the terminal answered
+ * nothing).
  *
- * resolveUiTones(mode) is the sibling read path for CHROME tokens (UI_TONES
- * in ui-primitives.ts, panel/modal/overlay/fullscreen backgrounds, borders,
- * status colours). It composes the same ThemeMode dimension so that
- * DEFAULT_PANEL_PALETTE, DEFAULT_STYLE, FULLSCREEN_PALETTE and
- * DEFAULT_OVERLAY_PALETTE all read through ONE mode-resolved path instead of
- * importing the static UI_TONES constant directly, so one mode flip reaches
- * every one of them.
+ * IMPORTANT: inline code has NO background token. Differentiate inline code
+ * via inlineCodeFg + bold only; the background inherits the terminal.
+ *
+ * The protected splash gradient does NOT come from here; see splash-lines.ts.
  */
 
-import { UI_TONES } from './ui-primitives.ts';
+import {
+  DEFAULT_THEME_NAME,
+  SYSTEM_THEME_NAME,
+  generateSystemTheme,
+  getBundledTheme,
+  listBundledThemes,
+  resolveTheme as resolveThemeFile,
+  themeToDiffTones,
+  themeToTones,
+  type DiffToneTokens,
+  type ThemeTokens as PaletteTokens,
+  type ToneTokens,
+} from '@pellux/goodvibes-sdk/platform/presentation';
+import { getTerminalPalette, type TerminalPalette } from './terminal-palette.ts';
+
+export type { PaletteTokens, DiffToneTokens };
 
 /** Background mode, dark is the safe default for an unprobed terminal. */
 export type ThemeMode = 'dark' | 'light';
 
-/** Resolved semantic colour tokens (concrete hex strings or ANSI-256 indices). */
+/** User-facing appearance preference: auto probes the terminal; dark/light force. */
+export type ThemeModeSetting = 'auto' | 'dark' | 'light';
+
+/** Legacy config value kept working: the old name of goodvibes-neon. */
+const LEGACY_VAPORWAVE_THEME_NAME = 'vaporwave';
+const NEON_THEME_NAME = 'goodvibes-neon';
+
+/** Transcript tokens (markdown / conversation rendering), one mode. */
 export interface ThemeTokens {
   /** H1 heading foreground + table header accent */
   heading1: string;
   /** H2 heading foreground */
   heading2: string;
-  /** H3 heading foreground (ANSI-256, falls back to nearest on ansi256 terminals) */
+  /** H3 heading foreground */
   heading3: string;
   /** Inline code foreground (bold is applied separately by caller) */
   inlineCodeFg: string;
@@ -51,7 +75,7 @@ export interface ThemeTokens {
   searchCurrentFg: string;
   /** Strikethrough / muted text foreground */
   strikethrough: string;
-  /** Blockquote / dim text foreground */
+  /** Blockquote text foreground */
   blockquote: string;
   /** Assistant event-line marker + label accent */
   assistantHeader: string;
@@ -61,7 +85,7 @@ export interface ThemeTokens {
   toolAccent: string;
   /** Collapsed-fragment body background (tool result preview bg) */
   collapsedBodyBg: string;
-  /** Checked task-list checkbox foreground (✓ in green) */
+  /** Checked task-list checkbox foreground */
   checkboxChecked: string;
   /** Error / cancelled message bar background */
   errorBarBg: string;
@@ -73,232 +97,230 @@ export interface ThemeTokens {
   diffAccent: string;
 }
 
-// ---------------------------------------------------------------------------
-// Dark palette
-// ---------------------------------------------------------------------------
-const DARK: ThemeTokens = {
-  heading1:        '#00ffff',
-  heading2:        '#00ffff',
-  heading3:        '111',
-  inlineCodeFg:    '#ffcc00',
-  link:            '#00aaff',
-  searchMatchBg:   '#806600',
-  searchMatchFg:   '#ffffff',
-  searchCurrentBg: '#ffff00',
-  searchCurrentFg: '#000000',
-  strikethrough:   '244',
-  blockquote:      '244',
-  assistantHeader: UI_TONES.accent.control,
-  reasoningAccent: UI_TONES.state.reasoning,
-  toolAccent:      UI_TONES.state.info,
-  collapsedBodyBg: '#1a1a1a',
-  checkboxChecked: '#22c55e',
-  errorBarBg:      '#3a1a1a',
-  modelNameDim:    '#94a3b8',
-  toolNameFg:      '#e2e8f0',
-  diffAccent:      '#f59e0b',
-};
+/** Chrome tokens in the legacy TONE_TOKENS shape. */
+export type UiToneTokens = ToneTokens;
+
+/** One row of the theme picker: 'system' plus every bundled theme. */
+export interface ThemeChoice {
+  readonly name: string;
+  readonly label: string;
+  readonly variants: readonly ThemeMode[];
+}
 
 // ---------------------------------------------------------------------------
-// Light palette
-//
-// Rationale per token:
-//   heading1/2:        Deep teal (#0077aa), readable on white/cream terminals
-//   heading3:          ANSI-256 #244 equivalent on light bg → use 24 (dark cyan)
-//   inlineCodeFg:      Dark orange (#b45309), distinguishable without a box bg
-//   link:              Standard blue (#0055cc), matches browser convention
-//   searchMatchBg:     Muted yellow (#ffe066), visible on light bg
-//   searchMatchFg:     Black (#000000)
-//   searchCurrentBg:   Strong amber (#f59e0b), current match is more vivid
-//   searchCurrentFg:   Black (#000000)
-//   strikethrough:     Medium gray (ANSI-256 244 stays; light terminals map it fine)
-//   blockquote:        Dim blue-gray (ANSI-256 67)
-//   assistantHeader:   Dark cyan (#0e7490)
-//   reasoningAccent:   Dark purple (#7c3aed)
-//   toolAccent:        Dark sky (#0369a1)
-//   collapsedBodyBg:   Very light gray (#f3f4f6)
-//   checkboxChecked:   Forest green (#15803d), AA on white (contrast ~5.2:1 on #fff)
-//   errorBarBg:        Soft rose (#fee2e2), light error bar bg, legible text on top
-//   modelNameDim:      Slate-500 (#64748b), dim label; contrast ~4.6:1 on #fff
-//   toolNameFg:        Slate-800 (#334155), strong enough for tool names
-//   diffAccent:        Amber-700 (#b45309), darker amber, contrast ~4.7:1 on #fff
+// Theme names
 // ---------------------------------------------------------------------------
-const LIGHT: ThemeTokens = {
-  heading1:        '#0077aa',
-  heading2:        '#0077aa',
-  heading3:        '24',
-  inlineCodeFg:    '#b45309',
-  link:            '#0055cc',
-  searchMatchBg:   '#ffe066',
-  searchMatchFg:   '#000000',
-  searchCurrentBg: '#f59e0b',
-  searchCurrentFg: '#000000',
-  strikethrough:   '244',
-  blockquote:      '67',
-  assistantHeader: '#0e7490',
-  reasoningAccent: '#7c3aed',
-  toolAccent:      '#0369a1',
-  collapsedBodyBg: '#f3f4f6',
-  checkboxChecked: '#15803d',
-  errorBarBg:      '#fee2e2',
-  modelNameDim:    '#64748b',
-  toolNameFg:      '#334155',
-  diffAccent:      '#b45309',
-};
+
+/** Every selectable theme: 'system' first, then the bundled catalog (default first). */
+export function listThemeChoices(): ThemeChoice[] {
+  return [
+    { name: SYSTEM_THEME_NAME, label: 'System (terminal colors)', variants: ['dark', 'light'] },
+    ...listBundledThemes().map(({ name, label, variants }) => ({ name, label, variants })),
+  ];
+}
 
 /**
- * resolveTheme, Return the semantic token set for the given background mode.
- *
- * Call with the session's resolved mode; 'dark' is the safe default for a
- * caller that has none. The returned object is frozen, do not mutate it.
+ * Turn a configured `display.theme` value into a theme name this runtime can
+ * resolve: 'vaporwave' maps to 'goodvibes-neon', unknown or non-string values
+ * map to the default theme.
+ */
+export function normalizeThemeName(raw: unknown): string {
+  if (typeof raw !== 'string') return DEFAULT_THEME_NAME;
+  const name = raw.trim().toLowerCase();
+  if (name === LEGACY_VAPORWAVE_THEME_NAME) return NEON_THEME_NAME;
+  if (name === SYSTEM_THEME_NAME) return SYSTEM_THEME_NAME;
+  return getBundledTheme(name) !== undefined ? name : DEFAULT_THEME_NAME;
+}
+
+// ---------------------------------------------------------------------------
+// Resolution (cached per theme + mode; the system entry per probed palette)
+// ---------------------------------------------------------------------------
+
+interface ResolvedEntry {
+  readonly palette: PaletteTokens;
+  transcript?: Readonly<ThemeTokens>;
+  tones?: Readonly<UiToneTokens>;
+  diff?: Readonly<DiffToneTokens>;
+}
+
+const resolvedCache = new Map<string, ResolvedEntry>();
+let systemCachePalette: TerminalPalette | null = null;
+
+/** True when the probe returned at least one usable colour. */
+function paletteHasColours(palette: TerminalPalette): boolean {
+  return palette.background !== undefined
+    || palette.foreground !== undefined
+    || palette.ansi.some((slot) => slot !== undefined);
+}
+
+function resolveEntry(name: string, mode: ThemeMode): ResolvedEntry {
+  if (name === SYSTEM_THEME_NAME) {
+    const probed = getTerminalPalette();
+    if (probed !== systemCachePalette) {
+      for (const key of [...resolvedCache.keys()]) {
+        if (key.startsWith(`${SYSTEM_THEME_NAME}:`)) resolvedCache.delete(key);
+      }
+      systemCachePalette = probed;
+    }
+    if (probed === null || !paletteHasColours(probed)) return resolveEntry(DEFAULT_THEME_NAME, mode);
+  }
+  const key = `${name}:${mode}`;
+  const cached = resolvedCache.get(key);
+  if (cached !== undefined) return cached;
+  const json = name === SYSTEM_THEME_NAME
+    ? generateSystemTheme(systemCachePalette!, mode)
+    : (getBundledTheme(name) ?? getBundledTheme(DEFAULT_THEME_NAME)!).json;
+  const entry: ResolvedEntry = { palette: Object.freeze(resolveThemeFile(json, mode)) };
+  resolvedCache.set(key, entry);
+  return entry;
+}
+
+function transcriptFrom(p: PaletteTokens): ThemeTokens {
+  return {
+    heading1: p.markdownHeading,
+    heading2: p.markdownHeading,
+    heading3: p.markdownHeading,
+    inlineCodeFg: p.markdownCode,
+    link: p.markdownLink,
+    searchMatchBg: p.searchMatchBg,
+    searchMatchFg: p.text,
+    searchCurrentBg: p.searchCurrentBg,
+    searchCurrentFg: p.selectedListItemText,
+    strikethrough: p.textMuted,
+    blockquote: p.markdownBlockQuote,
+    assistantHeader: p.panelControl,
+    reasoningAccent: p.reasoning,
+    toolAccent: p.info,
+    collapsedBodyBg: p.backgroundPanel,
+    checkboxChecked: p.success,
+    errorBarBg: p.backgroundError,
+    modelNameDim: p.textMuted,
+    toolNameFg: p.text,
+    diffAccent: p.warning,
+  };
+}
+
+/**
+ * Transcript tokens of the active theme for `mode`. The returned object is
+ * frozen and stable per (theme, mode), do not mutate it.
  */
 export function resolveTheme(mode: ThemeMode): Readonly<ThemeTokens> {
-  return mode === 'light' ? LIGHT : DARK;
+  const entry = resolveEntry(activeThemeName, mode);
+  entry.transcript ??= Object.freeze(transcriptFrom(entry.palette));
+  return entry.transcript;
 }
 
-// Freeze both palette objects so they are truly immutable at runtime,
-// matching the Readonly<ThemeTokens> return type in the doc comment above.
-Object.freeze(DARK);
-Object.freeze(LIGHT);
-
 /**
- * Default dark-mode token set, exported for convenience.
- * Frozen, do not mutate.
- */
-export const DARK_THEME: Readonly<ThemeTokens> = DARK;
-
-// ---------------------------------------------------------------------------
-// Chrome tokens (UI_TONES), mode-resolved sibling to resolveTheme().
-//
-// UI_TONES (ui-primitives.ts) is the dark entry. The light entry mirrors
-// dark for every role that has no light-appropriate equivalent yet, the
-// deliverable is the mode dimension and single read path, not a
-// shipped light chrome theme (see module doc comment above).
-// ---------------------------------------------------------------------------
-
-/** Recursively widen the `as const` literal leaves of UI_TONES to `string`
- * so mode variants (e.g. UI_TONES_LIGHT) can assign different colour
- * values without fighting TypeScript's literal-type inference. */
-type DeepWidenToString<T> = T extends string ? string : { [K in keyof T]: DeepWidenToString<T[K]> };
-
-export type UiToneTokens = DeepWidenToString<typeof UI_TONES>;
-
-//
-// chrome.*, persistent header/footer/thinking foregrounds that paint on the
-// TRANSPARENT terminal background (see the chrome group's doc in
-// ui-primitives.ts). Unlike fg.muted/fg.dim (which stay light for the opaque
-// dark modal/panel boxes), these invert toward dark so they read on a light
-// terminal. Contrast ratios below are against a white terminal (#ffffff),
-// matching the discipline of the LIGHT ThemeTokens above:
-//   label: Slate-500 (#64748b), header title; ~4.9:1 on #fff (matches modelNameDim)
-//   faint: Slate-400 (#94a3b8), version/rule/clean-git; ~2.7:1 on #fff, deliberately
-//          faint (mirrors the low-contrast intent of the dark fg.dim role)
-//   warn:  Amber-700 (#b45309), dirty git / pending risk; ~5.0:1 on #fff (matches diffAccent)
-//   bad:   Red-600  (#dc2626), DANGER banner / shell risk (bold); ~5.3:1 on #fff
-//   good:  Forest-700 (#15803d), tool-call ✓ status; ~5.02:1 on #fff (matches checkboxChecked)
-//   remote: Violet-700 (#6d28d9), risk:remote marker / plain status; ~7.10:1 on #fff,
-//          deliberately distinct from reasoningAccent (#7c3aed) so the remote-risk cue
-//          never reads as a reasoning accent on a light terminal
-const UI_TONES_LIGHT: UiToneTokens = {
-  ...UI_TONES,
-  state: {
-    ...UI_TONES.state,
-    info: LIGHT.toolAccent,
-    reasoning: LIGHT.reasoningAccent,
-  },
-  accent: {
-    ...UI_TONES.accent,
-    brand: LIGHT.heading1,
-    gradientStart: LIGHT.heading1,
-    gradientEnd: LIGHT.reasoningAccent,
-  },
-  chrome: {
-    ...UI_TONES.chrome,
-    label: '#64748b',
-    faint: '#94a3b8',
-    warn:  '#b45309',
-    bad:   '#dc2626',
-    good:  '#15803d',
-    remote: '#6d28d9',
-  },
-};
-
-Object.freeze(UI_TONES_LIGHT.state);
-Object.freeze(UI_TONES_LIGHT.accent);
-Object.freeze(UI_TONES_LIGHT.chrome);
-Object.freeze(UI_TONES_LIGHT);
-
-/**
- * resolveUiTones, Return the chrome (panel/modal/overlay/fullscreen) token
- * set for the given background mode. Single read path for UI_TONES; the
- * 'dark' resolution is byte-identical to the UI_TONES constant.
- *
- * Prefer activeUiTones() at call sites, resolveUiTones is the pure per-mode
- * resolver underneath it.
+ * Chrome tokens (legacy TONE_TOKENS shape) of the active theme for `mode`.
+ * Prefer activeUiTones() at call sites.
  */
 export function resolveUiTones(mode: ThemeMode): Readonly<UiToneTokens> {
-  return mode === 'light' ? UI_TONES_LIGHT : UI_TONES;
+  const entry = resolveEntry(activeThemeName, mode);
+  entry.tones ??= Object.freeze(themeToTones(entry.palette));
+  return entry.tones;
 }
 
 // ===========================================================================
-// Active-mode runtime.
+// Active theme runtime.
 //
-// The mode is decided ONCE at startup, from appearance config (display.themeMode
-// forced dark/light) or the terminal-background probe (auto), and is then stable
-// for the session. Two read shapes exist because the two token layers are
-// consumed differently:
-//
-//   - Transcript tokens (ThemeTokens): read live per render via activeTheme(),
-//     so a dark→light repaint (auto mode, light wins within the probe window)
-//     re-resolves without any module reload.
-//
-//   - Chrome tokens (UiToneTokens): baked into module-level palette CONSTANTS
-//     (DEFAULT_PANEL_PALETTE, DEFAULT_OVERLAY_PALETTE, FULLSCREEN_PALETTE,
-//     DEFAULT_STYLE) that hundreds of call sites read by reference. Those
-//     constants cannot be re-resolved per call without a rewrite, so each owner
-//     registers an in-place rebuild via registerThemeRefresh(); setActiveThemeMode
-//     runs every rebuild in registration order (base palettes before the
-//     extendPalette-derived panel palettes) so a single mode flip updates them
-//     all. The rebuild is fully reversible: light→dark restores byte-identical
-//     dark values (tests rely on this to keep the shared test process's default
-//     at dark).
+// Theme name and mode are session state. Transcript tokens are read live per
+// render (activeTheme()). Chrome palettes (DEFAULT_PANEL_PALETTE,
+// DEFAULT_OVERLAY_PALETTE, FULLSCREEN_PALETTE, DEFAULT_STYLE, MODAL_TONES and
+// every extendPalette result) are module-level objects read by reference at
+// hundreds of call sites, so each owner registers an in-place rebuild via
+// registerThemeRefresh(); every theme or mode change runs all rebuilds in
+// registration order (base palettes before the extendPalette-derived ones).
+// Callers that change the theme at runtime also request a full repaint.
 // ===========================================================================
-
-/** User-facing appearance preference: auto probes the terminal; dark/light force. */
-export type ThemeModeSetting = 'auto' | 'dark' | 'light';
 
 /** The resolved mode in effect for the current session. Dark is the safe default. */
 let activeMode: ThemeMode = 'dark';
 
-/** In-place palette rebuilders, run (in registration order) on every mode flip. */
+/** The theme in effect (already normalized). */
+let activeThemeName: string = DEFAULT_THEME_NAME;
+
+/** In-place palette rebuilders, run (in registration order) on every change. */
 const themeRefreshers: Array<() => void> = [];
 
 /**
- * Register an in-place palette rebuild to run whenever the active mode changes.
- * Base-palette owners register at their own module-eval time (before any
- * extendPalette-derived palette, which depends on the base), so refreshers run
- * base-first, the ordering the extended palettes require to re-merge correctly.
+ * Register an in-place palette rebuild to run whenever the active theme or
+ * mode changes. Base-palette owners register at their own module-eval time,
+ * before any extendPalette-derived palette (which depends on the base).
  */
 export function registerThemeRefresh(rebuild: () => void): void {
   themeRefreshers.push(rebuild);
 }
 
-/**
- * Set the active background mode and rebuild every registered chrome palette
- * in place. Idempotent and reversible. Callers: startup (forced mode or probe
- * result) and the settings-modal change hook for forced modes.
- */
-export function setActiveThemeMode(mode: ThemeMode): void {
-  activeMode = mode;
+/** The entry for the active (theme, mode); cleared on every change. */
+let activeEntry: ResolvedEntry | null = null;
+
+function currentEntry(): ResolvedEntry {
+  activeEntry ??= resolveEntry(activeThemeName, activeMode);
+  return activeEntry;
+}
+
+function runRefreshers(): void {
+  activeEntry = null;
   for (const rebuild of themeRefreshers) rebuild();
 }
 
-/** Transcript tokens for the active mode, read live, per render. */
-export function activeTheme(): Readonly<ThemeTokens> {
-  return resolveTheme(activeMode);
+/**
+ * Set the active background mode and rebuild every registered palette in
+ * place. Idempotent and reversible.
+ */
+export function setActiveThemeMode(mode: ThemeMode): void {
+  activeMode = mode;
+  runRefreshers();
 }
 
-/** Chrome tokens for the active mode, used to build (and rebuild) palettes. */
+/**
+ * Set the active theme by (configured) name and rebuild every registered
+ * palette in place. Accepts any config value; see normalizeThemeName.
+ * Returns the normalized name now in effect.
+ */
+export function setActiveThemeName(name: unknown): string {
+  activeThemeName = normalizeThemeName(name);
+  runRefreshers();
+  return activeThemeName;
+}
+
+/**
+ * Re-resolve after the terminal palette arrived or changed. Only the system
+ * theme depends on it; for any other theme this is a no-op returning false.
+ */
+export function refreshForTerminalPalette(): boolean {
+  if (activeThemeName !== SYSTEM_THEME_NAME) return false;
+  runRefreshers();
+  return true;
+}
+
+/** The normalized name of the active theme ('system' stays 'system'). */
+export function getActiveThemeName(): string {
+  return activeThemeName;
+}
+
+/** Full token table for the active theme and mode, read live. */
+export function activeTokens(): Readonly<PaletteTokens> {
+  return currentEntry().palette;
+}
+
+/** Transcript tokens for the active theme and mode, read live, per render. */
+export function activeTheme(): Readonly<ThemeTokens> {
+  const entry = currentEntry();
+  entry.transcript ??= Object.freeze(transcriptFrom(entry.palette));
+  return entry.transcript;
+}
+
+/** Chrome tokens for the active theme and mode, used to build (and rebuild) palettes. */
 export function activeUiTones(): Readonly<UiToneTokens> {
-  return resolveUiTones(activeMode);
+  const entry = currentEntry();
+  entry.tones ??= Object.freeze(themeToTones(entry.palette));
+  return entry.tones;
+}
+
+/** Diff add/del/hunk tones for the active theme and mode. */
+export function activeDiffTones(): Readonly<DiffToneTokens> {
+  const entry = currentEntry();
+  entry.diff ??= Object.freeze(themeToDiffTones(entry.palette));
+  return entry.diff;
 }

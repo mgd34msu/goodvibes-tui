@@ -12,6 +12,7 @@ import { ModalFactory } from './modal-factory.ts';
 import { BookmarkModal } from '../input/bookmark-modal.ts';
 import type { BookmarkEntry } from '@pellux/goodvibes-sdk/platform/bookmarks';
 import { getOverlayContentBudget, getStableOverlayContentRows } from './overlay-viewport.ts';
+import { activeTokens } from './theme.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,7 +70,7 @@ export function renderBookmarkModal(
     {
       type: 'text',
       content: '  Key                            Label                           Time',
-      style: { dim: true },
+      style: { fg: activeTokens().textFaint },
     },
     { type: 'separator' },
     { type: 'list', items },
@@ -79,7 +80,7 @@ export function renderBookmarkModal(
     sections.push({
       type: 'text',
       content: `[${modal.scrollOffset + 1}-${Math.min(modal.entries.length, modal.scrollOffset + visRows)} of ${modal.entries.length}]`,
-      style: { fg: '244', dim: true },
+      style: { fg: activeTokens().textFaint },
     });
   }
 

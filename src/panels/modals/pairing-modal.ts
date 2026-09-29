@@ -149,20 +149,20 @@ class PairingModalSurface implements ConfigModalSurface {
     const displayLink = this.revealed ? deepLink : SECRET_MASK;
 
     const rows: ConfigModalRow[] = [];
-    rows.push(infoRow('intro', 'Scan with the GoodVibes web app to pair this device; it opens already signed in.', { dim: true }));
+    rows.push(infoRow('intro', 'Scan with the GoodVibes web app to pair this device; it opens already signed in.', { fg: MODAL_TONES.dim }));
     rows.push(infoRow('url', `Web app   ${url}`));
     rows.push(infoRow('name', `Device    ${tokenName}`));
     rows.push(infoRow('token', `Token     ${displayToken}`, { fg: MODAL_TONES.reasoning }));
-    rows.push(infoRow('link', `Link      ${displayLink}`, { dim: true }));
+    rows.push(infoRow('link', `Link      ${displayLink}`, { fg: MODAL_TONES.dim }));
     if (this.deps.controlPlaneReadModel) {
       const connected = this.deps.controlPlaneReadModel.getSnapshot().activeClientIds.length;
-      rows.push(infoRow('companions', `Devices connected: ${connected}`, connected > 0 ? { fg: MODAL_TONES.good } : { dim: true }));
+      rows.push(infoRow('companions', `Devices connected: ${connected}`, connected > 0 ? { fg: MODAL_TONES.good } : { fg: MODAL_TONES.dim }));
     }
 
     // The offer set carried by this pairing, each named with its plain-language
     // consequence, each declinable in the web app.
     if (offers.length > 0) {
-      rows.push(infoRow('offers-h', 'Offers (each declinable when you pair):', { dim: true }));
+      rows.push(infoRow('offers-h', 'Offers (each declinable when you pair):', { fg: MODAL_TONES.dim }));
       formatPairingOffers(offers).forEach((line, i) => rows.push(infoRow(`offer:${i}`, line)));
     }
     // The labeled browser-capability list, what the paired device actually gets
@@ -170,7 +170,7 @@ class PairingModalSurface implements ConfigModalSurface {
     // never hidden behind a dead button.
     const capabilities = formatPostureCapabilities(posture);
     if (capabilities.length > 0) {
-      rows.push(infoRow('caps-h', 'This device will get:', { dim: true }));
+      rows.push(infoRow('caps-h', 'This device will get:', { fg: MODAL_TONES.dim }));
       capabilities.forEach((line, i) => rows.push(infoRow(`cap:${i}`, line)));
     }
     // The ONE honest LAN line, the SDK posture's own notice (LAN_PLAIN_HTTP_NOTICE),
@@ -205,16 +205,16 @@ class PairingModalSurface implements ConfigModalSurface {
     if (!ts || !ts.available) return; // absence stays quiet
     const httpsUrl = this.serveReceipt?.url ?? ts.httpsUrl;
     if (httpsUrl) {
-      rows.push(infoRow('ts-h', 'Encrypted access (Tailscale):', { dim: true }));
+      rows.push(infoRow('ts-h', 'Encrypted access (Tailscale):', { fg: MODAL_TONES.dim }));
       rows.push(infoRow('ts-url', `  ${httpsUrl}`, { fg: MODAL_TONES.good }));
     } else {
       rows.push(infoRow('ts-h', 'Tailscale detected: press t to serve this app over https (MagicDNS).', { fg: MODAL_TONES.reasoning }));
     }
     const receipt = this.serveReceipt ?? ts.lastServe;
     if (receipt) {
-      rows.push(infoRow('ts-receipt', `  ${receipt.ok ? '✓' : '✗'} ${receipt.detail}`, receipt.ok ? { dim: true } : { fg: MODAL_TONES.warn }));
+      rows.push(infoRow('ts-receipt', `  ${receipt.ok ? '✓' : '✗'} ${receipt.detail}`, receipt.ok ? { fg: MODAL_TONES.dim } : { fg: MODAL_TONES.warn }));
     } else if (this.serving) {
-      rows.push(infoRow('ts-serving', '  Serving over tailscale…', { dim: true }));
+      rows.push(infoRow('ts-serving', '  Serving over tailscale…', { fg: MODAL_TONES.dim }));
     }
   }
 

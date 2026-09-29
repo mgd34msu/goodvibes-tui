@@ -1,3 +1,4 @@
+import { activeTokens } from '../renderer/theme.ts';
 import { getConfigSnapshot } from '@pellux/goodvibes-sdk/platform/config';
 import {
   describeServingEffort,
@@ -244,17 +245,17 @@ export function createBootstrapCommandActions(
           configManager.set('helper.globalProvider', def.provider);
           configManager.set('helper.globalModel', key);
           configManager.set('helper.enabled', true);
-          conversation.log(`Helper model set to: ${def.displayName} (${def.provider})`, { fg: '135' });
+          conversation.log(`Helper model set to: ${def.displayName} (${def.provider})`, { fg: activeTokens().secondary });
         } else if (resolvedTarget === 'tool') {
           // Write to tool LLM config keys and enable the tool LLM
           configManager.set('tools.llmProvider', def.provider);
           configManager.set('tools.llmModel', key);
           configManager.setDynamic('tools.llmEnabled' as never, true);
-          conversation.log(`Tool LLM set to: ${def.displayName} (${def.provider})`, { fg: '135' });
+          conversation.log(`Tool LLM set to: ${def.displayName} (${def.provider})`, { fg: activeTokens().secondary });
         } else if (resolvedTarget === 'tts') {
           configManager.set('tts.llmProvider', def.provider);
           configManager.set('tts.llmModel', key);
-          conversation.log(`TTS LLM set to: ${def.displayName} (${def.provider})`, { fg: '135' });
+          conversation.log(`TTS LLM set to: ${def.displayName} (${def.provider})`, { fg: activeTokens().secondary });
         } else {
           // Default: main provider/model
           if (contextCap != null && contextCap > 0) {
@@ -292,13 +293,13 @@ export function createBootstrapCommandActions(
           const ctxNote = contextCap != null && contextCap > 0
             ? `, context cap: ${contextCap.toLocaleString()}`
             : '';
-          conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${describeServingEffort(serving, effortModel)}${ctxNote}`, { fg: '135' });
+          conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${describeServingEffort(serving, effortModel)}${ctxNote}`, { fg: activeTokens().secondary });
           // The SDK's own sentence, printed verbatim so the explanation cannot
           // drift from the resolution that produced it.
-          if (serving.note) conversation.log(serving.note, { fg: '214' });
+          if (serving.note) conversation.log(serving.note, { fg: activeTokens().warning });
         }
       } catch (e) {
-        conversation.log(`Error switching model: ${summarizeError(e)}`, { fg: '#ef4444' });
+        conversation.log(`Error switching model: ${summarizeError(e)}`, { fg: activeTokens().error });
       }
       completeModelSelectionSideEffect?.();
       requestRender();
@@ -306,7 +307,7 @@ export function createBootstrapCommandActions(
     jumpToBookmark: () => unwiredShellAction('jumpToBookmark'),
     scrollToLine: () => unwiredShellAction('scrollToLine'),
     print: (text: string) => {
-      conversation.log(text, { fg: '252' });
+      conversation.log(text, { fg: activeTokens().text });
       requestRender();
     },
     exit: () => unwiredShellAction('exit'),
@@ -359,7 +360,7 @@ export function createBootstrapCommandActions(
       if (panel instanceof LocalAuthPanel && localUserAuthManager) {
         panel.openMaskedEntry(kind, username, localUserAuthManager);
       } else {
-        conversation.log('Masked entry unavailable: local auth is not configured in this session.', { fg: '#ef4444' });
+        conversation.log('Masked entry unavailable: local auth is not configured in this session.', { fg: activeTokens().error });
         requestRender();
       }
     },

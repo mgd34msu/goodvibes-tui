@@ -1,6 +1,7 @@
 import { MODAL_TONES } from './modal-theme.ts';
 import { infoRow } from './modal-surface-helpers.ts';
 import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security';
+import { registerThemeRefresh } from '../../renderer/theme.ts';
 import type { ModalSectionStyle } from '../../renderer/modal-factory.ts';
 import type { UiReadModel, UiSecuritySnapshot } from '../../runtime/ui-read-models.ts';
 import type {
@@ -29,6 +30,11 @@ export interface SecurityModalDeps {
 
 const BAD: ModalSectionStyle = { fg: MODAL_TONES.bad };
 const WARN: ModalSectionStyle = { fg: MODAL_TONES.warn };
+// Rebuilt in place on theme change (MODAL_TONES refreshes first: it registers at its own module eval).
+registerThemeRefresh(() => {
+  Object.assign(BAD, { fg: MODAL_TONES.bad });
+  Object.assign(WARN, { fg: MODAL_TONES.warn });
+});
 const MAX_FINDINGS_SHOWN = 5;
 
 function resultColor(result: TokenAuditResult): ModalSectionStyle | undefined {
@@ -105,11 +111,11 @@ class SecurityModalSurface implements ConfigModalSurface {
     if (audit.results.length === 0) {
       const quarantinedMcp = snapshot.mcpServers.filter((s) => s.schemaFreshness === 'quarantined');
       rows.push(infoRow('empty:0', 'No API tokens are registered with the security auditor yet.'));
-      rows.push(infoRow('empty:1', 'The security control room can already review policy, MCP, plugin, and incident posture, but token-specific scope and rotation audit data has not been registered.', { dim: true }));
+      rows.push(infoRow('empty:1', 'The security control room can already review policy, MCP, plugin, and incident posture, but token-specific scope and rotation audit data has not been registered.', { fg: MODAL_TONES.dim }));
       if (quarantinedMcp.length > 0) rows.push(infoRow('empty:mcp', 'MCP quarantine still active despite no registered tokens.', WARN));
       rows.push(infoRow('empty:title', 'Inspect further'));
-      rows.push(infoRow('empty:storage', '/storage review — inspect secure secret storage and environment overrides', { dim: true }));
-      rows.push(infoRow('empty:mcptrust', '/mcp trust      — inspect active MCP trust and quarantine posture', { dim: true }));
+      rows.push(infoRow('empty:storage', '/storage review — inspect secure secret storage and environment overrides', { fg: MODAL_TONES.dim }));
+      rows.push(infoRow('empty:mcptrust', '/mcp trust      — inspect active MCP trust and quarantine posture', { fg: MODAL_TONES.dim }));
       return { id: 'tokens', label: 'Tokens', header, rows, emptyText: '' };
     }
 
@@ -121,7 +127,7 @@ class SecurityModalSurface implements ConfigModalSurface {
         ...(resultColor(result) ? { style: resultColor(result)! } : {}),
       });
     }
-    rows.push(infoRow('audit:when', `Last audit ${fmtIso(audit.lastAuditAt)}: press r to refresh`, { dim: true }));
+    rows.push(infoRow('audit:when', `Last audit ${fmtIso(audit.lastAuditAt)}: press r to refresh`, { fg: MODAL_TONES.dim }));
     return { id: 'tokens', label: 'Tokens', header, rows, hints: ['f preflight'] };
   }
 
@@ -145,17 +151,17 @@ class SecurityModalSurface implements ConfigModalSurface {
 
     const review = snapshot.attackPathReview;
     rows.push(infoRow('atk:title', 'MCP Attack-Path Review'));
-    rows.push(infoRow('atk:counts', `critical ${review.criticalFindings}  incoherent ${review.incoherentFindings}`, review.criticalFindings > 0 ? BAD : { dim: true }));
-    rows.push(infoRow('atk:summary', review.summary, { dim: true }));
+    rows.push(infoRow('atk:counts', `critical ${review.criticalFindings}  incoherent ${review.incoherentFindings}`, review.criticalFindings > 0 ? BAD : { fg: MODAL_TONES.dim }));
+    rows.push(infoRow('atk:summary', review.summary, { fg: MODAL_TONES.dim }));
     const shown = review.findings.slice(0, MAX_FINDINGS_SHOWN);
     shown.forEach((finding, i) => {
       rows.push(infoRow(`atk:${i}:h`, `${finding.severity.toUpperCase()} ${finding.serverName}: ${finding.route}`, findingColor(finding.severity)));
-      rows.push(infoRow(`atk:${i}:r`, `  ${finding.reason}`, { dim: true }));
-      rows.push(infoRow(`atk:${i}:e`, `  evidence: ${finding.evidence.join(' | ')}`, { dim: true }));
+      rows.push(infoRow(`atk:${i}:r`, `  ${finding.reason}`, { fg: MODAL_TONES.dim }));
+      rows.push(infoRow(`atk:${i}:e`, `  evidence: ${finding.evidence.join(' | ')}`, { fg: MODAL_TONES.dim }));
     });
     if (review.findings.length > shown.length) {
       const extra = review.findings.length - shown.length;
-      rows.push(infoRow('atk:more', `+${extra} more finding${extra === 1 ? '' : 's'} not shown`, { dim: true }));
+      rows.push(infoRow('atk:more', `+${extra} more finding${extra === 1 ? '' : 's'} not shown`, { fg: MODAL_TONES.dim }));
     }
     return { id: 'governance', label: 'Governance', rows, emptyText: 'No governance findings.' };
   }

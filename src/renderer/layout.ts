@@ -1,4 +1,5 @@
-import { GLYPHS, SPINNER_FRAMES, UI_TONES } from './ui-primitives.ts';
+import { GLYPHS, SPINNER_FRAMES } from './ui-primitives.ts';
+import { activeUiTones } from './theme.ts';
 
 /**
  * Layout constants, single source of truth for margins and content width.
@@ -17,9 +18,10 @@ export const TOOL_STATUS = {
   TOOL_NAME_PAD: 8,
 } as const;
 
+// `color` is a getter so it always reads the active theme.
 export const BORDERS = {
-  THINKING: { char: '▌', color: UI_TONES.state.reasoning },
-  ERROR:    { char: '▌', color: UI_TONES.state.bad },
-  WARNING:  { char: '▌', color: UI_TONES.state.warn },
-  INFO:     { char: '▌', color: UI_TONES.state.info },
+  THINKING: { char: '▌', get color(): string { return activeUiTones().state.reasoning; } },
+  ERROR:    { char: '▌', get color(): string { return activeUiTones().state.bad; } },
+  WARNING:  { char: '▌', get color(): string { return activeUiTones().state.warn; } },
+  INFO:     { char: '▌', get color(): string { return activeUiTones().state.info; } },
 } as const;

@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { renderProcessIndicator } from '../../renderer/process-indicator.ts';
+import { activeTokens, activeUiTones } from '../../renderer/theme.ts';
 import { lineToString } from '../setup.ts';
 
 const W = 100;
@@ -21,10 +22,10 @@ describe('renderProcessIndicator', () => {
     expect(text).toContain('No background processes');
   });
 
-  test('idle state cells are dimmed', () => {
+  test('idle state cells read faint (the faint token, not SGR dim)', () => {
     const lines = renderProcessIndicator(W, 0, 0);
-    const dimCells = lines[0].filter((c) => c.char !== ' ' && c.dim);
-    expect(dimCells.length).toBeGreaterThan(0);
+    const faintCells = lines[0].filter((c) => c.char !== ' ' && c.fg === activeTokens().textFaint && !c.dim);
+    expect(faintCells.length).toBeGreaterThan(0);
   });
 
   test('returns a single Line when active', () => {
@@ -96,10 +97,10 @@ describe('renderProcessIndicator', () => {
     expect(lines[0].length).toBe(narrow);
   });
 
-  test('active label cells are cyan + bold', () => {
+  test('active label cells are brand + bold', () => {
     const lines = renderProcessIndicator(W, 1, 0);
-    // Find a cell with cyan foreground from the label
-    const cyanBold = lines[0].filter((c) => c.fg === '#00ffff' && c.bold);
+    // Find a cell with the brand foreground from the label
+    const cyanBold = lines[0].filter((c) => c.fg === activeUiTones().accent.brand && c.bold);
     expect(cyanBold.length).toBeGreaterThan(0);
   });
 
@@ -120,19 +121,19 @@ describe('renderProcessIndicator', () => {
     expect(text).toContain('·');
   });
 
-  test('focused line uses cyan bold styling', () => {
+  test('focused line uses the browser accent in bold for its marker', () => {
     const lines = renderProcessIndicator(80, 1, 0, true);
     const firstNonSpace = lines[0].find(c => c.char.trim() !== '');
-    expect(firstNonSpace?.fg).toBe('#7dd3fc');
+    expect(firstNonSpace?.fg).toBe(activeUiTones().accent.browser);
     expect(firstNonSpace?.bold).toBe(true);
   });
 
   test('focused line uses a bounded background highlight', () => {
     const lines = renderProcessIndicator(80, 1, 0, true);
-    const highlighted = lines[0].filter((c) => c.bg === '#31506f');
+    const highlighted = lines[0].filter((c) => c.bg === activeTokens().backgroundSelected);
     expect(highlighted.length).toBeGreaterThan(10);
-    expect(lines[0][0]?.bg).not.toBe('#31506f');
-    expect(lines[0][79]?.bg).not.toBe('#31506f');
+    expect(lines[0][0]?.bg).not.toBe(activeTokens().backgroundSelected);
+    expect(lines[0][79]?.bg).not.toBe(activeTokens().backgroundSelected);
   });
 
   test('focused line respects terminal width', () => {

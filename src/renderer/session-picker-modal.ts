@@ -18,7 +18,7 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { ModalFactory } from './modal-factory.ts';
-import { UI_TONES } from './ui-primitives.ts';
+import { activeTokens, activeUiTones } from './theme.ts';
 import type { SessionPickerModal } from '../input/session-picker-modal.ts';
 import { formatTimestamp } from './modal-utils.ts';
 import { fitDisplay } from '../utils/terminal-width.ts';
@@ -262,12 +262,12 @@ export function renderSessionPickerModal(
     sections.push({
       type: 'text',
       content: 'No saved sessions.',
-      style: { fg: '244', dim: true },
+      style: { fg: activeTokens().textFaint },
     });
     sections.push({
       type: 'text',
       content: 'Use /save [name] to save the current session.',
-      style: { fg: '240', dim: true },
+      style: { fg: activeTokens().textFaint },
     });
   } else {
     // Proportional column widths that adapt to the modal's content width:
@@ -284,7 +284,7 @@ export function renderSessionPickerModal(
     sections.push({
       type: 'text',
       content: `${nameHdr}  ${tsHdr}  ${msgHdr}`,
-      style: { fg: '240', dim: true },
+      style: { fg: activeTokens().textFaint },
     });
     sections.push({ type: 'separator' });
 
@@ -307,7 +307,7 @@ export function renderSessionPickerModal(
       sections.push({
         type: 'text',
         content: `[${modal.scrollOffset + 1}-${Math.min(modal.sessions.length, modal.scrollOffset + visibleRows)} of ${modal.sessions.length}]`,
-        style: { fg: '244', dim: true },
+        style: { fg: activeTokens().textFaint },
       });
     }
   }
@@ -320,14 +320,14 @@ export function renderSessionPickerModal(
     sections.push({
       type: 'text',
       content: `Cross-surface sessions (${modal.crossSurfaceView.mode})`,
-      style: { fg: '240', dim: true, bold: true },
+      style: { fg: activeTokens().textFaint, bold: true },
     });
     const note = crossSurfaceNote(modal.crossSurfaceView, modal.crossSurfaceSessions.length);
     if (note) {
       sections.push({
         type: 'text',
         content: note,
-        style: { fg: modal.crossSurfaceView.offlineNote ? UI_TONES.state.warn : '244', dim: !modal.crossSurfaceView.offlineNote },
+        style: { fg: modal.crossSurfaceView.offlineNote ? activeUiTones().state.warn : activeTokens().textFaint },
       });
     }
     if (modal.crossSurfaceSessions.length > 0) {
@@ -341,7 +341,7 @@ export function renderSessionPickerModal(
         );
         // Reaped rows get their own tone (not plain dim-closed): the session
         // will auto-reopen on the next heartbeat, unlike a deliberate close.
-        const style = reaped ? { fg: UI_TONES.state.info } : closed ? { fg: '244', dim: true } : undefined;
+        const style = reaped ? { fg: activeUiTones().state.info } : closed ? { fg: activeTokens().textFaint } : undefined;
         return { label, style };
       });
       sections.push({ type: 'list', items: listItems });
@@ -349,7 +349,7 @@ export function renderSessionPickerModal(
         sections.push({
           type: 'text',
           content: `[showing ${MAX_CROSS_SURFACE_ROWS} of ${modal.crossSurfaceSessions.length}]`,
-          style: { fg: '244', dim: true },
+          style: { fg: activeTokens().textFaint },
         });
       }
       // W4 UX-lens: only ever rendered when a visible row actually carries
@@ -358,7 +358,7 @@ export function renderSessionPickerModal(
         sections.push({
           type: 'text',
           content: REAPED_BADGE_HINT,
-          style: { fg: UI_TONES.state.info, dim: true },
+          style: { fg: activeUiTones().state.info, dim: true },
         });
       }
     }
@@ -373,14 +373,14 @@ export function renderSessionPickerModal(
     sections.push({
       type: 'text',
       content: 'Daemon-hosted sessions',
-      style: { fg: '240', dim: true, bold: true },
+      style: { fg: activeTokens().textFaint, bold: true },
     });
     const note = hostedRosterNote(modal.hostedRoster);
     if (note) {
       sections.push({
         type: 'text',
         content: note,
-        style: { fg: modal.hostedRoster.note ? UI_TONES.state.warn : '244', dim: !modal.hostedRoster.note },
+        style: { fg: modal.hostedRoster.note ? activeUiTones().state.warn : activeTokens().textFaint },
       });
     }
     if (modal.hostedRoster.sessions.length > 0) {
@@ -392,21 +392,21 @@ export function renderSessionPickerModal(
           // A terminated hosted session is kept with its reason until retention
           // retires it; dimming it keeps it readable without looking live.
           style: record.status === 'terminated'
-            ? { fg: '244', dim: true }
-            : record.status === 'running' ? { fg: UI_TONES.state.good } : undefined,
+            ? { fg: activeTokens().textFaint }
+            : record.status === 'running' ? { fg: activeUiTones().state.good } : undefined,
         })),
       });
       if (modal.hostedRoster.sessions.length > MAX_HOSTED_ROWS) {
         sections.push({
           type: 'text',
           content: `[showing ${MAX_HOSTED_ROWS} of ${modal.hostedRoster.sessions.length}]`,
-          style: { fg: '244', dim: true },
+          style: { fg: activeTokens().textFaint },
         });
       }
       sections.push({
         type: 'text',
         content: 'Join one with /hosted attach <id>',
-        style: { fg: '244', dim: true },
+        style: { fg: activeTokens().textFaint },
       });
     }
   }
@@ -417,7 +417,7 @@ export function renderSessionPickerModal(
     sections.push({
       type: 'text',
       content: modal.statusMessage,
-      style: { fg: modal.deleteConfirmationTarget ? '#f59e0b' : '#00ffcc' },
+      style: { fg: modal.deleteConfirmationTarget ? activeTokens().warning : activeTokens().accent },
     });
   }
 
@@ -425,7 +425,7 @@ export function renderSessionPickerModal(
     sections.push({
       type: 'text',
       content: `Deletion is armed for ${modal.deleteConfirmationTarget}. Move selection or press Esc to cancel.`,
-      style: { fg: '244', dim: true },
+      style: { fg: activeTokens().textFaint },
     });
   }
 

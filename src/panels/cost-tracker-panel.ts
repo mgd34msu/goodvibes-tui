@@ -2,6 +2,7 @@
 // CostTrackerPanel, per-session / per-agent / per-plan cost estimates
 // ---------------------------------------------------------------------------
 
+import { activeTokens } from '../renderer/theme.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
@@ -82,12 +83,15 @@ function buildSparkline(history: number[]): string {
 // Colour palette
 // ---------------------------------------------------------------------------
 
-const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  cost:      '#ffdd44',
-  model:     '#88aaff',
-  running:   '#88aaff',
-  separator: '#333333',
-  bg:        '',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, () => {
+  const p = activeTokens();
+  return {
+    cost:      p.warning,
+    model:     p.info,
+    running:   p.info,
+    separator: p.borderSubtle,
+    bg:        '',
+  };
 });
 
 // ---------------------------------------------------------------------------

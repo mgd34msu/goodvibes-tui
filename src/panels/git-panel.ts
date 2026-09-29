@@ -4,7 +4,7 @@ import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { UI_TONES, DIFF_TONES } from '../renderer/ui-primitives.ts';
+import { activeTokens, activeDiffTones, activeUiTones } from '../renderer/theme.ts';
 import {
   buildEmptyState,
   buildKeyboardHints,
@@ -68,20 +68,20 @@ type GitConfirmSubject =
 const MIN_VISIBLE_DIFF_LINES = 5;
 
 // Colors
-
-const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  branch: '#00d7ff',
-  sectionHeader: '244',
-  commit: '250',
-  commitHash: '238',
-  commitAuthor: '244',
-  selected: '#1c1c1c',
-  selectedFg: '#ffffff',
-  diffMeta: DIFF_TONES.hunk, // shared diff-hunk token, was a local literal
-  diffNeutral: '250',
-  // Reuses the existing workflow accent token rather than adding a new hex
-  // literal (architecture gate ratchets the raw-hex-literal count).
-  sessionChanged: UI_TONES.accent.workflow,
+const C = extendPalette(DEFAULT_PANEL_PALETTE, () => {
+  const p = activeTokens();
+  return {
+    branch: p.primary,
+    sectionHeader: p.textMuted,
+    commit: p.text,
+    commitHash: p.textFaint,
+    commitAuthor: p.textMuted,
+    selected: p.backgroundSelected,
+    selectedFg: p.selectedListItemText,
+    diffMeta: activeDiffTones().hunk, // shared diff-hunk token
+    diffNeutral: p.text,
+    sessionChanged: activeUiTones().accent.workflow,
+  };
 });
 
 // GitPanel
@@ -648,7 +648,7 @@ export class GitPanel extends BasePanel {
           rows.push(this.renderCommitRow(item.entry, selected, width));
           break;
         case 'empty': {
-          rows.push(buildStyledPanelLine(width, [{ text: item.label, fg: C.sectionHeader, dim: true }]));
+          rows.push(buildStyledPanelLine(width, [{ text: item.label, fg: C.dim }]));
           break;
         }
       }

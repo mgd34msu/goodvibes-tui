@@ -93,7 +93,7 @@ describe('chrome palette in-place rebuild', () => {
   });
 
   test('extendPalette-derived palette tracks the base flip; extras stay put', () => {
-    const C = extendPalette(DEFAULT_PANEL_PALETTE, { custom: '#123456' });
+    const C = extendPalette(DEFAULT_PANEL_PALETTE, () => ({ custom: '#123456' }));
     const darkInfo = C.info;
     setActiveThemeMode('light');
     // Base role re-merged from the (now-light) base…
@@ -121,17 +121,17 @@ function fgSet(lines: Line[]): Set<string> {
 describe('transcript renders in the active mode', () => {
   const MD = '# Heading One\n\nA `code` span and a [link](https://example.com).';
 
-  test('dark uses the historical heading cyan (#00ffff)', () => {
+  test('dark uses the dark heading token', () => {
     const fgs = fgSet(renderMarkdown(MD, 80));
-    expect(fgs.has('#00ffff')).toBe(true);
-    expect(fgs.has('#0077aa')).toBe(false);
+    expect(fgs.has(resolveTheme('dark').heading1)).toBe(true);
+    expect(fgs.has(resolveTheme('light').heading1)).toBe(false);
   });
 
-  test('light uses the reviewed light heading teal (#0077aa), never the dark cyan', () => {
+  test('light uses the light heading token, never the dark one', () => {
     setActiveThemeMode('light');
     const fgs = fgSet(renderMarkdown(MD, 80));
-    expect(fgs.has('#0077aa')).toBe(true);   // LIGHT.heading1
-    expect(fgs.has('#00ffff')).toBe(false);  // no dark heading colour leaks
+    expect(fgs.has(resolveTheme('light').heading1)).toBe(true);
+    expect(fgs.has(resolveTheme('dark').heading1)).toBe(false); // no dark heading colour leaks
     // Inline code + link also swap to their light tokens.
     expect(fgs.has(resolveTheme('light').inlineCodeFg)).toBe(true);
     expect(fgs.has(resolveTheme('light').link)).toBe(true);

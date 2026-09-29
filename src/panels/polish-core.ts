@@ -65,27 +65,29 @@ registerThemeRefresh(() => Object.assign(DEFAULT_PANEL_PALETTE as Required<Panel
 /**
  * Extend the base panel palette with domain-specific colors.
  *
- * Convention: raw hex colors may only live inside a palette constant declared
- * at the top of a panel file, not inline in render calls.
+ * `extras` is a builder that reads theme tokens (activeTokens() /
+ * activeUiTones()); it runs now and again on every theme or mode change, so
+ * the domain colors follow the active theme. Raw hex literals do not belong
+ * in extras: map each domain color onto a theme token.
  *
  * @example
  * ```ts
- * const C = extendPalette(DEFAULT_PANEL_PALETTE, {
- *   decision: '#38bdf8',
- *   incident: '#ef4444',
+ * const C = extendPalette(DEFAULT_PANEL_PALETTE, () => {
+ *   const p = activeTokens();
+ *   return { decision: p.info, incident: p.error };
  * });
  * ```
  */
 export function extendPalette<T extends Record<string, string>>(
   base: typeof DEFAULT_PANEL_PALETTE,
-  extras: T,
+  extras: () => T,
 ): typeof DEFAULT_PANEL_PALETTE & T {
-  const merged = { ...base, ...extras } as typeof DEFAULT_PANEL_PALETTE & T;
+  const merged = { ...base, ...extras() } as typeof DEFAULT_PANEL_PALETTE & T;
   // Self-register an in-place rebuild so every extendPalette-derived panel
-  // palette (cost/token/git/skills/diff/wrfc) tracks the active mode with zero
-  // per-panel churn. Runs AFTER the base refresher (registered at module eval,
-  // before any panel calls this), so `base` already carries the new-mode values.
-  registerThemeRefresh(() => Object.assign(merged as Record<string, string>, base, extras));
+  // palette tracks the active theme with zero per-panel churn. Runs AFTER the
+  // base refresher (registered at module eval, before any panel calls this),
+  // so `base` already carries the new values when the extras are rebuilt.
+  registerThemeRefresh(() => Object.assign(merged as Record<string, string>, base, extras()));
   return merged;
 }
 

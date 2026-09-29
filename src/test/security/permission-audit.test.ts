@@ -9,6 +9,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { activeTokens } from '../../renderer/theme.ts';
 import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
 import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -379,22 +380,22 @@ describe('Path traversal protection via resolveAndValidatePath', () => {
 describe('PermissionPromptUI: renders correctly per category', () => {
   const WIDTH = 80;
 
-  test('write category: label is WRITE, color is yellow (220)', () => {
+  test('write category: label is WRITE, color is the theme warning token', () => {
     const { label, color } = PermissionPromptUI.getCategoryLabel('write');
     expect(label).toBe('WRITE');
-    expect(color).toBe('220');
+    expect(color).toBe(activeTokens().warning);
   });
 
-  test('execute category: label is EXECUTE, color is red (196)', () => {
+  test('execute category: label is EXECUTE, color is the theme error token', () => {
     const { label, color } = PermissionPromptUI.getCategoryLabel('execute');
     expect(label).toBe('EXECUTE');
-    expect(color).toBe('196');
+    expect(color).toBe(activeTokens().error);
   });
 
-  test('delegate category: label is DELEGATE, color is orange (208)', () => {
+  test('delegate category: label is DELEGATE, color is the theme blocked token', () => {
     const { label, color } = PermissionPromptUI.getCategoryLabel('delegate');
     expect(label).toBe('DELEGATE');
-    expect(color).toBe('208');
+    expect(color).toBe(activeTokens().blocked);
   });
 
   test('read category: falls through to default PERMISSION label', () => {

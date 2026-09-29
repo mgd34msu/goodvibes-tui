@@ -1,3 +1,4 @@
+import { activeTokens } from '../renderer/theme.ts';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { copyToClipboard, pasteFromClipboard, pasteImageFromClipboard } from '../utils/clipboard.ts';
 import type { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
@@ -299,7 +300,7 @@ export function handleBlockCopy(
   const lineIndex = getAnchorLine();
   const nearest = conversationManager.findNearestBlock(lineIndex);
   if (!nearest) {
-    conversationManager.log('[Ctrl+Y: No block found nearby]', { fg: '240' });
+    conversationManager.log('[Ctrl+Y: No block found nearby]', { fg: activeTokens().textFaint });
     requestRender();
     return;
   }
@@ -310,7 +311,7 @@ export function handleBlockCopy(
   // copying content the user just had search reveal is a deliberate choice
   // to keep it visible, not an accident of typing a query.
   conversationManager.searchExpansion.noteUserTouch(nearest.collapseKey);
-  conversationManager.log(`[Copied ${describeBlockForReceipt(nearest)}]`, { fg: '#22c55e' });
+  conversationManager.log(`[Copied ${describeBlockForReceipt(nearest)}]`, { fg: activeTokens().success });
   requestRender();
   setTimeout(() => requestRender(), 2005);
 }
@@ -325,7 +326,7 @@ export function handleBookmark(
   const lineIndex = getAnchorLine();
   const nearest = conversationManager.findNearestBlock(lineIndex);
   if (!nearest) {
-    conversationManager.log('[Ctrl+B: No block found nearby]', { fg: '240' });
+    conversationManager.log('[Ctrl+B: No block found nearby]', { fg: activeTokens().textFaint });
     requestRender();
     return;
   }
@@ -337,7 +338,7 @@ export function handleBookmark(
   const msg = added
     ? `[Bookmarked: ${target}]`
     : `[Bookmark removed: ${target}]`;
-  conversationManager.log(msg, { fg: added ? '#22c55e' : '244' });
+  conversationManager.log(msg, { fg: added ? activeTokens().success : activeTokens().textMuted });
   requestRender();
 }
 
@@ -351,7 +352,7 @@ export function handleBlockSave(
   const lineIndex = getAnchorLine();
   const nearest = conversationManager.findNearestBlock(lineIndex);
   if (!nearest) {
-    conversationManager.log('[Ctrl+S: No block found nearby]', { fg: '240' });
+    conversationManager.log('[Ctrl+S: No block found nearby]', { fg: activeTokens().textFaint });
     requestRender();
     return;
   }
@@ -362,10 +363,10 @@ export function handleBlockSave(
     const filePath = bookmarkManager.saveToFile(nearest.rawContent, nearest.type);
     const homePath = process.env.HOME || process.env.USERPROFILE || '';
     const displayPath = homePath ? filePath.replace(homePath, '~') : filePath;
-    conversationManager.log(`[Saved ${target} to: ${displayPath}]`, { fg: '#22c55e' });
+    conversationManager.log(`[Saved ${target} to: ${displayPath}]`, { fg: activeTokens().success });
   } catch (err) {
     const msg = summarizeError(err);
-    conversationManager.log(`[Save failed (${target}): ${msg}]`, { fg: '#ef4444' });
+    conversationManager.log(`[Save failed (${target}): ${msg}]`, { fg: activeTokens().error });
   }
   requestRender();
 }
@@ -382,7 +383,7 @@ export function handleBlockToggle(
   const wasCollapsed = conversationManager.isCollapsed(nearest.blockIndex);
   const blockIdx = conversationManager.toggleCollapseAtLine(lineIndex);
   if (blockIdx >= 0) {
-    conversationManager.log(`[${wasCollapsed ? 'Expanded' : 'Collapsed'} ${describeBlockForReceipt(nearest)}]`, { fg: '244' });
+    conversationManager.log(`[${wasCollapsed ? 'Expanded' : 'Collapsed'} ${describeBlockForReceipt(nearest)}]`, { fg: activeTokens().textMuted });
     requestRender();
   }
 }
@@ -415,14 +416,14 @@ export function handleDiffApply(
   }).then(({ approved }) => {
     if (!approved) return;
     if (!projectRoot) {
-      conversationManager.log('[Diff apply failed: missing working directory]', { fg: '#ef4444' });
+      conversationManager.log('[Diff apply failed: missing working directory]', { fg: activeTokens().error });
       return;
     }
     let resolvedPath: string;
     try {
       resolvedPath = resolveAndValidatePath(diff.filePath!, projectRoot);
     } catch (err) {
-      conversationManager.log(`[Diff apply failed: ${err instanceof Error ? err.message : err}]`, { fg: '#ef4444' });
+      conversationManager.log(`[Diff apply failed: ${err instanceof Error ? err.message : err}]`, { fg: activeTokens().error });
       return;
     }
     try {
@@ -430,22 +431,22 @@ export function handleDiffApply(
       if (diff.original && content.includes(diff.original)) {
         const occurrenceCount = content.split(diff.original).length - 1;
         if (occurrenceCount > 1) {
-          conversationManager.log(`[Diff apply failed: pattern found ${occurrenceCount} times in ${diff.filePath} - ambiguous]`, { fg: '#ef4444' });
+          conversationManager.log(`[Diff apply failed: pattern found ${occurrenceCount} times in ${diff.filePath} - ambiguous]`, { fg: activeTokens().error });
         } else {
           const newContent = content.replace(diff.original, diff.updated);
           writeFileSync(resolvedPath, newContent, 'utf-8');
-          conversationManager.log(`[Applied diff to ${diff.filePath}]`, { fg: '#22c55e' });
+          conversationManager.log(`[Applied diff to ${diff.filePath}]`, { fg: activeTokens().success });
         }
       } else {
-        conversationManager.log(`[Diff apply failed: original text not found in ${diff.filePath}]`, { fg: '#ef4444' });
+        conversationManager.log(`[Diff apply failed: original text not found in ${diff.filePath}]`, { fg: activeTokens().error });
       }
     } catch (err) {
       const msg = summarizeError(err);
-      conversationManager.log(`[Diff apply error: ${msg}]`, { fg: '#ef4444' });
+      conversationManager.log(`[Diff apply error: ${msg}]`, { fg: activeTokens().error });
     }
     requestRender();
   }).catch((err) => {
-    conversationManager.log(`[Diff apply error: ${summarizeError(err)}]`, { fg: '#ef4444' });
+    conversationManager.log(`[Diff apply error: ${summarizeError(err)}]`, { fg: activeTokens().error });
     requestRender();
   });
   return true;

@@ -1,14 +1,14 @@
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { renderMarkdownTracked } from '../renderer/markdown.ts';
 import { isDiffContent, renderExpandedToolResultLines } from '../renderer/tool-result-expanded-lines.ts';
-import { activeTheme, activeUiTones } from '../renderer/theme.ts';
+import { activeTheme, activeTokens, activeUiTones } from '../renderer/theme.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { summarizeToolResult } from '../renderer/tool-result-summary.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
 import { renderSystemMessage } from '../renderer/system-message.ts';
 import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types';
-import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
+import { getSplashLines, SPLASH_GRADIENT, type SplashOptions } from '../utils/splash-lines.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { BORDERS, LAYOUT, TOOL_STATUS } from '../renderer/layout.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -85,7 +85,7 @@ export function renderConversationUserMessage(
   const T = activeTheme();
   const displayText = extractUserDisplayText(message.content);
   if (message.cancelled) {
-    context.history.addLines(UIFactory.createMessageBar(width, displayText, T.errorBarBg, '196', ' x ', true));
+    context.history.addLines(UIFactory.createMessageBar(width, displayText, T.errorBarBg, activeTokens().error, ' x ', true));
     return;
   }
   // Compaction-continuation handoff: a user-ROLE message the compactor
@@ -118,7 +118,7 @@ export function renderConversationAssistantMessage(
   if (isHead) {
     const assistantHeaderDetails = [];
     if (message.model) {
-      assistantHeaderDetails.push({ text: ` ${message.model}${message.provider ? ` (${message.provider})` : ''} `, fg: T.modelNameDim, dim: true });
+      assistantHeaderDetails.push({ text: ` ${message.model}${message.provider ? ` (${message.provider})` : ''} `, fg: activeTokens().textFaint });
     }
     // The count spans the whole run, not just this message, that is the point
     // of merging. `tools:1` repeated over five headers becomes one `5 tools`.
@@ -151,7 +151,7 @@ export function renderConversationAssistantMessage(
       assistantHeaderDetails.push({ text: ` ${GLYPHS.status.active} reasoning `, fg: T.reasoningAccent, dim: true });
     }
     if (turnCollapsed && toolCount > 0) {
-      assistantHeaderDetails.push({ text: ` ${GLYPHS.navigation.collapsed} hidden `, fg: '244', dim: true });
+      assistantHeaderDetails.push({ text: ` ${GLYPHS.navigation.collapsed} hidden `, fg: activeTokens().textFaint });
     }
     // An empty run, no model, no tools, no reasoning, emits no header rather
     // than a bare `● assistant` with nothing under it.
@@ -163,7 +163,7 @@ export function renderConversationAssistantMessage(
         markerFg: T.assistantHeader,
         label: 'assistant',
         labelFg: T.assistantHeader,
-        detailFg: '244',
+        detailFg: activeTokens().textMuted,
       }, assistantHeaderDetails));
 
       // Turns are collapsible as a unit and default to EXPANDED, a turn
@@ -226,9 +226,9 @@ export function renderConversationAssistantMessage(
         markerFg: T.reasoningAccent,
         label: 'thinking',
         labelFg: T.reasoningAccent,
-        detailFg: '244',
+        detailFg: activeTokens().textMuted,
       }, [
-        { text: ` ${GLYPHS.navigation.collapsed} ${thinkingLineCount} line${thinkingLineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
+        { text: ` ${GLYPHS.navigation.collapsed} ${thinkingLineCount} line${thinkingLineCount === 1 ? '' : 's'} `, fg: activeTokens().textFaint },
       ], ''));
     } else {
       const thinkingLines = renderThinkingBlock(message.reasoningContent, width);
@@ -322,7 +322,7 @@ function renderAssistantProse(
     if (showAllLineNumbers) {
       const numbered = tracked.map((line, i) => {
         const label = String(i + 1).padStart(numWidth) + ' │ ';
-        const gutterCells = UIFactory.stringToLine(label, gutterW, { fg: '238', dim: true });
+        const gutterCells = UIFactory.stringToLine(label, gutterW, { fg: activeTokens().textFaint });
         const fullLine = createEmptyLine(width);
         for (let ci = 0; ci < gutterW && ci < gutterCells.length; ci++) {
           fullLine[ci] = gutterCells[ci];
@@ -412,16 +412,15 @@ export function renderConversationToolCallNode(
     const noteIndent = treeIndentCols(node.depth + 1, width);
     lines.push(renderConversationEventLine(width, {
       marker: GLYPHS.navigation.collapsed,
-      markerFg: '244',
+      markerFg: activeTokens().textMuted,
       label: '',
-      labelFg: '244',
-      detailFg: '244',
+      labelFg: activeTokens().textMuted,
+      detailFg: activeTokens().textMuted,
     }, [{
       text: node.truncated === 'depth'
         ? ` nested activity continues below depth ${MAX_NEST_DEPTH} `
         : ' nested activity repeats an agent already shown above ',
-      fg: '244',
-      dim: true,
+      fg: activeTokens().textFaint,
     }], noteIndent));
   }
 
@@ -529,7 +528,7 @@ export function renderConversationToolMessage(
     ? []
     : (message.toolName
       ? [{ text: ` ${message.toolName} `, fg: T.toolNameFg }]
-      : [{ text: ` ${summarizeCallId(message.callId || 'standalone')} `, fg: '244' as const, dim: true }]);
+      : [{ text: ` ${summarizeCallId(message.callId || 'standalone')} `, fg: activeTokens().textFaint }]);
 
   // A FOLDED result is exactly one row: this header, with its preview riding on
   // the same line right after the `▸ N lines` badge (see
@@ -540,11 +539,11 @@ export function renderConversationToolMessage(
     markerFg: isCancelled ? warnTone : (blockType === 'diff' ? T.diffAccent : T.toolAccent),
     label,
     labelFg: isCancelled ? warnTone : (blockType === 'diff' ? T.diffAccent : T.toolAccent),
-    detailFg: '244',
+    detailFg: activeTokens().textMuted,
   };
   const headerDetails = [
     ...nameSegments,
-    { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
+    { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: activeTokens().textFaint },
   ];
   const headerLine = isCollapsed
     ? renderConversationFoldedRow(width, headerTone, headerDetails, resultSummary ?? contentLines[0] ?? '', indent)
@@ -681,9 +680,9 @@ export function addConversationSplashScreen(
   width: number,
 ): void {
   const splashStrings = getSplashLines(width, context.splashOptions);
-  const cyan = '#00ffff';
-  const purple = '#d000ff';
-  const grey = '244';
+  // The splash gradient is protected: it never follows the theme.
+  const { start: cyan, end: purple } = SPLASH_GRADIENT;
+  const versionFg = activeTokens().textFaint;
 
   splashStrings.forEach((str, y) => {
     const line = UIFactory.stringToLine(str, width);
@@ -695,8 +694,7 @@ export function addConversationSplashScreen(
       const cell = line[x];
       if (cell.char === ' ' && (x < startX || x >= endX)) continue;
       if (isVersion) {
-        cell.fg = grey;
-        cell.dim = true;
+        cell.fg = versionFg;
       } else {
         const factor = (x - startX) / (endX - startX || 1);
         cell.fg = interpolateColor(cyan, purple, Math.max(0, Math.min(1, factor)));

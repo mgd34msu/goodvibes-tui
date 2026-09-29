@@ -86,7 +86,8 @@ export function renderHeaderLine(
   const t = activeUiTones();
   const CYAN = t.accent.brand;
   const GREY = t.chrome.faint;
-  const TITLE_COLOR = t.chrome.label;
+  // The title used chrome.label under SGR dim; the faint token replaces that pairing.
+  const TITLE_COLOR = t.chrome.faint;
   const brand = ` GoodVibes `;
   const ver = `v${version} `;
   const stats = ` ${model} `;
@@ -98,7 +99,7 @@ export function renderHeaderLine(
   const line = createEmptyLine(width);
   let curX = 0;
   for (const char of brand) { line[curX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
-  for (const char of ver) { line[curX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
+  for (const char of ver) { line[curX++] = { char, fg: GREY, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }; }
   // Optional conversation title, shown after brand/ver, truncated to fit
   if (title) {
     const titleStr = `│ ${title} `;
@@ -119,7 +120,7 @@ export function renderHeaderLine(
       }
       displayTitle = truncated;
     }
-    for (const char of displayTitle) { if (curX < width) line[curX++] = { char, fg: TITLE_COLOR, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
+    for (const char of displayTitle) { if (curX < width) line[curX++] = { char, fg: TITLE_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }; }
   }
   // Build git info segment
   let gitStr = '';
@@ -132,9 +133,9 @@ export function renderHeaderLine(
   }
   const rightSideW = getDisplayWidth(stats + prov + noteStr) + getDisplayWidth(gitStr);
   let rightX = width - rightSideW;
-  for (const char of gitStr) { if (rightX >= 0 && rightX < width) line[rightX++] = { char, fg: gitFg, bg: '', bold: false, dim: !gitInfo?.dirty && !(gitInfo?.ahead || gitInfo?.behind), underline: false, italic: false, strikethrough: false }; }
+  for (const char of gitStr) { if (rightX >= 0 && rightX < width) line[rightX++] = { char, fg: gitFg, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }; }
   for (const char of stats) { if (rightX < width) line[rightX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
-  for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
+  for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }; }
   // The marker reads as a warning, not as chrome: serving has left the
   // selection the user made and that is worth noticing.
   for (const char of noteStr) { if (rightX >= 0 && rightX < width) line[rightX++] = { char, fg: t.chrome.warn, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }; }

@@ -94,6 +94,5 @@ export function renderSystemMessage(
   return renderConversationNotice(content, width, {
     accent,
     text: textColor,
-    dim: msgType === 'info',
   }, border.char);
 }

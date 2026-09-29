@@ -2,11 +2,10 @@
  * hex-literal-rule.ts, architecture-gate rule.
  *
  * Bans raw `#RGB`, `#RRGGBB`, and `#RRGGBBAA` colour literals in
- * src/panels/**\/*.ts and src/renderer/**\/*.ts. UI_TONES
- * (src/renderer/ui-primitives.ts) and the
- * mode-resolved theme layer (src/renderer/theme.ts) are the single colour
- * token source; syntax-highlighter.ts owns its own colour table for syntax
- * themes. All three are exempt from the ban.
+ * src/panels/**\/*.ts and src/renderer/**\/*.ts. Theme data lives in the SDK
+ * (bundled themes, the system theme, derived fallbacks); the renderer reads it
+ * through src/renderer/theme.ts, which holds no colour literals itself, so no
+ * file under the ban is exempt.
  *
  * The ~790 pre-existing literals audited across the panel/renderer layers
  * (2026-07-01 panel audit) cannot be migrated in one work order, so this is a
@@ -21,12 +20,12 @@
 export const HEX_LITERAL_RE =
   /#[0-9a-fA-F]{8}(?![0-9a-fA-F])|#[0-9a-fA-F]{6}(?![0-9a-fA-F])|#[0-9a-fA-F]{3}(?![0-9a-fA-F])/g;
 
-/** Files that own their own colour source and are exempt from the ban. */
-export const HEX_LITERAL_BAN_EXEMPT: ReadonlySet<string> = new Set([
-  'src/renderer/ui-primitives.ts',
-  'src/renderer/theme.ts',
-  'src/renderer/syntax-highlighter.ts',
-]);
+/**
+ * Files exempt from the ban. Empty: the former token-source files
+ * (ui-primitives.ts, theme.ts, syntax-highlighter.ts) moved their colours
+ * into the SDK theme engine and are held to zero like everything else.
+ */
+export const HEX_LITERAL_BAN_EXEMPT: ReadonlySet<string> = new Set<string>();
 
 /** Count raw 3-, 6-, or 8-digit hex colour literals in a file's source text. */
 export function countHexLiterals(text: string): number {

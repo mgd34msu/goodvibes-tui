@@ -41,8 +41,8 @@
  *   bytes written and the filtering are exactly as described above.
  */
 
-import { setActiveThemeMode, type ThemeMode } from './theme.ts';
-import { resolveConfiguredThemeMode } from './theme-mode-config.ts';
+import { refreshForTerminalPalette, setActiveThemeMode, setActiveThemeName, type ThemeMode } from './theme.ts';
+import { resolveConfiguredThemeMode, resolveConfiguredThemeName } from './theme-mode-config.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
   PALETTE_QUERIES,
@@ -341,6 +341,9 @@ export interface InstallThemeProbeOptions {
  */
 export function installBackgroundThemeProbe(options: InstallThemeProbeOptions): ThemeProbeHandle {
   const pref = resolveConfiguredThemeMode(options.configManager);
+  // The configured theme applies before the first paint; the mode below
+  // (forced, or dark until the probe answers) completes the resolution.
+  setActiveThemeName(resolveConfiguredThemeName(options.configManager));
   const palette = options.probePalette === true && options.isTTY ? createPaletteProbe(options) : null;
 
   if (pref === 'dark' || pref === 'light') {
@@ -402,6 +405,8 @@ function createPaletteProbe(options: InstallThemeProbeOptions): TerminalPaletteP
     timeoutMs: options.paletteTimeoutMs,
     onResolve: (result) => {
       setTerminalPalette(result.palette);
+      // The system theme is generated from this palette: re-resolve and repaint.
+      if (refreshForTerminalPalette()) options.requestRepaint();
       options.onPaletteResolve?.(result);
     },
   });

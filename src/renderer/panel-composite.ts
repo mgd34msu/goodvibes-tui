@@ -5,6 +5,7 @@ import type { PanelManager } from '../panels/panel-manager.ts';
 import type { PanelCompositeData } from './compositor.ts';
 import { createSplitPaneLayout } from './layout-engine.ts';
 import { renderPanelWorkspaceBar } from './panel-workspace-bar.ts';
+import { activeTokens } from './theme.ts';
 
 /**
  * Per-panel render cache for dirty-flag skipping.
@@ -31,6 +32,8 @@ interface PanelRenderCache {
   lines: Line[];
   width: number;
   height: number;
+  /** The theme token table the lines were painted with (identity). */
+  tokens: object;
 }
 const panelRenderCache = new WeakMap<Panel, PanelRenderCache>();
 /**
@@ -62,7 +65,7 @@ function getRenderGenState(panel: Panel): { gen: number } {
 /** Render a panel, skipping if nothing changed. Returns cached lines on a skip. */
 export function renderPanel(panel: Panel, width: number, height: number): Line[] {
   const cached = panelRenderCache.get(panel);
-  if (cached && !panel.needsRender && cached.width === width && cached.height === height) {
+  if (cached && !panel.needsRender && cached.width === width && cached.height === height && cached.tokens === activeTokens()) {
     return cached.lines;
   }
   // Snapshot render-generation counter BEFORE calling render(). If an event
@@ -79,7 +82,7 @@ export function renderPanel(panel: Panel, width: number, height: number): Line[]
   }
   // If gen changed, needsRender is already true (invalidate() set it); do not
   // call markRendered(), the next frame will pick it up.
-  panelRenderCache.set(panel, { lines, width, height });
+  panelRenderCache.set(panel, { lines, width, height, tokens: activeTokens() });
   return lines;
 }
 

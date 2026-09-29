@@ -9,6 +9,7 @@ import type {
   PolicyPreflightReview,
   PolicySimulationSummary,
 } from '@/runtime/index.ts';
+import { registerThemeRefresh } from '../../renderer/theme.ts';
 import type { ModalSectionStyle } from '../../renderer/modal-factory.ts';
 import type {
   ConfigModalActionContext,
@@ -49,7 +50,14 @@ export interface PolicyModalDeps {
 const BAD: ModalSectionStyle = { fg: MODAL_TONES.bad };
 const WARN: ModalSectionStyle = { fg: MODAL_TONES.warn };
 const GOOD: ModalSectionStyle = { fg: MODAL_TONES.good };
-const DIM: ModalSectionStyle = { dim: true };
+// Rebuilt in place on theme change (MODAL_TONES refreshes first: it registers at its own module eval).
+registerThemeRefresh(() => {
+  Object.assign(BAD, { fg: MODAL_TONES.bad });
+  Object.assign(WARN, { fg: MODAL_TONES.warn });
+  Object.assign(GOOD, { fg: MODAL_TONES.good });
+  Object.assign(DIM, { fg: MODAL_TONES.dim });
+});
+const DIM: ModalSectionStyle = { fg: MODAL_TONES.dim };
 const MAX_ROWS = 5;
 
 function fmtTime(value: string | undefined): string {

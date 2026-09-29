@@ -18,7 +18,7 @@ import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { BasePanel } from './base-panel.ts';
-import { DIFF_TONES, UI_TONES } from '../renderer/ui-primitives.ts';
+import { activeDiffTones, activeUiTones } from '../renderer/theme.ts';
 import {
   buildEmptyState,
   buildPanelWorkspace,
@@ -39,11 +39,10 @@ import {
   type HunkComment,
 } from './diff-review-model.ts';
 
-const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, {
-  addition: DIFF_TONES.add,
-  deletion: DIFF_TONES.del,
-  hunk: DIFF_TONES.hunk,
-} as const);
+const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, () => {
+  const diff = activeDiffTones();
+  return { addition: diff.add, deletion: diff.del, hunk: diff.hunk };
+});
 
 /** A comment attached to a hunk plus whether it has already been steered to the session. */
 interface CommentState {
@@ -326,7 +325,7 @@ export class DiffReviewPanel extends BasePanel {
     return buildStyledPanelLine(width, [{
       text: truncateDisplay(`${isCursor ? '▸ ' : '  '}${label}`, width),
       fg: state?.submitted ? COLOR.addition : isCursor ? COLOR.value : COLOR.dim,
-      bg: isCursor ? UI_TONES.bg.selected : undefined,
+      bg: isCursor ? activeUiTones().bg.selected : undefined,
       bold: isCursor,
     }]);
   }

@@ -87,7 +87,6 @@ function renderFrozenTranscriptNotice(width: number): Line[] {
   return renderConversationNotice(FROZEN_TRANSCRIPT_NOTICE, width, {
     accent: palette.warn ?? DEFAULT_PANEL_PALETTE.warn,
     text: palette.dim,
-    dim: true,
   });
 }
 
@@ -338,7 +337,7 @@ export function renderFleetLedgerFallback(
   const notice = renderConversationNotice(
     'Read-only. Full transcript unavailable for this agent; showing its activity log instead.',
     width,
-    { accent: palette.warn, text: palette.dim, dim: true },
+    { accent: palette.warn, text: palette.dim },
   );
   const body = entries.length === 0
     ? [buildPanelLine(width, [[' (no activity recorded)', palette.dim]])]

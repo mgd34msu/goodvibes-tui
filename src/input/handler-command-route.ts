@@ -1,3 +1,4 @@
+import { activeTokens } from '../renderer/theme.ts';
 import { loadSkillByTrigger } from '@pellux/goodvibes-sdk/platform/tools';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CommandContext, CommandRegistry } from './command-registry.ts';
@@ -112,7 +113,7 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
             if (skillContent) {
               state.commandContext?.submitInput?.(skillContent);
             } else {
-              state.conversationManager?.log(`Unknown command: /${name}. Type /help for available commands.`, { fg: '#ef4444' });
+              state.conversationManager?.log(`Unknown command: /${name}. Type /help for available commands.`, { fg: activeTokens().error });
               state.requestRender();
             }
           }
@@ -122,7 +123,7 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
           // already guard their own internals: a handler that throws or
           // awaits a rejected promise must never become a silent unhandled
           // rejection, it renders the same way an unknown command does.
-          state.conversationManager?.log(`Command /${name} failed: ${summarizeError(err)}`, { fg: '#ef4444' });
+          state.conversationManager?.log(`Command /${name} failed: ${summarizeError(err)}`, { fg: activeTokens().error });
           state.requestRender();
         });
     } else {

@@ -7,6 +7,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { BasePanel } from '../../panels/base-panel.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 
 // ---------------------------------------------------------------------------
 // Test subclass, exposes protected methods as public for assertions
@@ -86,7 +87,7 @@ describe('BasePanel error surface (I2)', () => {
     panel.exposeSetError('err');
     const line = panel.exposeRenderErrorLine(80)!;
     const nonSpace = line.find((c) => c.char !== ' ')!;
-    expect(nonSpace.fg).toBe('#ef4444');
+    expect(nonSpace.fg).toBe(activeTokens().error);
     expect(nonSpace.bold).toBe(true);
   });
 });

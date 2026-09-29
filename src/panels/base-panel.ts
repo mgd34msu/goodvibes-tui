@@ -5,9 +5,7 @@ import type { ComponentHealthMonitor } from '@pellux/goodvibes-sdk/platform/runt
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { SPINNER_FRAMES } from '../renderer/ui-primitives.ts';
 import { fitDisplay } from '../utils/terminal-width.ts';
-
-/** Canonical error-surface foreground (bad/red), kept out of the render body. */
-const ERROR_FG = '#ef4444';
+import { activeTokens } from '../renderer/theme.ts';
 
 /**
  * Frame requester wired by main.ts to the render scheduler. Without it,
@@ -91,14 +89,14 @@ export abstract class BasePanel implements Panel {
    * Build a single error Line for display above the hints footer.
    * Returns null when there is no active error.
    *
-   * Color: bold red foreground (palette-consistent: #ef4444).
+   * Color: bold red foreground (theme error token).
    */
   protected renderErrorLine(width: number): Line | null {
     if (!this.lastError) return null;
     return UIFactory.stringToLine(
       fitDisplay(` ✕ ${this.lastError}`, width),
       width,
-      { fg: ERROR_FG, bold: true },
+      { fg: activeTokens().error, bold: true },
     );
   }
 
@@ -162,7 +160,7 @@ export abstract class BasePanel implements Panel {
     const idx = (frame || Math.floor(Date.now() / 100)) % SPINNER_FRAMES.length;
     const spinner = SPINNER_FRAMES[idx] ?? SPINNER_FRAMES[0]!;
     const text = ` ${spinner} ${this._loadingLabel}`;
-    return UIFactory.stringToLine(fitDisplay(text, width), width, { fg: '135', bold: true });
+    return UIFactory.stringToLine(fitDisplay(text, width), width, { fg: activeTokens().secondary, bold: true });
   }
 
   /**

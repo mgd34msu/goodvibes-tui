@@ -1,3 +1,5 @@
+import { DEFAULT_THEME_NAME } from '@pellux/goodvibes-sdk/platform/presentation';
+import { listThemeChoices } from '../../renderer/theme.ts';
 /**
  * daemon-owned-config-migration.test.ts
  *
@@ -19,6 +21,9 @@ import { join } from 'node:path';
 import { ConfigManager, daemonConfigPath } from '@pellux/goodvibes-sdk/platform/config';
 import { runDaemonConfigMigration } from '../../config/run-daemon-config-migration.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+
+// Any selectable theme other than the default: the enum rejects retired names such as 'dark'.
+const [NON_DEFAULT_THEME, OTHER_THEME] = listThemeChoices().map((c) => c.name).filter((n) => n !== DEFAULT_THEME_NAME) as [string, string];
 
 const roots: string[] = [];
 function home(): string {
@@ -52,7 +57,7 @@ describe('runDaemonConfigMigration', () => {
           defaultChatId: 'chat-9',
         },
       },
-      display: { theme: 'dark' },
+      display: { theme: NON_DEFAULT_THEME },
     });
 
     const first = runDaemonConfigMigration(h);
@@ -78,7 +83,7 @@ describe('runDaemonConfigMigration', () => {
       display?: { theme?: string };
     };
     expect(surface.surfaces?.telegram).toBeUndefined();
-    expect(surface.display?.theme).toBe('dark');
+    expect(surface.display?.theme).toBe(NON_DEFAULT_THEME);
 
     // Idempotent: a second call is a no-op (already migrated), same marker path.
     const second = runDaemonConfigMigration(h);
@@ -120,26 +125,26 @@ describe('runDaemonConfigMigration', () => {
     const h = home();
     writeTuiSettings(h, {
       surfaces: { telegram: { enabled: true } },
-      display: { theme: 'dark' },
+      display: { theme: NON_DEFAULT_THEME },
     });
     const result = runDaemonConfigMigration(h);
     expect(result!.migrated).toBe(true);
 
     const cm = new ConfigManager({ homeDir: h, workingDir: h, surfaceRoot: 'tui' });
-    expect(cm.get('display.theme')).toBe('dark');
+    expect(cm.get('display.theme')).toBe(NON_DEFAULT_THEME);
 
     const themeSource = cm.describeConfigKeySource('display.theme');
     expect(themeSource.tier).not.toBe('daemon');
     expect(themeSource.daemonOwned).toBe(false);
 
     // Setting it again writes back to the surface file, not the daemon store.
-    cm.set('display.theme', 'light');
+    cm.set('display.theme', OTHER_THEME);
     const surface = JSON.parse(readFileSync(tuiSettingsPath(h), 'utf-8')) as { display?: { theme?: string } };
-    expect(surface.display?.theme).toBe('light');
+    expect(surface.display?.theme).toBe(OTHER_THEME);
     const storePath = daemonConfigPath(h);
     if (existsSync(storePath)) {
       const store = JSON.parse(readFileSync(storePath, 'utf-8')) as { display?: { theme?: string } };
-      expect(store.display?.theme).not.toBe('light');
+      expect(store.display?.theme).not.toBe(OTHER_THEME);
     }
   });
 });

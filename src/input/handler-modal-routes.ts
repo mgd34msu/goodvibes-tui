@@ -4,6 +4,7 @@ import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { CommandContext } from './command-registry.ts';
 import type { ConfigModal } from './config-modal.ts';
 import { openTtsProviderPicker, openTtsVoicePicker } from './tts-settings-actions.ts';
+import { openThemePicker } from './theme-settings-actions.ts';
 import { isTextBackspace } from './delete-key-policy.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -263,7 +264,7 @@ type SettingsRouteState = {
     cancelEdit: () => void;
     pendingModelPickerTarget: import('./model-picker.ts').ModelPickerTarget | null;
     pendingProviderModelPickerTarget?: import('./model-picker.ts').ModelPickerTarget | null;
-    pendingSettingsPickerAction?: 'tts-provider' | 'tts-voice' | null;
+    pendingSettingsPickerAction?: 'tts-provider' | 'tts-voice' | 'theme' | null;
     resetSelected?: () => { key: string; value: unknown } | null;
     initiateResetCategory?: () => void;
     initiateResetAll?: () => void;
@@ -307,6 +308,10 @@ function consumeSettingsPickerRequest(state: SettingsRouteState): void {
     if (!state.commandContext) return;
     if (settingsAction === 'tts-provider') {
       openTtsProviderPicker(state.commandContext);
+      return;
+    }
+    if (settingsAction === 'theme') {
+      openThemePicker(state.commandContext);
       return;
     }
     void openTtsVoicePicker(state.commandContext).catch((error: unknown) => {

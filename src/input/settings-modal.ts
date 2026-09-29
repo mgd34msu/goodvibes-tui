@@ -156,7 +156,7 @@ export class SettingsModal {
   /** Set when the highlighted setting should open provider selection before model selection. */
   public pendingProviderModelPickerTarget: ModelPickerTarget | null = null;
   /** Set when a highlighted setting needs an external picker owned by the shell route. */
-  public pendingSettingsPickerAction: 'tts-provider' | 'tts-voice' | null = null;
+  public pendingSettingsPickerAction: 'tts-provider' | 'tts-voice' | 'theme' | null = null;
   /** Provider awaiting explicit logout confirmation, if any. */
   public subscriptionLogoutConfirmationTarget: string | null = null;
 

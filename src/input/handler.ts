@@ -421,6 +421,7 @@ export class InputHandler implements InputHandlerLike {
       allowSearch?: boolean;
       customActions?: Map<string, SelectionAction>;
       primaryVerbLabel?: string;
+      onHighlight?: (item: import('./selection-modal.ts').SelectionItem | null) => void;
     } | undefined,
     callback: SelectionModalCallback,
   ): void {

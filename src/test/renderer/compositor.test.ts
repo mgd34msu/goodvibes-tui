@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { Compositor } from '../../renderer/compositor.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 import { createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import type { Line, Cell } from '@pellux/goodvibes-sdk/platform/types';
 import type { CompositeRequest, PanelCompositeData, SelectionInfo } from '../../renderer/compositor.ts';
@@ -365,9 +366,9 @@ describe('Compositor: degenerate panelWidth >= width', () => {
     expect(() => {
       compositor.composite(makeBaseRequest({ panel, panelWidth: WIDTH - 2, selection }));
     }).not.toThrow();
-    // Selection at col 0 should be applied (bg = '4')
+    // Selection at col 0 should be applied (the theme's selection fill)
     const cell = cellAt(compositor, 0, 2);
-    expect(cell?.bg).toBe('4');
+    expect(cell?.bg).toBe(activeTokens().backgroundSelected);
   });
 });
 

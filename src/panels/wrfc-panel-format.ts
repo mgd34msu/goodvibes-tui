@@ -1,6 +1,7 @@
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import type { WrfcState, Constraint, ConstraintFinding } from '@pellux/goodvibes-sdk/platform/agents';
 import { DEFAULT_PANEL_PALETTE, extendPalette } from './polish.ts';
+import { activeTokens } from '../renderer/theme.ts';
 
 // ---------------------------------------------------------------------------
 // Colour palette + formatting helpers for the WRFC panel.
@@ -9,28 +10,31 @@ import { DEFAULT_PANEL_PALETTE, extendPalette } from './polish.ts';
 // line-count cap. Leaf module (only polish + terminal-width + sdk types); the
 // panel re-exports the public helpers so ./wrfc-panel.ts stays their import site.
 // ---------------------------------------------------------------------------
-export const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  // WRFC state-machine colours (domain status -- no shared equivalent)
-  passed:     '#22c55e', // green
-  failed:     '#ef4444', // red
-  reviewing:  '#eab308', // yellow
-  engineering:'#22d3ee', // cyan
-  fixing:     '#f97316', // orange
-  pending:    '#6b7280', // grey
-  gating:     '#a78bfa', // violet
-  committing: '#38bdf8', // sky
-  integrating:'#818cf8', // indigo
+export const C = extendPalette(DEFAULT_PANEL_PALETTE, () => {
+  const p = activeTokens();
+  return {
+    // WRFC state-machine colours (domain status mapped onto theme tokens)
+    passed:     p.success,
+    failed:     p.error,
+    reviewing:  p.warning,
+    engineering:p.primary,
+    fixing:     p.blocked,
+    pending:    p.textMuted,
+    gating:     p.secondary,
+    committing: p.info,
+    integrating:p.accent,
 
-  // Issue-severity ramp (domain -- no shared equivalent)
-  issueCrit:  '#ef4444',
-  issueMaj:   '#f97316',
-  issueMin:   '#eab308',
-  issueSug:   '#6b7280',
+    // Issue-severity ramp
+    issueCrit:  p.error,
+    issueMaj:   p.blocked,
+    issueMin:   p.warning,
+    issueSug:   p.textMuted,
 
-  // Selection + divider chrome with no shared equivalent
-  selected:   '#1e40af', // selection bg
-  selectedFg: '#f8fafc',
-  border:     '#334155',
+    // Selection + divider chrome
+    selected:   p.backgroundSelected,
+    selectedFg: p.selectedListItemText,
+    border:     p.borderSubtle,
+  };
 });
 
 // ---------------------------------------------------------------------------
@@ -115,7 +119,7 @@ export function constraintStatusMarker(
 ): { tag: string; fg: string; dim: boolean } {
   const finding = findings?.find(f => f.constraintId === constraint.id);
   if (!finding) {
-    return { tag: '[UNV]', fg: C.dim, dim: true };
+    return { tag: '[UNV]', fg: C.dim, dim: false };
   }
   if (finding.satisfied) {
     return { tag: '[SAT]', fg: C.good, dim: false };

@@ -7,22 +7,16 @@
  * - Falls back to empty array (caller uses regex tokenizer) when parser not ready
  * - Caches parsed results keyed by language + content hash to avoid re-parsing
  *
- * Vaporwave color theme:
- *   Keywords:          #d000ff  (purple)
- *   Strings:           #00ff88  (green)
- *   Numbers:           #ffcc00  (yellow)
- *   Comments:          #666666  (dim grey)
- *   Functions/methods: #00ffff  (cyan)
- *   Types/classes:     #ff6b9d  (pink)
- *   Operators:         #ffffff  (white)
- *   Properties:        #87ceeb  (light blue)
- *   Built-ins/special: #ff8c00  (orange)
- *   Default:           252      (light grey)
+ * Colours: every node type maps to a syntax role (keyword, string, number,
+ * comment, function, type, operator, property, builtin, plain); the active
+ * theme's syntax tokens colour each role (syntax-theme.ts). The cache holds
+ * roles, so a theme change re-colours cached blocks without re-parsing.
  */
 import type { Node } from 'web-tree-sitter';
 import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { syntaxStyles, type SyntaxRole, type SyntaxStyle } from './syntax-theme.ts';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,193 +56,194 @@ const FENCE_TO_LANG_ID: Record<string, string> = {
   zsh: 'bash',
 };
 
-// ─── Vaporwave Color Mapping ─────────────────────────────────────────────────
+// ─── Node Type → Syntax Role ─────────────────────────────────────────────────
 
-// Map tree-sitter node types to vaporwave theme colors.
+// Map tree-sitter node types to syntax roles; syntax-theme.ts turns a role into
+// the active theme's colour (shared with code-block.ts's regex fallback).
 // The node types are specific to each grammar's output.
-const NODE_TYPE_COLORS: Record<string, { fg: string; bold?: boolean; italic?: boolean }> = {
+const NODE_TYPE_COLORS: Record<string, SyntaxRole> = {
   // ── Keywords
-  'if': { fg: '#d000ff', bold: true },
-  'else': { fg: '#d000ff', bold: true },
-  'return': { fg: '#d000ff', bold: true },
-  'const': { fg: '#d000ff', bold: true },
-  'let': { fg: '#d000ff', bold: true },
-  'var': { fg: '#d000ff', bold: true },
-  'function': { fg: '#d000ff', bold: true },
-  'class': { fg: '#d000ff', bold: true },
-  'import': { fg: '#d000ff', bold: true },
-  'export': { fg: '#d000ff', bold: true },
-  'from': { fg: '#d000ff', bold: true },
-  'new': { fg: '#d000ff', bold: true },
-  'typeof': { fg: '#d000ff', bold: true },
-  'instanceof': { fg: '#d000ff', bold: true },
-  'in': { fg: '#d000ff', bold: true },
-  'of': { fg: '#d000ff', bold: true },
-  'for': { fg: '#d000ff', bold: true },
-  'while': { fg: '#d000ff', bold: true },
-  'do': { fg: '#d000ff', bold: true },
-  'switch': { fg: '#d000ff', bold: true },
-  'case': { fg: '#d000ff', bold: true },
-  'break': { fg: '#d000ff', bold: true },
-  'continue': { fg: '#d000ff', bold: true },
-  'throw': { fg: '#d000ff', bold: true },
-  'try': { fg: '#d000ff', bold: true },
-  'catch': { fg: '#d000ff', bold: true },
-  'finally': { fg: '#d000ff', bold: true },
-  'async': { fg: '#d000ff', bold: true },
-  'await': { fg: '#d000ff', bold: true },
-  'yield': { fg: '#d000ff', bold: true },
-  'delete': { fg: '#d000ff', bold: true },
-  'void': { fg: '#d000ff', bold: true },
-  'static': { fg: '#d000ff', bold: true },
-  'extends': { fg: '#d000ff', bold: true },
-  'implements': { fg: '#d000ff', bold: true },
-  'interface': { fg: '#d000ff', bold: true },
-  'type': { fg: '#d000ff', bold: true },
-  'enum': { fg: '#d000ff', bold: true },
-  'namespace': { fg: '#d000ff', bold: true },
-  'abstract': { fg: '#d000ff', bold: true },
-  'readonly': { fg: '#d000ff', bold: true },
-  'as': { fg: '#d000ff', bold: true },
-  'satisfies': { fg: '#d000ff', bold: true },
+  'if': 'keyword',
+  'else': 'keyword',
+  'return': 'keyword',
+  'const': 'keyword',
+  'let': 'keyword',
+  'var': 'keyword',
+  'function': 'keyword',
+  'class': 'keyword',
+  'import': 'keyword',
+  'export': 'keyword',
+  'from': 'keyword',
+  'new': 'keyword',
+  'typeof': 'keyword',
+  'instanceof': 'keyword',
+  'in': 'keyword',
+  'of': 'keyword',
+  'for': 'keyword',
+  'while': 'keyword',
+  'do': 'keyword',
+  'switch': 'keyword',
+  'case': 'keyword',
+  'break': 'keyword',
+  'continue': 'keyword',
+  'throw': 'keyword',
+  'try': 'keyword',
+  'catch': 'keyword',
+  'finally': 'keyword',
+  'async': 'keyword',
+  'await': 'keyword',
+  'yield': 'keyword',
+  'delete': 'keyword',
+  'void': 'keyword',
+  'static': 'keyword',
+  'extends': 'keyword',
+  'implements': 'keyword',
+  'interface': 'keyword',
+  'type': 'keyword',
+  'enum': 'keyword',
+  'namespace': 'keyword',
+  'abstract': 'keyword',
+  'readonly': 'keyword',
+  'as': 'keyword',
+  'satisfies': 'keyword',
   // Python keywords
-  'def': { fg: '#d000ff', bold: true },
-  'lambda': { fg: '#d000ff', bold: true },
-  'with': { fg: '#d000ff', bold: true },
-  'pass': { fg: '#d000ff', bold: true },
-  'global': { fg: '#d000ff', bold: true },
-  'nonlocal': { fg: '#d000ff', bold: true },
-  'assert': { fg: '#d000ff', bold: true },
-  'raise': { fg: '#d000ff', bold: true },
-  'except': { fg: '#d000ff', bold: true },
-  'elif': { fg: '#d000ff', bold: true },
-  'and': { fg: '#d000ff', bold: true },
-  'or': { fg: '#d000ff', bold: true },
-  'not': { fg: '#d000ff', bold: true },
-  'is': { fg: '#d000ff', bold: true },
+  'def': 'keyword',
+  'lambda': 'keyword',
+  'with': 'keyword',
+  'pass': 'keyword',
+  'global': 'keyword',
+  'nonlocal': 'keyword',
+  'assert': 'keyword',
+  'raise': 'keyword',
+  'except': 'keyword',
+  'elif': 'keyword',
+  'and': 'keyword',
+  'or': 'keyword',
+  'not': 'keyword',
+  'is': 'keyword',
   // Bash keywords
-  'then': { fg: '#d000ff', bold: true },
-  'fi': { fg: '#d000ff', bold: true },
-  'done': { fg: '#d000ff', bold: true },
-  'esac': { fg: '#d000ff', bold: true },
+  'then': 'keyword',
+  'fi': 'keyword',
+  'done': 'keyword',
+  'esac': 'keyword',
 
   // ── Strings
-  'string': { fg: '#00ff88' },
-  'string_fragment': { fg: '#00ff88' },
-  'template_string': { fg: '#00ff88' },
-  'escape_sequence': { fg: '#00ff88' },
-  'raw_string': { fg: '#00ff88' },
-  'concatenated_string': { fg: '#00ff88' },
-  'string_content': { fg: '#00ff88' },
-  'quoted_attribute_value': { fg: '#00ff88' },
-  'attribute_value': { fg: '#00ff88' },
-  'pair_value': { fg: '#00ff88' },
-  'plain_value': { fg: '#00ff88' },
+  'string': 'string',
+  'string_fragment': 'string',
+  'template_string': 'string',
+  'escape_sequence': 'string',
+  'raw_string': 'string',
+  'concatenated_string': 'string',
+  'string_content': 'string',
+  'quoted_attribute_value': 'string',
+  'attribute_value': 'string',
+  'pair_value': 'string',
+  'plain_value': 'string',
 
   // ── Numbers
-  'number': { fg: '#ffcc00' },
-  'integer': { fg: '#ffcc00' },
-  'float': { fg: '#ffcc00' },
-  'decimal_integer_literal': { fg: '#ffcc00' },
-  'hex_integer_literal': { fg: '#ffcc00' },
-  'octal_integer_literal': { fg: '#ffcc00' },
-  'binary_integer_literal': { fg: '#ffcc00' },
+  'number': 'number',
+  'integer': 'number',
+  'float': 'number',
+  'decimal_integer_literal': 'number',
+  'hex_integer_literal': 'number',
+  'octal_integer_literal': 'number',
+  'binary_integer_literal': 'number',
 
   // ── Comments
-  'comment': { fg: '#666666', italic: true },
-  'line_comment': { fg: '#666666', italic: true },
-  'block_comment': { fg: '#666666', italic: true },
-  'shebang': { fg: '#666666', italic: true },
+  'comment': 'comment',
+  'line_comment': 'comment',
+  'block_comment': 'comment',
+  'shebang': 'comment',
 
   // ── Functions/methods
-  'function_declaration': { fg: '#00ffff' },
-  'method_declaration': { fg: '#00ffff' },
-  'method_definition': { fg: '#00ffff' },
-  'arrow_function': { fg: '#00ffff' },
-  'function_expression': { fg: '#00ffff' },
-  'call_expression': { fg: '#00ffff' },
-  'function_definition': { fg: '#00ffff' }, // Python
+  'function_declaration': 'function',
+  'method_declaration': 'function',
+  'method_definition': 'function',
+  'arrow_function': 'function',
+  'function_expression': 'function',
+  'call_expression': 'function',
+  'function_definition': 'function', // Python
 
   // ── Types and classes
-  'type_identifier': { fg: '#ff6b9d' },
-  'type_annotation': { fg: '#ff6b9d' },
-  'class_declaration': { fg: '#ff6b9d' },
-  'class_definition': { fg: '#ff6b9d' }, // Python
-  'interface_declaration': { fg: '#ff6b9d' },
-  'type_alias_declaration': { fg: '#ff6b9d' },
-  'predefined_type': { fg: '#ff6b9d' },
-  'builtin_type': { fg: '#ff6b9d' },
-  'tag_name': { fg: '#ff6b9d' },
-  'element': { fg: '#ff6b9d' },
+  'type_identifier': 'type',
+  'type_annotation': 'type',
+  'class_declaration': 'type',
+  'class_definition': 'type', // Python
+  'interface_declaration': 'type',
+  'type_alias_declaration': 'type',
+  'predefined_type': 'type',
+  'builtin_type': 'type',
+  'tag_name': 'type',
+  'element': 'type',
 
   // ── Operators
-  '+': { fg: '#ffffff' },
-  '-': { fg: '#ffffff' },
-  '*': { fg: '#ffffff' },
-  '/': { fg: '#ffffff' },
-  '%': { fg: '#ffffff' },
-  '=': { fg: '#ffffff' },
-  '==': { fg: '#ffffff' },
-  '===': { fg: '#ffffff' },
-  '!=': { fg: '#ffffff' },
-  '!==': { fg: '#ffffff' },
-  '<': { fg: '#ffffff' },
-  '>': { fg: '#ffffff' },
-  '<=': { fg: '#ffffff' },
-  '>=': { fg: '#ffffff' },
-  '&&': { fg: '#ffffff' },
-  '||': { fg: '#ffffff' },
-  '??': { fg: '#ffffff' },
-  '=>': { fg: '#ffffff' },
-  '!': { fg: '#ffffff' },
-  '&': { fg: '#ffffff' },
-  '|': { fg: '#ffffff' },
-  '^': { fg: '#ffffff' },
-  '~': { fg: '#ffffff' },
-  '<<': { fg: '#ffffff' },
-  '>>': { fg: '#ffffff' },
-  '>>>': { fg: '#ffffff' },
+  '+': 'operator',
+  '-': 'operator',
+  '*': 'operator',
+  '/': 'operator',
+  '%': 'operator',
+  '=': 'operator',
+  '==': 'operator',
+  '===': 'operator',
+  '!=': 'operator',
+  '!==': 'operator',
+  '<': 'operator',
+  '>': 'operator',
+  '<=': 'operator',
+  '>=': 'operator',
+  '&&': 'operator',
+  '||': 'operator',
+  '??': 'operator',
+  '=>': 'operator',
+  '!': 'operator',
+  '&': 'operator',
+  '|': 'operator',
+  '^': 'operator',
+  '~': 'operator',
+  '<<': 'operator',
+  '>>': 'operator',
+  '>>>': 'operator',
 
   // ── Properties
-  'property_identifier': { fg: '#87ceeb' },
-  'shorthand_property_identifier': { fg: '#87ceeb' },
-  'attribute_name': { fg: '#87ceeb' },
-  'property_name': { fg: '#87ceeb' },
-  'pair_key': { fg: '#87ceeb' },
+  'property_identifier': 'property',
+  'shorthand_property_identifier': 'property',
+  'attribute_name': 'property',
+  'property_name': 'property',
+  'pair_key': 'property',
 
   // ── Built-ins / special values
-  'true': { fg: '#ff8c00' },
-  'false': { fg: '#ff8c00' },
-  'null': { fg: '#ff8c00' },
-  'undefined': { fg: '#ff8c00' },
-  'none': { fg: '#ff8c00' },
-  'None': { fg: '#ff8c00' },
-  'True': { fg: '#ff8c00' },
-  'False': { fg: '#ff8c00' },
-  'this': { fg: '#ff8c00' },
-  'super': { fg: '#ff8c00' },
-  'self': { fg: '#ff8c00' },
-  'boolean': { fg: '#ff8c00' },
+  'true': 'builtin',
+  'false': 'builtin',
+  'null': 'builtin',
+  'undefined': 'builtin',
+  'none': 'builtin',
+  'None': 'builtin',
+  'True': 'builtin',
+  'False': 'builtin',
+  'this': 'builtin',
+  'super': 'builtin',
+  'self': 'builtin',
+  'boolean': 'builtin',
 
   // ── JSON specific
-  'json_string': { fg: '#00ff88' },
-  'json_key': { fg: '#87ceeb' },
-  'json_number': { fg: '#ffcc00' },
+  'json_string': 'string',
+  'json_key': 'property',
+  'json_number': 'number',
 
   // ── CSS specific
-  'class_selector': { fg: '#ff6b9d' },
-  'id_selector': { fg: '#ff6b9d' },
-  'pseudo_class_selector': { fg: '#d000ff' },
-  'pseudo_element_selector': { fg: '#d000ff' },
-  'property_name_css': { fg: '#87ceeb' },
-  'unit': { fg: '#ffcc00' },
-  'color_value': { fg: '#00ff88' },
-  'at_keyword': { fg: '#d000ff', bold: true },
-  'important': { fg: '#d000ff', bold: true },
+  'class_selector': 'type',
+  'id_selector': 'type',
+  'pseudo_class_selector': 'keyword',
+  'pseudo_element_selector': 'keyword',
+  'property_name_css': 'property',
+  'unit': 'number',
+  'color_value': 'string',
+  'at_keyword': 'keyword',
+  'important': 'keyword',
 };
 
-// Default color for unrecognized node types
-const DEFAULT_FG = '252';
+// Default role for unrecognized node types
+const DEFAULT_ROLE: SyntaxRole = 'plain';
 
 // ─── Content Hash ─────────────────────────────────────────────────────────────
 
@@ -270,10 +265,16 @@ interface Span {
   endRow: number;
   endCol: number;
   text: string;
-  fg: string;
-  bold?: boolean;
-  italic?: boolean;
+  role: SyntaxRole;
 }
+
+/** A cached token: text plus its role (colour resolved per theme on read). */
+interface RoleToken {
+  text: string;
+  role: SyntaxRole;
+}
+
+type RoleLine = RoleToken[];
 
 /**
  * Walk the AST and collect leaf nodes with their positions and colors.
@@ -282,7 +283,7 @@ interface Span {
 function collectSpans(root: Node, code: string): Span[] {
   const spans: Span[] = [];
 
-  function getStyle(node: Node): { fg: string; bold?: boolean; italic?: boolean } | null {
+  function getStyle(node: Node): SyntaxRole | null {
     // Named nodes (keywords, identifiers, etc.)
     const namedStyle = NODE_TYPE_COLORS[node.type];
     if (namedStyle) return namedStyle;
@@ -309,9 +310,7 @@ function collectSpans(root: Node, code: string): Span[] {
         endRow: node.endPosition.row,
         endCol: node.endPosition.column,
         text,
-        fg: style?.fg ?? DEFAULT_FG,
-        bold: style?.bold,
-        italic: style?.italic,
+        role: style ?? DEFAULT_ROLE,
       });
       return;
     }
@@ -329,9 +328,7 @@ function collectSpans(root: Node, code: string): Span[] {
         endRow: node.endPosition.row,
         endCol: node.endPosition.column,
         text,
-        fg: style.fg,
-        bold: style.bold,
-        italic: style.italic,
+        role: style,
       });
       return;
     }
@@ -371,8 +368,8 @@ function isLeafLike(node: Node): boolean {
  * Convert a flat list of positioned spans into per-line SyntaxToken arrays.
  * Handles multi-line spans (e.g., block comments, template literals).
  */
-function spansToLines(spans: Span[], codeLines: string[]): HighlightedLine[] {
-  const result: HighlightedLine[] = codeLines.map(() => []);
+function spansToLines(spans: Span[], codeLines: string[]): RoleLine[] {
+  const result: RoleLine[] = codeLines.map(() => []);
 
   // Track the current position to emit default-colored text for gaps
   const linePositions: number[] = codeLines.map(() => 0);
@@ -390,12 +387,12 @@ function spansToLines(spans: Span[], codeLines: string[]): HighlightedLine[] {
       const currentCol = linePositions[row];
       if (currentCol < span.startCol) {
         const gapText = codeLines[row].slice(currentCol, span.startCol);
-        if (gapText) result[row].push({ text: gapText, fg: DEFAULT_FG });
+        if (gapText) result[row].push({ text: gapText, role: DEFAULT_ROLE });
       }
 
       const tokenText = codeLines[row].slice(span.startCol, span.endCol);
       if (tokenText) {
-        result[row].push({ text: tokenText, fg: span.fg, bold: span.bold, italic: span.italic });
+        result[row].push({ text: tokenText, role: span.role });
       }
       linePositions[row] = span.endCol;
     } else {
@@ -413,12 +410,12 @@ function spansToLines(spans: Span[], codeLines: string[]): HighlightedLine[] {
         const currentCol = linePositions[r];
         if (currentCol < colStart) {
           const gapText = codeLines[r].slice(currentCol, colStart);
-          if (gapText) result[r].push({ text: gapText, fg: DEFAULT_FG });
+          if (gapText) result[r].push({ text: gapText, role: DEFAULT_ROLE });
         }
 
         const tokenText = codeLines[r].slice(colStart, colEnd);
         if (tokenText) {
-          result[r].push({ text: tokenText, fg: span.fg, bold: span.bold, italic: span.italic });
+          result[r].push({ text: tokenText, role: span.role });
         }
         linePositions[r] = colEnd;
       }
@@ -428,7 +425,7 @@ function spansToLines(spans: Span[], codeLines: string[]): HighlightedLine[] {
   // Fill remaining text on each line with default color
   for (let r = 0; r < codeLines.length; r++) {
     const remaining = codeLines[r].slice(linePositions[r]);
-    if (remaining) result[r].push({ text: remaining, fg: DEFAULT_FG });
+    if (remaining) result[r].push({ text: remaining, role: DEFAULT_ROLE });
   }
 
   return result;
@@ -438,9 +435,23 @@ function spansToLines(spans: Span[], codeLines: string[]): HighlightedLine[] {
 
 const MAX_HIGHLIGHT_CACHE = 200;
 
+/** A parsed block: roles, plus the colours resolved for the last theme read. */
+interface HighlightEntry {
+  readonly roles: RoleLine[];
+  resolved?: HighlightedLine[];
+  resolvedFor?: Readonly<Record<SyntaxRole, SyntaxStyle>>;
+}
+
+function resolveRoleLines(roles: RoleLine[], styles: Readonly<Record<SyntaxRole, SyntaxStyle>>): HighlightedLine[] {
+  return roles.map((line) => line.map(({ text, role }) => {
+    const style = styles[role];
+    return style.italic ? { text, fg: style.fg, italic: true } : { text, fg: style.fg };
+  }));
+}
+
 export class SyntaxHighlighter {
   private service: TreeSitterService;
-  private cache: Map<string, HighlightedLine[]> = new Map();
+  private cache: Map<string, HighlightEntry> = new Map();
   private pending: Set<string> = new Set();
 
   constructor() {
@@ -477,7 +488,15 @@ export class SyntaxHighlighter {
 
     const key = `${langId}:${hashString(code)}`;
     const cached = this.cache.get(key);
-    if (cached) return cached;
+    if (cached) {
+      // Colours follow the active theme: re-resolve when the theme changed.
+      const styles = syntaxStyles();
+      if (cached.resolvedFor !== styles || cached.resolved === undefined) {
+        cached.resolved = resolveRoleLines(cached.roles, styles);
+        cached.resolvedFor = styles;
+      }
+      return cached.resolved;
+    }
 
     // Do not schedule background parse while the block is still being streamed.
     // The regex tokenizer serves during streaming (as designed). Schedule parse
@@ -526,7 +545,7 @@ export class SyntaxHighlighter {
           if (firstKey !== undefined) this.cache.delete(firstKey);
         }
 
-        this.cache.set(key, highlighted);
+        this.cache.set(key, { roles: highlighted });
         logger.debug('SyntaxHighlighter: parsed and cached', { langId, lines: codeLines.length });
       } catch (err) {
         logger.warn('SyntaxHighlighter: parse error', { langId, error: summarizeError(err) });

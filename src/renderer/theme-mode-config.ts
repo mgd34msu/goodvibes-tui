@@ -19,7 +19,7 @@
  * without pulling in the stateful probe class.
  */
 
-import type { ThemeModeSetting } from './theme.ts';
+import { normalizeThemeName, type ThemeModeSetting } from './theme.ts';
 import type { ConfigKey, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 /** Config key backing the appearance/theme-mode preference (see module doc). */
@@ -51,5 +51,20 @@ export function resolveConfiguredThemeMode(
   } catch {
     // Defensive: any unexpected resolvePath/section error → honest default.
     return THEME_MODE_DEFAULT;
+  }
+}
+
+/** Config key backing the color theme (bundled name, 'system', or legacy 'vaporwave'). */
+export const THEME_NAME_CONFIG_KEY: ConfigKey = 'display.theme';
+
+/**
+ * Read the configured theme name, normalized: 'vaporwave' maps to
+ * 'goodvibes-neon' and an unset or unknown value maps to the default theme.
+ */
+export function resolveConfiguredThemeName(configManager: Pick<ConfigManager, 'get'>): string {
+  try {
+    return normalizeThemeName(configManager.get(THEME_NAME_CONFIG_KEY));
+  } catch {
+    return normalizeThemeName(undefined);
   }
 }

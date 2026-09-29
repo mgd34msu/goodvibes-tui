@@ -9,6 +9,7 @@
  */
 
 import type { Cell } from '@pellux/goodvibes-sdk/platform/types';
+import { activeTheme } from './theme.ts';
 
 /** Module-level set of inline markdown special characters (hoisted out of hot loop). */
 const INLINE_SPECIAL_CHARS = new Set(['[', '`', '*', '_', '~']);
@@ -102,7 +103,7 @@ export function renderInlineMarkdown(text: string): InlineToken[] {
     if (text.slice(i, i + 2) === '~~') {
       const end = text.indexOf('~~', i + 2);
       if (end !== -1) {
-        tokens.push({ type: 'text', text: text.slice(i + 2, end), style: { strikethrough: true, fg: '244' } });
+        tokens.push({ type: 'text', text: text.slice(i + 2, end), style: { strikethrough: true, fg: activeTheme().strikethrough } });
         i = end + 2;
         continue;
       }

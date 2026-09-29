@@ -31,10 +31,10 @@ describe('isHexLiteralBanTarget', () => {
     expect(isHexLiteralBanTarget('src/renderer/ui-factory.ts')).toBe(true);
   });
 
-  test('exempts the token-source files', () => {
-    expect(isHexLiteralBanTarget('src/renderer/ui-primitives.ts')).toBe(false);
-    expect(isHexLiteralBanTarget('src/renderer/theme.ts')).toBe(false);
-    expect(isHexLiteralBanTarget('src/renderer/syntax-highlighter.ts')).toBe(false);
+  test('holds the former token-source files to the ban (theme data lives in the SDK)', () => {
+    expect(isHexLiteralBanTarget('src/renderer/ui-primitives.ts')).toBe(true);
+    expect(isHexLiteralBanTarget('src/renderer/theme.ts')).toBe(true);
+    expect(isHexLiteralBanTarget('src/renderer/syntax-highlighter.ts')).toBe(true);
   });
 
   test('does not target files outside panels/renderer', () => {
@@ -80,12 +80,12 @@ describe('checkHexLiteralRatchet', () => {
     expect(violations[0]).toContain('1 > baseline 0');
   });
 
-  test('ignores exempt token-source files even with many literals', () => {
+  test('flags literals in the former token-source files', () => {
     const violations = checkHexLiteralRatchet(
-      [{ relPath: 'src/renderer/ui-primitives.ts', text: "'#38bdf8' '#ef4444' '#22c55e'" }],
+      [{ relPath: 'src/renderer/theme.ts', text: "'#38bdf8' '#ef4444' '#22c55e'" }],
       {},
     );
-    expect(violations).toEqual([]);
+    expect(violations).toHaveLength(1);
   });
 
   test('ignores files outside src/panels and src/renderer', () => {

@@ -23,6 +23,14 @@ const TAGLINE = '[ ｇｏｏｄ ｖｉｂｅｓ ・ Ａ Ｉ ・ いい雰囲気 
 const versionLine = (version: string) =>
   `　✦　v${version}　█　terminal AI assistant　█　自動ｺｰﾄﾞ 　✦`;
 
+/**
+ * The splash wordmark gradient, protected: it is part of the GoodVibes mark,
+ * identical under every theme and mode, and must never be routed through the
+ * theme tokens. conversation-rendering.ts interpolates start to end across
+ * each wordmark row.
+ */
+export const SPLASH_GRADIENT = Object.freeze({ start: '#00ffff', end: '#d000ff' } as const);
+
 /** Fixed hint line, the three primary shell entry points. */
 const HINT_LINE = 'Ctrl+P panels  /  ? help  /  F2 fleet';
 

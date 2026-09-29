@@ -11,8 +11,8 @@
  *   7. **Import-cycle detection**, Tarjan SCC over the src/ import graph
  *   8. **Layer-boundary rules**, codified allowed dependency directions
  *   9. **Hex-literal ratchet**, bans raw #RRGGBB literals in
- *      src/panels/**\/*.ts and src/renderer/**\/*.ts except ui-primitives.ts,
- *      theme.ts and syntax-highlighter.ts; a seeded baseline
+ *      src/panels/**\/*.ts and src/renderer/**\/*.ts (no exemptions: theme
+ *      data lives in the SDK theme engine); a seeded baseline
  *      (scripts/hex-literal-baseline.json) may only shrink, never grow
  *
  * ─── LAYER MAP ───────────────────────────────────────────────────────────────

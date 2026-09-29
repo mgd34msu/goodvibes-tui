@@ -3,7 +3,7 @@ import { ModalFactory } from './modal-factory.ts';
 import type { ConversationManager } from '../core/conversation';
 import { getOverlayContentBudget, getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { estimateTokens } from '@pellux/goodvibes-sdk/platform/core';
-import { UI_TONES } from './ui-primitives.ts';
+import { activeTokens, activeUiTones } from './theme.ts';
 
 // ─── ContextInspectorModal ────────────────────────────────────────────────────
 
@@ -145,7 +145,7 @@ export function renderContextInspector(
     sections.push({
       type: 'text',
       content: 'WARNING: context is 80%+ full. Run /compact to free space.',
-      style: { fg: UI_TONES.state.warn, bold: true },
+      style: { fg: activeUiTones().state.warn, bold: true },
     });
   }
 
@@ -163,7 +163,7 @@ export function renderContextInspector(
     sections.push({
       type: 'text',
       content: `(${startOffset} older messages not shown)`,
-      style: { dim: true },
+      style: { fg: activeTokens().textFaint },
     });
   }
 
@@ -178,7 +178,7 @@ export function renderContextInspector(
     sections.push({
       type: 'text',
       content: line,
-      style: isLarge ? { fg: UI_TONES.state.warn, bold: true } : {},
+      style: isLarge ? { fg: activeUiTones().state.warn, bold: true } : {},
     });
   }
 
@@ -192,12 +192,12 @@ export function renderContextInspector(
     sections.push({
       type: 'text',
       content: `Compaction hint: ${largeMsgs.length} message${largeMsgs.length > 1 ? 's' : ''} use ${largePct} of context.`,
-      style: { fg: '#00ffcc' },
+      style: { fg: activeTokens().accent },
     });
     sections.push({
       type: 'text',
       content: 'Run /compact to summarise and reduce context size.',
-      style: { dim: true },
+      style: { fg: activeTokens().textFaint },
     });
   }
 
