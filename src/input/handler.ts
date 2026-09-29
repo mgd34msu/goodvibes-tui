@@ -165,6 +165,8 @@ export class InputHandler implements InputHandlerLike {
   public bookmarkModal: BookmarkModal;
   public blockActionsMenu = new BlockActionsMenu();
   public surfaceModals = new SurfaceModalHost();
+  /** Agent and process views (shell/session-views.ts); null until the shell wires them. */
+  public sessionView: import('./handler-session-view-route.ts').SessionViewControls | null = null;
   public settingsModal = new SettingsModal();
   public configModal = new ConfigModal();
   public mcpWorkspace = new McpWorkspace();
@@ -314,6 +316,7 @@ export class InputHandler implements InputHandlerLike {
       },
       {
         modalOpened: (name: string) => this.modalOpened(name),
+        getSessionView: () => this.sessionView,
         handleEscape: () => { if (!this.cancelConcealedInput()) this.handleEscape(); this.syncFeedContextMutableFields(); },
         submitConcealedInput: (value: string) => this.submitConcealedInput(value),
         handleCopy: () => this.handleCopy(),

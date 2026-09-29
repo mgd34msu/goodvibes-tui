@@ -105,7 +105,7 @@ describe('probeTermCaps', () => {
   });
 
   test('depth=8 yields ansi256', () => {
-    withEnv({ NO_COLOR: undefined, TERM: 'xterm-256color' }, () => {
+    withEnv({ NO_COLOR: undefined, TERM: 'xterm-256color', COLORTERM: undefined, TERM_PROGRAM: undefined }, () => {
       const caps = probeTermCaps(mockStream(8));
       expect(caps.capability).toBe('ansi256');
       expect(caps.syncedOutput).toBe(true);
@@ -117,6 +117,41 @@ describe('probeTermCaps', () => {
       const caps = probeTermCaps(mockStream(24));
       expect(caps.capability).toBe('truecolor');
       expect(caps.syncedOutput).toBe(true);
+    });
+  });
+
+  test('depth=8 with COLORTERM=truecolor yields truecolor (gradients stay smooth)', () => {
+    withEnv({ NO_COLOR: undefined, TERM: 'tmux-256color', COLORTERM: 'truecolor', TERM_PROGRAM: undefined }, () => {
+      expect(probeTermCaps(mockStream(8)).capability).toBe('truecolor');
+    });
+  });
+
+  test('depth=8 on a terminal known to draw 24-bit color yields truecolor', () => {
+    for (const term of ['xterm-ghostty', 'xterm-kitty', 'alacritty', 'foot', 'xterm-direct']) {
+      withEnv({ NO_COLOR: undefined, TERM: term, COLORTERM: undefined, TERM_PROGRAM: undefined }, () => {
+        expect(probeTermCaps(mockStream(8)).capability).toBe('truecolor');
+      });
+    }
+    withEnv({ NO_COLOR: undefined, TERM: 'xterm-256color', COLORTERM: undefined, TERM_PROGRAM: 'ghostty' }, () => {
+      expect(probeTermCaps(mockStream(8)).capability).toBe('truecolor');
+    });
+  });
+
+  test('COLORTERM values that do not promise 24-bit color keep 256 colors', () => {
+    withEnv({ NO_COLOR: undefined, TERM: 'xterm-256color', COLORTERM: '1', TERM_PROGRAM: undefined }, () => {
+      expect(probeTermCaps(mockStream(8)).capability).toBe('ansi256');
+    });
+    withEnv({ NO_COLOR: undefined, TERM: 'screen-256color', COLORTERM: undefined, TERM_PROGRAM: undefined }, () => {
+      expect(probeTermCaps(mockStream(8)).capability).toBe('ansi256');
+    });
+    withEnv({ NO_COLOR: undefined, TERM: 'screen-256color', COLORTERM: '24bit', TERM_PROGRAM: undefined }, () => {
+      expect(probeTermCaps(mockStream(8)).capability).toBe('truecolor');
+    });
+  });
+
+  test('depth=4 stays basic16 even when COLORTERM claims truecolor', () => {
+    withEnv({ NO_COLOR: undefined, TERM: 'xterm', COLORTERM: 'truecolor', TERM_PROGRAM: undefined }, () => {
+      expect(probeTermCaps(mockStream(4)).capability).toBe('basic16');
     });
   });
 

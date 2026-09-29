@@ -75,5 +75,11 @@ export type BlockMeta = Omit<SdkBlockMeta, 'type'> & {
     readonly finished?: boolean;
     /** The lane this row sits on (bead rows inside an agent lane carry that lane's collapse key). */
     readonly laneKey?: string;
+    /** The agent a lane row draws (Enter opens it full screen). */
+    readonly agentId?: string;
+    /** A lane row's color index (lane-graph/paint.ts laneColor): the agent's own color. */
+    readonly colorIndex?: number;
+    /** The background process a ▶ bead started (Enter opens its output). */
+    readonly processId?: string;
   };
 };

@@ -39,8 +39,15 @@ export interface ComposerOptions {
   readonly unfocusedHint?: string;
   /** Faint hint after the cursor on the last row (a command's arguments). */
   readonly argsHint?: string;
-  /** The bar's color: the session mode (brand, plan, auto-approving modes, shell). */
+  /** The bar's color: the session mode (brand, plan, auto-approving modes, shell), or the agent or process shown. */
   readonly modeColor: string;
+  /** The empty composer's placeholder (an agent view: "Message engineer. This steers it; main keeps running."). */
+  readonly placeholder?: string;
+  /**
+   * The composer takes no input here; the reason is drawn in its place (a
+   * process whose stdin is not reachable). No cursor is drawn.
+   */
+  readonly disabledReason?: string;
 }
 
 interface Style { readonly fg: string; readonly bg: string; readonly bold?: boolean }
@@ -73,9 +80,15 @@ export function renderComposer(options: ComposerOptions): Line[] {
   const bg = t.backgroundElement;
   const bar = options.modeColor;
   const textEnd = width - 4; // exclusive: text keeps 2 columns from the fill's right edge
+  if (options.disabledReason !== undefined) {
+    const line = blockRow(width, bar, bg);
+    put(line, COMPOSER_TEXT_X, textEnd, truncateDisplay(options.disabledReason, Math.max(0, textEnd - COMPOSER_TEXT_X)), { fg: t.textFaint, bg });
+    return [blockRow(width, bar, bg), line, blockRow(width, bar, bg)];
+  }
   const rows = options.promptText.split('\n');
   const lines: Line[] = [blockRow(width, bar, bg)];
   const textFg = options.focused ? t.text : t.textFaint;
+  const placeholder = options.placeholder ?? COMPOSER_PLACEHOLDER;
 
   let offset = 0;
   rows.forEach((text, i) => {
@@ -83,7 +96,7 @@ export function renderComposer(options: ComposerOptions): Line[] {
     const last = i === rows.length - 1;
     const empty = rows.length === 1 && text === '';
     if (empty) {
-      const hint = options.focused ? COMPOSER_PLACEHOLDER : (options.unfocusedHint ?? COMPOSER_PLACEHOLDER);
+      const hint = options.focused ? placeholder : (options.unfocusedHint ?? placeholder);
       put(line, COMPOSER_TEXT_X, textEnd, truncateDisplay(hint, Math.max(0, textEnd - COMPOSER_TEXT_X)), { fg: t.textFaint, bg });
     } else {
       put(line, COMPOSER_TEXT_X, textEnd + 1, text, { fg: textFg, bg });

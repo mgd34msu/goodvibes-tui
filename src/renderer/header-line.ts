@@ -10,7 +10,10 @@
  *           serving backend is not the configured one
  *
  * No rule row under it. The header is the one place for session identity:
- * title, branch, model. On a narrow row the marker falls back to its short
+ * title, branch, model. Inside an agent or process view the title gives way
+ * to the breadcrumb (main › engineer, the last name in its own color) and the
+ * right side names that session: the agent's model, or the process's pid,
+ * uptime and port. On a narrow row the marker falls back to its short
  * form, then is dropped whole (a half-cut marker reads worse than none); the
  * branch goes before the marker does, the title before either.
  */
@@ -26,6 +29,15 @@ const BRAND_X = 1;
 const GAP = 3;
 
 interface Seg { readonly text: string; readonly fg: string; readonly bold?: boolean }
+
+/** An agent or process view: the breadcrumb in place of the title, the session's own right side. */
+export interface HeaderView {
+  /** main, then each level down to the one shown; the last is drawn bold in its color. */
+  readonly crumbs: ReadonlyArray<{ readonly text: string; readonly fg: string; readonly bold?: boolean }>;
+  /** Replaces the branch and model on the right (the agent's model; pid · uptime · port). */
+  readonly right: string;
+  readonly rightFg?: string;
+}
 
 function put(line: Line, x: number, endX: number, seg: Seg): number {
   let cx = x;
@@ -67,11 +79,13 @@ export function renderHeaderLine(
   gitInfo?: GitHeaderInfo,
   version: string = VERSION,
   modelNote?: string,
+  view?: HeaderView,
 ): Line[] {
   const t = activeTokens();
   const line = createEmptyLine(width);
   for (const cell of line) cell.bg = '';
   const end = width - 1; // exclusive: the model ends at width-2
+  if (view) return [renderViewHeader(line, width, version, view)];
 
   // Right side first, so the title knows how much room it has.
   const leftMin = BRAND_X + BRAND.length + 1 + getDisplayWidth(version);
@@ -110,4 +124,30 @@ export function renderHeaderLine(
   rx = put(line, rx, end, { text: model, fg: t.text });
   if (note) put(line, rx, end, { text: note, fg: t.warning });
   return [line];
+}
+
+/** The header inside an agent or process view. */
+function renderViewHeader(line: Line, width: number, version: string, view: HeaderView): Line {
+  const t = activeTokens();
+  const end = width - 1;
+  let x = BRAND_X;
+  [...BRAND].forEach((ch, i) => {
+    x = put(line, x, end, { text: ch, fg: interpolateColor(t.brand, t.brandEnd, i / (BRAND.length - 1)), bold: true });
+  });
+  x = put(line, x + 1, end, { text: version, fg: t.textFaint });
+  const crumbsW = view.crumbs.reduce((s, c, i) => s + (i > 0 ? 3 : 0) + getDisplayWidth(c.text), 0);
+  // The right side yields before the breadcrumb does: where you are matters more than the model name.
+  const roomForRight = end - (x + 2 + crumbsW + GAP);
+  const right = roomForRight >= 4 ? truncateDisplay(view.right, roomForRight) : '';
+  const rightX = end - getDisplayWidth(right);
+  const crumbEnd = right ? rightX - GAP : end;
+  x += 2;
+  view.crumbs.forEach((crumb, i) => {
+    if (i > 0) x = put(line, x + 1, crumbEnd, { text: '›', fg: t.textFaint }) + 1;
+    const last = i === view.crumbs.length - 1;
+    const room = crumbEnd - x;
+    x = put(line, x, crumbEnd, { text: last ? truncateDisplay(crumb.text, Math.max(0, room)) : crumb.text, fg: crumb.fg, bold: crumb.bold });
+  });
+  if (right) put(line, rightX, end, { text: right, fg: view.rightFg ?? t.text });
+  return line;
 }

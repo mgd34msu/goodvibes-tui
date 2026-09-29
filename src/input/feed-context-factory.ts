@@ -135,6 +135,8 @@ export interface FeedContextStableRefs {
 /** Bound method closures for InputFeedContext. Built in handler.ts where private members are accessible. */
 export interface FeedContextClosures {
   modalOpened: (name: string) => void;
+  /** The agent or process view controls (null before the shell wires them). */
+  getSessionView: () => import('./handler-session-view-route.ts').SessionViewControls | null;
   handleEscape: () => void;
   /** Deliver a concealed submission; returns true when concealed mode consumed it. */
   submitConcealedInput: (value: string) => boolean;

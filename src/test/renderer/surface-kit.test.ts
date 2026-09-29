@@ -161,6 +161,64 @@ describe('list rows', () => {
     expect(text(tight.canvas.lines[tight.top + 2])).toContain('two');
   });
 
+  /** Five groups of six items; `selected` is an item index (0..29). */
+  function groupedRows(selected: number): KitRow[] {
+    const rows: KitRow[] = [];
+    for (let g = 0; g < 5; g++) {
+      rows.push({ header: `Group ${g}` });
+      for (let i = 0; i < 6; i++) rows.push({ label: `item ${g * 6 + i}`, selected: g * 6 + i === selected });
+    }
+    return rows;
+  }
+
+  test('a scrolling list on a wide screen keeps the blank row above each group, and the selected row stays in view', () => {
+    for (const selected of [0, 7, 13, 20, 29]) {
+      const f = beginModal(120, 40, { title: 'x' });
+      const bottom = f.top + 14;
+      const result = drawList(f.canvas, { rows: groupedRows(selected), top: f.top, bottom, x0: f.l, x1: f.r });
+      const shown = f.canvas.lines.slice(f.top, bottom + 1).map(text);
+      expect(shown.join('\n')).toContain(`item ${selected}`);
+      // Every header after the first visible row has a blank row above it.
+      shown.forEach((line, k) => {
+        if (k > 0 && line.includes('group ')) expect(shown[k - 1]!.trim()).toBe('');
+      });
+      expect(shown.some((line, k) => k > 0 && line.includes('group '))).toBe(true);
+      // Nothing is drawn past the list area and the counts cover every hidden item.
+      expect(result.endY).toBeLessThanOrEqual(bottom + 1);
+      const visibleItems = shown.filter((line) => /item \d+/.test(line)).length;
+      expect(result.above + result.below + visibleItems).toBe(30);
+    }
+  });
+
+  test('below 90 columns, or on a short list area, a scrolling list drops group spacing first', () => {
+    const narrow = beginModal(80, 40, { title: 'x' });
+    expect(narrow.canvas.compact).toBe(true);
+    drawList(narrow.canvas, { rows: groupedRows(0), top: narrow.top, bottom: narrow.top + 14, x0: narrow.l, x1: narrow.r });
+    const narrowShown = narrow.canvas.lines.slice(narrow.top, narrow.top + 15).map(text);
+    const noSpacer = (lines: string[]): boolean => lines.every((line, k) => !(line.trim() === '' && (lines[k + 1] ?? '').includes('group ')));
+    expect(noSpacer(narrowShown)).toBe(true);
+    expect(narrowShown.filter((line) => line.includes('group ')).length).toBeGreaterThan(1);
+
+    const short = beginModal(120, 40, { title: 'x' });
+    drawList(short.canvas, { rows: groupedRows(0), top: short.top, bottom: short.top + 8, x0: short.l, x1: short.r });
+    const shortShown = short.canvas.lines.slice(short.top, short.top + 9).map(text);
+    expect(noSpacer(shortShown)).toBe(true);
+    expect(shortShown.filter((line) => line.includes('group ')).length).toBeGreaterThan(1);
+  });
+
+  test('the selected row is one smooth gradient: every cell interpolated across the full highlight span', () => {
+    const t = activeTokens();
+    const f = beginModal(120, 30, { title: 'x' });
+    drawRow(f.canvas, f.top, { label: 'Changes', desc: 'a tinted diff', right: '/changes', selected: true }, f.l, f.r);
+    const row = f.canvas.lines[f.top]!;
+    const x = f.l - 2;
+    const span = f.r - f.l + 1 + 4;
+    for (let q = 0; q < span; q++) expect(row[x + q]!.bg).toBe(mixHex(t.brand, t.brandEnd, q / (span - 1)));
+    // Text runs do not restart the gradient: cells outside the highlight keep the fill.
+    expect(row[x - 1]!.bg).toBe(t.backgroundPanel);
+    expect(row[x + span]!.bg).toBe(t.backgroundPanel);
+  });
+
   test('a long list keeps the selected row in view and counts what it hides', () => {
     const rows: KitRow[] = Array.from({ length: 40 }, (_, i) => ({ label: `item ${i}`, selected: i === 30 }));
     const f = beginModal(100, 30, { title: 'x' });

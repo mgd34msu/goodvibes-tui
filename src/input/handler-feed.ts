@@ -35,6 +35,7 @@ import {
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import { getViewportBottomLine } from '../renderer/conversation-layout.ts';
 import { handleWorkTreeToken } from './handler-work-tree-route.ts';
+import { handleSessionViewToken } from './handler-session-view-route.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
 import { handleCommandModeToken } from './handler-command-route.ts';
 import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
@@ -135,6 +136,8 @@ export interface InputFeedContext {
   readonly scroll: (delta: number) => void;
   requestRender: () => void;
   readonly modalOpened: (name: string) => void;
+  /** The agent or process view controls (null before the shell wires them). */
+  readonly getSessionView: () => import('./handler-session-view-route.ts').SessionViewControls | null;
   readonly handleEscape: () => void;
   /** Deliver a concealed submission; returns true when concealed mode consumed it. */
   readonly submitConcealedInput: (value: string) => boolean;
@@ -272,8 +275,25 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       continue;
     }
 
-    // The keyboard inside the work tree (Alt+Up enters, Esc leaves; see handler-work-tree-route.ts).
-    if (handleWorkTreeToken({
+    // An agent or process open full screen, and the session chips' Tab (handler-session-view-route.ts).
+    const sessionView = context.getSessionView();
+    const viewState = {
+      controls: sessionView,
+      prompt: context.prompt,
+      cursorPos: context.cursorPos,
+      commandMode: context.commandMode,
+      saveUndoState: context.saveUndoState,
+      requestRender: context.requestRender,
+    };
+    if (handleSessionViewToken(viewState, token)) {
+      context.prompt = viewState.prompt;
+      context.cursorPos = viewState.cursorPos;
+      continue;
+    }
+
+    // The keyboard inside the work tree (Alt+Up enters, Esc leaves; see
+    // handler-work-tree-route.ts). The work tree is main's: inside a view it is not on screen.
+    if (!sessionView?.active && handleWorkTreeToken({
       conversationManager: context.conversationManager,
       enterMatch: token.type === 'key' && keybindings.matches('focus-work-tree', token),
       anchorLine: getViewportBottomLine(scrollTop, viewportHeight, lineCount),
@@ -282,6 +302,8 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       scroll: context.scroll,
       requestRender: context.requestRender,
       onCopied: () => { /* the copy receipt is the transcript line handleBlockCopy logs */ },
+      openAgent: (id) => context.commandContext?.openSessionView?.({ kind: 'agent', id }) ?? false,
+      openProcess: (id) => context.commandContext?.openSessionView?.({ kind: 'process', id }) ?? false,
     }, token)) {
       continue;
     }

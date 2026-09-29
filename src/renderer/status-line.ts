@@ -21,6 +21,15 @@
  * side really ends (3 columns between pieces, 1 between a key and its
  * action): the `ctrl+p` keycap with "menu", the context bar, the cost.
  *
+ * A long directory is shortened before anything else is given up: ~ for the
+ * home directory (the caller does that), then a middle ellipsis that keeps the
+ * first segment and as many trailing segments as fit (~/…/demo-proj). Only
+ * when even that does not leave the right side its full room is it dropped.
+ *
+ * Inside an agent or process view the left side is that view's keys (esc back
+ * to main, ctrl+x stop, …) followed by a short trailing piece that keeps main
+ * in sight (◐ main · working).
+ *
  * Narrow screens: below 100 columns the directory goes first, then the cost,
  * then the bar narrows from 16 cells toward 6, then the "used / total" label
  * goes, then the word "context"; the bar is dropped only when even the bare
@@ -76,6 +85,8 @@ export interface StatusBusyState {
   readonly ttftMs?: number;
   /** True while the turn is blocked on an approval (Esc still interrupts). */
   readonly approvalPending?: boolean;
+  /** What the next Esc does, when not "interrupt" (the composer has text: "clear input"). */
+  readonly escAction?: string;
 }
 
 export interface StatusBackgroundState {
@@ -112,6 +123,8 @@ export interface StatusLineOptions {
    * or directory (the conversation work tree: move, fold, open, copy, back).
    */
   readonly keys?: readonly KitHint[] | null;
+  /** A piece drawn after the keys (an agent view keeps main in sight: "◐ main · working"). */
+  readonly trail?: { readonly text: string; readonly fg: string } | null;
 }
 
 interface Piece {
@@ -238,7 +251,12 @@ function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: 
       if (keycapHintsWidth([...keys, key]) > maxX - startX) break;
       keys.push(key);
     }
-    return keys.length > 0 ? paintKeycapHints(line, startX, maxX, keys, { fg: t.textFaint }) : startX;
+    let x = keys.length > 0 ? paintKeycapHints(line, startX, maxX, keys, { fg: t.textFaint }) : startX;
+    const trail = options.trail;
+    if (trail && keys.length === options.keys.length && x + GAP + getDisplayWidth(trail.text) <= maxX) {
+      x = putText(line, x + GAP, maxX, { text: trail.text, fg: trail.fg });
+    }
+    return x;
   }
   if (options.busy) {
     const b = options.busy;
@@ -249,7 +267,7 @@ function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: 
     if (b.elapsedMs !== undefined) tail.push(formatElapsed(b.elapsedMs));
     if (!b.approvalPending && b.ttftMs !== undefined && b.ttftMs > 0) tail.push(`first token ${formatElapsed(b.ttftMs)}`);
     if (!b.approvalPending && b.tokenSpeed !== undefined && b.tokenSpeed > 0) tail.push(`${Math.round(b.tokenSpeed)} tok/s`);
-    const hints: KitHint[] = [['esc', 'interrupt']];
+    const hints: KitHint[] = [['esc', b.escAction ?? 'interrupt']];
     const hintsW = keycapHintsWidth(hints) + GAP;
     const tailText = tail.length > 0 ? ` · ${tail.join(' · ')}` : '';
     const room = Math.max(0, maxX - x - hintsW);
@@ -312,11 +330,34 @@ function drawChips(line: Line, chips: readonly StatusChip[], maxX: number, right
 
 /** Render the status line. */
 export function renderStatusLine(options: StatusLineOptions): Line {
-  // The directory is the first thing to go: when it would cost the cost or the
-  // full context bar their room, the row is laid out again without it.
+  // The directory is the first thing to shorten, then to go: when it would
+  // cost the cost or the full context bar their room, the row is laid out
+  // again with a shorter form of it, and finally without it.
   const withDirectory = layoutStatusLine(options, true);
   if (withDirectory.fullFit || !options.directory) return withDirectory.line;
+  for (const shorter of abbreviatedDirectories(options.directory)) {
+    const attempt = layoutStatusLine({ ...options, directory: shorter }, true);
+    if (attempt.fullFit) return attempt.line;
+  }
   return layoutStatusLine(options, false).line;
+}
+
+/**
+ * Shorter forms of a directory, longest first: the first segment kept, the
+ * middle replaced by …, as many trailing segments as the form allows
+ * (~/Projects/…/app/demo-proj, then ~/…/demo-proj).
+ */
+function abbreviatedDirectories(directory: string): string[] {
+  const absolute = directory.startsWith('/');
+  const segments = directory.split('/').filter((s) => s.length > 0);
+  if (segments.length < 3) return [];
+  const head = absolute ? `/${segments[0]}` : segments[0]!;
+  const out: string[] = [];
+  for (let keep = segments.length - 2; keep >= 1; keep--) {
+    const form = `${head}/…/${segments.slice(segments.length - keep).join('/')}`;
+    if (form.length < directory.length && !out.includes(form)) out.push(form);
+  }
+  return out;
 }
 
 function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): { line: Line; fullFit: boolean } {

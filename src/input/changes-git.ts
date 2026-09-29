@@ -6,7 +6,7 @@
  * here throws into the render loop; failures come back as text to show.
  */
 
-import { join, relative } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -58,10 +58,76 @@ export interface LoadedDiff {
   readonly error: string | null;
 }
 
-/** The diff for a source. `sessionFiles` are the files this session edited. */
+/** Untracked files larger than this show as added with a note instead of every line. */
+export const MAX_UNTRACKED_BYTES = 256 * 1024;
+/** Untracked files with more lines than this show as added with a note instead of every line. */
+export const MAX_UNTRACKED_LINES = 4000;
+/** At most this many untracked files are read into one diff; the label counts the rest. */
+export const MAX_UNTRACKED_FILES = 200;
+
+/**
+ * A new-file chunk with no hunks and a note line in place of the content. The
+ * note line starts with "# ", which no git header line does; parseChanges
+ * reads it into ChangeFile.note.
+ */
+function noteChunk(path: string, note: string): string {
+  return `diff --git a/${path} b/${path}\nnew file mode 100644\n# ${note}\n`;
+}
+
+/** One untracked file as an all-added diff chunk (paths relative to the repo root). */
+async function untrackedChunk(repoRoot: string, path: string): Promise<string> {
+  let size = 0;
+  try {
+    size = Bun.file(join(repoRoot, path)).size;
+  } catch {
+    size = 0;
+  }
+  if (size > MAX_UNTRACKED_BYTES) return noteChunk(path, `large new file (${Math.round(size / 1024)} KB), not shown line by line`);
+  // --no-index against /dev/null is git's own new-file patch: binary detection,
+  // "new file mode", "--- /dev/null", and a hunk staging can apply as is.
+  const result = await run(['diff', '--no-index', '--no-color', ...DIFF_PREFIX_ARGS, '--', '/dev/null', path], repoRoot);
+  // --no-index exits 1 when the files differ, which is the expected case here.
+  if (!result.out.trim()) return result.err ? noteChunk(path, `could not read: ${result.err.split('\n')[0]}`) : noteChunk(path, 'empty new file');
+  const lines = result.out.split('\n').length;
+  if (lines > MAX_UNTRACKED_LINES) return noteChunk(path, `large new file (${lines} lines), not shown line by line`);
+  return result.out.endsWith('\n') ? result.out : `${result.out}\n`;
+}
+
+/**
+ * Untracked, non-ignored files as all-added diff chunks, one per file. With
+ * `only` set, just the untracked files among those paths (the session's own
+ * new files); otherwise every untracked file in the repository.
+ */
+export async function loadUntrackedDiff(cwd: string, only?: readonly string[]): Promise<{ raw: string; count: number; skipped: number }> {
+  if (only && only.length === 0) return { raw: '', count: 0, skipped: 0 };
+  const top = await run(['rev-parse', '--show-toplevel'], cwd);
+  if (!top.ok) return { raw: '', count: 0, skipped: 0 };
+  const repoRoot = top.out.trim() || cwd;
+  // A session path outside this repository would fail the whole listing; leave it out.
+  const specs = only ? only.filter((path) => !isAbsolute(path) || path.startsWith(`${repoRoot}/`)) : [':/'];
+  if (specs.length === 0) return { raw: '', count: 0, skipped: 0 };
+  const listed = await run(['ls-files', '--others', '--exclude-standard', '--full-name', '-z', '--', ...specs], cwd);
+  if (!listed.ok) return { raw: '', count: 0, skipped: 0 };
+  const paths = listed.out.split('\0').filter((path) => path.length > 0).sort();
+  const shown = paths.slice(0, MAX_UNTRACKED_FILES);
+  const chunks: string[] = [];
+  // A few at a time: one git process per file, never hundreds at once.
+  for (let i = 0; i < shown.length; i += 8) {
+    chunks.push(...await Promise.all(shown.slice(i, i + 8).map((path) => untrackedChunk(repoRoot, path))));
+  }
+  return { raw: chunks.join(''), count: shown.length, skipped: paths.length - shown.length };
+}
+
+/**
+ * The diff for a source. `sessionFiles` are the files this session edited.
+ * Untracked files are part of every source except "staged": they show as
+ * added files with their whole content (the session source takes only the
+ * untracked files this session wrote).
+ */
 export async function loadDiff(cwd: string, source: ChangesSource, sessionFiles: readonly string[]): Promise<LoadedDiff> {
   let args: string[];
   let label: string;
+  let untrackedOnly: readonly string[] | undefined;
   if (source === 'working') {
     args = ['diff', '--no-color', ...DIFF_PREFIX_ARGS];
     label = 'not staged';
@@ -71,13 +137,23 @@ export async function loadDiff(cwd: string, source: ChangesSource, sessionFiles:
   } else if (source === 'session' && sessionFiles.length > 0) {
     args = ['diff', '--no-color', ...DIFF_PREFIX_ARGS, 'HEAD', '--', ...sessionFiles];
     label = `this session · ${sessionFiles.length} file${sessionFiles.length === 1 ? '' : 's'} vs HEAD`;
+    untrackedOnly = sessionFiles;
   } else {
     args = ['diff', '--no-color', ...DIFF_PREFIX_ARGS, 'HEAD'];
     label = source === 'session' ? 'no files tracked this session · all changes vs HEAD' : 'all changes vs HEAD';
   }
-  const result = await run(args, cwd);
+  const [result, untracked] = await Promise.all([
+    run(args, cwd),
+    source === 'staged' ? Promise.resolve({ raw: '', count: 0, skipped: 0 }) : loadUntrackedDiff(cwd, untrackedOnly),
+  ]);
   if (!result.ok) return { raw: '', label, error: result.err || 'git diff failed' };
-  return { raw: result.out, label, error: null };
+  const total = untracked.count + untracked.skipped;
+  if (total > 0) {
+    label += ` · ${total} untracked`;
+    if (untracked.skipped > 0) label += ` (${untracked.skipped} not shown)`;
+  }
+  const tracked = result.out && !result.out.endsWith('\n') ? `${result.out}\n` : result.out;
+  return { raw: tracked + untracked.raw, label, error: null };
 }
 
 export interface CommitEntry {

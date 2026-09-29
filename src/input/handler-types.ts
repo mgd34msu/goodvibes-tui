@@ -118,6 +118,7 @@ export interface InputHandlerLike {
   filePicker: FilePickerModal;
   blockActionsMenu: BlockActionsMenu;
   surfaceModals: import('./surface-modal-host.ts').SurfaceModalHost;
+  sessionView: import('./handler-session-view-route.ts').SessionViewControls | null;
   selectionModal: SelectionModal;
 
   // ── Onboarding ────────────────────────────────────────────────────────────

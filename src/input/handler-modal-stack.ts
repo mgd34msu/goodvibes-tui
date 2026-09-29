@@ -48,6 +48,13 @@ export type EscapeState = ModalStackState & {
   selectionModal: ModalStackState['selectionModal'];
   autocompleteReset: () => void;
   autocompleteUpdate?: (query: string) => void;
+  /**
+   * An agent or process view (core/session-focus.ts). With no modal open and
+   * the composer empty, Esc there goes back up one level (closing the
+   * process view's search first) and never reaches cancelGeneration: leaving
+   * a view never stops the agent, the process or main.
+   */
+  sessionView?: { readonly active: boolean; escape(): void };
   /** Kit modals: the top one (or its own sub-level) is the first thing Esc pops. */
   surfaceModals?: { readonly active: boolean; escape(): boolean };
   clearOnboardingModelPickerCancelState?: () => void;
@@ -248,6 +255,25 @@ export function handleEscape(state: EscapeState): {
     state.saveUndoState();
     prompt = '';
     cursorPos = 0;
+    return {
+      prompt,
+      cursorPos,
+      commandMode,
+      helpOverlayActive,
+      helpScrollOffset,
+      shortcutsOverlayActive,
+      shortcutsScrollOffset,
+      selectionCallback,
+      indicatorFocused,
+      modalReturnFocus,
+    };
+  }
+
+  // Inside an agent or process view Esc goes up one level and stops here:
+  // interrupting belongs to main alone.
+  if (state.sessionView?.active) {
+    state.sessionView.escape();
+    state.requestRender();
     return {
       prompt,
       cursorPos,

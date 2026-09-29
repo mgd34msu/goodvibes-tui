@@ -69,6 +69,7 @@ export function wireViewOpeners(options: WireViewOpenersOptions): void {
       },
       confirm: (confirmOptions) => confirmThrough(host, confirmOptions),
       requestRender: render,
+      openSessionView: (target) => commandContext.openSessionView?.(target) ?? false,
     });
     if (opts.target) modal.reveal(opts.target);
     if (opts.hosted) modal.showHosted();

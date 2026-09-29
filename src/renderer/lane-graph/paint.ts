@@ -54,11 +54,30 @@ function timeEnd(width: number): number {
   return width - 4;
 }
 
+/** Added to every lane index while an agent view draws (its spine takes the agent's color). */
+let laneColorBase = 0;
+
 /** A lane's color: the theme's `lanes` tokens in rotation. */
 export function laneColor(index: number): string {
   const lanes = activeTokens().lanes;
   if (lanes.length === 0) return activeTokens().brand;
-  return lanes[((index % lanes.length) + lanes.length) % lanes.length]!;
+  const at = index + laneColorBase;
+  return lanes[((at % lanes.length) + lanes.length) % lanes.length]!;
+}
+
+/**
+ * Draw with every lane shifted by `base`: an agent opened full screen draws
+ * its own spine in the color its lane has in main, and its children in the
+ * colors after it. Synchronous; the base is restored afterwards.
+ */
+export function withLaneColorBase<T>(base: number, draw: () => T): T {
+  const previous = laneColorBase;
+  laneColorBase = base;
+  try {
+    return draw();
+  } finally {
+    laneColorBase = previous;
+  }
 }
 
 function summaryColor(tone: SummaryTone): string {

@@ -8,8 +8,10 @@
  * plus the daemon-hosted conversation this terminal is attached to. The right
  * side tails the selected one live.
  *
- * Keys on the list: ↑↓ move; Enter opens the selected agent full height (or
- * acts on a row waiting on you: pick a winner, resolve a conflict); s steers
+ * Keys on the list: ↑↓ move; Enter opens the selected agent (or background
+ * process) full screen, outside the modal, with its own composer (or acts on
+ * a row waiting on you: pick a winner, resolve a conflict); other kinds with
+ * a transcript open full height inside the modal; s steers
  * (inline input); x stops it and its descendants (asks first); i interrupts;
  * p pauses or resumes; n hosts a third-party agent; D discards a worktree;
  * b jumps to the next thing waiting on you; f follows the newest running
@@ -80,6 +82,8 @@ export interface AgentsModalDeps {
   readonly requestRender: () => void;
   /** Tick for elapsed times and steer badges (ms; 0 disables, for tests). */
   readonly tickMs?: number;
+  /** Open an agent or background process full screen (shell/session-views.ts); false when it is not known here. */
+  readonly openSessionView?: (target: { readonly kind: 'agent' | 'process'; readonly id: string }) => boolean;
 }
 
 const HOSTED_ID = 'hosted-session';
@@ -265,12 +269,19 @@ export class AgentsModal implements SurfaceModal {
     this.status = { text, tone };
   }
 
-  private openFull(): void {
+  private openFull(host: SurfaceModalHost): void {
     const entry = this.selectedEntry();
     if (!entry) return;
     if (entry.kind === 'hosted') { this.hostedFull = true; return; }
     const node = entry.row.node;
     if (this.deps.acts?.handleTreeKey('enter', node)) return;
+    // An agent or a background process opens full screen, outside the modal.
+    const target = node.kind === 'agent' ? { kind: 'agent' as const, id: node.id }
+      : node.kind === 'background-process' ? { kind: 'process' as const, id: node.id } : null;
+    if (target && this.deps.openSessionView?.(target)) {
+      host.close(this, 'done');
+      return;
+    }
     if (!isAttachableFleetKind(node.kind)) {
       this.say(`${node.kind} has no transcript to open; its details are on the right.`, 'faint');
       return;
@@ -423,7 +434,7 @@ export class AgentsModal implements SurfaceModal {
       else if (name === 'down') this.move(1);
       else if (name === 'pageup') this.move(-10);
       else if (name === 'pagedown') this.move(10);
-      else if (name === 'enter') this.openFull();
+      else if (name === 'enter') this.openFull(host);
       else if (isTextBackspace(name) && this.query) this.query = this.query.slice(0, -1);
       return;
     }

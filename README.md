@@ -99,13 +99,14 @@ Press `?` for a searchable, categorized list of every slash command with its arg
 | `Enter` / `Shift+Enter` | Send the message / insert a newline |
 | `?` | Help and command picker (on an empty prompt) |
 | `@` | File picker: insert a path into the prompt |
-| `Tab` | Complete a path, or toggle collapse on the nearest block |
+| `Tab` | Complete a path, or toggle collapse on the nearest block. With the session chips showing and an empty composer, switch to the next session |
 | `Ctrl+F` | Search the conversation |
 | `Ctrl+Y` / `Ctrl+S` | Copy / save the nearest block |
 | `Ctrl+P` / `Ctrl+K` | Command palette: search and run any command, view or setting |
 | `F2` / `Ctrl+O` | Open or close Agents |
-| `Shift+Tab` | Cycle the session permission mode |
-| `Esc` | Close the top modal (one level), clear the composer, or interrupt the turn |
+| `Shift+Tab` | Cycle the session permission mode. With the session chips showing and an empty composer, switch to the previous session |
+| `Esc` | Close the top modal (one level), clear the composer, leave an agent or process view (never stops it), or interrupt main's turn |
+| `Ctrl+X` | Inside an agent or process view: stop it (press twice to confirm) |
 | `Ctrl+C` | Clear input, cancel a running turn. Press twice to quit |
 
 Most bindings are customizable in `~/.goodvibes/tui/keybindings.json`, and `/keybindings` shows what is currently bound. Five keys are fixed and stay out of that file: `F2` (Fleet), `Shift+Tab` (permission-mode cycle), `Esc` (leave the current mode), `?` (help), and `@` (file picker). The full reference is in [docs/tools-and-commands.md](docs/tools-and-commands.md).

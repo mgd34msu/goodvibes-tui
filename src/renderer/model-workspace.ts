@@ -100,6 +100,9 @@ function capabilityNames(model: ModelDefinition): string[] {
 // ---------------------------------------------------------------------------
 
 /** Model rows; without a detail panel the selected row names its full key instead of the provider. */
+/** The muted row shown while the catalog is still loading behind an open picker. */
+const LOADING_ROW: KitRow = { label: 'loading catalog…', muted: true };
+
 function modelRows(picker: ModelPickerModal, compact = false): KitRow[] {
   const t = activeTokens();
   const models = picker.getFilteredModels();
@@ -125,7 +128,7 @@ function modelRows(picker: ModelPickerModal, compact = false): KitRow[] {
       selected,
     });
   });
-  if (rows.length === 0) rows.push({ label: picker.query ? `No models match "${picker.query}".` : 'No models are available for this target.', muted: true });
+  if (rows.length === 0 && !picker.catalogLoading) rows.push({ label: picker.query ? `No models match "${picker.query}".` : 'No models are available for this target.', muted: true });
   return rows;
 }
 
@@ -155,13 +158,13 @@ function providerRows(picker: ModelPickerModal): KitRow[] {
     });
     index++;
   }
-  if (rows.length === 0) rows.push({ label: picker.query ? `No providers match "${picker.query}".` : 'No providers are registered.', muted: true });
+  if (rows.length === 0 && !picker.catalogLoading) rows.push({ label: picker.query ? `No providers match "${picker.query}".` : 'No providers are registered.', muted: true });
   return rows;
 }
 
 function embeddingRows(picker: ModelPickerModal): KitRow[] {
   const t = activeTokens();
-  if (picker.embeddingProviders.length === 0) return [{ label: 'No embedding providers are registered.', muted: true }];
+  if (picker.embeddingProviders.length === 0) return picker.catalogLoading ? [] : [{ label: 'No embedding providers are registered.', muted: true }];
   return picker.embeddingProviders.map((provider, index) => ({
     label: provider.label,
     desc: provider.detail,
@@ -412,10 +415,12 @@ export function renderModelWorkspace(picker: ModelPickerModal, screenWidth: numb
   if (picker.mode === 'contextCap') {
     drawContextCap(f, picker, body, f.l, x1);
   } else {
-    const rows = picker.mode === 'model' ? modelRows(picker, !twoPane)
+    const listed = picker.mode === 'model' ? modelRows(picker, !twoPane)
       : picker.mode === 'provider' ? providerRows(picker)
       : picker.mode === 'embeddingProvider' ? embeddingRows(picker)
       : effortRows(picker);
+    // The picker opens on its cached catalog; the rest fills in while this row shows.
+    const rows = picker.catalogLoading && picker.mode !== 'effort' ? [LOADING_ROW, ...listed] : listed;
     result = drawList(f.canvas, { rows, top: body, bottom: f.bottom, x0: f.l, x1, scrollKey });
   }
   if (twoPane) {
@@ -456,6 +461,7 @@ function getRenderCacheKey(picker: ModelPickerModal, width: number, height: numb
     keyForSet(picker.configuredProviders),
     keyForMap(picker.configuredViaMap),
     keyForTargets(picker.targetInfos),
+    picker.catalogLoading ? 1 : 0,
   ];
   if (picker.mode === 'model') {
     const filtered = picker.getFilteredModels();

@@ -6,7 +6,8 @@
  *
  *   ↑ ↓     move between beads (and turn headers and agent lanes)
  *   ← →     fold / unfold
- *   Enter   open a bead's body, unfold an agent lane
+ *   Enter   open a bead's body; on an agent lane open that agent full
+ *           screen; on a ▶ bead open that background process's output
  *   y       copy the focused row's content
  *   Esc     back to typing (never stops or cancels anything)
  *
@@ -29,6 +30,10 @@ export interface WorkTreeRouteState {
   readonly scroll: (delta: number) => void;
   readonly requestRender: () => void;
   readonly onCopied: () => void;
+  /** Open an agent full screen (Enter on its lane); false when it cannot be opened. */
+  readonly openAgent?: (agentId: string) => boolean;
+  /** Open a background process's output (Enter on its ▶ bead); false when it cannot be opened. */
+  readonly openProcess?: (processId: string) => boolean;
 }
 
 /** Scroll so the focused row (and as much of its opened body as fits) is visible. */
@@ -79,10 +84,24 @@ export function handleWorkTreeToken(state: WorkTreeRouteState, token: InputToken
         revealFocus(state);
         state.requestRender();
         return true;
+      case 'enter': {
+        const wt = tree.focusBlock()?.workTree;
+        const opened = wt?.kind === 'lane' && wt.agentId ? state.openAgent?.(wt.agentId)
+          : wt?.kind === 'bead' && wt.processId ? state.openProcess?.(wt.processId)
+            : false;
+        if (opened) {
+          tree.leave();
+          state.requestRender();
+          return true;
+        }
+        tree.act('activate');
+        revealFocus(state);
+        state.requestRender();
+        return true;
+      }
       case 'left':
       case 'right':
-      case 'enter':
-        tree.act(token.logicalName === 'left' ? 'fold' : token.logicalName === 'right' ? 'unfold' : 'activate');
+        tree.act(token.logicalName === 'left' ? 'fold' : 'unfold');
         revealFocus(state);
         state.requestRender();
         return true;

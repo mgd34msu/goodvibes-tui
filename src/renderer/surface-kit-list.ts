@@ -2,7 +2,8 @@
  * surface-kit-list.ts, list rows and group headers for the modal surface kit.
  *
  *   ✦ group header         lowercase, accent (violet), bold; a blank row above
- *                          every group except the first
+ *                          every group except the first (dropped when a
+ *                          narrow or short list does not fit)
  *   ● Label  description             right metadata
  *     wrapped continuation of a long label or description
  *
@@ -10,7 +11,8 @@
  * columns from each side of the fill, with dark bold text
  * (selectedListItemText). Long labels and descriptions wrap onto continuation
  * rows; nothing is clipped. When the list does not fit, group spacing collapses
- * first, then the list scrolls around the selected row and reports how many
+ * first (always when that makes it fit; on a narrow screen or a short list
+ * area in every case), then the list scrolls around the selected row and reports how many
  * rows are hidden above and below (drawn as a muted "12 more ↓" count).
  */
 
@@ -234,17 +236,22 @@ export interface KitListResult {
   readonly endY: number;
 }
 
-/**
- * Draw a list of rows between `top` and `bottom`, keeping the selected row in
- * view. Group spacing (the blank row above each header but the first) is kept
- * while everything fits and collapses before any row is cut.
- */
-export function drawList(canvas: SurfaceCanvas, options: KitListOptions): KitListResult {
+interface ListPlan {
+  readonly capacity: number;
+  readonly heights: readonly number[];
+  /** Whether the blank row above each group header (but the first) is drawn. */
+  readonly gaps: boolean;
+  /** True when the rows do not all fit and the list scrolls. */
+  readonly scrolls: boolean;
+  /** Canvas rows that rows from..to take, spacing included when `gaps` is on. */
+  readonly spanOf: (from: number, to: number) => number;
+}
+
+/** Heights, group spacing and whether the list scrolls, by the rules drawList documents. */
+function planList(canvas: SurfaceCanvas, options: KitListOptions): ListPlan {
   const { rows, top, bottom, x0, x1 } = options;
   const capacity = Math.max(1, bottom - top + 1);
   const heights = rows.map((row) => measureRow(row, x0, x1));
-  const selected = rows.findIndex((row) => row.selected === true);
-
   // Prefix sums keep every span query O(1): catalogs run to thousands of rows.
   const heightPre = [0];
   const headerPre = [0];
@@ -252,33 +259,73 @@ export function drawList(canvas: SurfaceCanvas, options: KitListOptions): KitLis
     heightPre.push(heightPre[i]! + heights[i]!);
     headerPre.push(headerPre[i]! + (isHeader(rows[i]!) ? 1 : 0));
   }
-  const spanOf = (from: number, to: number, gaps: boolean): number => {
+  const span = (from: number, to: number, withGaps: boolean): number => {
     if (to < from) return 0;
     const base = heightPre[to + 1]! - heightPre[from]!;
     // A blank row above every header after the first row of the span.
-    return gaps ? base + (headerPre[to + 1]! - headerPre[from + 1]!) : base;
+    return withGaps ? base + (headerPre[to + 1]! - headerPre[from + 1]!) : base;
   };
+  const last = rows.length - 1;
+  if (rows.length === 0 || span(0, last, true) <= capacity) {
+    return { capacity, heights, gaps: true, scrolls: false, spanOf: (from, to) => span(from, to, true) };
+  }
+  // Spacing collapses before anything is cut; when the list scrolls anyway it
+  // stays on a wide screen with room, and goes on a narrow screen or a short list.
+  const scrolls = span(0, last, false) > capacity;
+  const gaps = scrolls && !canvas.compact && capacity >= SHORT_LIST_ROWS;
+  return { capacity, heights, gaps, scrolls, spanOf: (from, to) => span(from, to, gaps) };
+}
 
+/**
+ * The furthest first row a list can scroll to and still fill its area: for
+ * callers that track their own scroll position (drawList's scrollStart) and
+ * need to know where the end is, by the same spacing rules drawList uses.
+ */
+export function listScrollEnd(canvas: SurfaceCanvas, options: KitListOptions): number {
+  const plan = planList(canvas, options);
+  if (!plan.scrolls) return 0;
+  const last = options.rows.length - 1;
+  let start = last;
+  while (start > 0 && plan.spanOf(start - 1, last) <= plan.capacity) start--;
+  return start;
+}
+
+/**
+ * A list shorter than this many rows drops its group spacing as soon as it
+ * scrolls: on a short screen every row of content is worth more than the gap.
+ */
+const SHORT_LIST_ROWS = 10;
+
+/**
+ * Draw a list of rows between `top` and `bottom`, keeping the selected row in
+ * view. Group spacing (the blank row above each header but the first) stays
+ * while the list scrolls on a wide screen. It collapses before any row is cut
+ * when everything would fit without it, and it is dropped whenever the list
+ * does not fit on a narrow screen (below 90 columns) or a short list area.
+ */
+export function drawList(canvas: SurfaceCanvas, options: KitListOptions): KitListResult {
+  const { rows, top, bottom, x0, x1 } = options;
+  const plan = planList(canvas, options);
+  const { gaps, heights } = plan;
   let start = 0;
-  let gaps = true;
-  if (rows.length > 0 && spanOf(0, rows.length - 1, true) > capacity) {
-    gaps = false;
-    if (spanOf(0, rows.length - 1, false) > capacity) {
-      start = Math.max(0, Math.min(rememberedStart(options.scrollKey) ?? options.scrollStart ?? 0, rows.length - 1));
-      if (selected >= 0) {
-        if (selected < start) start = selected;
-        while (start < selected && spanOf(start, selected, false) > capacity) start++;
-        // Show the selected row's group header when there is room for it.
-        if (start > 0 && start === selected && isHeader(rows[start - 1]!) && spanOf(start - 1, selected, false) <= capacity) start--;
-      }
-      // Do not leave empty space at the end when scrolled down.
-      while (start > 0 && spanOf(start - 1, rows.length - 1, false) <= capacity) start--;
+  const last = rows.length - 1;
+  if (plan.scrolls) {
+    const { capacity, spanOf } = plan;
+    const selected = rows.findIndex((row) => row.selected === true);
+    start = Math.max(0, Math.min(rememberedStart(options.scrollKey) ?? options.scrollStart ?? 0, last));
+    if (selected >= 0) {
+      if (selected < start) start = selected;
+      while (start < selected && spanOf(start, selected) > capacity) start++;
+      // Show the selected row's group header when there is room for it.
+      if (start > 0 && start === selected && isHeader(rows[start - 1]!) && spanOf(start - 1, selected) <= capacity) start--;
     }
+    // Do not leave empty space at the end when scrolled down.
+    while (start > 0 && spanOf(start - 1, last) <= capacity) start--;
   }
 
   rememberStart(options.scrollKey, start);
   let y = top;
-  let last = start - 1;
+  let lastDrawn = start - 1;
   for (let i = start; i < rows.length; i++) {
     const gap = gaps && i > start && isHeader(rows[i]!) ? 1 : 0;
     if (y + gap > bottom) break;
@@ -287,7 +334,7 @@ export function drawList(canvas: SurfaceCanvas, options: KitListOptions): KitLis
     y += gap;
     const used = drawRow(canvas, y, rows[i]!, x0, x1, bottom);
     y += used;
-    last = i;
+    lastDrawn = i;
     if (used < heights[i]!) break;
   }
   const countItems = (from: number, to: number): number => {
@@ -297,7 +344,7 @@ export function drawList(canvas: SurfaceCanvas, options: KitListOptions): KitLis
   };
   return {
     above: countItems(0, start - 1),
-    below: countItems(last + 1, rows.length - 1),
+    below: countItems(lastDrawn + 1, last),
     start,
     endY: y,
   };
@@ -309,6 +356,7 @@ export function drawList(canvas: SurfaceCanvas, options: KitListOptions): KitLis
  */
 export function drawScrollingList(canvas: SurfaceCanvas, options: KitListOptions): KitListResult {
   const scratch = new SurfaceCanvas(canvas.width, canvas.height);
+  scratch.compact = canvas.compact;
   const trial = drawList(scratch, options);
   if (trial.above === 0 && trial.below === 0) return drawList(canvas, options);
   const result = drawList(canvas, { ...options, bottom: options.bottom - 1 });

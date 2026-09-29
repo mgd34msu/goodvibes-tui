@@ -120,6 +120,28 @@ function systemLines(content: string, p: GraphPaint): Line[] {
   return renderSystemMessage(content, Math.max(20, p.width - shift));
 }
 
+/** The process id a backgrounded call reported (`process_id` or `processId`, top level or on its first command). */
+export function backgroundProcessId(result: string | undefined): string | undefined {
+  if (!result || !/process_?[iI]d/.test(result)) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(result);
+    const find = (value: unknown, depth: number): string | undefined => {
+      if (depth > 3 || value === null || typeof value !== 'object') return undefined;
+      if (Array.isArray(value)) {
+        for (const item of value) { const id = find(item, depth + 1); if (id) return id; }
+        return undefined;
+      }
+      const rec = value as Record<string, unknown>;
+      for (const key of ['process_id', 'processId'] as const) if (typeof rec[key] === 'string' && (rec[key] as string).length > 0) return rec[key] as string;
+      for (const child of Object.values(rec)) { const id = find(child, depth + 1); if (id) return id; }
+      return undefined;
+    };
+    return find(parsed, 0);
+  } catch {
+    return /"process_?[iI]d"\s*:\s*"([^"]+)"/.exec(result)?.[1];
+  }
+}
+
 function beadMeta(bead: BeadModel, startLine: number, lineCount: number, capped: boolean, laneKey: string | undefined): BlockMeta {
   const isDiff = bead.body?.kind === 'diff';
   const raw = bead.result ?? JSON.stringify(bead.call.arguments, null, 2);
@@ -131,7 +153,10 @@ function beadMeta(bead: BeadModel, startLine: number, lineCount: number, capped:
     lineCount,
     rawContent: isDiff && bead.body?.kind === 'diff' ? bead.body.diff : raw,
     toolName: bead.call.name,
-    workTree: { kind: 'bead', id: bead.id, hasBody: bead.body !== null, open: bead.open, capped, moreKey: beadMoreKeyOf(bead.id), laneKey },
+    workTree: {
+      kind: 'bead', id: bead.id, hasBody: bead.body !== null, open: bead.open, capped, moreKey: beadMoreKeyOf(bead.id), laneKey,
+      processId: bead.status === 'bg' ? backgroundProcessId(bead.result) : undefined,
+    },
   };
   if (bead.body?.kind === 'diff' && bead.body.numbered) {
     const parsed = parseDiffForApply(bead.body.diff);
@@ -297,7 +322,10 @@ export function renderTurn(model: TurnModel, options: TurnRenderOptions): TurnRe
           lineCount: 1,
           rawContent: `${lane.name}: ${lane.arg}\n${lane.mergeText}`,
           toolName: row.bead.call.name,
-          workTree: { kind: 'lane', id: laneFocusId(lane), hasBody: true, open: row.kind === 'spawn', capped: false, finished: lane.outcome !== 'run', laneKey: lane.key },
+          workTree: {
+            kind: 'lane', id: laneFocusId(lane), hasBody: true, open: row.kind === 'spawn', capped: false, finished: lane.outcome !== 'run', laneKey: lane.key,
+            agentId: lane.id, colorIndex: layout.laneColor.get(lane.id) ?? 0,
+          },
         });
         noteMessage(row.bead.scope === '' ? row.bead.messageIndex : undefined, start);
         noteMessage(row.bead.resultIndex, start);

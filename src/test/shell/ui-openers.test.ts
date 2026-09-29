@@ -57,6 +57,14 @@ describe('wireShellUiOpeners', () => {
         loadRecentModels: mock(async () => {}),
         getSelectedTargetInfo: mock(() => null),
         target: 'main',
+        // The picker opens on the cached catalog, then the slow reads land through
+        // fillCatalog (input/model-picker-open.ts); the stub applies them the same way.
+        beginCatalogLoad: mock(() => 1),
+        fillCatalog: mock(function (this: Record<string, unknown>, _ticket: number, fill: { embeddingProviders?: unknown[]; targetInfos?: unknown[] }) {
+          if (fill.embeddingProviders) this.embeddingProviders = fill.embeddingProviders;
+          if (fill.targetInfos) (this.setTargetInfos as (infos: unknown[]) => void)(fill.targetInfos);
+          return true;
+        }),
       },
       modalOpened: mock(() => {}),
       openSelection: mock(() => {}),
@@ -236,8 +244,9 @@ describe('wireShellUiOpeners', () => {
       await openModelPickerAndFlush();
 
       const setTargetInfos = getModelPicker().setTargetInfos as ReturnType<typeof mock>;
-      expect(setTargetInfos).toHaveBeenCalledTimes(1);
-      const targets = setTargetInfos.mock.calls[0]![0] as Array<{ target: string; label: string; configuredNote?: string; model: string }>;
+      // Once on open (cached), once more when the embeddings probe lands.
+      expect(setTargetInfos).toHaveBeenCalledTimes(2);
+      const targets = setTargetInfos.mock.calls.at(-1)![0] as Array<{ target: string; label: string; configuredNote?: string; model: string }>;
       expect(targets.map((t) => t.target)).toEqual(['main', 'helper', 'tool', 'tts', 'embeddings']);
 
       const embeddingsTarget = targets.find((t) => t.target === 'embeddings')!;
@@ -250,7 +259,7 @@ describe('wireShellUiOpeners', () => {
       await openModelPickerAndFlush();
 
       const setTargetInfos = getModelPicker().setTargetInfos as ReturnType<typeof mock>;
-      const targets = setTargetInfos.mock.calls[0]![0] as Array<{ target: string; label: string }>;
+      const targets = setTargetInfos.mock.calls.at(-1)![0] as Array<{ target: string; label: string }>;
       expect(targets.find((t) => t.target === 'main')?.label).toBe('Main Chat');
       expect(targets.find((t) => t.target === 'helper')?.label).toBe('Helper Model');
       expect(targets.find((t) => t.target === 'tool')?.label).toBe('Tool LLM');
@@ -271,7 +280,7 @@ describe('wireShellUiOpeners', () => {
       await openModelPickerAndFlush();
 
       const setTargetInfos = getModelPicker().setTargetInfos as ReturnType<typeof mock>;
-      const targets = setTargetInfos.mock.calls[0]![0] as Array<{ target: string; configuredNote?: string }>;
+      const targets = setTargetInfos.mock.calls.at(-1)![0] as Array<{ target: string; configuredNote?: string }>;
       expect(targets.find((t) => t.target === 'embeddings')?.configuredNote).toBe('vanished-provider · unregistered');
     });
 

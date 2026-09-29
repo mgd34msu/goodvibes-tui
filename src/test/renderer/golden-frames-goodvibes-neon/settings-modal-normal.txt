@@ -14,15 +14,15 @@
 |           Permissions     23                                                                       |
 |           Policy-as-Code   4      Stream LLM tokens as they arrive                                 |
 |           Token Security   4                                                                       |
-|         ✦ ai routing              Possible values:                                                 |
-|           Provider         7      true: enabled or allowed for this setting.                       |
-|           Pricing          1      false: disabled or not allowed for this setting.                 |
-|           Subscriptions    1      4 more ↓ · pgdn                                                  |
-|           Helper           3                                                                       |
-|           Tools            9      lineNumbers                                      off             |
-|           TTS              6      collapseThreshold                                 30             |
-|           Voice (local    34      theme                                      goodvibes             |
-|           engines)                themeMode                                       auto             |
+|                                   Possible values:                                                 |
+|         ✦ ai routing              true: enabled or allowed for this setting.                       |
+|           Provider         7      false: disabled or not allowed for this setting.                 |
+|           Pricing          1      4 more ↓ · pgdn                                                  |
+|           Subscriptions    1                                                                       |
+|           Helper           3      lineNumbers                                      off             |
+|           Tools            9      collapseThreshold                                 30             |
+|           TTS              6      theme                                      goodvibes             |
+|           Voice (local    34      themeMode                                       auto             |
 |                    43 more ↓                                                                       |
 |                                                                                                    |
 |            ↑↓  category    →  settings    tab  pane                             5 more ↓           |
@@ -2200,39 +2200,18 @@
 15 6 bg=#050507
 15 7 bg=#161a22
 15 8 bg=#161a22
-15 9 fg=#d000ff
 15 9 bg=#161a22
 15 10 bg=#161a22
-15 11 fg=#a855f7
 15 11 bg=#161a22
-15 11 bold=1
-15 12 fg=#a855f7
 15 12 bg=#161a22
-15 12 bold=1
-15 13 fg=#a855f7
 15 13 bg=#161a22
-15 13 bold=1
-15 14 fg=#a855f7
 15 14 bg=#161a22
-15 14 bold=1
-15 15 fg=#a855f7
 15 15 bg=#161a22
-15 15 bold=1
-15 16 fg=#a855f7
 15 16 bg=#161a22
-15 16 bold=1
-15 17 fg=#a855f7
 15 17 bg=#161a22
-15 17 bold=1
-15 18 fg=#a855f7
 15 18 bg=#161a22
-15 18 bold=1
-15 19 fg=#a855f7
 15 19 bg=#161a22
-15 19 bold=1
-15 20 fg=#a855f7
 15 20 bg=#161a22
-15 20 bold=1
 15 21 bg=#161a22
 15 22 bg=#161a22
 15 23 bg=#161a22
@@ -2367,26 +2346,39 @@
 16 6 bg=#050507
 16 7 bg=#161a22
 16 8 bg=#161a22
+16 9 fg=#d000ff
 16 9 bg=#161a22
 16 10 bg=#161a22
-16 11 fg=#e2e8f0
+16 11 fg=#a855f7
 16 11 bg=#161a22
-16 12 fg=#e2e8f0
+16 11 bold=1
+16 12 fg=#a855f7
 16 12 bg=#161a22
-16 13 fg=#e2e8f0
+16 12 bold=1
+16 13 fg=#a855f7
 16 13 bg=#161a22
-16 14 fg=#e2e8f0
+16 13 bold=1
+16 14 fg=#a855f7
 16 14 bg=#161a22
-16 15 fg=#e2e8f0
+16 14 bold=1
+16 15 fg=#a855f7
 16 15 bg=#161a22
-16 16 fg=#e2e8f0
+16 15 bold=1
+16 16 fg=#a855f7
 16 16 bg=#161a22
-16 17 fg=#e2e8f0
+16 16 bold=1
+16 17 fg=#a855f7
 16 17 bg=#161a22
-16 18 fg=#e2e8f0
+16 17 bold=1
+16 18 fg=#a855f7
 16 18 bg=#161a22
+16 18 bold=1
+16 19 fg=#a855f7
 16 19 bg=#161a22
+16 19 bold=1
+16 20 fg=#a855f7
 16 20 bg=#161a22
+16 20 bold=1
 16 21 bg=#161a22
 16 22 bg=#161a22
 16 23 bg=#161a22
@@ -2394,7 +2386,6 @@
 16 25 bg=#161a22
 16 26 bg=#161a22
 16 27 bg=#161a22
-16 28 fg=#4e5c6f
 16 28 bg=#161a22
 16 29 bg=#161a22
 16 30 bg=#161a22
@@ -2548,6 +2539,7 @@
 17 16 bg=#161a22
 17 17 fg=#e2e8f0
 17 17 bg=#161a22
+17 18 fg=#e2e8f0
 17 18 bg=#161a22
 17 19 bg=#161a22
 17 20 bg=#161a22
@@ -2718,17 +2710,11 @@
 18 16 bg=#161a22
 18 17 fg=#e2e8f0
 18 17 bg=#161a22
-18 18 fg=#e2e8f0
 18 18 bg=#161a22
-18 19 fg=#e2e8f0
 18 19 bg=#161a22
-18 20 fg=#e2e8f0
 18 20 bg=#161a22
-18 21 fg=#e2e8f0
 18 21 bg=#161a22
-18 22 fg=#e2e8f0
 18 22 bg=#161a22
-18 23 fg=#e2e8f0
 18 23 bg=#161a22
 18 24 bg=#161a22
 18 25 bg=#161a22
@@ -2859,12 +2845,19 @@
 19 15 bg=#161a22
 19 16 fg=#e2e8f0
 19 16 bg=#161a22
+19 17 fg=#e2e8f0
 19 17 bg=#161a22
+19 18 fg=#e2e8f0
 19 18 bg=#161a22
+19 19 fg=#e2e8f0
 19 19 bg=#161a22
+19 20 fg=#e2e8f0
 19 20 bg=#161a22
+19 21 fg=#e2e8f0
 19 21 bg=#161a22
+19 22 fg=#e2e8f0
 19 22 bg=#161a22
+19 23 fg=#e2e8f0
 19 23 bg=#161a22
 19 24 bg=#161a22
 19 25 bg=#161a22
@@ -2978,6 +2971,7 @@
 20 14 bg=#161a22
 20 15 fg=#e2e8f0
 20 15 bg=#161a22
+20 16 fg=#e2e8f0
 20 16 bg=#161a22
 20 17 bg=#161a22
 20 18 bg=#161a22
@@ -3108,7 +3102,9 @@
 21 12 bg=#161a22
 21 13 fg=#e2e8f0
 21 13 bg=#161a22
+21 14 fg=#e2e8f0
 21 14 bg=#161a22
+21 15 fg=#e2e8f0
 21 15 bg=#161a22
 21 16 bg=#161a22
 21 17 bg=#161a22
@@ -3245,29 +3241,19 @@
 22 12 bg=#161a22
 22 13 fg=#e2e8f0
 22 13 bg=#161a22
-22 14 fg=#e2e8f0
 22 14 bg=#161a22
-22 15 fg=#e2e8f0
 22 15 bg=#161a22
-22 16 fg=#e2e8f0
 22 16 bg=#161a22
-22 17 fg=#e2e8f0
 22 17 bg=#161a22
-22 18 fg=#e2e8f0
 22 18 bg=#161a22
-22 19 fg=#e2e8f0
 22 19 bg=#161a22
-22 20 fg=#e2e8f0
 22 20 bg=#161a22
-22 21 fg=#e2e8f0
 22 21 bg=#161a22
-22 22 fg=#e2e8f0
 22 22 bg=#161a22
 22 23 bg=#161a22
 22 24 bg=#161a22
 22 25 bg=#161a22
 22 26 bg=#161a22
-22 27 fg=#4e5c6f
 22 27 bg=#161a22
 22 28 fg=#4e5c6f
 22 28 bg=#161a22
@@ -3397,15 +3383,21 @@
 23 17 bg=#161a22
 23 18 fg=#e2e8f0
 23 18 bg=#161a22
+23 19 fg=#e2e8f0
 23 19 bg=#161a22
+23 20 fg=#e2e8f0
 23 20 bg=#161a22
+23 21 fg=#e2e8f0
 23 21 bg=#161a22
+23 22 fg=#e2e8f0
 23 22 bg=#161a22
 23 23 bg=#161a22
 23 24 bg=#161a22
 23 25 bg=#161a22
 23 26 bg=#161a22
+23 27 fg=#4e5c6f
 23 27 bg=#161a22
+23 28 fg=#4e5c6f
 23 28 bg=#161a22
 23 29 bg=#161a22
 23 30 bg=#161a22

@@ -43,6 +43,15 @@ import {
 } from './model-picker-items.ts';
 
 export { detectFamily, POPULAR_PROVIDERS, tierToCategoryFilter } from './model-picker-types.ts';
+
+/** Catalog data that arrives after the picker opened (see ModelPickerModal.fillCatalog). */
+export interface ModelPickerCatalogFill {
+  readonly models?: ModelDefinition[];
+  readonly providers?: string[];
+  readonly configuredViaMap?: Map<string, 'env' | 'secrets' | 'subscription' | 'anonymous'>;
+  readonly embeddingProviders?: EmbeddingProviderPickerEntry[];
+  readonly targetInfos?: ModelPickerTargetInfo[];
+}
 export type {
   BenchmarkSort,
   CapabilityFilter,
@@ -135,6 +144,15 @@ export class ModelPickerModal {
   public benchmarkSort: BenchmarkSort = 'none';
   /** Current group-by mode. */
   public groupBy: GroupByMode = 'provider';
+
+  /**
+   * True from the moment the picker opens on its cached catalog until the
+   * slower reads (credential sources, embedding providers, the live model
+   * lists) land through fillCatalog. The list shows a muted "loading catalog…"
+   * row meanwhile; the picker is usable the whole time.
+   */
+  public catalogLoading = false;
+  private catalogTicket = 0;
 
   private filteredModelsCache: FilteredModelsCache | null = null;
   private filteredProvidersCache: FilteredProvidersCache | null = null;
@@ -380,8 +398,49 @@ export class ModelPickerModal {
     this.scrollOffset = 0;
   }
 
+  /** Mark the catalog as loading; the returned ticket lets fillCatalog drop a load that a close or a newer open overtook. */
+  beginCatalogLoad(): number {
+    this.catalogLoading = true;
+    return ++this.catalogTicket;
+  }
+
+  /**
+   * Land catalog data that finished loading after the picker opened. The
+   * query, filters and the selected row (matched by id) stay as they are.
+   * Returns false, changing nothing, when the picker closed or a newer load
+   * started since `ticket` was issued.
+   */
+  fillCatalog(ticket: number, fill: ModelPickerCatalogFill, done = true): boolean {
+    if (!this.active || ticket !== this.catalogTicket) return false;
+    const selectedId = this.selectedItemId();
+    if (fill.models) this.models = fill.models;
+    if (fill.providers) this.providers = fill.providers;
+    if (fill.configuredViaMap) this.configuredViaMap = fill.configuredViaMap;
+    if (fill.embeddingProviders) this.embeddingProviders = fill.embeddingProviders;
+    if (fill.targetInfos) this.targetInfos = fill.targetInfos;
+    this.clearCaches();
+    if (selectedId !== null && this.mode !== 'effort') {
+      const ids = this.mode === 'model' ? this.getFilteredModels().map((m) => m.id)
+        : this.mode === 'provider' ? this.getFilteredProviders()
+        : this.embeddingProviders.map((provider) => provider.id);
+      const idx = ids.indexOf(selectedId);
+      this.selectedIndex = idx >= 0 ? idx : Math.min(this.selectedIndex, Math.max(0, ids.length - 1));
+    }
+    if (done) this.catalogLoading = false;
+    return true;
+  }
+
+  private selectedItemId(): string | null {
+    if (this.mode === 'model') return this.getFilteredModels()[this.selectedIndex]?.id ?? null;
+    if (this.mode === 'provider') return this.getFilteredProviders()[this.selectedIndex] ?? null;
+    if (this.mode === 'embeddingProvider') return this.embeddingProviders[this.selectedIndex]?.id ?? null;
+    return null;
+  }
+
   /** Close the picker entirely. */
   close(): void {
+    this.catalogLoading = false;
+    this.catalogTicket++;
     this.active = false;
     this.mode = 'model';
     this.target = 'main';

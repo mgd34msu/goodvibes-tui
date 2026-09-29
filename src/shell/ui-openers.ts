@@ -1,4 +1,5 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { openModelPickerNow, type ModelPickerOpenDeps } from '../input/model-picker-open.ts';
 import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
@@ -290,70 +291,39 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     ];
   };
 
-  commandContext.openModelPicker = () => {
-    // Picker-open re-check: re-verify each provider's live model list (TTL-
-    // respecting) so a freshly-opened picker reflects models the provider
-    // started or stopped serving. Fire-and-forget; a completed refresh re-renders
-    // so the list updates in place without blocking the open.
-    void providerRegistry.refreshLiveModelDiscovery?.().then((reports) => {
-      if (reports.some((report) => report.added.length > 0 || report.removed.length > 0)) render();
-    }).catch(() => {});
-    void (async () => {
-      // getSelectableModels() is catalog-driven and can list models whose
-      // `provider` id (e.g. 'google', sourced from the pricing catalog) was never
-      // handed to providerRegistry.register()/registerRuntimeProvider(). Selecting
-      // such a model fails hard at turn time with ProviderNotFoundError
-      // ("Provider 'X' is not registered."). Filter to runtime-registered
-      // providers only, so the picker never offers a model that cannot work.
-      const models = providerRegistry.getSelectableModels().filter((m) => providerRegistry.has(m.provider));
-      const configuredIds = new Set(getConfiguredProviderIds());
-      input.modelPicker.configuredProviders = configuredIds;
-      const providerIds = [...new Set(models.map((m) => m.provider))];
-      const secretProviderIds = await resolveSecretProviderIds();
-      input.modelPicker.configuredViaMap = buildConfiguredViaMap(providerIds, configuredIds, subscriptionManager, secretProviderIds);
-      void getPinned().then((pinned) => {
-        input.modelPicker.pinnedIds = new Set(pinned);
-      });
-      void input.modelPicker.loadRecentModels().catch(() => {}); // best-effort: prefetch for UI, failure is non-visible
-      const embeddingEntries = await resolveEmbeddingProviderEntries();
-      input.modelPicker.embeddingProviders = embeddingEntries;
-      input.modalOpened('modelPicker');
-      input.modelPicker.setTargetInfos(buildModelPickerTargets(embeddingEntries));
-      input.modelPicker.openAllModels(models, getCurrentModelForPickerTarget());
-      render();
-    })().catch((error: unknown) => {
-      commandContext.print?.(`Model picker failed to open: ${summarizeError(error)}`);
-      render();
-    });
+  // The picker opens at once on the cached catalog; the credential-source
+  // reads, the embeddings probe and the live model re-check fill in after
+  // (input/model-picker-open.ts). getSelectableModels() and listModels() can
+  // name catalog providers this runtime never registered; both lists keep
+  // runtime-registered providers only, so the picker never offers a model
+  // that fails with "Provider not registered" at turn time.
+  const pickerOpenDeps: ModelPickerOpenDeps = {
+    picker: input.modelPicker,
+    modalOpened: () => input.modalOpened('modelPicker'),
+    render,
+    listModels: () => providerRegistry.getSelectableModels().filter((m) => providerRegistry.has(m.provider)),
+    listProviders: () => [...new Set(providerRegistry.listModels().map((m) => m.provider))].filter((id) => providerRegistry.has(id)),
+    currentModelId: getCurrentModelForPickerTarget,
+    currentProviderId: getCurrentProviderForPickerTarget,
+    configuredProviderIds: () => new Set(getConfiguredProviderIds()),
+    buildConfiguredVia: (ids, configured, secretIds) => buildConfiguredViaMap([...ids], new Set(configured), subscriptionManager, secretIds),
+    buildTargets: buildModelPickerTargets,
+    resolveSecretProviderIds,
+    resolveEmbeddingProviders: resolveEmbeddingProviderEntries,
+    refreshLiveModels: async () => ((await providerRegistry.refreshLiveModelDiscovery?.()) ?? []).some((r) => r.added.length > 0 || r.removed.length > 0),
+    prefetch: async () => {
+      input.modelPicker.pinnedIds = new Set(await getPinned());
+      await input.modelPicker.loadRecentModels();
+    },
+    onError: (error) => { commandContext.print?.(`Model picker could not load everything: ${summarizeError(error)}`); render(); },
   };
+
+  commandContext.openModelPicker = () => { void openModelPickerNow(pickerOpenDeps, 'models'); };
 
   commandContext.openModelPickerWithTarget = (target) => input.openModelPickerWithTarget(target);
   commandContext.openProviderModelPickerWithTarget = (target) => input.openProviderModelPickerWithTarget(target);
 
-  commandContext.openProviderPicker = () => {
-    void (async () => {
-      // listModels() surfaces every catalog provider id, not just the ones
-      // actually registered on this runtime (see openModelPicker above for the
-      // same class of bug). Intersect against providerRegistry.has() so the
-      // provider picker never offers a provider that will fail with
-      // "Provider not registered" once a model under it is selected.
-      const providers = [...new Set(providerRegistry.listModels().map((model) => model.provider))]
-        .filter((providerId) => providerRegistry.has(providerId));
-      const configuredIds = new Set(getConfiguredProviderIds());
-      input.modelPicker.configuredProviders = configuredIds;
-      const secretProviderIds = await resolveSecretProviderIds();
-      input.modelPicker.configuredViaMap = buildConfiguredViaMap(providers, configuredIds, subscriptionManager, secretProviderIds);
-      const embeddingEntries = await resolveEmbeddingProviderEntries();
-      input.modelPicker.embeddingProviders = embeddingEntries;
-      input.modalOpened('modelPicker');
-      input.modelPicker.setTargetInfos(buildModelPickerTargets(embeddingEntries));
-      input.modelPicker.openProviders(providers, getCurrentProviderForPickerTarget());
-      render();
-    })().catch((error: unknown) => {
-      commandContext.print?.(`Provider picker failed to open: ${summarizeError(error)}`);
-      render();
-    });
-  };
+  commandContext.openProviderPicker = () => { void openModelPickerNow(pickerOpenDeps, 'providers'); };
 
   commandContext.completeEmbeddingProviderSelection = (providerId: string) => {
     try {

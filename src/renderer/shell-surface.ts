@@ -30,6 +30,25 @@ const WORK_TREE_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['↑↓', 'move between beads'], ['←→', 'fold / unfold'], ['enter', 'open'], ['y', 'copy'], ['esc', 'back to typing'],
 ];
 
+/** What an agent or process view changes under the transcript. */
+export interface ShellFooterView {
+  /** The composer bar: the agent's lane color, or the process color. */
+  readonly barColor: string;
+  readonly placeholder?: string;
+  /** The composer takes no input; this says why. */
+  readonly disabledReason?: string;
+  /** The view's keys on the status line (esc back to main, ctrl+x stop, …). */
+  readonly keys: ReadonlyArray<readonly [string, string]>;
+  /** After the keys: main kept in sight (◐ main · working). */
+  readonly trail?: { readonly text: string; readonly fg: string } | null;
+  /** A notice in place of the keys (press ctrl+x again to stop). */
+  readonly notice?: { readonly text: string; readonly tone: 'error' | 'info' } | null;
+  /** The process view shows no context bar or cost. */
+  readonly noContext?: boolean;
+  /** The cost this view states instead of the session's (an agent's own, when priced). */
+  readonly cost?: string | null;
+}
+
 export interface ShellFooterBuildOptions {
   readonly width: number;
   /** The keyboard is in the conversation work tree: the status line shows its keys. */
@@ -44,6 +63,10 @@ export interface ShellFooterBuildOptions {
   /** The model the session cost is priced against; not drawn (the header names the model). */
   readonly model?: string;
   readonly workingDir?: string;
+  /** The home directory, drawn as ~ at the start of the working directory. */
+  readonly homeDirectory?: string;
+  /** An agent or process view is showing (session-focus.ts). */
+  readonly view?: ShellFooterView | null;
   /** The current branch (and dirty marker), shown beside the directory at rest. */
   readonly branch?: string;
   readonly contextWindow?: number;
@@ -153,6 +176,17 @@ function modeChips(permissionMode: string | undefined, dangerMode: boolean): Sta
   return chips;
 }
 
+/** The chips no view hides: auto-approve, the live microphone, sleep disabled. */
+function safetyChips(options: ShellFooterBuildOptions): StatusChip[] {
+  const t = activeTokens();
+  const chips: StatusChip[] = [];
+  if (options.dangerMode) chips.push({ text: '! auto-approve', fg: t.error, bold: true, keep: true });
+  const voice = options.voiceCapture ?? null;
+  if (voice && voiceCaptureRowVisible(voice)) chips.push(voiceCaptureChip(voice));
+  if (options.powerKeepAwake) chips.push({ text: SLEEP_DISABLED_CHIP, fg: t.warning, bold: true, keep: true });
+  return chips;
+}
+
 /** Format a USD amount with a precision that suits its magnitude. */
 function fmtCost(usd: number): string {
   if (!(usd > 0)) return '0.00';
@@ -173,10 +207,12 @@ export function statusCostText(usage: ShellFooterBuildOptions['usage'], model: s
   return main;
 }
 
-function displayDirectory(workingDir: string | undefined): string | undefined {
+function displayDirectory(workingDir: string | undefined, homeDirectory: string | undefined): string | undefined {
   if (!workingDir) return undefined;
-  const home = typeof process !== 'undefined' ? process.env.HOME ?? '' : '';
-  return home && workingDir.startsWith(home) ? '~' + workingDir.slice(home.length) : workingDir;
+  const home = homeDirectory ?? (typeof process !== 'undefined' ? process.env.HOME ?? '' : '');
+  if (!home) return workingDir;
+  if (workingDir === home) return '~';
+  return workingDir.startsWith(home.endsWith('/') ? home : `${home}/`) ? '~' + workingDir.slice(home.replace(/\/$/, '').length) : workingDir;
 }
 
 export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterBuildResult {
@@ -189,6 +225,7 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
   if (options.scriptableStatusLine) lines.push(UIFactory.stringToLine(`   ${options.scriptableStatusLine}`, options.width, { fg: t.textMuted }));
 
   const focused = options.promptFocused ?? !options.indicatorFocused;
+  const view = options.view ?? null;
   lines.push(...renderComposer({
     width: options.width,
     promptText: options.promptText,
@@ -196,7 +233,9 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
     focused,
     unfocusedHint: 'Esc returns to the composer',
     argsHint: options.commandArgsHint,
-    modeColor: composerBarColor(options.permissionMode, options.composerPendingRisk === 'shell'),
+    modeColor: view ? view.barColor : composerBarColor(options.permissionMode, options.composerPendingRisk === 'shell'),
+    placeholder: view?.placeholder,
+    disabledReason: view?.disabledReason,
   }));
 
   // The left end of the status line: mode, auto-approve, microphone and
@@ -213,6 +252,20 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
   }
 
   const copied = Date.now() - options.lastCopyTime < 2000;
+  if (view) {
+    // Inside an agent or process view: its keys (what Esc does first), then main kept in sight.
+    lines.push(tagFooterLine(renderStatusLine({
+      width: options.width,
+      chips: safetyChips(options),
+      notice: options.showExitNotice ? { text: 'Press Ctrl+C again to exit', tone: 'error' } : view.notice ?? (copied ? { text: 'Copied', tone: 'info' } : null),
+      keys: view.keys,
+      trail: view.trail ?? null,
+      cost: view.noContext ? null : view.cost ?? null,
+      context: null,
+    }), 'usage'));
+    lastRenderedFooterHeight = lines.length;
+    return { lines, height: lines.length };
+  }
   // A click anywhere on the status line (the context bar, the cost) opens Usage.
   lines.push(tagFooterLine(renderStatusLine({
     width: options.width,
@@ -220,9 +273,10 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
     notice: options.showExitNotice
       ? { text: 'Press Ctrl+C again to exit', tone: 'error' }
       : copied ? { text: 'Copied', tone: 'info' } : null,
-    busy: options.busy ?? null,
+    // With text in the composer the next Esc clears it; only an empty composer's Esc interrupts.
+    busy: options.busy ? { ...options.busy, escAction: options.promptText.trim().length > 0 ? 'clear input' : undefined } : null,
     keys: options.workTreeFocused ? WORK_TREE_KEYS : null,
-    directory: displayDirectory(options.workingDir),
+    directory: displayDirectory(options.workingDir, options.homeDirectory),
     branch: options.branch,
     background: {
       agents: options.runningAgentCount,

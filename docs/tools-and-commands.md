@@ -389,11 +389,15 @@ There are no side panes. Every view opens as a modal over the dimmed conversatio
 | Key | Action |
 |-----|--------|
 | `Ctrl+P` / `Ctrl+K` | Command palette: every command, view and setting; the old pane names (fleet, tokens, git, …) are search words |
-| `F2` / `Ctrl+O` | Agents: running and finished agents, WRFC chains, workflows and hosted sessions; steer (`s`), stop (`Ctrl+X`, asks first; `Ctrl+X` again confirms), open a transcript (`Enter`) |
+| `F2` / `Ctrl+O` | Agents: running and finished agents, WRFC chains, workflows and hosted sessions; steer (`s`), stop (`Ctrl+X`, asks first; `Ctrl+X` again confirms), open an agent or background process full screen (`Enter`) |
 | `/usage` | Usage: context bar with the compaction threshold, session totals, per-turn bars, fleet cost split, compact now |
 | `/changes` | Changes: changed files with +/- counts, a tinted syntax-colored diff, the semantic summary, hunk navigation (`]` `[`), stage hunk (`space`), review comments (`c`), mark reviewed (`m`), open in editor (`o`) |
 | `/notifications` | Notification history |
 | `/sessions` | Session picker, with hosted sessions in a Hosted group |
+
+An agent or a background process can take over the whole terminal. `Enter` on an agent's lane in the work tree (or on its row in Agents) opens the agent: its work is the spine, its own children branch off it, the header reads `main › engineer` in the agent's color, and the composer steers the agent while main keeps running. `Enter` on a `▶` bead (or a process row) opens the process: live output with timestamps, errors in red, follow mode on. The process view takes no input, because GoodVibes cannot write to a background process's stdin; `/` searches its output and `y` copies it. While more than one session exists, a row of session chips under the header lists them, and `Tab` / `Shift+Tab` switch between them when the composer is empty.
+
+`Esc` in a view goes back up one level (a child agent returns to the agent that started it, then main) and never stops anything. Stopping is `Ctrl+X`: the first press asks, the second stops. The status line always says what the next `Esc` does.
 
 ### Selection modals
 
@@ -416,7 +420,8 @@ In a searchable modal, `/` focuses the filter, and any keystroke that no row hot
 |-----|--------|
 | `Ctrl+C` | Clear input / cancel generation / exit (double-press to quit) |
 | `Ctrl+K` | Open the command palette (search and run any command) |
-| `Shift+Tab` | Cycle the session permission mode: normal → accept-edits → plan → auto |
+| `Shift+Tab` | Cycle the session permission mode: normal → accept-edits → plan → auto. While the session chips show (an agent or background process is running) and the composer is empty, it switches to the previous session instead, and `Tab` to the next |
+| `Ctrl+X` | Inside an agent or process view: stop what it shows (the first press asks, the second stops) |
 | `Alt+C` | Cancel the running tool call (the turn continues) |
 | `Alt+A` | Toggle keep-awake (the "sleep disabled" chip) |
 | `Alt+M` | List or hide the memories a turn used (provenance chip drill-in) |

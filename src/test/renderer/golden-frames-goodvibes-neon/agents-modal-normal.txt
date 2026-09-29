@@ -20,12 +20,12 @@
 |         ◐ bun test src/test/renderer          15s     approvals —                                  |
 |           background process · 42 pass 0                                                           |
 |           fail                                                                                     |
-|         ✦ finished                                   No messages yet.                              |
-|         ✓ [Agent] Regenerate       1m40s · $0.012                                                  |
+|                                                      No messages yet.                              |
+|                                                                                                    |
 |                                                                                                    |
 |            ⏎  open full screen    s  steer    ctrl+x  stop    n  new agent                         |
 |            i  interrupt    p  pause    b  waiting on you (1)    v  archive                         |
-|            a  archive one    f  follow                                          1 more ↓           |
+|            a  archive one    f  follow                                          2 more ↓           |
 |                                                                                                    |
 |       ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀       |
 |                                                                                                    |
@@ -3292,33 +3292,16 @@
 21 6 bg=#050507
 21 7 bg=#161a22
 21 8 bg=#161a22
-21 9 fg=#d000ff
 21 9 bg=#161a22
 21 10 bg=#161a22
-21 11 fg=#a855f7
 21 11 bg=#161a22
-21 11 bold=1
-21 12 fg=#a855f7
 21 12 bg=#161a22
-21 12 bold=1
-21 13 fg=#a855f7
 21 13 bg=#161a22
-21 13 bold=1
-21 14 fg=#a855f7
 21 14 bg=#161a22
-21 14 bold=1
-21 15 fg=#a855f7
 21 15 bg=#161a22
-21 15 bold=1
-21 16 fg=#a855f7
 21 16 bg=#161a22
-21 16 bold=1
-21 17 fg=#a855f7
 21 17 bg=#161a22
-21 17 bold=1
-21 18 fg=#a855f7
 21 18 bg=#161a22
-21 18 bold=1
 21 19 bg=#161a22
 21 20 bg=#161a22
 21 21 bg=#161a22
@@ -3439,44 +3422,25 @@
 22 6 bg=#050507
 22 7 bg=#161a22
 22 8 bg=#161a22
-22 9 fg=#22c55e
 22 9 bg=#161a22
 22 10 bg=#161a22
-22 11 fg=#e2e8f0
 22 11 bg=#161a22
-22 12 fg=#e2e8f0
 22 12 bg=#161a22
-22 13 fg=#e2e8f0
 22 13 bg=#161a22
-22 14 fg=#e2e8f0
 22 14 bg=#161a22
-22 15 fg=#e2e8f0
 22 15 bg=#161a22
-22 16 fg=#e2e8f0
 22 16 bg=#161a22
-22 17 fg=#e2e8f0
 22 17 bg=#161a22
-22 18 fg=#e2e8f0
 22 18 bg=#161a22
-22 19 fg=#e2e8f0
 22 19 bg=#161a22
-22 20 fg=#e2e8f0
 22 20 bg=#161a22
-22 21 fg=#e2e8f0
 22 21 bg=#161a22
-22 22 fg=#e2e8f0
 22 22 bg=#161a22
-22 23 fg=#e2e8f0
 22 23 bg=#161a22
-22 24 fg=#e2e8f0
 22 24 bg=#161a22
-22 25 fg=#e2e8f0
 22 25 bg=#161a22
-22 26 fg=#e2e8f0
 22 26 bg=#161a22
-22 27 fg=#e2e8f0
 22 27 bg=#161a22
-22 28 fg=#e2e8f0
 22 28 bg=#161a22
 22 29 bg=#161a22
 22 30 bg=#161a22
@@ -3485,33 +3449,19 @@
 22 33 bg=#161a22
 22 34 bg=#161a22
 22 35 bg=#161a22
-22 36 fg=#4e5c6f
 22 36 bg=#161a22
-22 37 fg=#4e5c6f
 22 37 bg=#161a22
-22 38 fg=#4e5c6f
 22 38 bg=#161a22
-22 39 fg=#4e5c6f
 22 39 bg=#161a22
-22 40 fg=#4e5c6f
 22 40 bg=#161a22
-22 41 fg=#4e5c6f
 22 41 bg=#161a22
-22 42 fg=#4e5c6f
 22 42 bg=#161a22
-22 43 fg=#4e5c6f
 22 43 bg=#161a22
-22 44 fg=#4e5c6f
 22 44 bg=#161a22
-22 45 fg=#4e5c6f
 22 45 bg=#161a22
-22 46 fg=#4e5c6f
 22 46 bg=#161a22
-22 47 fg=#4e5c6f
 22 47 bg=#161a22
-22 48 fg=#4e5c6f
 22 48 bg=#161a22
-22 49 fg=#4e5c6f
 22 49 bg=#161a22
 22 50 bg=#161a22
 22 51 bg=#161a22

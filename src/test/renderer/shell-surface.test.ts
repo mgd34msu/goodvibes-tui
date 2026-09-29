@@ -206,9 +206,15 @@ describe('shell surface: the status line', () => {
   });
 
   test('a running turn shows its phrase, elapsed time and esc interrupt instead of the directory', () => {
-    const row = status({ width: 120, busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 12_000 } });
+    const row = status({ width: 120, promptText: '', busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 12_000 } });
     expect(row).toContain('Thinking... · 12s');
     expect(row).toMatch(/esc +interrupt/);
+  });
+
+  test('while the composer has text, the busy line says the next Esc clears it (it does not interrupt yet)', () => {
+    const row = status({ width: 120, promptText: 'draft', busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 12_000 } });
+    expect(row).toMatch(/esc +clear input/);
+    expect(row).not.toMatch(/esc +interrupt/);
     expect(row).not.toContain('/tmp/demo');
   });
 

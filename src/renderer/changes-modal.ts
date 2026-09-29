@@ -16,7 +16,8 @@
  *
  * Changed rows keep their syntax colors; the change shows as a background tint
  * across the row and a separate tint on the line-number gutter (the theme's
- * diff tokens). Long lines wrap under their own gutter. The semantic summary
+ * diff tokens, pushed further from the panel fill when a theme's tint sits too
+ * close to it; see diff-tint.ts). Long lines wrap under their own gutter. The semantic summary
  * (tree-sitter) leads the pane. A preview (a fleet candidate, a rewind or an
  * attempt) can carry a question with its two buttons on the first body row.
  */
@@ -28,6 +29,7 @@ import { button, buttonWidth, panel, type KitPanel } from './surface-kit-parts.t
 import { drawTextBlock, splitPanes } from './surface-kit-extra.ts';
 import { highlightCodeLines } from './code-block.ts';
 import type { SemanticDiff } from './semantic-diff.ts';
+import { diffRowTints } from './diff-tint.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { languageForPath, type ChangeFile, type ChangeHunk, type ChangeLine } from '../input/changes-model.ts';
 
@@ -137,7 +139,8 @@ export function buildDiffRows(diffFiles: readonly ChangeFile[], codeWidth: numbe
   for (const file of diffFiles) {
     if (fileHeaders) rows.push({ kind: 'file', text: `${file.path}  +${file.added} −${file.removed}` });
     if (file.headerOnly) {
-      rows.push({ kind: 'file', text: file.headerLines.some((l) => l.startsWith('Binary')) ? 'binary file, no line changes to show' : 'no line changes (mode or rename only)' });
+      const why = file.note ?? (file.headerLines.some((l) => l.startsWith('Binary')) ? 'binary file, no line changes to show' : 'no line changes (mode or rename only)');
+      rows.push({ kind: 'file', text: why });
       continue;
     }
     for (const hunk of file.hunks) {
@@ -179,8 +182,9 @@ export function drawDiffRow(canvas: SurfaceCanvas, p: KitPanel, y: number, row: 
   const line = row.line;
   const gutterEnd = p.l + GUTTER - 1;
   if (line.kind === 'add' || line.kind === 'del') {
-    canvas.tint(p.x, y, p.w, line.kind === 'add' ? t.diffAddedBg : t.diffRemovedBg);
-    canvas.tint(p.x, y, gutterEnd - p.x + 2, line.kind === 'add' ? t.diffAddedLineNumberBg : t.diffRemovedLineNumberBg);
+    const tints = diffRowTints(p.bg);
+    canvas.tint(p.x, y, p.w, line.kind === 'add' ? tints.addedRow : tints.removedRow);
+    canvas.tint(p.x, y, gutterEnd - p.x + 2, line.kind === 'add' ? tints.addedGutter : tints.removedGutter);
   }
   if (line.kind === 'note') {
     canvas.put(p.l + GUTTER + 3, y, clipText(row.text, p.r - p.l - GUTTER - 2), { fg: t.textFaint });

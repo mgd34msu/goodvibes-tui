@@ -73,6 +73,11 @@ export interface KitStyle {
 /** A width x height grid of cells with the concept's small painter API. */
 export class SurfaceCanvas {
   readonly lines: Line[];
+  /**
+   * True when the screen is narrower than the modal breakpoint (90 columns):
+   * lists on this canvas drop their group spacing as soon as they do not fit.
+   */
+  compact = false;
 
   constructor(readonly width: number, readonly height: number) {
     this.lines = Array.from({ length: Math.max(0, height) }, () =>
@@ -173,7 +178,7 @@ function gradientAt(from: string, to: string, k: number, n: number): string {
 // ---------------------------------------------------------------------------
 
 /** Width below which modals take the full width minus 1 per side. */
-const NARROW_MODAL_BREAKPOINT = 90;
+export const NARROW_MODAL_BREAKPOINT = 90;
 /** Upper bound on a modal's width. */
 const MAX_MODAL_WIDTH = 124;
 /** Columns between the fill edge and text. */
@@ -400,6 +405,7 @@ export function beginModal(screenW: number, screenH: number, options: ModalOptio
   const geometry = modalGeometry(screenW, screenH, options);
   const { w, h } = geometry;
   const canvas = new SurfaceCanvas(w, h + 2);
+  canvas.compact = screenW < NARROW_MODAL_BREAKPOINT;
   canvas.fill(0, 1, w, h, t.backgroundPanel);
 
   // Soft caps: ▄ above in the brand gradient (or a warning strip), ▀ below in the surface color.

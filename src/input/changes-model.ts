@@ -35,6 +35,12 @@ export interface ChangeFile {
   readonly removed: number;
   /** A binary file or a mode-only change: header only, nothing to show line by line. */
   readonly headerOnly: boolean;
+  /**
+   * Why a file has no lines to show when it is not the usual binary or
+   * mode-only case (a large or empty untracked file). Read from a "# " line in
+   * the file's header, which changes-git.ts writes and git never does.
+   */
+  readonly note?: string;
 }
 
 function numberLines(hunk: ReviewHunk): ChangeLine[] {
@@ -82,6 +88,7 @@ export function parseChanges(raw: string): ChangeFile[] {
   headers.forEach((header, index) => {
     const review = byIndex.get(index);
     const hunks: ChangeHunk[] = (review?.hunks ?? []).map((hunk) => ({ review: hunk, lines: numberLines(hunk) }));
+    const noteLine = header.lines.find((line) => line.startsWith('# '));
     files.push({
       path: review?.filePath ?? pathFromHeader(header.lines),
       headerLines: header.lines,
@@ -89,6 +96,7 @@ export function parseChanges(raw: string): ChangeFile[] {
       added: hunks.reduce((n, h) => n + h.review.added, 0),
       removed: hunks.reduce((n, h) => n + h.review.removed, 0),
       headerOnly: hunks.length === 0,
+      ...(noteLine ? { note: noteLine.slice(2) } : {}),
     });
   });
   return files;

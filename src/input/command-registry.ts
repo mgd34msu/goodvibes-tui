@@ -240,6 +240,11 @@ export interface CommandShellUiOpeners {
   openView?: (name: string, target?: ViewTarget) => boolean;
   /** The Agents modal; `target` selects a process, `hosted` opens the attached hosted session. */
   openAgents?: (options?: { readonly target?: ViewTarget; readonly hosted?: boolean }) => void;
+  /**
+   * Open an agent or a background process full screen (core/session-focus.ts).
+   * False when it is not known here (the caller keeps its own fallback).
+   */
+  openSessionView?: (target: { readonly kind: 'agent' | 'process'; readonly id: string }) => boolean;
   /** The Usage modal (`tab: 'agents'` opens on the per-agent cost ledger). */
   openUsage?: (options?: { readonly tab?: 'overview' | 'turns' | 'agents' }) => void;
   /** The Changes modal over the repository (this session's files, not staged, staged or vs HEAD). */

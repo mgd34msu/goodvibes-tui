@@ -7,7 +7,9 @@ import type { SlashCommand } from '../../input/command-registry.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
 import { OverlayFilter, OverlayFilters } from '../../input/overlay-filter.ts';
 import { handleOverlayToken } from '../../input/handler-ui-state.ts';
-import { layerText, layerTextBlock } from '../helpers/surface-frame.ts';
+import { frameFromLayer, layerText, layerTextBlock } from '../helpers/surface-frame.ts';
+import { auditFrame } from '../helpers/frame-audit.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 import type { SurfaceLayer } from '../../renderer/surface-kit.ts';
 
 const W = 120;
@@ -188,7 +190,7 @@ describe('renderShortcutsOverlay (the concept keys screen)', () => {
     const row = layer.lines.find((line) => line.map((c) => c.char).join('').includes('Shift+Enter'))!;
     const x = row.map((c) => c.char).join('').indexOf('Shift+Enter');
     expect(row[x]!.bold).toBe(true);
-    // Three columns at this width: a group header sits past the first third.
+    // Two columns at this width: a group header sits in the second column.
     const headerCols = layerText(layer).flatMap((line) => [...line.matchAll(/✦/g)].map((m) => m.index!));
     expect(Math.max(...headerCols)).toBeGreaterThan(40);
 
@@ -197,6 +199,34 @@ describe('renderShortcutsOverlay (the concept keys screen)', () => {
     const filtered = layerTextBlock(renderShortcutsOverlay(140, 40, KEYBINDINGS, 0, filter));
     expect(filtered).toContain('Shift+Enter');
     expect(filtered).not.toContain('Mouse wheel');
+  });
+
+  /** Columns of ✦ group headers below the title row (the title's own ✦ is excluded). */
+  function headerColumns(layer: SurfaceLayer): number[] {
+    const rows = layerText(layer);
+    const title = rows.findIndex((line) => line.includes('Keyboard shortcuts'));
+    return [...new Set(rows.slice(title + 1).flatMap((line) => [...line.matchAll(/✦/g)].map((m) => m.index!)))].sort((a, b) => a - b);
+  }
+
+  test('two columns below 170 screen columns, three from 170 up; the frame passes the layout audit', () => {
+    for (const [width, columns] of [[100, 2], [150, 2], [169, 2], [170, 3], [200, 3]] as const) {
+      const layer = renderShortcutsOverlay(width, 50, KEYBINDINGS, 0, new OverlayFilter());
+      expect(headerColumns(layer).length).toBe(columns);
+      const frame = frameFromLayer(layer, width, 50);
+      expect(auditFrame(frame, width, activeTokens()).map((i) => `${width}: ${i.kind} row ${i.row}: ${i.detail}`)).toEqual([]);
+    }
+  });
+
+  test('at 150 columns a description that fits its column stays on one line', () => {
+    const layer = renderShortcutsOverlay(150, 120, KEYBINDINGS, 0, new OverlayFilter());
+    const rows = layerText(layer);
+    const [first, second] = headerColumns(layer);
+    // The action column starts after the widest key plus 2; the column ends 4 before the next one.
+    const actionW = second! - first! - 4 - 2 - 15;
+    expect(actionW).toBeGreaterThanOrEqual(38);
+    const fitting = KEYBINDINGS.getAll().map((e) => e.description).filter((d) => d.length <= actionW);
+    expect(fitting.length).toBeGreaterThan(12);
+    for (const description of fitting) expect(rows.some((line) => line.includes(description))).toBe(true);
   });
 
   test('an unmatched query says so honestly', () => {

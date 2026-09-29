@@ -17,6 +17,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { activeTokens } from './theme.ts';
 import {
+  NARROW_MODAL_BREAKPOINT,
   SurfaceCanvas,
   clipText,
   type KitHint,
@@ -310,11 +311,15 @@ export function renderPopup(options: PopupOptions): PopupResult {
   const listMax = Math.max(1, options.maxRows - headerRows);
   const scrollKey = options.scrollOwner ? { owner: options.scrollOwner, name: 'popup' } : undefined;
   // Measure on a scratch canvas: how many rows the list really needs.
-  const trial = drawList(new SurfaceCanvas(width, listMax + 1), { rows: options.rows, top: 0, bottom: listMax - 1, x0, x1, scrollKey });
+  const compact = width < NARROW_MODAL_BREAKPOINT;
+  const scratch = new SurfaceCanvas(width, listMax + 1);
+  scratch.compact = compact;
+  const trial = drawList(scratch, { rows: options.rows, top: 0, bottom: listMax - 1, x0, x1, scrollKey });
   const overflow = trial.above > 0 || trial.below > 0;
   const listUsed = overflow ? listMax : Math.max(1, trial.endY);
   const used = headerRows + listUsed;
   const canvas = new SurfaceCanvas(width, used + 2);
+  canvas.compact = compact;
   canvas.fill(fillX, 0, fillW, used + 2, t.backgroundPanel);
   if (options.header) drawRow(canvas, 1, options.header, x0, x1);
   const listOptions = { rows: options.rows, top: 1 + headerRows, bottom: used, x0, x1, scrollKey };

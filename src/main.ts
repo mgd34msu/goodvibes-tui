@@ -84,6 +84,7 @@ import { ALT_SCREEN_ENTER, ALT_SCREEN_EXIT, MOUSE_ENABLE, MOUSE_DISABLE, CURSOR_
 import { installBackgroundThemeProbe } from './renderer/terminal-bg-probe.ts';
 import { registerThemeRefresh } from './renderer/theme.ts';
 import { VERSION } from './version.ts';
+import { SessionViews } from './shell/session-views.ts';
 
 async function main() {
   const stdout = process.stdout;
@@ -196,16 +197,20 @@ async function main() {
   // Live-microphone footer row (push-to-talk or the wake detector); assigned once voice capture is wired below, null until then so pre-wiring frames size correctly.
   let voiceCaptureStatus: () => import('./core/voice-capture-status.ts').VoiceCaptureIndicatorState | null = () => null;
 
+  // Agents and background processes opened full screen (shell/session-views.ts); set once the input handler exists.
+  let sessionViews: SessionViews | null = null;
+  let lastHeaderModel = runtime.model;
   const getViewportHeight = (): number => {
     if (input.onboardingWizard.active) return stdout.rows || 24;
     const promptLines: number = input.getVisiblePromptLineCount(getPromptContentWidth());
     const currentModel = providerRegistry.getCurrentModel();
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const rows = stdout.rows || 24;
-    return rows - 1 - estimateShellFooterHeight(promptLines); // 1: the header row
+    return rows - (sessionViews?.headerRows() ?? 1) - estimateShellFooterHeight(promptLines); // the header row (+ the session chips)
   };
 
   const scroll = (delta: number) => {
+    if (sessionViews?.active) { sessionViews.scroll(-delta); return; } // a view scrolls its own lines (up is positive there)
     // Prefer the last clamp the renderer computed (overlay- and real-footer-aware).
     // The footer estimate is only a fallback for the pre-first-render frame.
     const maxScroll = lastMaxScroll ?? Math.max(0, conversation.history.getLineCount() - getViewportHeight());
@@ -409,6 +414,13 @@ async function main() {
   );
 
   orchestratorRefs.getViewportHeight = getViewportHeight; orchestratorRefs.scrollToEnd = scrollToEnd;
+  const views = new SessionViews({
+    conversation, agentManager, processManager, fleetNodes: () => ctx.services.processRegistry.query().nodes,
+    steer: (id, text) => ctx.views.fleet.actions.steer(id, text), killAgent: (id) => ctx.views.fleet.actions.kill(id, { cascade: true }),
+    mainBusy: () => orchestrator.isThinking, mainModel: () => lastHeaderModel, promptText: () => input.prompt, requestRender: () => render(),
+  });
+  sessionViews = views; input.sessionView = views; unsubs.push(() => views.dispose());
+  commandContext.openSessionView = (target) => views.open(target);
 
   input.setCommandRegistry(commandRegistry, commandContext);
   commandContext.openComposerEditor = makeComposerEditorOpener({ buffer: input, stdin, stdout, writeGuard: allowTerminalWrite, repaint: () => { compositor.resetDiff(); render(); }, cwd: workingDir, env: process.env, notify: (m) => systemMessageRouter.high(m) });
@@ -445,7 +457,11 @@ async function main() {
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
     const activeModel = resolveActiveModelDisplay({ serving: currentModel, configuredRegistryKey: configManager.get('provider.model') as string, configuredLabel: runtime.model, configuredProvider: runtime.provider, failover: failoverState.current() });
-    const headerLines = UIFactory.createHeader(width, activeModel.headerModel, conversation.title || undefined, lastGitInfoRef.value, undefined, activeModel.divergenceNote);
+    lastHeaderModel = activeModel.headerModel;
+    const viewFrame = views.frame(width); // an agent or process open full screen, or null in main
+    const headerLines = viewFrame ? [viewFrame.header] : UIFactory.createHeader(width, activeModel.headerModel, conversation.title || undefined, lastGitInfoRef.value, undefined, activeModel.divergenceNote);
+    const chipsRow = views.chips(width);
+    if (chipsRow) headerLines.push(chipsRow);
     const managerAgents = agentManager.list().filter((a) => a.status === 'running' || a.status === 'pending');
     const runtimeAgents = agentSnapshot.active;
     const runningAgentSummary = summarizeRunningAgents(managerAgents, runtimeAgents, ctx.services.wrfcController.listChains());
@@ -482,7 +498,7 @@ async function main() {
       showExitNotice: input.showExitNotice,
       lastCopyTime: input.lastCopyTime,
       model: activeModel.footerModel, // prices the cost; the header names the model
-      workingDir,
+      workingDir, homeDirectory, view: viewFrame?.footer ?? null,
       branch: lastGitInfoRef.value?.branch,
       contextWindow,
       contextStatusHint,
@@ -498,7 +514,7 @@ async function main() {
       // Always-visible "sleep disabled" chip, topology-aware: the DAEMON's state in adopted-external mode, the in-process manager otherwise (power-chip-source.ts).
       powerKeepAwake: powerChipSource.get().keepAwake,
       // Composer must not read as focused while the process indicator owns keyboard focus.
-      promptFocused: !input.indicatorFocused && !conversation.workTree.focused, workTreeFocused: conversation.workTree.focused,
+      promptFocused: !input.indicatorFocused && !conversation.workTree.focused && viewFrame?.footer.disabledReason === undefined, workTreeFocused: conversation.workTree.focused && !viewFrame,
       indicatorFocused: input.indicatorFocused,
       runningAgentProgress: runningAgentSummary.progress,
       composerFlags: composerState.flags,
@@ -545,19 +561,18 @@ async function main() {
     });
     scrollTop = conversationViewport.nextScrollTop;
     lastMaxScroll = conversationViewport.maxScroll;
-    let viewport = conversation.isSplashShowing()
+    let viewport = viewFrame ? viewFrame.body(vHeight) : conversation.isSplashShowing()
       ? centerViewportContent(conversationViewport.viewport, conversationViewport.effectiveHeight, conversationWidth)
       : conversationViewport.viewport;
 
-    if (orchestrator.isThinking) {
+    if (orchestrator.isThinking && !viewFrame) {
       // The spinner and phrase live on the status line now; the opt-in partial
       // tool preview keeps its own faint row under the transcript.
       const partialToolPreview = (configManager.get('display.showToolPreview') as boolean) ? sessionSnapshot.streamToolPreview : undefined;
       if (partialToolPreview) viewport.push(UIFactory.createToolPreviewRow(conversationWidth, partialToolPreview));
     }
 
-    viewport.push(...UIFactory.createQueuedMessageList(conversationWidth, orchestrator.listQueuedMessages()));
-    viewport.push(...memoryProvenanceUi.renderChip(conversationWidth, configManager));
+    if (!viewFrame) viewport.push(...UIFactory.createQueuedMessageList(conversationWidth, orchestrator.listQueuedMessages()), ...memoryProvenanceUi.renderChip(conversationWidth, configManager));
 
     const overlayContext = { input, conversation, commandRegistry, keybindingsManager: ctx.services.keybindingsManager, contextWindow };
     viewport = applyConversationOverlays(viewport, { ...overlayContext, conversationWidth, viewportHeight: vHeight });
@@ -567,12 +582,12 @@ async function main() {
       header: shellHeaderLines,
       viewport,
       footer: shellFooterLines,
-      selection: onboardingOwnsScreen ? undefined : {
+      selection: onboardingOwnsScreen || viewFrame ? undefined : {
         isCellSelected: (col, row) => selection.isCellSelected(col, row),
         scrollTop,
         lineCount: conversation.history.getLineCount(),
       },
-      search: !onboardingOwnsScreen && input.searchManager.active ? {
+      search: !onboardingOwnsScreen && !viewFrame && input.searchManager.active ? {
         manager: input.searchManager,
         scrollTop,
         viewportStartY: shellHeaderLines.length,

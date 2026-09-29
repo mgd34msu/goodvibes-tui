@@ -581,6 +581,10 @@ export class ConversationManager extends SdkConversationManager {
 
   /** Live facts the work tree draws: timings, agent lanes, the call a prompt is holding. */
   public setWorkTreeSources(sources: WorkTreeSources): void { this.workTreeSources = sources; this.markDirty(); }
+  // An agent view (core/agent-view-render.ts) draws with main's sources, glyphs and the agent's lane color.
+  public getWorkTreeSources(): WorkTreeSources { return this.workTreeSources; }
+  public getTreeGlyphSet(): TreeGlyphSetName { return this.treeGlyphSet(); }
+  public laneColorOf(agentId: string): number | undefined { return this.getBlockRegistry().find((b) => b.workTree?.kind === 'lane' && b.workTree.agentId === agentId)?.workTree?.colorIndex; }
   /** Override the unicode probe (tests, and a terminal the caller knows better). */
   public setUnicodeCapable(capable: boolean): void { this.unicodeCapable = capable; this.markDirty(); }
   /** Find the nearest block to a given line index, optionally filtered by type. */
