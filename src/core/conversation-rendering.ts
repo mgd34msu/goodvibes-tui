@@ -117,8 +117,29 @@ export function buildConversationTurnModel(
   });
 }
 
-/** Draw a turn model (lines, blocks and error lines relative to the turn). */
+/**
+ * Draw a turn model (lines, blocks and error lines relative to the turn), then
+ * the notices that arrived during it. A notice is not a step of the turn, so it
+ * is drawn after the turn and outside its lanes, exactly as a notice between
+ * turns is (the concept's turns hold only the turn's own text, beads, lanes and
+ * answer; agent and WRFC state is the lanes' own spawn and merge rows).
+ */
 export function drawConversationTurn(context: ConversationRenderContext, model: TurnModel, width: number): TurnRender {
+  const render = drawTurnRows(context, model, width);
+  if (model.notices.length === 0) return render;
+  const lines = [...render.lines];
+  const errorLines = [...render.errorLines];
+  const messageLines = new Map(render.messageLines);
+  for (const notice of model.notices) {
+    lines.push(createEmptyLine(width));
+    messageLines.set(notice.messageIndex, lines.length);
+    if (isNavigableSystemMessage(context, notice.messageIndex)) errorLines.push(lines.length);
+    lines.push(...renderSystemMessage(notice.content, width));
+  }
+  return { ...render, lines, errorLines, messageLines };
+}
+
+function drawTurnRows(context: ConversationRenderContext, model: TurnModel, width: number): TurnRender {
   const config = context.configManager;
   return renderTurn(model, {
     width,

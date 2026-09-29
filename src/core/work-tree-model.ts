@@ -131,6 +131,13 @@ export interface TurnModel {
   readonly agentCount: number;
   /** Collapse keys of every bead in the turn (search and /expand reach them). */
   readonly beadKeys: readonly string[];
+  /**
+   * System notices that arrived while the turn ran ([WRFC] …, [Agents] …,
+   * compaction receipts), in order. A notice is not a step of the turn: it is
+   * drawn after the turn, outside its lanes (conversation-rendering.ts), the
+   * way a notice between turns is.
+   */
+  readonly notices: ReadonlyArray<{ readonly messageIndex: number; readonly content: string }>;
 }
 
 /** A contiguous stretch of the transcript: one user message, one turn, or one standalone system message. */
@@ -578,6 +585,7 @@ export function buildTurnModel(input: BuildTurnInput): TurnModel {
   let model = head.model;
   let toolCount = 0;
   const items: Pending[] = [];
+  const notices: Array<{ messageIndex: number; content: string }> = [];
   const calledIds = new Set<string>();
   for (let abs = unit.start; abs <= unit.end; abs++) {
     const m = at(abs);
@@ -595,7 +603,7 @@ export function buildTurnModel(input: BuildTurnInput): TurnModel {
       continue;
     }
     if (m.role === 'system') {
-      items.push({ row: { kind: 'prose', messageIndex: abs, content: m.content, role: 'system' }, t: undefined });
+      notices.push({ messageIndex: abs, content: m.content });
       continue;
     }
     if (m.role !== 'assistant') continue;
@@ -667,6 +675,53 @@ export function buildTurnModel(input: BuildTurnInput): TurnModel {
     toolCount,
     agentCount: ctx.lanes,
     beadKeys: ctx.beadKeys,
+    notices,
+  };
+}
+
+/**
+ * A WRFC chain owner opened full screen. The owner never takes a turn of its
+ * own (it supervises), so its view is built from its chain: each phase agent
+ * (engineer, reviewer, fixer, …) branches off the owner's spine as a lane
+ * drawn from that agent's own transcript, the way main draws any spawned
+ * agent. The header names the chain and counts phases, not tools.
+ */
+export function buildWrfcOwnerModel(input: {
+  readonly info: AgentLaneInfo;
+  readonly sources: WorkTreeSources;
+  readonly collapse: ReadonlyMap<string, boolean>;
+}): TurnModel {
+  const { info, sources } = input;
+  const now = sources.now?.() ?? Date.now();
+  const ctx: BuildContext = { sources, collapse: input.collapse, waiting: sources.waitingCallIds?.() ?? new Set<string>(), now, lanes: 0, live: false, beadKeys: [] };
+  const active = info.status === 'running' || info.status === 'pending';
+  const scope = `wrfc:${info.id}/`;
+  const items: Pending[] = [];
+  (info.wrfcPhases ?? []).forEach((phase, k) => {
+    // The phase is an agent the chain spawned: the same shape main's spawn
+    // call has, so its lane, beads and merge row come from the one path.
+    const call: ToolCall = { id: `${scope}${phase.agentId}`, name: 'agent', arguments: { mode: 'spawn', task: phase.task } };
+    items.push(...callRows(ctx, SPINE, scope, call, -1, k, { content: JSON.stringify({ agentId: phase.agentId }), index: -1 }, active, 0, [info.id]));
+  });
+  const rows = inheritTimes(resolvePending(items), info.startedAt);
+  const phases = info.wrfcPhases?.length ?? 0;
+  const parts = ['WRFC chain', plural(phases, 'phase')];
+  if (active) parts.push('working');
+  else if (info.wrfcPassed === true) parts.push('passed');
+  else if (info.wrfcPassed === false || info.status === 'failed') parts.push('failed');
+  if (info.startedAt !== undefined) parts.push(formatBeadTime((info.completedAt ?? now) - info.startedAt));
+  return {
+    turnKey: `${scope}turn`,
+    headIndex: -1,
+    memberIndexes: [],
+    folded: false,
+    headerText: parts.join(' · '),
+    rows: [{ kind: 'head' }, ...rows.map((r) => r.row)],
+    live: ctx.live || active,
+    toolCount: 0,
+    agentCount: ctx.lanes,
+    beadKeys: ctx.beadKeys,
+    notices: [],
   };
 }
 
@@ -701,6 +756,7 @@ function turnOutcomeFor(sources: WorkTreeSources, userIndex: number, userMessage
  */
 export function turnSignature(model: TurnModel): Array<string | number | boolean | undefined> {
   const parts: Array<string | number | boolean | undefined> = [model.turnKey, model.folded, model.headerText, model.live, model.rows.length];
+  for (const notice of model.notices) parts.push('notice', notice.messageIndex, notice.content);
   const bead = (b: BeadModel): void => {
     parts.push(b.id, b.lane, b.status, b.name, b.arg, b.summary?.text, b.summary?.tone, b.time, b.open, b.expanded, b.answers, b.body?.kind);
     if (b.open) parts.push(b.result, b.body?.kind === 'diff' ? b.body.diff : undefined);

@@ -469,7 +469,7 @@ async function main() {
     const runtimeAgents = agentSnapshot.active;
     const runningAgentSummary = summarizeRunningAgents(managerAgents, runtimeAgents, ctx.services.wrfcController.listChains());
     const runningAgentCount = runningAgentSummary.count;
-    const runningProcessCount = processManager.list().filter((p) => !p.status.startsWith('done')).length;
+    const runningProcessCount = processManager.list().filter((p) => !p.done).length;
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
     const commandArgsHint = buildCommandArgsHint(input.prompt, commandRegistry);
@@ -625,7 +625,7 @@ async function main() {
       autoApprove: isEffectiveDangerMode(configManager), keepAwake: powerChipSource.get().keepAwake,
       microphone: voice && voiceCaptureRowVisible(voice) ? voiceCaptureDescription(voice) : null,
       runningAgents: agentManager.list().filter((a) => a.status === 'running' || a.status === 'pending').length,
-      runningProcesses: processManager.list().filter((p) => !p.status.startsWith('done')).length,
+      runningProcesses: processManager.list().filter((p) => !p.done).length,
     });
   };
   wireShellUiOpeners({

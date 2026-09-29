@@ -67,7 +67,8 @@ export interface SessionViewFrame {
 
 const NOTICE_MS = 4000;
 const STEER_FORGET_MS = 10 * 60_000;
-const NO_STDIN_REASON = 'No input here: GoodVibes cannot write to this process\'s stdin (keys: / search, y copy)';
+// The input area says only what the input area is; the keys are the status line's.
+const NO_STDIN_REASON = 'No input here: GoodVibes cannot write to this process\'s stdin';
 
 type AgentRecord = NonNullable<ReturnType<AgentManager['getStatus']>>;
 
@@ -81,9 +82,10 @@ function agentMark(status: AgentRecord['status']): SessionMark {
   }
 }
 
-function processMark(status: string): SessionMark {
-  if (!status.startsWith('done')) return 'run';
-  return /exit 0\b/.test(status) ? 'ok' : 'err';
+/** A process's mark from whether it ended (never parsed from the status text: a timeout or a kill does not read "done"). */
+function processMark(p: { readonly done: boolean; readonly status: string }): SessionMark {
+  if (!p.done) return 'run';
+  return /^done \(exit 0\)$/.test(p.status) ? 'ok' : 'err';
 }
 
 function shortCommand(cmd: string): string {
@@ -105,13 +107,15 @@ export class SessionViews implements SessionViewControls {
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly deps: SessionViewsDeps) {
-    const agentName = (r: AgentRecord): string => r.template || 'agent';
+    // A WRFC chain owner is named for what it is, as its lane in main is: its
+    // template ("engineer") would read as the chain's own engineer phase.
+    const agentName = (r: AgentRecord): string => (r.wrfcRole === 'owner' ? 'WRFC chain' : r.template || 'agent');
     this.focus = new SessionFocus({
       liveAgents: () => deps.agentManager.list()
         .filter((a) => a.status === 'running' || a.status === 'pending')
         .map((a) => ({ id: a.id, name: agentName(a), mark: agentMark(a.status) })),
       liveProcesses: () => deps.processManager.list()
-        .filter((p) => !p.status.startsWith('done'))
+        .filter((p) => !p.done)
         .map((p) => ({ id: p.id, name: shortCommand(p.cmd), mark: 'run' as const })),
       agent: (id) => {
         const r = deps.agentManager.getStatus(id);
@@ -119,7 +123,7 @@ export class SessionViews implements SessionViewControls {
       },
       process: (id) => {
         const p = deps.processManager.list().find((e) => e.id === id);
-        return p ? { name: shortCommand(p.cmd), mark: processMark(p.status) } : null;
+        return p ? { name: shortCommand(p.cmd), mark: processMark(p) } : null;
       },
       parentAgent: (id) => {
         const parent = deps.fleetNodes().find((n) => n.id === id)?.parentId;
@@ -131,7 +135,12 @@ export class SessionViews implements SessionViewControls {
     this.focus.onChange(() => { this.search = null; this.agentCache = null; });
     const pollMs = deps.pollMs ?? 500;
     if (pollMs > 0) {
-      this.timer = setInterval(() => { if (this.poll() && this.kind === 'process') deps.requestRender(); }, pollMs);
+      this.timer = setInterval(() => {
+        const ended = this.noteEnded();
+        // New output repaints the process view; a process ending repaints
+        // wherever you are, since the chips and the status line count it.
+        if ((this.poll() && this.kind === 'process') || ended) deps.requestRender();
+      }, pollMs);
       (this.timer as { unref?: () => void }).unref?.();
     }
   }
@@ -142,6 +151,20 @@ export class SessionViews implements SessionViewControls {
   }
 
   private now(): number { return this.deps.now?.() ?? Date.now(); }
+
+  private readonly endedSeen = new Set<string>();
+
+  /** True when a process ended since the last call (by any means: exit, timeout, kill). */
+  noteEnded(): boolean {
+    let ended = false;
+    const known = new Set<string>();
+    for (const p of this.deps.processManager.list()) {
+      known.add(p.id);
+      if (p.done && !this.endedSeen.has(p.id)) { this.endedSeen.add(p.id); ended = true; }
+    }
+    for (const id of this.endedSeen) if (!known.has(id)) this.endedSeen.delete(id);
+    return ended;
+  }
 
   /** Read new process output; true when anything arrived. */
   poll(): boolean {
@@ -437,10 +460,11 @@ export class SessionViews implements SessionViewControls {
       this.poll();
       const rows = this.rows(id, width);
       const key = this.scrollKey();
-      const scroll = Math.min(this.scrollBy.get(key) ?? 0, processMaxScroll(rows.length, height));
+      const inner = SessionViews.innerRows(height);
+      const scroll = Math.min(this.scrollBy.get(key) ?? 0, processMaxScroll(rows.length, inner));
       this.scrollBy.set(key, scroll);
       const lines = renderProcessView({
-        width, height, rows, scrollFromBottom: scroll, color, ended, dropped: this.log.dropped(id),
+        width, height: inner, rows, scrollFromBottom: scroll, color, ended, dropped: this.log.dropped(id),
         search: this.search ? { query: this.search.query, editing: this.search.editing, current: this.search.current } : null,
       });
       return this.window(lines, height, width, interpolateColor(color, t.background || t.backgroundBase, 0.35));
@@ -448,22 +472,35 @@ export class SessionViews implements SessionViewControls {
     return { header, body, footer };
   }
 
-  /** The bottom `height` lines (less the scroll), with the view's bar down column 0 on every row. */
+  /**
+   * Rows the view's own content gets: the body less the blank row under the
+   * chips and the blank row above the composer (the concept's agent and
+   * process screens leave both empty, with no bar).
+   */
+  private static innerRows(height: number): number {
+    return height >= 3 ? height - 2 : height;
+  }
+
+  /**
+   * The body: a blank row, then the bottom rows of `all` (less the scroll)
+   * with the view's bar down column 0 on every one of them, then a blank row.
+   * The bar runs the full height of the block between the two blank rows,
+   * the way the concept's agent and process screens draw it.
+   */
   private window(all: readonly Line[], height: number, width: number, barColor: string): Line[] {
+    const blank = (): Line => Array.from({ length: width }, () => ({ char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }));
+    const inner = SessionViews.innerRows(height);
     const key = this.scrollKey();
-    const maxScroll = Math.max(0, all.length - height);
+    const maxScroll = Math.max(0, all.length - inner);
     const scroll = Math.min(this.scrollBy.get(key) ?? 0, maxScroll);
     if (this.kind === 'agent') this.scrollBy.set(key, scroll);
     const end = this.kind === 'agent' ? all.length - scroll : all.length;
-    const shown = all.slice(Math.max(0, end - height), end).map((l) => l.slice(0, width));
-    while (shown.length < height) {
-      const pad: Line = Array.from({ length: width }, () => ({ char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }));
-      shown.push(pad);
-    }
+    const shown = all.slice(Math.max(0, end - inner), end).map((l) => l.slice(0, width));
+    while (shown.length < inner) shown.push(blank());
     for (const line of shown) {
       if (line.length > 0) line[0] = { char: '┃', fg: barColor, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
     }
-    return shown;
+    return inner < height ? [blank(), ...shown, blank()] : shown;
   }
 
   private scrollKey(): string {

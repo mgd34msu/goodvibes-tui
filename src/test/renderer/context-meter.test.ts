@@ -87,8 +87,9 @@ describe('context bar geometry', () => {
     }));
     expect(render(0.85)).toMatch(/[█░│]{6} 85%/);
     expect(render(0.7)).toMatch(/[█░│]{6} 70%/);
-    // Healthy: the phrase keeps its room.
-    expect(render(0.3)).not.toContain('30%');
+    // Healthy: the bar still shares the row; the phrase is what gets cut.
+    expect(render(0.3)).toMatch(/[█░│]{6,} 30%/);
+    expect(render(0.3)).toContain('◐ Recalibrating');
   });
 });
 

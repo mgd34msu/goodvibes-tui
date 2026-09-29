@@ -119,7 +119,7 @@ export function makeViewScene(options: { readonly withProcess?: boolean; readonl
   const processes = new Map<string, ProcessRecord>();
   if (options.withProcess ?? true) processes.set(proc.id, proc);
   const processManager = {
-    list: () => [...processes.values()].map((p) => ({ id: p.id, pid: p.pid, cmd: p.cmd, status: p.done ? `done (exit ${p.exitCode})` : 'running' })),
+    list: () => [...processes.values()].map((p) => ({ id: p.id, pid: p.pid, cmd: p.cmd, status: p.done ? `done (exit ${p.exitCode})` : 'running', done: p.done })),
     getStatus: (id: string) => processes.get(id),
     stop: (id: string) => { log.stopped.push(id); const p = processes.get(id); if (p) { p.done = true; p.exitCode = 143; } return p !== undefined; },
   } as unknown as Pick<ProcessManager, 'list' | 'getStatus' | 'stop'>;

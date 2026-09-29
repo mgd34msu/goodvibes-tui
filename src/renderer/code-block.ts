@@ -1,6 +1,6 @@
 import { type Line, type Cell, createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { getDisplayWidth, wrapPreservingIndent } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { SyntaxHighlighter, type SyntaxToken as HLToken } from './syntax-highlighter.ts';
 import { activeTokens } from './theme.ts';
@@ -394,9 +394,25 @@ export function renderCodeBlock(
   for (let px = leftMargin; px < effectiveWidth; px++) padLine[px] = createStyledCell(' ', { bg: BG });
   lines.push(padLine);
 
-  // Code lines
+  // Code lines. A line wider than the text column wraps the way an opened
+  // read or command output does (wrapPreservingIndent: indentation kept,
+  // continuation rows indented like the first): text is never cut at the
+  // fill's edge. Each character keeps its token's style across the wrap, and
+  // a continuation row leaves the line-number column blank.
+  const textEnd = effectiveWidth - PAD;
+  const textWidth = Math.max(8, textEnd - contentStartX);
+  const bodyRow = (): Cell[] => {
+    const line: Cell[] = createEmptyLine(width);
+    // Paint only the code-block body band so body rows match the header/footer width.
+    for (let x = leftMargin; x < effectiveWidth; x++) line[x] = createStyledCell(' ', { bg: BG });
+    return line;
+  };
   for (let i = 0; i < codeLines.length; i++) {
-    const rawLine = codeLines[i];
+    // Control characters (a tab included) take one blank column, as they always have.
+    const rawLine = Array.from(codeLines[i] ?? '').map((ch) => {
+      const code = ch.charCodeAt(0);
+      return code < 32 || code === 127 ? ' ' : ch;
+    }).join('');
     const lineNum = String(i + 1).padStart(lineNumW);
 
     // Select token source: tree-sitter (accurate) or regex (fallback)
@@ -404,55 +420,62 @@ export function renderCodeBlock(
       hlLines && i < hlLines.length && hlLines[i].length > 0
         ? (hlLines[i] as HLToken[])
         : regexTokenize(rawLine);
-
-    const line: Cell[] = createEmptyLine(width);
-    // Paint only the code-block body band so body rows match the header/footer width.
-    for (let x = leftMargin; x < effectiveWidth; x++) {
-      line[x] = createStyledCell(' ', { bg: BG });
+    // Each character's style, when the tokens spell the line (plain otherwise).
+    const chars = Array.from(rawLine);
+    const styles: Array<Pick<SyntaxToken, 'fg' | 'bold' | 'italic'>> = [];
+    const spelled = tokens.map((tk) => tk.text).join('').replace(/[\x00-\x1f\x7f]/g, ' ');
+    if (spelled === rawLine) {
+      for (const token of tokens) for (const _ of Array.from(token.text)) styles.push({ fg: token.fg, bold: token.bold, italic: token.italic });
+    } else {
+      for (let k = 0; k < chars.length; k++) styles.push({ fg: palette.text });
     }
 
-    const textEnd = effectiveWidth - PAD;
-    let cx = leftMargin + PAD;
-    if (showLineNumbers) {
-      for (const ch of lineNum) {
-        if (cx >= contentStartX) break;
-        line[cx++] = createStyledCell(ch, { fg: LINE_NUM_FG, bg: BG });
-      }
-      line[cx++] = createStyledCell(' ', { bg: BG });
-    }
-
-    // Syntax tokens
-    for (const token of tokens) {
-      for (const ch of token.text) {
-        if (cx >= textEnd) break;
-        const cw = getDisplayWidth(ch);
-        const code = ch.charCodeAt(0);
-        if (code < 32 || code === 127) {
-          cx++;
-          continue;
+    const parts = getDisplayWidth(rawLine.replace(/\s+$/, '')) <= textWidth ? [rawLine] : wrapPreservingIndent(rawLine, textWidth);
+    let cursor = 0;
+    parts.forEach((part, partIndex) => {
+      const line = bodyRow();
+      let cx = leftMargin + PAD;
+      if (showLineNumbers) {
+        const label = partIndex === 0 ? lineNum : ' '.repeat(lineNumW);
+        for (const ch of label) {
+          if (cx >= contentStartX) break;
+          line[cx++] = createStyledCell(ch, { fg: LINE_NUM_FG, bg: BG });
         }
+        line[cx++] = createStyledCell(' ', { bg: BG });
+      }
+      // A continuation row: the wrap dropped the spaces it broke at and
+      // re-added the indent, so the next source character is the first
+      // non-space after the cursor.
+      const pc = Array.from(part);
+      let lead = 0;
+      if (partIndex > 0) {
+        while (pc[lead] === ' ') lead++;
+        while (chars[cursor] === ' ') cursor++;
+      }
+      cx += lead;
+      for (let k = lead; k < pc.length; k++) {
+        const ch = pc[k]!;
+        const style = styles[cursor] ?? { fg: palette.text };
+        cursor++;
+        const cw = getDisplayWidth(ch);
         // A wide glyph that does not fit before the text edge ends the row
         // rather than drawing half of itself into the padding.
         if (cx + cw > textEnd) break;
-        line[cx] = createStyledCell(ch, { fg: token.fg, bg: BG, bold: token.bold, italic: token.italic });
-        // Bound the wide-glyph placeholder against the body's own right edge
-        // (effectiveWidth), not the full line width, otherwise a 2-column
-        // glyph landing on the last body column spills its placeholder cell
-        // into the reserved right-margin band the header/footer stop at.
+        line[cx] = createStyledCell(ch, { fg: style.fg, bg: BG, bold: style.bold, italic: style.italic });
+        // Bound the wide-glyph placeholder against the text edge so it never
+        // spills into the padding or the reserved right-margin band.
         if (cw === 2 && cx + 1 < textEnd) line[cx + 1] = { ...line[cx], char: '' };
         cx += cw;
       }
-    }
-
-    if (i === 0 && langLabel) {
-      const labelX = textEnd - getDisplayWidth(langLabel);
-      if (labelX > cx + 1) {
-        let lx = labelX;
-        for (const ch of langLabel) line[lx++] = createStyledCell(ch, { fg: palette.textMuted, bg: BG });
+      if (i === 0 && partIndex === 0 && langLabel) {
+        const labelX = textEnd - getDisplayWidth(langLabel);
+        if (labelX > cx + 1) {
+          let lx = labelX;
+          for (const ch of langLabel) line[lx++] = createStyledCell(ch, { fg: palette.textMuted, bg: BG });
+        }
       }
-    }
-
-    lines.push(line);
+      lines.push(line);
+    });
   }
 
   // Footer line

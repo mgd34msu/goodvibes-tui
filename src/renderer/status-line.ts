@@ -36,6 +36,11 @@
  * 6 cells and percent do not fit. From the warning level up the left side
  * yields room for that bare bar, so a filling window is never hidden. The
  * kept chips at the left end are never dropped.
+ *
+ * A running turn's phrase and the background summary share the row with the
+ * cost and the context bar at every width: the right side's room is reserved
+ * before they are drawn (reserveRight), giving way in the same order, and
+ * they are truncated into what remains. They never push the bar off the row.
  */
 
 import { type Line, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
@@ -59,6 +64,12 @@ const GAP = 3;
 const LEFT_X = 3;
 /** Columns between the chips at the left end. */
 const CHIP_GAP = 2;
+/**
+ * Room the busy phrase or background summary keeps before the right side
+ * gives anything up for it: the spinner and a readable start of the phrase.
+ * Past that the phrase is truncated; the context bar never is.
+ */
+const LEFT_TEXT_MIN = 26;
 
 /** A chip at the left end of the status line. */
 export interface StatusChip {
@@ -258,8 +269,12 @@ function backgroundSummary(bg: StatusBackgroundState): string {
   return parts.join(' · ');
 }
 
-/** Draw the left side from `startX`; returns the column where it really ends. */
-function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: number, withDirectory: boolean): number {
+/**
+ * Draw the left side from `startX`; returns the column where it really ends.
+ * `textMax` bounds the busy phrase and the background summary: the room the
+ * right side's reservation left them (reserveRight).
+ */
+function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: number, textMax: number, withDirectory: boolean, cut: { summary: boolean }): number {
   const t = activeTokens();
   const width = options.width;
   if (options.notice) {
@@ -281,6 +296,7 @@ function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: 
   }
   if (options.busy) {
     const b = options.busy;
+    maxX = Math.max(startX, Math.min(maxX, textMax));
     const glyphFg = interpolateColor(t.brand, t.brandEnd, ((Math.sin(b.frame / 6) + 1) / 2));
     let x = putText(line, startX, maxX, { text: b.spinner, fg: glyphFg, bold: true });
     x += 1;
@@ -316,16 +332,48 @@ function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: 
     const hints: KitHint[] = bg.focused
       ? (bg.agents + bg.processes > 0 ? [['⏎', 'open'], ['esc', 'back']] : [['esc', 'back']])
       : [['⏎', 'view']];
+    const end = Math.min(maxX, textMax);
+    // The directory yields to the summary: a cut summary makes the caller
+    // try a shorter directory, then none (renderStatusLine).
+    cut.summary = getDisplayWidth(`◐ ${summary}`) > Math.max(0, end - start - (bg.focused ? keycapHintsWidth(hints) + GAP : 0));
     if (bg.focused) {
-      const text = truncateDisplay(`▸ ${summary}`, Math.max(0, maxX - start - keycapHintsWidth(hints) - GAP));
-      x = putText(line, start, maxX, { text, fg: t.text, bold: true, bg: t.backgroundSelected });
-      x = paintKeycapHints(line, x + GAP, maxX, hints, { fg: t.textFaint });
+      const text = truncateDisplay(`▸ ${summary}`, Math.max(0, end - start - keycapHintsWidth(hints) - GAP));
+      x = putText(line, start, end, { text, fg: t.text, bold: true, bg: t.backgroundSelected });
+      x = paintKeycapHints(line, x + GAP, end, hints, { fg: t.textFaint });
     } else {
-      const text = truncateDisplay(`◐ ${summary}`, Math.max(0, maxX - start));
-      x = putText(line, start, maxX, { text, fg: t.brand, bold: true });
+      const text = truncateDisplay(`◐ ${summary}`, Math.max(0, end - start));
+      x = putText(line, start, end, { text, fg: t.brand, bold: true });
     }
   }
   return x;
+}
+
+/**
+ * Columns the right side (left of the menu) keeps from the busy phrase or the
+ * background summary, `avail` being the room both share. Pieces give way in
+ * the Measurements table's order until LEFT_TEXT_MIN is left for the text:
+ * the cost first, then the bar narrows from 16 cells to 6, then its label
+ * goes, then the word "context". The bare bar and its percent are always
+ * kept (when they fit on the row at all): busy text never hides the context
+ * bar. Each kept piece counts its GAP.
+ */
+function reserveRight(ctx: StatusContextState | null, cost: string | null, avail: number): number {
+  const costW = cost ? GAP + getDisplayWidth(cost) : 0;
+  const leaves = (w: number): boolean => avail - w >= LEFT_TEXT_MIN;
+  if (!ctx) return cost && leaves(costW) ? costW : 0;
+  const full: ContextBarForm = { cells: CONTEXT_BAR_CELLS, word: true, label: true };
+  const barW = (form: ContextBarForm): number => GAP + contextBarWidth(ctx, form);
+  if (leaves(barW(full) + costW) && cost) return barW(full) + costW;
+  const forms: ContextBarForm[] = ctx.windowTokens === null
+    ? [full, { ...full, word: false }]
+    : [
+        ...Array.from({ length: CONTEXT_BAR_CELLS - CONTEXT_BAR_MIN_CELLS + 1 }, (_, k) => ({ ...full, cells: CONTEXT_BAR_CELLS - k })),
+        { cells: CONTEXT_BAR_MIN_CELLS, word: true, label: false },
+        BARE_CONTEXT_FORM,
+      ];
+  for (const form of forms) if (leaves(barW(form))) return barW(form);
+  const last = forms[forms.length - 1]!;
+  return barW(last) <= avail ? barW(last) : 0;
 }
 
 /**
@@ -402,7 +450,12 @@ function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): {
   const leftMax = Math.max(LEFT_X, rightEdge - menuW - GAP - reserve);
   const chipsEnd = drawChips(line, options.chips ?? [], leftMax, rightEdge);
   const leftStart = chipsEnd > LEFT_X ? chipsEnd + GAP : LEFT_X;
-  const drawn = drawLeft(line, options, leftStart, Math.max(leftStart, leftMax), withDirectory);
+  // The busy phrase and background summary share the row: the right side's
+  // room is reserved first and they are truncated into what is left.
+  const avail = rightEdge - menuW - GAP - leftStart;
+  const textMax = leftStart + Math.max(0, avail - reserveRight(ctx, options.cost ?? null, avail));
+  const cut = { summary: false };
+  const drawn = drawLeft(line, options, leftStart, Math.max(leftStart, leftMax), Math.max(leftStart, Math.min(leftMax, textMax)), withDirectory, cut);
   const leftEnd = drawn > leftStart ? drawn : chipsEnd;
 
   const cost = options.cost ?? null;
@@ -411,7 +464,7 @@ function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): {
   const fullRightW = menuW
     + (ctx ? GAP + contextBarWidth(ctx, full) : 0)
     + (cost ? GAP + costW : 0);
-  const fullFit = leftEnd + GAP + fullRightW <= rightEdge;
+  const fullFit = leftEnd + GAP + fullRightW <= rightEdge && !cut.summary;
 
   let rx = rightEdge;
   if (rx - menuW >= leftEnd + GAP) {

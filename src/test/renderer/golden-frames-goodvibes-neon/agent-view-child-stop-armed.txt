@@ -1,7 +1,7 @@
 # GV_GOLDEN surface=agent-view-child-stop-armed width=120 height=30
 | GoodVibes 2.0.21  main › engineer › tester                                                             claude-opus-5-5 |
 |     ◐ main     ◐ engineer     ◐ tester     ▶ bun run dev                                tab  next    shift+tab  prev   |
-|┃                                                                                                                       |
+|                                                                                                                        |
 |┃  ◆ tester · cover the cap with tests · started by engineer 1m00s ago                                                  |
 |┃                                                                                                                       |
 |┃ ┃                                                                                                                     |
@@ -24,7 +24,7 @@
 |┃                                                                                                                       |
 |┃                                                                                                                       |
 |┃                                                                                                                       |
-|┃                                                                                                                       |
+|                                                                                                                        |
 |  ┃                                                                                                                     |
 |  ┃  Message tester. This steers it; main keeps running.                                                                |
 |  ┃                                                                                                                     |
@@ -267,7 +267,6 @@
 1 114 fg=#4e5c6f
 1 115 fg=#4e5c6f
 1 116 fg=#4e5c6f
-2 0 fg=141;7;175
 3 0 fg=141;7;175
 3 3 fg=#d000ff
 3 3 bold=1
@@ -1135,7 +1134,6 @@
 22 0 fg=141;7;175
 23 0 fg=141;7;175
 24 0 fg=141;7;175
-25 0 fg=141;7;175
 26 2 fg=#d000ff
 26 3 bg=#1e293b
 26 4 bg=#1e293b

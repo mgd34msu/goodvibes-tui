@@ -1,7 +1,7 @@
 # GV_GOLDEN surface=agent-view-120x30 width=120 height=30
 | GoodVibes 2.0.21  main › engineer                                                                    claude-sonnet-5-5 |
 |     ◐ main     ◐ engineer     ◐ tester     ▶ bun run dev                                tab  next    shift+tab  prev   |
-|┃                                                                                                                       |
+|                                                                                                                        |
 |┃  ◆ engineer · add a maxDelayMs cap · started by main 2m14s ago                                                        |
 |┃                                                                                                                       |
 |┃ ┃                                                                                                                     |
@@ -24,7 +24,7 @@
 |┃                                                                                                                       |
 |┃                                                                                                                       |
 |┃                                                                                                                       |
-|┃                                                                                                                       |
+|                                                                                                                        |
 |  ┃                                                                                                                     |
 |  ┃  Message engineer. This steers it; main keeps running.                                                              |
 |  ┃                                                                                                                     |
@@ -266,7 +266,6 @@
 1 114 fg=#636176
 1 115 fg=#636176
 1 116 fg=#636176
-2 0 fg=122;113;180
 3 0 fg=122;113;180
 3 3 fg=#a99af7
 3 3 bold=1
@@ -2005,7 +2004,6 @@
 22 0 fg=122;113;180
 23 0 fg=122;113;180
 24 0 fg=122;113;180
-25 0 fg=122;113;180
 26 2 fg=#a99af7
 26 3 bg=#2d2e48
 26 4 bg=#2d2e48

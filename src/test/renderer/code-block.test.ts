@@ -147,4 +147,20 @@ describe('renderCodeBlock', () => {
       expect(headerCells[0].bg).toBe(activeTokens().accent);
     }
   });
+  test('a line wider than the fill wraps with its indentation kept; no character is cut at the edge', () => {
+    // The live run's reviewer JSON: a long string value at 6 columns of indent.
+    const long = '      "evidence": "The engineer reports zero files created, modified, or deleted and explicitly says, \\"I did not modify any files\\" in its report."';
+    const width = 100;
+    const rows = renderCodeBlock(['{', long, '}'], 'json', width, { showLineNumbers: false }).map((l) => lineText(l).replace(/\s+$/, ''));
+    const wrapped = rows.slice(2, -2);
+    expect(wrapped.length).toBeGreaterThan(1);
+    // Text stays 2 columns inside the fill's right edge (the fill ends at width - RIGHT_MARGIN).
+    const textEnd = width - LAYOUT.RIGHT_MARGIN - 2;
+    for (const r of rows) expect(r.length).toBeLessThanOrEqual(textEnd);
+    // Every word of the line is drawn, in order.
+    expect(wrapped.map((r) => r.trim()).join(' ')).toBe(long.trim());
+    // Continuation rows keep the indent: they start where the line's text starts.
+    const start = wrapped[0]!.indexOf('"evidence"');
+    for (const r of wrapped.slice(1)) expect(r.search(/\S/)).toBe(start);
+  });
 });
