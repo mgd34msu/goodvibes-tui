@@ -43,18 +43,18 @@ describe('keybindings modal surface', () => {
     expect(tabText(view, 'shortcuts').toLowerCase()).toContain('keybindings manager not wired');
   });
 
-  test('activate: Tools tab -> /panel open fleet --target <tool>:tool (deep-link); Models tab -> /model <key>; unselectable model is a no-op', () => {
+  test('activate: Tools tab -> /agents --target <tool>:tool (deep-link); Models tab -> /model <key>; unselectable model is a no-op', () => {
     const surface = createKeybindingsModalSurface({ toolRegistry: FIXED_TOOLS, providerRegistry: FIXED_MODELS });
     open(surface);
     const fleet = captureCommands();
     surface.onAction?.('activate', actionCtx({ id: 'tool:read_file', label: '' }, { ...fleet.extra, tabId: 'tools' }));
-    expect(fleet.calls).toEqual([['panel', ['open', 'fleet', '--target', 'read_file:tool']]]);
+    expect(fleet.calls).toEqual([['agents', ['--target', 'read_file:tool']]]);
 
     // A row with no parseable tool name (id doesn't start with 'tool:') falls
     // back to the plain generic jump, never crashes, never sends a garbage target.
     const noRow = captureCommands();
     surface.onAction?.('activate', actionCtx(null, { ...noRow.extra, tabId: 'tools' }));
-    expect(noRow.calls).toEqual([['panel', ['open', 'fleet']]]);
+    expect(noRow.calls).toEqual([['agents', []]]);
 
     const model = captureCommands();
     surface.onAction?.('activate', actionCtx({ id: 'model:acme:a', label: '' }, { ...model.extra, tabId: 'models' }));
@@ -68,7 +68,11 @@ describe('keybindings modal surface', () => {
   test('Shortcuts tab folds the categorized overlay reference AND the exhaustive live binding table', () => {
     const text = tabText(open(createKeybindingsModalSurface({ keybindingsManager: keybindings() })), 'shortcuts');
     expect(text).toContain('Navigation');
-    expect(text).toContain('In-Panel Controls');
+    // The pane-only 'In-Panel Controls' category is gone; views open as modals.
+    expect(text).not.toContain('In-Panel Controls');
+    expect(text).toContain('Views');
+    expect(text).toMatch(/F2 \/ Ctrl\+O +Agents/);
+    expect(text).not.toMatch(/Alt\+\d/);
     expect(text).toContain('Ctrl+F'); // 'search' combo label
     expect(text).toContain('All Bindings (live)');
     expect(text).toContain('Reverse input history search');

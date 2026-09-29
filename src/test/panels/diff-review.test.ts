@@ -6,7 +6,6 @@ import {
   hunkExcerpt,
   buildSteerMessage,
 } from '../../panels/diff-review-model.ts';
-import { DiffReviewPanel } from '../../panels/diff-review-panel.ts';
 
 const SAMPLE_DIFF = `diff --git a/src/app.ts b/src/app.ts
 index 111..222 100644
@@ -77,58 +76,5 @@ describe('diff review model', () => {
     expect(msg).toContain('first');
     expect(msg).toContain('second');
     expect(msg).toContain('README.md');
-  });
-});
-
-describe('DiffReviewPanel comment-to-steer loop', () => {
-  function typed(panel: DiffReviewPanel, text: string): void {
-    for (const ch of text) panel.handleInput(ch);
-  }
-
-  test('attaching a comment and sending it steers structured context to the session', () => {
-    const captured: string[] = [];
-    const panel = new DiffReviewPanel('/tmp', () => {});
-    panel.setSubmit((t) => captured.push(t));
-    panel.loadReview(parseReviewDiff(SAMPLE_DIFF), 'working tree vs HEAD (2 files edited this session)');
-
-    // Open the composer on the first hunk, type a comment, confirm it.
-    expect(panel.handleInput('c')).toBe(true);
-    typed(panel, 'rename b');
-    expect(panel.handleInput('return')).toBe(true); // attach
-
-    // Not composing now: Enter submits the current hunk's comment.
-    expect(panel.handleInput('return')).toBe(true);
-    expect(captured.length).toBe(1);
-    expect(captured[0]).toContain('src/app.ts');
-    expect(captured[0]).toContain('lines 10-13');
-    expect(captured[0]).toContain('rename b');
-  });
-
-  test('send-all batches every unsent comment into one steering message', () => {
-    const captured: string[] = [];
-    const panel = new DiffReviewPanel('/tmp', () => {});
-    panel.setSubmit((t) => captured.push(t));
-    panel.loadReview(parseReviewDiff(SAMPLE_DIFF), 'working tree vs HEAD');
-
-    panel.handleInput('c'); typed(panel, 'one'); panel.handleInput('return');
-    panel.handleInput('down'); // move to hunk 2
-    panel.handleInput('c'); typed(panel, 'two'); panel.handleInput('return');
-    panel.handleInput('a'); // send all
-
-    expect(captured.length).toBe(1);
-    expect(captured[0]).toContain('one');
-    expect(captured[0]).toContain('two');
-    // A second send-all has nothing unsent left to send.
-    panel.handleInput('a');
-    expect(captured.length).toBe(1);
-  });
-
-  test('renders without throwing and shows the honest source label', () => {
-    const panel = new DiffReviewPanel('/tmp', () => {});
-    panel.loadReview(parseReviewDiff(SAMPLE_DIFF), 'working tree vs HEAD (2 files edited this session)');
-    const lines = panel.render(80, 24);
-    expect(lines.length).toBeGreaterThan(0);
-    const text = lines.map((l) => l.map((c) => c.char ?? '').join('')).join('\n');
-    expect(text).toContain('edited this session');
   });
 });

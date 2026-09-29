@@ -111,7 +111,7 @@ function flattenCellChars(raw: string, isHdr: boolean): StyledChar[] {
   for (const token of renderInlineMarkdown(raw)) {
     let style: Partial<Cell>;
     if (token.type === 'code') {
-      style = { fg: T.inlineCodeFg, bold: true };
+      style = { fg: activeTokens().markdownCode };
     } else if (token.type === 'link') {
       style = { fg: T.link, underline: true };
     } else {
@@ -315,9 +315,10 @@ function renderStackedTable(
   hasSeparator: boolean,
   width: number,
   indent: number,
+  rightGutter: number,
 ): Line[] {
   const lines: Line[] = [];
-  const availW = Math.max(1, width - indent);
+  const availW = Math.max(1, width - rightGutter - indent);
   const headerRow = hasSeparator ? parsedRows[0] : undefined;
   const bodyRows = hasSeparator ? parsedRows.slice(1) : [...parsedRows];
   // A header-only table still has to show its headers, so it renders as one
@@ -348,7 +349,11 @@ function renderStackedTable(
  * Render a markdown table with box-drawing borders. Cells wrap to as many
  * physical lines as their content needs; nothing is ever truncated.
  */
-export function renderTable(rows: string[], width: number, indent: number): Line[] {
+/**
+ * `rightGutter` columns on the right stay clear: the table (boxed or stacked)
+ * ends at width - rightGutter - 1 or earlier.
+ */
+export function renderTable(rows: string[], width: number, indent: number, rightGutter = 0): Line[] {
   const lines: Line[] = [];
 
   // Parse rows into cells, skip separator
@@ -367,7 +372,7 @@ export function renderTable(rows: string[], width: number, indent: number): Line
   if (parsedRows.length === 0) return lines;
 
   const colCount = Math.max(...parsedRows.map((r) => r.length));
-  const availW = width - indent;
+  const availW = width - rightGutter - indent;
 
   // Measure using stripped text (no markdown markers), both the natural width
   // and the widest single word, the latter is what a column needs before it
@@ -391,8 +396,8 @@ export function renderTable(rows: string[], width: number, indent: number): Line
   // the end of the line buffer and silently dropped, so the box is abandoned
   // for the stacked layout instead.
   const boxWidth = indent + 1 + colWidths.reduce((sum, w) => sum + w + 3, 0);
-  if (boxWidth > width) {
-    return renderStackedTable(parsedRows, colCount, hasSeparator, width, indent);
+  if (boxWidth > width - rightGutter) {
+    return renderStackedTable(parsedRows, colCount, hasSeparator, width, indent, rightGutter);
   }
 
   const bc = activeTokens().textFaint; // border color

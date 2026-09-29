@@ -1,7 +1,7 @@
 /**
  * session-resume-core.test.ts, the canonical resume routine both resume
  * seams (session-workflow.ts's /session resume and bootstrap-hook-bridge.ts's
- * panel/session-browser resume) now call.
+ * session-browser resume) now call.
  *
  * Covers the four divergences the audit found between the two seams (now
  * impossible by construction, since both call this one function):
@@ -9,9 +9,8 @@
  *   2. conversation.resetAll() always runs before fromJSON().
  *   3. The selectModel reselection fallback (raw id on failure) is honored
  *      when provided, and skipped cleanly when omitted.
- *   4. Panel reopen always skips MIGRATE-TO-MODAL ids, honestly reporting
- *      them separately from genuinely reopened panels, plus the new
- *      reopen-cap overflow report (item 7).
+ *   4. A session saved while the TUI still had side panes carries
+ *      returnContext.openPanels; it loads, and nothing is reopened.
  *
  * Also proves parity: two independent "seam-shaped" calls against the same
  * saved session produce the identical outcome.
@@ -20,9 +19,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, rmSync } from 'node:fs';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { ConversationManager } from '../../core/conversation.ts';
-import { PanelManager } from '../../panels/panel-manager.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { resumeSessionCore, reopenPanelsWithModalSkip, DEFAULT_PANEL_REOPEN_LIMIT } from '../../core/session-resume-core.ts';
+import { resumeSessionCore } from '../../core/session-resume-core.ts';
 import { clearTurnAnchors, getTurnAnchors, persistTurnAnchors, recordTurnAnchor } from '@pellux/goodvibes-sdk/platform/rewind';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 
@@ -40,20 +38,6 @@ function makeRuntime(sessionId = 'previous-session') {
   return { sessionId, model: 'old-model', provider: 'old-provider' };
 }
 
-function makePanelManagerWithGit(): PanelManager {
-  const pm = new PanelManager();
-  pm.registerType({
-    id: 'git', name: 'Git', icon: 'G', category: 'development', description: '',
-    factory: () => ({
-      id: 'git', name: 'Git', icon: 'G', category: 'development',
-      onActivate: () => {}, onDeactivate: () => {}, onDestroy: () => {}, render: () => [],
-      isTransient: false, isPinned: false, needsRender: false,
-      invalidate: () => {}, markRendered: () => {},
-    }),
-  });
-  return pm;
-}
-
 describe('resumeSessionCore', () => {
   test('resets and restores the conversation from the saved session, not appending to whatever was already live', async () => {
     const sm = new SessionManager(tmpDir, { surface: makeTestSurface(tmpDir) });
@@ -69,7 +53,6 @@ describe('resumeSessionCore', () => {
       conversation,
       runtime: makeRuntime(),
       surface: makeTestSurface(tmpDir),
-      panelManager: makePanelManagerWithGit(),
     });
 
     expect(outcome.resumedMessageCount).toBe(1);
@@ -93,7 +76,6 @@ describe('resumeSessionCore', () => {
       conversation,
       runtime: makeRuntime(),
       surface: makeTestSurface(tmpDir),
-      panelManager: makePanelManagerWithGit(),
     });
 
     expect(outcome.restoredAnchorCount).toBe(1);
@@ -111,7 +93,6 @@ describe('resumeSessionCore', () => {
       conversation,
       runtime,
       surface: makeTestSurface(tmpDir),
-      panelManager: makePanelManagerWithGit(),
       selectModel: async (model) => ({ registryKey: `resolved:${model}`, providerId: 'resolved-provider' }),
     });
 
@@ -136,14 +117,13 @@ describe('resumeSessionCore', () => {
       conversation,
       runtime,
       surface: makeTestSurface(tmpDir),
-      panelManager: makePanelManagerWithGit(),
       selectModel: async () => { throw new Error('model not found locally'); },
     });
 
     expect(runtime.model).toBe('no-longer-installed');
   });
 
-  test('without selectModel: sets the model straight from the saved meta (matches the panel seam\'s pre-existing behavior when no provider API is wired)', async () => {
+  test('without selectModel: sets the model straight from the saved meta (the behavior when no provider API is wired)', async () => {
     const sm = new SessionManager(tmpDir, { surface: makeTestSurface(tmpDir) });
     sm.save('sess-direct-model', [], { title: 'T', model: 'direct-model-id', provider: 'direct-provider', timestamp: Date.now() });
     const conversation = new ConversationManager(() => 80);
@@ -154,7 +134,6 @@ describe('resumeSessionCore', () => {
       conversation,
       runtime,
       surface: makeTestSurface(tmpDir),
-      panelManager: makePanelManagerWithGit(),
     });
 
     expect(runtime.model).toBe('direct-model-id');
@@ -172,26 +151,20 @@ describe('resumeSessionCore', () => {
       conversation,
       runtime: makeRuntime(),
       surface: makeTestSurface(tmpDir),
-      panelManager: makePanelManagerWithGit(),
       hydrateSessionUsage: () => { hydrateCalls++; },
     });
 
     expect(hydrateCalls).toBe(1);
   });
 
-  test('reopens saved panels, skipping a MIGRATE-TO-MODAL id and honestly noting it (never pops a modal mid-resume)', async () => {
-    const pm = makePanelManagerWithGit();
-    pm.registerModalRedirect('sessions', 'sessionPicker');
-    const modalOpens: string[] = [];
-    pm.setOpenModalCallback((name) => modalOpens.push(name));
-
+  test('a session saved with returnContext.openPanels (from when the TUI had side panes) loads; the field is ignored', async () => {
     const sm = new SessionManager(tmpDir, { surface: makeTestSurface(tmpDir) });
-    sm.save('sess-panels', [], {
+    sm.save('sess-panels', [{ role: 'user', content: 'from the pane era' }], {
       title: 'T', model: 'm', provider: 'p', timestamp: Date.now(),
       returnContext: {
         activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 0, toolCallCount: 0,
         toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
-        openPanels: ['sessions', 'git'],
+        openPanels: ['sessions', 'git', 'fleet', 'tokens'],
       },
     });
     const conversation = new ConversationManager(() => 80);
@@ -201,72 +174,16 @@ describe('resumeSessionCore', () => {
       conversation,
       runtime: makeRuntime(),
       surface: makeTestSurface(tmpDir),
-      panelManager: pm,
     });
 
-    expect(outcome.panels.reopened).toEqual(['git']);
-    expect(outcome.panels.movedToModal).toEqual(['sessions']);
-    expect(modalOpens).toEqual([]); // never pops the modal mid-resume
-    expect(pm.getAllOpen().map((p) => p.id)).toEqual(['git']);
-  });
-
-  test('caps panel reopen at the deliberate limit and reports the overflow honestly (item 7)', async () => {
-    const pm = new PanelManager();
-    const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'];
-    ids.forEach((id, i) => {
-      const icon = String.fromCharCode(97 + i); // unique per-panel icon: 'a', 'b', 'c', ...
-      pm.registerType({
-        id, name: id, icon, category: 'development', description: '',
-        factory: () => ({
-          id, name: id, icon, category: 'development',
-          onActivate: () => {}, onDeactivate: () => {}, onDestroy: () => {}, render: () => [],
-          isTransient: false, isPinned: false, needsRender: false,
-          invalidate: () => {}, markRendered: () => {},
-        }),
-      });
-    });
-    const sm = new SessionManager(tmpDir, { surface: makeTestSurface(tmpDir) });
-    sm.save('sess-overflow', [], {
-      title: 'T', model: 'm', provider: 'p', timestamp: Date.now(),
-      returnContext: {
-        activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 0, toolCallCount: 0,
-        toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
-        openPanels: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'],
-      },
-    });
-    const conversation = new ConversationManager(() => 80);
-
-    const outcome = await resumeSessionCore('sess-overflow', {
-      sessionManager: sm,
-      conversation,
-      runtime: makeRuntime(),
-      surface: makeTestSurface(tmpDir),
-      panelManager: pm,
-    });
-
-    expect(outcome.panels.reopened).toEqual(['p1', 'p2', 'p3', 'p4']);
-    expect(outcome.panels.notReopened).toEqual(['p5', 'p6']);
-    expect(DEFAULT_PANEL_REOPEN_LIMIT).toBe(4);
-  });
-});
-
-describe('reopenPanelsWithModalSkip', () => {
-  test('no saved panels at all is a no-op (no crash on an undefined/empty list)', () => {
-    const pm = makePanelManagerWithGit();
-    expect(reopenPanelsWithModalSkip(pm, undefined, 4)).toEqual({ reopened: [], movedToModal: [], notReopened: [] });
-    expect(reopenPanelsWithModalSkip(pm, [], 4)).toEqual({ reopened: [], movedToModal: [], notReopened: [] });
-  });
-
-  test('an unknown/unavailable panel id is silently skipped, never thrown', () => {
-    const pm = makePanelManagerWithGit();
-    const result = reopenPanelsWithModalSkip(pm, ['git', 'no-such-panel'], 4);
-    expect(result.reopened).toEqual(['git']);
-    expect(result.notReopened).toEqual([]);
+    expect(outcome.resumedMessageCount).toBe(1);
+    expect(outcome.meta.returnContext?.openPanels).toEqual(['sessions', 'git', 'fleet', 'tokens']);
+    expect(Object.keys(outcome)).not.toContain('panels');
   });
 });
 
 describe('parity: both resume seams reach an identical outcome for the same saved session', () => {
-  test('a session-workflow-shaped call and a bootstrap-hook-bridge-shaped call produce the same restoredAnchorCount, resumedMessageCount, and panel outcome', async () => {
+  test('a session-workflow-shaped call and a bootstrap-hook-bridge-shaped call produce the same restoredAnchorCount and resumedMessageCount', async () => {
     const sessionId = 'sess-parity';
     clearTurnAnchors(sessionId);
     recordTurnAnchor(sessionId, { turnId: 't1', label: 'parity turn', messageCount: 2, at: Date.now() });
@@ -292,7 +209,6 @@ describe('parity: both resume seams reach an identical outcome for the same save
       conversation: conversationA,
       runtime: runtimeA,
       surface: makeTestSurface(tmpDir),
-      panelManager: makePanelManagerWithGit(),
       selectModel: async (model) => ({ registryKey: model, providerId: 'shared-provider' }),
     });
 
@@ -306,14 +222,12 @@ describe('parity: both resume seams reach an identical outcome for the same save
       conversation: conversationB,
       runtime: runtimeB,
       surface: makeTestSurface(tmpDir),
-      panelManager: makePanelManagerWithGit(),
       selectModel: async (model) => ({ registryKey: model, providerId: 'shared-provider' }),
     });
 
     expect(outcomeA.restoredAnchorCount).toBe(outcomeB.restoredAnchorCount);
     expect(outcomeA.restoredAnchorCount).toBe(1);
     expect(outcomeA.resumedMessageCount).toBe(outcomeB.resumedMessageCount);
-    expect(outcomeA.panels).toEqual(outcomeB.panels);
     expect(runtimeA.model).toBe(runtimeB.model);
     expect(runtimeA.provider).toBe(runtimeB.provider);
   });

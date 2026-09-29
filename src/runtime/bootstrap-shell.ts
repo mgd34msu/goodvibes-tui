@@ -16,7 +16,7 @@ import { InputHistory } from '../input/input-history.ts';
 import { GitStatusProvider } from '../renderer/git-status.ts';
 import type { GitHeaderInfo } from '../renderer/git-status.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
-import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
+import { createShellViews, type ShellViews } from '../panels/builtin-views.ts';
 import { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { createSystemMessageRouter, type SystemMessageRouter } from '../core/system-message-router.ts';
 import { getConfigSnapshot } from '@pellux/goodvibes-sdk/platform/config';
@@ -28,7 +28,6 @@ import { loadBootstrapSystemPrompt } from '@/runtime/index.ts';
 import { createShellPlanRuntime, createShellRemoteCommandService } from '@/runtime/index.ts';
 import { createRuntimeFoundationClients } from '@/runtime/index.ts';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
-import type { BuiltinPanelDeps } from '../panels/builtin/shared.ts';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { PolicyRuntimeState } from '@/runtime/index.ts';
@@ -44,6 +43,8 @@ export interface BootstrapShellState {
   readonly lastGitInfoRef: { value: GitHeaderInfo | undefined };
   readonly inputHistory: InputHistory;
   readonly systemMessageRouter: SystemMessageRouter;
+  /** The always-on read models and config-modal surfaces behind the built-in modals. */
+  readonly views: ShellViews;
 }
 
 export interface BootstrapShellOptions {
@@ -133,7 +134,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     writeLastSessionPointer,
     hookDispatcher: services.hookDispatcher,
     sessionManager: services.sessionManager,
-    panelManager: services.panelManager,
     surface: services.surface,
     // Read lazily on purpose. The selection modal lives on the command
     // context, which is composed further down this function (and whose
@@ -156,11 +156,9 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
   });
 
   // initial cost-budget alert threshold (USD; 0/unset = disabled).
-  // Once the session starts, the real control surface is the CostTrackerPanel
-  // itself, the in-panel 'b' key and /cost budget <usd> both call
-  // CostTrackerPanel.setBudgetThreshold() directly on the live panel instance,
-  // which now writes through to the behavior.budgetAlertUsd config key
-  // so the background budget-breach notifier reads the same value. The env
+  // Once the session starts, the Usage modal's 'b' key and /cost budget <usd>
+  // both write the behavior.budgetAlertUsd config key (runtime/usage-tracker.ts),
+  // the same key the background budget-breach notifier reads. The env
   // var remains a first-run convenience only: it seeds the config key when
   // that key has never been set, so it doesn't silently override a value the
   // user has already configured in a prior session.
@@ -173,54 +171,22 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
   }
 
   let commandContextRef: CommandContext | null = null;
-  registerBuiltinPanels(services.panelManager, {
-    configManager,
-    getOrchestratorUsage: () => orchestrator.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
-    budgetThreshold: initialCostBudgetThreshold,
-    toolRegistry,
+  const views = createShellViews({
     providerRegistry: services.providerRegistry,
-    contextWindow: services.providerRegistry.getContextWindowForModel(services.providerRegistry.getCurrentModel()),
+    uiServices,
+    toolRegistry,
     orchestrator,
     getCtxWindow: () => services.providerRegistry.getContextWindowForModel(services.providerRegistry.getCurrentModel()),
-    resumeSession,
     requestRender,
-    submitPlanningAnswer: (answer) => {
-      if (!commandContextRef?.submitInput) {
-        throw new Error('Planning answer submission is not wired yet.');
-      }
-      commandContextRef.submitInput(answer);
-    },
-    dismissPlanning: () => {
-      services.panelManager.close('project-planning');
-      commandContextRef?.focusPrompt?.();
-      requestRender();
-    },
-    forensicsRegistry,
-    policyRuntimeState,
-    approvalBroker: services.approvalBroker,
-    // Panels read the cross-surface union facade, not the raw local broker.
-    sessionBroker: uiServices.sessions.sessionBroker,
-    automationManager: services.automationManager,
-    getControlPlaneRecentEvents,
-    tokenAuditor: services.tokenAuditor,
-    componentHealthMonitor: services.componentHealthMonitor,
-    worktreeRegistry: services.worktreeRegistry,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
-    // Memory modal reads via the spine client, not the raw registry (see builtin/shared.ts).
+    // Memory modal reads via the spine client, not the raw registry.
     memoryRegistry: services.memorySpine,
-    uiServices,
     pluginManager: services.pluginManager,
     hookDispatcher: services.hookDispatcher,
     hookActivityTracker: services.hookActivityTracker,
     hookWorkbench: services.hookWorkbench,
-    mcpRegistry: services.mcpRegistry,
-    daemonHomeDir: join(services.homeDirectory, '.goodvibes', 'daemon'),
-    opsApi,
-    planRuntime,
-    watcherRegistry: services.watcherRegistry,
-    runtimeStore,
-    openPanel: (panelId: string) => { services.panelManager.open(panelId); },
     knowledgeApi,
+    sessionChangeTracker: services.sessionChangeTracker,
     // Fleet acts (pick / conflict / discard) surface receipts through the command
     // context's print and reuse its one-key jump affordance, both late-bound
     // (the command context is assigned to commandContextRef after bootstrap, and
@@ -228,7 +194,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     fleetActsNotify: (message: string) => { commandContextRef?.print?.(message); requestRender(); },
     armFixSessionAttach: (sessionId: string) => { commandContextRef?.armFixSessionAttach?.(sessionId); },
   });
-  services.panelManager.prewarmRegistered();
 
   const systemMessageRouter = createSystemMessageRouter(
     conversation,
@@ -341,7 +306,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     mcpApi,
     opsApi,
     directTransport,
-    panelManager: services.panelManager,
     worktreeRegistry: services.worktreeRegistry,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
     loadSystemPrompt: () => loadBootstrapSystemPrompt(configManager),
@@ -393,5 +357,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     lastGitInfoRef,
     inputHistory,
     systemMessageRouter,
+    views,
   };
 }

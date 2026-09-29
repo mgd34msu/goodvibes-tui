@@ -65,7 +65,7 @@ import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from
 import { CacheRegistry, PauseController } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 import { wireMemoryGovernance } from './memory-governance-services.ts';
 import { wireVoiceSetup } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import { PanelManager } from '../panels/panel-manager.ts';
+import { createViewPanelAdapter } from '../panels/view-panel-adapter.ts';
 import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
 import { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
@@ -218,7 +218,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const admitExpensiveWork = (label: string): { allowed: boolean; reason?: string | undefined } =>
     admitExpensiveWorkRef.current?.(label) ?? { allowed: true };
   const isKnowledgeBackgroundPaused = (): boolean => pauseController.isPaused('knowledge-self-improvement');
-  const panelManager = new PanelManager();
+  // The operator API's panels.list / panels.open, answered by the modal views.
+  const viewPanels = createViewPanelAdapter();
   const keybindingsManager = new KeybindingsManager({
     configPath: shellPaths.resolveUserPath('tui', 'keybindings.json'),
   });
@@ -508,7 +509,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
 
   const integrationHelpers = new IntegrationHelperService({
     surface, configManager, automationManager, approvalBroker, sessionBroker, distributedRuntime,
-    remoteRunnerRegistry, remoteSupervisor, panelManager, localUserAuthManager, providerRegistry,
+    remoteRunnerRegistry, remoteSupervisor, panelManager: viewPanels, localUserAuthManager, providerRegistry,
     serviceRegistry, subscriptionManager, secretsManager,
     runtimeStore: options.runtimeStore, runtimeBus: options.runtimeBus,
     getConversationTitle: options.getConversationTitle,
@@ -568,7 +569,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     runtimeBus: options.runtimeBus,
     runtimeStore: options.runtimeStore,
     runtimeDispatch,
-    panelManager,
+    panelManager: viewPanels,
     keybindingsManager,
     routeBindings,
     surfaceRegistry,

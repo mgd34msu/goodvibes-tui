@@ -169,13 +169,20 @@ export interface HunkComment {
  * patch excerpt so the model knows exactly what the comment targets. The
  * `sourceLabel` states the honest provenance of the diff (working tree vs base).
  */
-export function buildSteerMessage(items: readonly HunkComment[], sourceLabel: string): string {
+export function buildSteerMessage(
+  items: readonly HunkComment[],
+  sourceLabel: string,
+  /** One-line semantic summaries (functions, classes, imports changed) by file path, when known. */
+  semanticByFile?: ReadonlyMap<string, string>,
+): string {
   const blocks = items.map(({ hunk, comment }) => {
     const range = hunkLineRange(hunk);
+    const semantic = semanticByFile?.get(hunk.filePath);
     return [
       `Review comment on ${hunk.filePath} (lines ${range.start}-${range.end}, new file):`,
       comment,
       '',
+      ...(semantic ? [`Structure of this file's change: ${semantic}`, ''] : []),
       'Referenced change:',
       '```diff',
       hunkExcerpt(hunk),

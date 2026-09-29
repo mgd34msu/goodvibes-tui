@@ -38,12 +38,6 @@ export interface SessionResumeRuntime {
   provider: string;
 }
 
-export interface SessionResumePanelManager {
-  open(id: string): unknown;
-  show(): void;
-  getModalRedirect(id: string): string | undefined;
-}
-
 export interface SessionResumeDeps {
   readonly sessionManager: Pick<SessionManager, 'load' | 'save'>;
   readonly conversation: ConversationManager;
@@ -56,7 +50,6 @@ export interface SessionResumeDeps {
    * seam.
    */
   readonly surface: SessionSurface;
-  readonly panelManager: SessionResumePanelManager;
   /**
    * Reselects the saved model through the live provider registry, falling
    * back to the raw saved id on failure (a saved model may no longer exist
@@ -64,20 +57,6 @@ export interface SessionResumeDeps {
    */
   readonly selectModel?: (model: string) => Promise<{ readonly registryKey: string; readonly providerId: string }>;
   readonly hydrateSessionUsage?: () => void;
-  /**
-   * Deliberate cap on how many saved panels are reopened at once, resuming
-   * into a workspace crowded with every panel that happened to be open is
-   * its own kind of surprise. Overflow beyond the cap is reported in the
-   * outcome (`panels.notReopened`), never silently dropped. Defaults to 4.
-   */
-  readonly panelReopenLimit?: number;
-}
-
-export interface PanelReopenOutcome {
-  readonly reopened: readonly string[];
-  readonly movedToModal: readonly string[];
-  /** Saved panel ids beyond `panelReopenLimit`, not attempted, honestly reported (see /panels to open the rest). */
-  readonly notReopened: readonly string[];
 }
 
 export interface SessionResumeOutcome {
@@ -85,51 +64,16 @@ export interface SessionResumeOutcome {
   readonly resumedMessageCount: number;
   readonly restoredAnchorCount: number;
   readonly journalReplay: ReplayIntoConversationResult;
-  readonly panels: PanelReopenOutcome;
-}
-
-/**
- * Exported so both session-workflow.ts's standalone `reopenPanelsFromReturnContext`
- * (kept for its existing direct unit-test coverage, see
- * session-workflow-panel-restore.test.ts) and `resumeSessionCore` below share
- * the exact same default cap.
- */
-export const DEFAULT_PANEL_REOPEN_LIMIT = 4;
-
-export function reopenPanelsWithModalSkip(
-  panelManager: SessionResumePanelManager,
-  openPanelIds: readonly string[] | undefined,
-  limit: number,
-): PanelReopenOutcome {
-  if (!openPanelIds || openPanelIds.length === 0) return { reopened: [], movedToModal: [], notReopened: [] };
-  const within = openPanelIds.slice(0, limit);
-  const overflow = openPanelIds.slice(limit);
-  const reopened: string[] = [];
-  const movedToModal: string[] = [];
-  for (const panelId of within) {
-    // A MIGRATE-TO-MODAL id has no panel to restore, a modal is not part of
-    // the saved panel layout. Skip it (don't pop a modal mid-resume) and note
-    // it once, rather than firing open() and revealing an empty workspace.
-    if (panelManager.getModalRedirect(panelId) !== undefined) {
-      movedToModal.push(panelId);
-      continue;
-    }
-    try {
-      panelManager.open(panelId);
-      reopened.push(panelId);
-    } catch {
-      // Ignore unknown or currently unavailable panel ids during resume.
-    }
-  }
-  if (reopened.length > 0) panelManager.show();
-  return { reopened, movedToModal, notReopened: overflow };
 }
 
 /**
  * The canonical resume sequence: load, reset + restore the conversation,
  * restore rewind anchors, replay any post-snapshot journal records, hydrate
- * footer usage, reselect the model, and reopen saved panels (modal-redirect
- * aware, cap honestly reported).
+ * footer usage and reselect the model.
+ *
+ * Sessions saved while the TUI still had side panes carry
+ * `returnContext.openPanels`; it is read as part of the saved return context
+ * and otherwise ignored (there are no panes to reopen).
  */
 export async function resumeSessionCore(sessionId: string, deps: SessionResumeDeps): Promise<SessionResumeOutcome> {
   const { meta, messages } = deps.sessionManager.load(sessionId);
@@ -190,17 +134,10 @@ export async function resumeSessionCore(sessionId: string, deps: SessionResumeDe
   }
   if (meta.provider) deps.runtime.provider = meta.provider;
 
-  const panels = reopenPanelsWithModalSkip(
-    deps.panelManager,
-    meta.returnContext?.openPanels,
-    deps.panelReopenLimit ?? DEFAULT_PANEL_REOPEN_LIMIT,
-  );
-
   return {
     meta,
     resumedMessageCount: deps.conversation.getMessageCount(),
     restoredAnchorCount,
     journalReplay,
-    panels,
   };
 }

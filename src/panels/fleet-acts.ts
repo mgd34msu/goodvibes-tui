@@ -1,18 +1,17 @@
 // ---------------------------------------------------------------------------
 // fleet-acts.ts
 //
-// The Fleet panel's waiting-on-human ACTS: the flagged pick row, the flagged
-// conflict row, and the worktree discard all act from the panel selection with
-// no id ever typed. This controller owns that flow so fleet-panel.ts stays under
-// the 800-line architecture cap, the panel delegates the trigger keys, the
-// pick-mode input, and the pick-mode render here.
+// The waiting-on-human ACTS in the Agents modal: the flagged pick row, the
+// flagged conflict row, and the worktree discard all act from the selected row
+// with no id ever typed. This controller owns that flow; the Agents modal
+// delegates the trigger keys and the pick-mode input here and draws pickView().
 //
 //   • Pick , the flagged workstream row (needsAttention 'pick') opens a
 //     candidate picker (best-of-N held attempts, from fleet.attempts.list);
-//     ↑↓ chooses the winner, its diff shows in the shared DiffPanel, and Enter
+//     ↑↓ chooses the winner, Enter shows its diff in a Changes preview and
 //     drives fleet.attempts.pick preview (confirm:false) -> confirm (confirm:true)
-//     through the DiffPanel's existing confirm overlay. No group/candidate id is
-//     ever typed, the panel derives them from the node and the selection.
+//     through the question on that preview. No group/candidate id is ever
+//     typed; they come from the node and the selection.
 //   • Conflict, the flagged work-item row (needsAttention 'conflict') runs
 //     fleet.conflicts.resolve and hands the STAMPED resolution session id to the
 //     shared one-key jump/attach affordance (the CI fix-session machinery). On
@@ -25,17 +24,9 @@
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { WorkItem } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { isPanelSearchBackspace, isPanelSearchCancel, isPanelSearchCommit, isPanelSearchPrintable } from './search-focus.ts';
 import { appendSteerText } from './fleet-tabs.ts';
 import { isObservedExternalNode, observedKindLabel, type ObservedNode } from './fleet-observed-render.ts';
-import {
-  buildKeyboardHints,
-  buildPanelWorkspace,
-  DEFAULT_PANEL_PALETTE,
-  type PanelPalette,
-} from './polish.ts';
-import { buildPanelLine } from './polish.ts';
 import { formatAgentCost } from './agent-inspector-shared.ts';
 import { fleetNodeAttention } from './fleet-read-model.ts';
 import {
@@ -48,11 +39,11 @@ import {
   type FleetHeldMergeGroup,
 } from './fleet-gateway.ts';
 
-/** The DiffPanel-backed surface the pick act reuses: show a diff, arm its confirm overlay, close it. */
+/** The Changes-preview surface the pick act reuses: show a diff, ask over it, close it. */
 export interface FleetDiffSurface {
-  /** Open + focus the diff panel showing this unified diff (title labels the candidate). */
+  /** Show this unified diff in a Changes preview (title labels the candidate). */
   show(title: string, unifiedDiff: string): void;
-  /** Arm the diff panel's existing confirm overlay (Enter/y merges, n/Esc cancels). */
+  /** Ask a yes/no question over the preview (or in a confirm dialog when none is open). */
   armConfirm(opts: {
     readonly id: string;
     readonly label: string;
@@ -60,14 +51,14 @@ export interface FleetDiffSurface {
     readonly onConfirm: () => void | Promise<void>;
     readonly onCancel?: () => void;
   }): void;
-  /** Close the diff panel and return focus to the prompt. */
+  /** Close the preview. */
   close(): void;
 }
 
 export interface FleetActsDeps {
   /** Resolve a live gateway per act (so a daemon that comes up mid-session is seen); honest unavailable reason otherwise. */
   readonly resolveGateway: () => FleetGatewayResolution;
-  /** The shared DiffPanel surface (reused for candidate diffs + the pick confirm). */
+  /** The Changes preview surface (candidate diffs + the pick confirm). */
   readonly diffSurface: FleetDiffSurface;
   /** Surface a result/receipt/error line to the operator (system message, high priority). */
   readonly notify: (message: string) => void;
@@ -85,7 +76,15 @@ interface PickMode {
   selectedHeldIndex: number;
 }
 
-const C = DEFAULT_PANEL_PALETTE;
+/** The candidate picker, as data the Agents modal draws. */
+export interface FleetPickView {
+  readonly title: string;
+  readonly candidates: ReadonlyArray<{ readonly label: string; readonly detail: string; readonly selected: boolean }>;
+  /** The selected candidate's unified diff, or null when it has none. */
+  readonly diff: string | null;
+  /** The model's advisory proposal, or null. */
+  readonly proposal: string | null;
+}
 
 function shortId(id: string): string {
   return id.length > 10 ? `${id.slice(0, 10)}…` : id;
@@ -248,7 +247,6 @@ export class FleetActs {
     }
     if (!group) { this.deps.notify('No ready best-of-N group on this workstream; every attempt must settle first.'); return; }
     this.pick = { workstreamNodeId: node.id, group, selectedHeldIndex: 0 };
-    this.showSelectedDiff();
     this.deps.markDirty();
   }
 
@@ -259,13 +257,11 @@ export class FleetActs {
     if (key === 'escape' || key === 'esc') { this.pick = null; this.deps.markDirty(); return true; }
     if (key === 'up' || key === 'k') {
       this.pick.selectedHeldIndex = (this.pick.selectedHeldIndex - 1 + held.length) % held.length;
-      this.showSelectedDiff();
       this.deps.markDirty();
       return true;
     }
     if (key === 'down' || key === 'j') {
       this.pick.selectedHeldIndex = (this.pick.selectedHeldIndex + 1) % held.length;
-      this.showSelectedDiff();
       this.deps.markDirty();
       return true;
     }
@@ -273,18 +269,9 @@ export class FleetActs {
     return true; // absorb every other key while the picker owns the view
   }
 
-  private showSelectedDiff(): void {
-    if (!this.pick) return;
-    const cand = heldCandidates(this.pick.group)[this.pick.selectedHeldIndex];
-    if (!cand) return;
-    const diff = cand.diff?.unifiedDiff?.trim();
-    if (diff) this.deps.diffSurface.show(cand.title, cand.diff!.unifiedDiff);
-    else this.deps.diffSurface.show(cand.title, '@@ pick @@\n (no diff to preview for this candidate)');
-  }
-
   /**
-   * Drive fleet.attempts.pick preview (confirm:false) then, behind the DiffPanel
-   * confirm overlay, confirm (confirm:true). No id is typed, the group id and
+   * Drive fleet.attempts.pick preview (confirm:false) then, behind the question
+   * on the candidate's Changes preview, confirm (confirm:true). No id is typed, the group id and
    * the winner item id both come from the picker state.
    */
   private async confirmSelectedPick(): Promise<void> {
@@ -394,48 +381,25 @@ export class FleetActs {
     return true;
   }
 
-  // ── Render (pick mode) ────────────────────────────────────────────────────
+  // ── Pick mode, as data ────────────────────────────────────────────────────
 
-  /** The candidate picker view (replaces the tree while pick mode is active). */
-  public renderPickMode(width: number, height: number, palette: PanelPalette = C): Line[] {
-    const P = palette;
-    if (!this.pick) return [];
-    const { group } = this.pick;
+  /** The candidate picker while pick mode is active, else null. */
+  public pickView(): FleetPickView | null {
+    if (!this.pick) return null;
+    const { group, selectedHeldIndex } = this.pick;
     const held = heldCandidates(group);
-    const lines: Line[] = [];
-    lines.push(buildPanelLine(width, [
-      [' Best-of-N winner pick: ', P.label],
-      [group.sourceTitle, P.value],
-    ]));
-    lines.push(buildPanelLine(width, [[' Choose the winner; its diff shows in the diff panel. No id is typed.', P.dim]]));
-    lines.push(buildPanelLine(width, [['', P.dim]]));
-    held.forEach((cand, index) => {
-      const selected = index === this.pick!.selectedHeldIndex;
-      const files = cand.diff ? `${cand.diff.files.length} file(s)` : 'no diff';
-      const cost = cand.usage.costUsd !== null && cand.usage.costState !== 'unpriced'
-        ? formatAgentCost(cand.usage.costUsd)
-        : 'unpriced';
-      lines.push(buildPanelLine(width, [
-        [selected ? ' ▸ ' : '   ', selected ? P.info : P.dim],
-        [`${cand.attemptIndex + 1}. `, P.label],
-        [cand.title, selected ? P.value : P.dim],
-        [`, ${files}, ${cost}`, P.dim],
-      ]));
-    });
-    if (group.judgment?.proposedWinnerItemId) {
-      const proposed = held.find((c) => c.itemId === group.judgment!.proposedWinnerItemId);
-      lines.push(buildPanelLine(width, [['', P.dim]]));
-      lines.push(buildPanelLine(width, [
-        [' judge proposal (model, advisory): ', P.label],
-        [proposed ? `attempt ${proposed.attemptIndex + 1}` : shortId(group.judgment.proposedWinnerItemId), P.info],
-      ]));
-    }
-    const footerLines = [buildKeyboardHints(width, [
-      { keys: '↑↓', label: 'choose' },
-      { keys: 'Enter', label: 'pick (confirm)' },
-      { keys: 'Esc', label: 'cancel' },
-    ], P)];
-    return buildPanelWorkspace(width, height, { title: 'Fleet: Pick winner', sections: [{ lines }], footerLines, palette: P });
+    const proposedId = group.judgment?.proposedWinnerItemId;
+    const proposed = proposedId ? held.find((c) => c.itemId === proposedId) : undefined;
+    return {
+      title: group.sourceTitle,
+      candidates: held.map((cand, index) => {
+        const files = cand.diff ? `${cand.diff.files.length} file${cand.diff.files.length === 1 ? '' : 's'}` : 'no diff';
+        const cost = cand.usage.costUsd !== null && cand.usage.costState !== 'unpriced' ? formatAgentCost(cand.usage.costUsd) : 'unpriced';
+        return { label: `${cand.attemptIndex + 1}. ${cand.title}`, detail: `${files} · ${cost}`, selected: index === selectedHeldIndex };
+      }),
+      proposal: proposedId ? (proposed ? `attempt ${proposed.attemptIndex + 1}` : shortId(proposedId)) : null,
+      diff: held[selectedHeldIndex]?.diff?.unifiedDiff?.trim() ? held[selectedHeldIndex]!.diff!.unifiedDiff : null,
+    };
   }
 
   private requireGateway(): FleetGateway | null {

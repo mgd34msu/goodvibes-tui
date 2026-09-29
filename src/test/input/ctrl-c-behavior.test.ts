@@ -5,7 +5,7 @@ import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import { handleCtrlC } from '../../input/handler-content-actions.ts';
-import { UIFactory } from '../../renderer/ui-factory.ts';
+import { buildShellFooter } from '../../renderer/shell-surface.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -38,11 +38,11 @@ function makeInput() {
 }
 
 describe('Ctrl+C behavior', () => {
-  test('clears prompt content even when panel workspace has focus', () => {
+  test('clears prompt content even when the process indicator has focus', () => {
     const { input, renders } = makeInput();
     input.prompt = 'pending text';
     input.cursorPos = input.prompt.length;
-    input.panelFocused = true;
+    input.indicatorFocused = true;
 
     input.feed('\x03');
 
@@ -70,7 +70,7 @@ describe('Ctrl+C behavior', () => {
     const { input } = makeInput();
     const cancelGeneration = mock(() => {});
     (input as unknown as InputHandlerTestAccess).commandContext = { cancelGeneration };
-    input.panelFocused = true;
+    input.indicatorFocused = true;
 
     input.feed('\x03');
 
@@ -82,7 +82,7 @@ describe('Ctrl+C behavior', () => {
   // token, a TTS notice) rather than flashing and vanishing. showExitNotice
   // has exactly one write site (handleCtrlCForHandler, via handleCtrlC in
   // handler-content-actions.ts) and is read fresh, as a plain field, not a
-  // per-feed-buffered value, by createFooter on every render call, so an
+  // per-feed-buffered value, by buildShellFooter on every render call, so an
   // unrelated render triggered in between cannot observe or produce anything
   // other than the same true value until the 1s timeout clears it. This test
   // pins that: it simulates the interleaving directly (extra render() calls
@@ -102,7 +102,10 @@ describe('Ctrl+C behavior', () => {
     input.requestRender();
     expect(input.showExitNotice).toBe(true); // untouched by the interleaved renders
 
-    const lines = UIFactory.createFooter(80, input.prompt, { up: 0, down: 0 }, input.showExitNotice, 0);
+    const lines = buildShellFooter({
+      width: 80, promptText: input.prompt, promptLineCount: 1, usage: { up: 0, down: 0 }, showExitNotice: input.showExitNotice, lastCopyTime: 0,
+      runningAgentCount: 0, runningProcessCount: 0, indicatorFocused: false,
+    }).lines;
     const text = lines.map((line) => line.map((cell) => cell.char ?? ' ').join('')).join('\n');
     expect(text).toContain('Press Ctrl+C again to exit');
   });

@@ -21,11 +21,9 @@
 // The undo/redo stacks stay TUI-side: the service reports how to reverse a
 // rewind (its receipt's undo block), and this module performs the reversal.
 //
-// The confirm step reuses the DiffPanel confirm idiom (PanelConfirmOverlay),
-// exactly like the former checkpoint-id /rewind this replaces (see the
-// architecture note in checkpoint-runtime.ts): the handler resolves the
-// anchor, previews the change, and arms the panel's confirm overlay; the actual
-// y/n handling lives in DiffPanel.handleInput().
+// The confirm step is a question on a Changes preview (ctx.previewChanges):
+// the handler resolves the anchor, shows exactly what changes, and waits for
+// the answer; Esc or closing the preview answers no.
 // ---------------------------------------------------------------------------
 
 import {
@@ -44,7 +42,6 @@ import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { buildRewindReceiptBlock } from '../../core/rewind-receipt.ts';
 import { getTurnAnchors, type TurnAnchor } from '@pellux/goodvibes-sdk/platform/rewind';
 import { createConversationRewindPort, type ConversationRewindPort } from '../../runtime/conversation-rewind-port.ts';
-import { requirePanelManager } from './runtime-services.ts';
 import { shortId } from './checkpoint-runtime.ts';
 
 export type RewindScope = SdkRewindScope;
@@ -304,52 +301,42 @@ async function handleCheckpointOnlyRewind(args: string[], ctx: CommandContext): 
   }
   const checkpoint = resolved;
 
-  const { DiffPanel } = await import('../../panels/diff-panel.ts');
-  const pm = requirePanelManager(ctx);
-  let panel = pm.getAllOpen().find((p) => p.id === 'diff');
-  if (!panel) {
-    try { panel = pm.open('diff'); } catch { ctx.print('Could not open diff panel.'); return; }
-  }
-  pm.activateById('diff');
-  if (!pm.isVisible()) pm.show();
-  ctx.focusPanels?.();
-  const diffPanel = panel as InstanceType<typeof DiffPanel>;
-
+  let diff: string | undefined;
+  let note: string | undefined;
   try {
-    const diff = await mgr.diff(checkpoint.id);
-    if (diff.unifiedDiff.trim()) diffPanel.loadRawDiff(diff.unifiedDiff);
-    else diffPanel.showDiff('(no file changes)', '@@ -0,0 +0,0 @@\n Working tree already matches this checkpoint.');
+    const result = await mgr.diff(checkpoint.id);
+    if (result.unifiedDiff.trim()) diff = result.unifiedDiff;
+    else note = 'The working tree already matches this checkpoint.';
   } catch {
-    diffPanel.showDiff('(preview unavailable)', '@@ -0,0 +0,0 @@\n Could not load the checkpoint diff.');
+    note = 'Could not load the checkpoint diff.';
+  }
+  if (!ctx.previewChanges) {
+    ctx.print('Previewing a restore needs the Changes view, which is not available in this session.');
+    return;
   }
 
-  diffPanel.confirmOverlay.arm({
-    id: checkpoint.id,
-    label: `${checkpoint.label}: restore FILES ONLY (no conversation state this run)`,
-    verb: 'Restore',
-    onConfirm: async () => {
-      try {
-        await mgr.restore(checkpoint.id, { safetyCheckpoint: true });
-        ctx.session.conversationManager.addTypedSystemMessage(
-          `[Rewind] Restored files from checkpoint ${shortId(checkpoint.id)} ("${checkpoint.label}"). Files only: no turn anchors exist this run, so conversation state is unchanged.`,
-          'operational',
-        );
-        pm.close('diff');
-        ctx.focusPrompt?.();
-        ctx.renderRequest();
-      } catch (err) {
-        ctx.print(`Checkpoint restore failed: ${summarizeError(err)}`);
-      }
-    },
-    onCancel: () => {
-      ctx.print('Restore cancelled: nothing changed.');
-      pm.close('diff');
-      ctx.focusPrompt?.();
-      ctx.renderRequest();
-    },
+  ctx.print(`Previewing checkpoint restore: "${checkpoint.label}" (files only; no conversation state this run). Enter or y restores, n or Esc cancels.`);
+  ctx.renderRequest();
+  const confirmed = await ctx.previewChanges({
+    title: checkpoint.label,
+    diff,
+    note,
+    question: { text: `Restore "${checkpoint.label}"? Files only: no conversation state this run.`, confirmLabel: 'Restore', tone: 'warning' },
   });
-
-  ctx.print(`Previewing checkpoint restore: "${checkpoint.label}" (FILES ONLY; no conversation state this run). Confirm in the diff panel: Enter/y to restore, n/Esc to cancel.`);
+  if (!confirmed) {
+    ctx.print('Restore cancelled: nothing changed.');
+    ctx.renderRequest();
+    return;
+  }
+  try {
+    await mgr.restore(checkpoint.id, { safetyCheckpoint: true });
+    ctx.session.conversationManager.addTypedSystemMessage(
+      `[Rewind] Restored files from checkpoint ${shortId(checkpoint.id)} ("${checkpoint.label}"). Files only: no turn anchors exist this run, so conversation state is unchanged.`,
+      'operational',
+    );
+  } catch (err) {
+    ctx.print(`Checkpoint restore failed: ${summarizeError(err)}`);
+  }
   ctx.renderRequest();
 }
 
@@ -412,82 +399,68 @@ export function registerRewindRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      // Preview in the DiffPanel + arm its confirm overlay (same idiom the
-      // former checkpoint-id /rewind used, see checkpoint-runtime.ts).
-      const { DiffPanel } = await import('../../panels/diff-panel.ts');
-      const pm = requirePanelManager(ctx);
-      let panel = pm.getAllOpen().find((p) => p.id === 'diff');
-      if (!panel) {
-        try { panel = pm.open('diff'); } catch { ctx.print('Could not open diff panel.'); return; }
-      }
-      pm.activateById('diff');
-      if (!pm.isVisible()) pm.show();
-      ctx.focusPanels?.();
-      const diffPanel = panel as InstanceType<typeof DiffPanel>;
-
+      // Preview what changes in Changes, with the question on it.
+      let diff: string | undefined;
+      let note: string | undefined;
       const checkpointId = plan.files?.checkpointId ?? null;
       if (filesAvailable && checkpointId && ctx.workspace.workspaceCheckpointManager) {
         try {
-          const diff = await ctx.workspace.workspaceCheckpointManager.diff(checkpointId);
-          if (diff.unifiedDiff.trim()) diffPanel.loadRawDiff(diff.unifiedDiff);
-          else diffPanel.showDiff('(no file changes)', '@@ -0,0 +0,0 @@\n Working tree already matches this checkpoint.');
+          const result = await ctx.workspace.workspaceCheckpointManager.diff(checkpointId);
+          if (result.unifiedDiff.trim()) diff = result.unifiedDiff;
+          else note = 'The working tree already matches this checkpoint.';
         } catch {
-          diffPanel.showDiff('(preview unavailable)', '@@ -0,0 +0,0 @@\n Could not load the checkpoint diff.');
+          note = 'Could not load the checkpoint diff.';
         }
       } else {
         const drop = plan.conversation?.messagesToDrop ?? 0;
         const remaining = plan.conversation?.messagesRemaining ?? 0;
-        diffPanel.showDiff(
-          `Conversation rewind: drop ${drop} message(s)`,
-          `@@ rewind @@\n Keep ${remaining} message(s), drop ${drop} after this turn. No files change.`,
-        );
+        note = `Conversation rewind: keep ${remaining} message(s), drop ${drop} after this turn. No files change.`;
       }
 
       const summaryParts: string[] = [];
       if (wants(scope, 'files')) summaryParts.push(filesAvailable ? `${plan.files?.affectedFileCount ?? 0} file(s)` : 'files: none');
       if (wants(scope, 'conversation')) summaryParts.push(conversationAvailable ? `${plan.conversation?.messagesToDrop ?? 0} message(s)` : 'conversation: unavailable');
+      if (!ctx.previewChanges) {
+        ctx.print('Previewing a rewind needs the Changes view, which is not available in this session.');
+        return;
+      }
 
-      diffPanel.confirmOverlay.arm({
-        id: anchor.turnId ?? sessionId,
-        label: `${resolved.label}: rewind ${scope} (${summaryParts.join(', ')})`,
-        verb: 'Rewind',
-        onConfirm: async () => {
-          try {
-            const result = await state.service.apply(anchor, scope, { confirmToken: plan.token });
-            const receipt = result.receipt;
-            if (!receipt) {
-              ctx.print(`Rewind not applied: ${result.refusal?.reason ?? 'confirmation was refused.'}`);
-              return;
-            }
-            if (undoAvailable(receipt)) {
-              state.undo.push(receipt);
-              state.redo.length = 0; // a fresh apply invalidates the redo stack
-            }
-            // addTypedSystemMessage persists the receipt into real session
-            // history (indexed by getTranscriptEventIndex + save/load), and the
-            // [Rewind] prefix is force-surfaced inline (system-message-router.ts).
-            ctx.session.conversationManager.addTypedSystemMessage(
-              buildRewindReceiptBlock({ ...receipt, undoAvailable: undoAvailable(receipt) }),
-              'operational',
-            );
-            pm.close('diff');
-            ctx.focusPrompt?.();
-            ctx.renderRequest();
-          } catch (err) {
-            ctx.print(`Rewind failed: ${summarizeError(err)}`);
-          }
-        },
-        onCancel: () => {
-          ctx.print('Rewind cancelled: nothing changed.');
-          pm.close('diff');
-          ctx.focusPrompt?.();
-          ctx.renderRequest();
-        },
-      });
-
-      ctx.print(`Previewing rewind of turn "${resolved.label}" (${scope}: ${summaryParts.join(', ')}). Confirm in the diff panel: Enter/y to rewind, n/Esc to cancel.`);
+      ctx.print(`Previewing rewind of turn "${resolved.label}" (${scope}: ${summaryParts.join(', ')}). Enter or y rewinds, n or Esc cancels.`);
       for (const w of plan.warnings) ctx.print(`  note: ${w}`);
       ctx.renderRequest();
+      const confirmed = await ctx.previewChanges({
+        title: `rewind ${resolved.label}`,
+        diff,
+        note,
+        question: { text: `Rewind ${scope} to "${resolved.label}"? (${summaryParts.join(', ')})`, confirmLabel: 'Rewind', tone: 'warning' },
+      });
+      if (!confirmed) {
+        ctx.print('Rewind cancelled: nothing changed.');
+        ctx.renderRequest();
+        return;
+      }
+      try {
+        const result = await state.service.apply(anchor, scope, { confirmToken: plan.token });
+        const receipt = result.receipt;
+        if (!receipt) {
+          ctx.print(`Rewind not applied: ${result.refusal?.reason ?? 'confirmation was refused.'}`);
+          return;
+        }
+        if (undoAvailable(receipt)) {
+          state.undo.push(receipt);
+          state.redo.length = 0; // a fresh apply invalidates the redo stack
+        }
+        // addTypedSystemMessage persists the receipt into real session
+        // history (indexed by getTranscriptEventIndex + save/load), and the
+        // [Rewind] prefix is force-surfaced inline (system-message-router.ts).
+        ctx.session.conversationManager.addTypedSystemMessage(
+          buildRewindReceiptBlock({ ...receipt, undoAvailable: undoAvailable(receipt) }),
+          'operational',
+        );
+        ctx.renderRequest();
+      } catch (err) {
+        ctx.print(`Rewind failed: ${summarizeError(err)}`);
+      }
     },
   });
 }

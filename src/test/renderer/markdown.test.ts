@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+import { activeTokens } from '../../renderer/theme.ts';
 import { renderMarkdown, renderMarkdownTracked, renderInlineMarkdown } from '../../renderer/markdown.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
@@ -32,18 +33,55 @@ describe('renderMarkdown', () => {
     expect(text).toContain('hello world');
   });
 
-  test('renders H1 heading in uppercase', () => {
+  test('renders an H1 heading in its own case, bold, in the heading color', () => {
     const result = renderMarkdown('# My Title', WIDTH);
     const text = textLines(result).join('\n');
-    expect(text).toContain('MY TITLE');
+    expect(text).toContain('My Title');
+    expect(text).not.toContain('MY TITLE');
+    const cell = result[0]!.find((c) => c.char === 'M')!;
+    expect(cell.bold).toBe(true);
+    expect(cell.fg).toBe(activeTokens().markdownHeading);
   });
 
-  test('renders H2 heading with underline', () => {
-    const result = renderMarkdown('## Section Header', WIDTH);
-    const texts = textLines(result);
-    expect(texts.some((t) => t.includes('Section Header'))).toBe(true);
-    // H2 produces 2 lines (text + rule)
-    expect(texts.length).toBeGreaterThanOrEqual(2);
+  test('headings carry no rule row', () => {
+    for (const md of ['# One', '## Two', '### Three']) {
+      expect(renderMarkdown(md, WIDTH)).toHaveLength(1);
+    }
+  });
+
+  test('inline code uses the markdown code color and is not bold', () => {
+    const result = renderMarkdown('call `fn()` now', WIDTH);
+    const cell = result[0]!.find((c) => c.char === 'f')!;
+    expect(cell.fg).toBe(activeTokens().markdownCode);
+    expect(cell.bold).toBeFalsy();
+  });
+
+  test('list markers are muted', () => {
+    const bullet = renderMarkdown('- item', WIDTH)[0]!.find((c) => c.char === '•')!;
+    expect(bullet.fg).toBe(activeTokens().textMuted);
+    const num = renderMarkdown('1. item', WIDTH)[0]!.find((c) => c.char === '1')!;
+    expect(num.fg).toBe(activeTokens().textMuted);
+  });
+
+  test('a block quote keeps its thin bar and style on every wrapped row', () => {
+    const long = '> ' + 'quoted words that wrap '.repeat(12);
+    const rows = textLines(renderMarkdown(long, 60));
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) expect(row.trimStart().startsWith('│')).toBe(true);
+  });
+
+  test('exactly one blank row around code, tables, quotes and rules', () => {
+    const md = ['before', '', '', '', '```ts', 'x', '```', 'between', '> q', 'after', '---', '| a | b |', '|---|---|', '| 1 | 2 |', 'end'].join('\n');
+    // A row on a fill (the code block's padding) is not a blank row.
+    const rows = renderMarkdown(md, WIDTH).map((line) => (line.some((c) => c.bg) ? '#fill' : lineToString(line).trim()));
+    // Never two blank rows in a row, and every block is fenced by one blank row.
+    for (let i = 1; i < rows.length; i++) expect(rows[i] === '' && rows[i - 1] === '').toBe(false);
+    const idx = (needle: string) => rows.findIndex((r) => r.includes(needle));
+    expect(rows[idx('between') - 1]).toBe('');
+    expect(rows[idx('between') + 1]).toBe('');
+    expect(rows[idx('after') - 1]).toBe('');
+    expect(rows[idx('after') + 1]).toBe('');
+    expect(rows[idx('end') - 1]).toBe('');
   });
 
   test('renders H3 heading', () => {
@@ -77,7 +115,7 @@ describe('renderMarkdown', () => {
   test('renders blockquote', () => {
     const result = renderMarkdown('> quoted text', WIDTH);
     const text = textLines(result).join('\n');
-    expect(text).toContain('┃');
+    expect(text).toContain('│');
     expect(text).toContain('quoted text');
   });
 
@@ -381,5 +419,40 @@ describe('renderInlineMarkdown', () => {
     // Bold produces a text token with bold style
     expect(tokens.some((t) => t.type === 'text' && (t as { style?: { bold?: boolean } }).style?.bold === true)).toBe(true);
     expect(tokens.some((t) => t.type === 'code')).toBe(true);
+  });
+});
+
+describe('transcript columns (the Measurements table)', () => {
+  const firstTextCol = (line: import('@pellux/goodvibes-sdk/platform/types').Line): number =>
+    line.findIndex((cell) => cell.char !== ' ' && cell.char !== '');
+  const lastTextCol = (line: import('@pellux/goodvibes-sdk/platform/types').Line): number => {
+    for (let x = line.length - 1; x >= 0; x--) if (line[x]!.char !== ' ' && line[x]!.char !== '') return x;
+    return -1;
+  };
+
+  test('prose starts at column 5 and wraps before width-5', () => {
+    const long = 'word '.repeat(60).trim();
+    for (const width of [60, 80, 120]) {
+      const lines = renderMarkdown(`${long}\n\n> ${long}\n\n- ${long}\n\n1. ${long}`, width).filter((l) => firstTextCol(l) >= 0);
+      expect(lines.length).toBeGreaterThan(4);
+      for (const line of lines) {
+        expect(firstTextCol(line)).toBeGreaterThanOrEqual(5);
+        expect(lastTextCol(line)).toBeLessThanOrEqual(width - 6);
+      }
+    }
+  });
+
+  test('a heading keeps one blank row above and below it', () => {
+    const rows = linesToText(renderMarkdown('Intro line.\n## Heading\nBody line.', WIDTH));
+    const at = rows.findIndex((r) => r.includes('Heading'));
+    expect(rows[at - 1]!.trim()).toBe('');
+    expect(rows[at + 1]!.trim()).toBe('');
+    expect(rows[at - 2]).toContain('Intro line.');
+    expect(rows[at + 2]).toContain('Body line.');
+  });
+
+  test('a heading that opens the message has no blank row above it', () => {
+    const rows = linesToText(renderMarkdown('## Heading\nBody line.', WIDTH));
+    expect(rows[0]).toContain('Heading');
   });
 });

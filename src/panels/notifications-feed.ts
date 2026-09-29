@@ -9,8 +9,9 @@
  * file, nothing in this repo consumed that target outside of tests, a
  * panel-routed notification (including every burst- or batch-collapsed one)
  * had nowhere to go. This feed is that place: a caller holding a routed
- * `Notification` + `RoutingDecision` pair calls `record()`, and
- * `notifications-panel.ts` renders whatever has accumulated.
+ * `Notification` + `RoutingDecision` pair calls `record()`, and the
+ * Notifications modal (input/notifications-modal.ts) shows whatever has
+ * accumulated; warning and critical entries also toast.
  *
  * Collapsed groups (reasonCode `burst_collapsed` / `batch_window_collapsed`)
  * are tracked by their `batchKey` and accumulate an honest running count
@@ -18,7 +19,7 @@
  *
  * Production wiring, something in the running app actually calling
  * `record()` with live notifications, rides the SDK round that turns on
- * adaptive notification suppression by default; this feed and its panel are
+ * adaptive notification suppression by default; this feed and its modal are
  * the render target that work lands on, built ahead of it so the target is
  * never missing when that switch flips.
  */
@@ -35,6 +36,25 @@ export interface PanelFeedEntry {
   readonly reasonCode: RoutingDecision['reasonCode'];
   /** How many notifications this entry represents. 1 for a standalone item; >1 for a collapsed group. Always the true count, never estimated. */
   readonly collapsedCount: number;
+  /**
+   * The view this notification is about (the notification's own panelId or
+   * jump action, else one derived from its domain), resolved to a modal by
+   * input/views.ts. Undefined when it is not about anything that can be opened.
+   */
+  readonly subject?: string;
+}
+
+/** Domains whose notifications are about something the Agents modal shows. */
+const AGENT_DOMAINS: ReadonlySet<string> = new Set(['agents', 'tasks', 'workflows', 'automation', 'wrfc', 'orchestration']);
+
+/** The view a notification is about, or undefined. */
+function subjectOf(notification: Notification): string | undefined {
+  if (notification.panelId) return notification.panelId;
+  if (notification.action?.type === 'jump_to_panel' && notification.action.panelId) return notification.action.panelId;
+  if (AGENT_DOMAINS.has(notification.domain)) return 'agents';
+  if (notification.domain === 'security') return 'security';
+  if (notification.domain === 'git') return 'changes';
+  return undefined;
 }
 
 const MAX_ENTRIES = 200;
@@ -50,6 +70,8 @@ export class PanelNotificationFeed {
   /** Insertion order of `entries` keys (oldest first), for bounded eviction. */
   private order: string[] = [];
   private readonly listeners = new Set<() => void>();
+  /** Unix ms of the newest entry the user has seen in the Notifications modal. */
+  private seenThrough = 0;
 
   /**
    * Record a routed notification. Only notifications actually targeted at
@@ -73,6 +95,7 @@ export class PanelNotificationFeed {
       timestamp: notification.timestamp,
       reasonCode: decision.reasonCode,
       collapsedCount: previousCount + 1,
+      subject: subjectOf(notification),
     };
 
     if (!this.entries.has(key)) {
@@ -102,7 +125,32 @@ export class PanelNotificationFeed {
     this.emitChange();
   }
 
-  /** Subscribe to feed changes (e.g. to mark a panel dirty). Returns an unsubscribe function. */
+  /** Remove one entry (a collapsed group goes as a whole). Returns whether it existed. */
+  dismiss(key: string): boolean {
+    if (!this.entries.delete(key)) return false;
+    this.order = this.order.filter((k) => k !== key);
+    this.emitChange();
+    return true;
+  }
+
+  /** Entries updated since the user last looked. */
+  unreadCount(): number {
+    let n = 0;
+    for (const entry of this.entries.values()) if (entry.timestamp > this.seenThrough) n++;
+    return n;
+  }
+
+  /** Whether an entry was updated since the user last looked. */
+  isUnread(entry: PanelFeedEntry): boolean {
+    return entry.timestamp > this.seenThrough;
+  }
+
+  /** Everything recorded so far counts as seen. */
+  markAllSeen(): void {
+    for (const entry of this.entries.values()) this.seenThrough = Math.max(this.seenThrough, entry.timestamp);
+  }
+
+  /** Subscribe to feed changes (e.g. to repaint an open modal). Returns an unsubscribe function. */
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -117,7 +165,7 @@ let sharedFeed: PanelNotificationFeed | null = null;
 
 /**
  * The process-wide `panel_only` feed. Lazily created so the running app has
- * exactly one feed that every future caller and the NotificationsPanel agree
+ * exactly one feed that every caller and the Notifications modal agree
  * on, while tests construct their own isolated `PanelNotificationFeed`
  * instance instead of reaching for this one.
  */

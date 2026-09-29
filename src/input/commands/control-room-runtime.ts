@@ -9,13 +9,13 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
   registry.register({
     name: 'cockpit',
     aliases: [],
-    description: 'Open the unified operator cockpit',
+    description: 'Open Agents (the old operator cockpit)',
     handler(_args, ctx) {
       if (ctx.openCockpitPanel) {
         ctx.openCockpitPanel();
         return;
       }
-      ctx.print('Cockpit panel is not available in this runtime.');
+      ctx.print('The Agents view is not available in this runtime.');
     },
   });
 
@@ -32,7 +32,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
           return;
         }
         if (graphs.length === 0) {
-          ctx.print('Orchestration panel is not available in this runtime.');
+          ctx.print('The Agents view is not available in this runtime.');
           return;
         }
       }
@@ -107,7 +107,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         ctx.openCommunicationPanel();
         return;
       }
-      ctx.print('Communication panel is not available in this runtime.');
+      ctx.print('The Agents view is not available in this runtime.');
     },
   });
 
@@ -122,7 +122,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
           ctx.openSecurityPanel();
           return;
         }
-        ctx.print('Security panel is not available in this runtime.');
+        ctx.print('The Security view is not available in this runtime.');
         return;
       }
 
@@ -205,7 +205,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
           ctx.openMemoryPanel();
           return;
         }
-        ctx.print('Memory panel is not available in this runtime.');
+        ctx.print('The Memory view is not available in this runtime.');
         return;
       }
       if (subcommand === 'queue') {

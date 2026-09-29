@@ -7,7 +7,7 @@ import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import { formatModelDiscoveryReport } from '@pellux/goodvibes-sdk/platform/providers';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
 import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config';
-import { openCommandPanel, requireBookmarkManager, requireProviderApi, requireSecretsManager } from './runtime-services.ts';
+import { openCommandView, requireBookmarkManager, requireProviderApi, requireSecretsManager } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function isGoodVibesSecretRefInput(value: string): boolean {
@@ -81,7 +81,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         ctx.openIncidentPanel();
         return;
       }
-      ctx.print('Incident panel is not available in this runtime.');
+      ctx.print('The Agents view is not available in this runtime.');
     },
   });
 
@@ -93,16 +93,13 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     handler(args, ctx) {
       const sub = (args[0] ?? '').toLowerCase();
       if (sub === 'panel' || sub === 'review') {
-        // (the purge): 'tools'/ToolInspectorPanel was DELETE-disposition
-        // (no surviving human surface, tool results render inline in the
-        // transcript, plus a per-node tool list in Fleet). There is no alias
-        // to resolve through, so this prints an honest notice and opens
-        // Fleet instead of the retired inspector.
-        ctx.print('Tools panel retired: tool activity now renders inline in the transcript and per-agent in the Fleet panel. Opening Fleet.');
+        // Tool results render inline in the transcript and per agent in the
+        // Agents modal; there is no separate tools view.
+        ctx.print('Tool activity renders inline in the transcript and per agent in the Agents view. Opening Agents.');
         try {
-          openCommandPanel(ctx, 'fleet');
+          openCommandView(ctx, 'agents');
         } catch {
-          // Panel registry may be unavailable in lightweight command-only contexts.
+          // The view openers may be absent in lightweight command-only contexts.
         }
         if (sub === 'review') {
           ctx.print([
@@ -110,7 +107,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
             '  Native file tools stay compact by default.',
             '  Read/write/edit/notebook capabilities are available through the native tool stack, with detail routed inline and to approval surfaces instead of transcript bloat.',
             '  Shell and native tool approvals classify work into read, mutation, destructive, dependency, config, notebook, network, remote, and lifecycle risk families.',
-            '  Use /tools panel to jump to the Fleet panel for live per-agent tool activity.',
+            '  Use /tools panel to open Agents for live per-agent tool activity.',
             '  Use /approval review shell or /approval review file when you need the action-specific why-prompted posture.',
           ].join('\n'));
         }

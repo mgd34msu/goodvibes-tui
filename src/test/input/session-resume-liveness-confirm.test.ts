@@ -14,7 +14,6 @@ import { existsSync, rmSync } from 'node:fs';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { ConversationManager } from '../../core/conversation.ts';
-import { PanelManager } from '../../panels/panel-manager.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { handleSessionWorkflowCommand } from '../../input/commands/session-workflow.ts';
 import { writeLivenessMarker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
@@ -43,7 +42,6 @@ function makeCtx(sm: SessionManager, printed: string[]): CommandContext {
     workspace: {
       shellPaths: { workingDirectory: tmpDir, homeDirectory: tmpDir },
       surface: makeTestSurface(tmpDir),
-      panelManager: new PanelManager(),
     },
     platform: { configManager: { get: () => 'off', getCategory: () => ({}) } },
     clients: { providerApi: { selectModel: async (model: string) => ({ registryKey: model, providerId: 'p' }) } },

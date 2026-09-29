@@ -20,7 +20,7 @@ export function registerIncidentRuntimeCommands(registry: CommandRegistry): void
           ctx.openIncidentPanel();
           return;
         }
-        ctx.print('Incident panel is not available in this runtime.');
+        ctx.print('The Agents view is not available in this runtime.');
         return;
       }
       if (!forensicRegistry) {

@@ -219,7 +219,7 @@ export function renderConversationFoldedRow(
   );
 }
 
-export function renderConversationStatusLine(
+function renderConversationStatusLine(
   width: number,
   segments: readonly ConversationStatusSegment[],
   options: {

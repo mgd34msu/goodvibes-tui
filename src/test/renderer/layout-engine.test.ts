@@ -1,26 +1,19 @@
 import { describe, expect, test } from 'bun:test';
-import { createShellLayout, createSplitPaneLayout } from '../../renderer/layout-engine.ts';
+import { createShellLayout } from '../../renderer/layout-engine.ts';
 
 describe('layout engine', () => {
-  test('creates a shell layout with stable conversation and panel regions', () => {
-    const layout = createShellLayout({
-      width: 120,
-      height: 40,
-      headerHeight: 2,
-      footerHeight: 10,
-      panelWidth: 32,
-    });
-
+  test('the conversation takes the full width of the body (there are no side panes)', () => {
+    const layout = createShellLayout({ width: 120, height: 40, headerHeight: 2, footerHeight: 10 });
     expect(layout.body.height).toBe(28);
-    expect(layout.conversation.width).toBe(87);
-    expect(layout.panel?.width).toBe(32);
-    expect(layout.separatorX).toBe(87);
+    expect(layout.conversation.width).toBe(120);
+    expect(layout.conversation.y).toBe(2);
+    expect(layout.footer.y).toBe(30);
   });
 
-  test('creates a split-pane layout with tab and separator chrome reserved', () => {
-    const split = createSplitPaneLayout(24, 0.6);
-    expect(split.topContentRows).toBeGreaterThan(0);
-    expect(split.bottomContentRows).toBeGreaterThan(0);
-    expect(split.topContentRows + split.bottomContentRows + split.topTabRows + split.bottomTabRows + split.separatorRows).toBe(24);
+  test('clamps header and footer to the screen', () => {
+    const layout = createShellLayout({ width: 10, height: 5, headerHeight: 4, footerHeight: 4 });
+    expect(layout.header.height).toBe(4);
+    expect(layout.footer.height).toBe(1);
+    expect(layout.body.height).toBe(0);
   });
 });

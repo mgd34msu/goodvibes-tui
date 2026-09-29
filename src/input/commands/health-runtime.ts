@@ -8,7 +8,6 @@ import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { getSettingsControlPlaneSnapshot } from '@/runtime/index.ts';
 import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '@/runtime/index.ts';
 import {
-  openCommandPanel,
   requireLocalUserAuthManager,
   requireOperatorClient,
   requireReadModels,
@@ -431,7 +430,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
           lines.push('  /health maintenance');
           lines.push('  /guidance review');
           lines.push('  /compact');
-          lines.push('  /panel tokens');
+          lines.push('  /usage');
           lines.push('  verify: /health maintenance');
         } else if (domain === 'worktrees') {
           lines.push('  domain: worktrees');

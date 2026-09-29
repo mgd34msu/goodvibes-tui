@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { requireShellPaths } from './runtime-services.ts';
 import {
   getSandboxPreset,
   inspectSandboxBundle,

@@ -9,7 +9,7 @@ import type { SelectionItem, SelectionResult, SelectionAction } from './selectio
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { WorkspaceCheckpointManager } from '@pellux/goodvibes-sdk/platform/workspace';
 import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
-import type { PanelManager, PanelDeepLinkTarget } from '../panels/panel-manager.ts';
+import type { ViewTarget } from './views.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import type { OpenOnboardingWizardOptions } from './handler-ui-state.ts';
@@ -202,7 +202,6 @@ export interface CommandShellUiOpeners {
   openProfilePicker?: () => void;
   openShortcutsOverlay?: () => void;
   getScrollTop?: () => number;
-  openPanelPicker?: () => void;
   /**
    * Open the fuzzy command palette, a searchable picker over every registered
    * slash command (generated live from the registry). Bound to Ctrl+K and the
@@ -218,6 +217,12 @@ export interface CommandShellUiOpeners {
   /** Show a toast in the top right corner for five seconds (a colored ┃ on both sides). */
   showToast?: (toast: import('../renderer/surface-kit-parts.ts').ToastSpec) => void;
   /**
+   * The /status report: session, model, tools, notification mode, token
+   * totals and cost, context use, cross-surface posture and the safety
+   * states. Built by the shell from the same sources the footer reads.
+   */
+  describeStatus?: () => string;
+  /**
    * Command name -> reference-category label, from the same single source of
    * truth as the generated command reference (categorizeBuiltinCommands),
    * memoized by the shell. Lets registry-driven surfaces built inside command
@@ -227,16 +232,34 @@ export interface CommandShellUiOpeners {
    */
   getCommandCategories?: () => ReadonlyMap<string, string>;
   /**
-   * Open (and optionally focus) a panel. focus rule: the command path is
-   * "the user is mid-command-flow", opening a panel this way leaves keyboard
-   * focus in the composer by default. Pass `{ focus: true }` for a caller that
-   * genuinely wants to grab focus (chords use panelManager.focusPanels()
-   * directly instead of this method, so no current call site needs it, but
-   * the intent is explicit rather than implicit here). `target` is a
-   * fleet deep-link jump target forwarded to PanelManager.open.
+   * Open the modal that holds a view, by its current or old name ('agents',
+   * 'fleet', 'cockpit', 'tokens', 'git', 'providers', …; see views.ts).
+   * `target` selects a specific process in the Agents modal. Returns false
+   * when nothing holds that name.
    */
-  showPanel?: (panelId: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget, opts?: { focus?: boolean }) => void;
-  focusPanels?: () => void;
+  openView?: (name: string, target?: ViewTarget) => boolean;
+  /** The Agents modal; `target` selects a process, `hosted` opens the attached hosted session. */
+  openAgents?: (options?: { readonly target?: ViewTarget; readonly hosted?: boolean }) => void;
+  /** The Usage modal (`tab: 'agents'` opens on the per-agent cost ledger). */
+  openUsage?: (options?: { readonly tab?: 'overview' | 'turns' | 'agents' }) => void;
+  /** The Changes modal over the repository (this session's files, not staged, staged or vs HEAD). */
+  openChanges?: (options?: { readonly source?: import('./changes-git.ts').ChangesSource }) => void;
+  /**
+   * Show a diff someone else produced (a rewind checkpoint, a workstream
+   * attempt, a fleet candidate) in a read-only Changes preview. With a
+   * question, resolves true only when its confirm button is pressed; closing
+   * the preview answers no. `note` is shown when there is no diff to draw.
+   */
+  previewChanges?: (options: {
+    readonly title: string;
+    readonly diff?: string;
+    readonly note?: string;
+    readonly question?: import('./changes-modal.ts').ChangesQuestionSpec;
+  }) => Promise<boolean>;
+  /** The notification history. */
+  openNotifications?: () => void;
+  /** Open a file in $VISUAL / $EDITOR (at a line when the editor takes one). */
+  openFileInEditor?: (path: string, line?: number) => void;
   focusPrompt?: () => void;
   openOpsPanel?: () => void;
   openCockpitPanel?: () => void;
@@ -253,14 +276,14 @@ export interface CommandShellUiOpeners {
   openRemotePanel?: () => void;
   openSubscriptionPanel?: () => void;
   /**
-   * Open the LocalAuthPanel in masked-password-entry mode for the given
-   * operation and username. The panel captures keystrokes into a private
-   * buffer; no plaintext password is ever stored in input history, transcript,
-   * logs, or recovery files.
+   * Open the local-auth password prompt (a kit modal) for the operation and
+   * user. Keystrokes land in a private buffer that is never drawn; no
+   * plaintext password reaches input history, the transcript, logs, or
+   * recovery files. An empty username for add-user asks for it first.
    */
   openLocalAuthMaskedEntry?: (
     kind: 'add-user' | 'rotate-password',
-    username: string,
+    username?: string,
   ) => void;
 }
 
@@ -325,7 +348,6 @@ export interface CommandWorkspaceUiServices {
   gatewayMethods?: GatewayMethodCatalog;
   workspaceTrustManager?: import('@pellux/goodvibes-sdk/platform/runtime/operations').WorkspaceTrustManager;
   workspaceRegistrationManager?: import('@pellux/goodvibes-sdk/platform/runtime/operations').WorkspaceRegistrationManager;
-  panelManager?: PanelManager;
   profileManager?: import('@pellux/goodvibes-sdk/platform/profiles').ProfileManager;
   bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks').BookmarkManager;
   projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;

@@ -224,11 +224,6 @@ describe('seam-replay: seam 2; in-TUI panel resume (createResumeSessionHandler)'
         },
         list: () => [],
       } as never,
-      panelManager: {
-        open: () => {},
-        show: () => {},
-        hide: () => {},
-      } as never,
       configManager: {
         get: (_key: string) => 'off',
         getCategory: (_cat: string) => ({}),
@@ -303,11 +298,6 @@ describe('seam-replay: seam 2; in-TUI panel resume (createResumeSessionHandler)'
         save: (_id: string, msgs: never[], _opts: unknown) => { void msgs; },
         list: () => [],
       } as never,
-      panelManager: {
-        open: () => {},
-        show: () => {},
-        hide: () => {},
-      } as never,
       configManager: {
         get: (_key: string) => 'off',
         getCategory: (_cat: string) => ({}),
@@ -379,11 +369,6 @@ describe('seam-replay: seam 2; in-TUI panel resume (createResumeSessionHandler)'
           void msgs;
         },
         list: () => [],
-      } as never,
-      panelManager: {
-        open: () => {},
-        show: () => {},
-        hide: () => {},
       } as never,
       configManager: {
         get: (_key: string) => 'off',

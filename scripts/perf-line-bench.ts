@@ -8,8 +8,6 @@
  *
  *   transcript.build_1k   Line[] build for a 1000-message mixed conversation
  *                         (text, tool results, code blocks, a diff-shaped result)
- *   panel.two_pane_build  panel-workspace two-pane frame build (top + bottom pane,
- *                         workspace bar, split layout), panels invalidated per build
  *   markdown.render       renderMarkdownTracked on a representative mixed document
  *   codeblock.regex       renderCodeBlock via the regex fallback tokenizer (cold /
  *                         tree-sitter not yet cached, the streaming path)
@@ -40,13 +38,8 @@ import { appendConversationMessages } from '../src/core/conversation-rendering.t
 import { ConversationManager } from '../src/core/conversation.ts';
 import { renderMarkdownTracked } from '../src/renderer/markdown.ts';
 import { renderCodeBlock } from '../src/renderer/code-block.ts';
-import { PanelManager } from '../src/panels/panel-manager.ts';
-import type { Panel, PanelCategory } from '../src/panels/types.ts';
-import { createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
-import { buildPanelCompositeData } from '../src/renderer/panel-composite.ts';
 import { renderHelpOverlay } from '../src/renderer/help-overlay.ts';
 import { KeybindingsManager } from '../src/input/keybindings.ts';
-import type { InputHandler } from '../src/input/handler.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 
 // ---------------------------------------------------------------------------
@@ -84,7 +77,6 @@ export const LINE_BUDGETS: Readonly<Record<string, number>> = {
   // a resize invalidates every width-dependent message (all of them), so
   // it still pays a near-full re-render, gated at the same ceiling as build_1k.
   'transcript.resize_1k_ms': 400,
-  'panel.two_pane_build_ms': 4,
   'markdown.render_ms': 6,
   'codeblock.regex_ms': 4,
   'codeblock.treesitter_ms': 4,
@@ -287,63 +279,6 @@ function makeConversationContext() {
   };
 }
 
-/**
- * A self-contained, deterministic full-pane content panel for the two-pane
- * composite benchmark. Fills each pane with styled rows (mixed fg tones + a
- * separator) so the compositor does representative per-cell work every frame.
- * (the purge) replaced the previously-used DocsPanel here, a migrated,
- * now-deleted panel, with this bench-local implementation so the perf bench
- * never breaks when a domain panel is retired.
- */
-/**
- * Category the bench panels register under. Typed as PanelCategory so a future
- * rename of the category union fails `bun run typecheck` here instead of at run
- * time, the string literal 'system' used to sit inline and had already gone
- * stale when the union was split into the current nine categories.
- */
-const BENCH_PANEL_CATEGORY: PanelCategory = 'runtime-ops';
-
-function createBenchPanel(id: string, name: string, icon: string): Panel {
-  const palette = ['#e2e8f0', '#94a3b8', '#38bdf8', '#22c55e', '#f59e0b'];
-  return {
-    id, name, icon, category: BENCH_PANEL_CATEGORY,
-    onActivate: () => {}, onDeactivate: () => {}, onDestroy: () => {},
-    isTransient: false, isPinned: false, needsRender: true,
-    invalidate: () => {}, markRendered: () => {},
-    render: (width: number, height: number): Line[] => {
-      const lines: Line[] = [];
-      for (let row = 0; row < height; row++) {
-        if (row === 1) {
-          const sep = createEmptyLine(width);
-          for (let x = 0; x < width; x++) sep[x] = createStyledCell('─', { fg: '#334155' });
-          lines.push(sep);
-          continue;
-        }
-        const line = createEmptyLine(width);
-        const text = `  ${name} row ${row}: composite benchmark content, mixed tokens, glyphs, and padding fill`;
-        const fg = palette[row % palette.length]!;
-        for (let x = 0; x < text.length && x < width; x++) {
-          line[x] = createStyledCell(text[x]!, { fg, bold: row % 5 === 0 });
-        }
-        lines.push(line);
-      }
-      return lines;
-    },
-  };
-}
-
-/** Register two full-pane content panels and open them in the top and bottom panes. */
-function makeTwoPaneManager(): { manager: PanelManager; input: InputHandler } {
-  const manager = new PanelManager();
-  manager.registerType({ id: 'bench-top', name: 'Top', icon: '⬆', category: BENCH_PANEL_CATEGORY, description: 'bench top pane', factory: () => createBenchPanel('bench-top', 'Top', '⬆') });
-  manager.registerType({ id: 'bench-bottom', name: 'Bottom', icon: '⬇', category: BENCH_PANEL_CATEGORY, description: 'bench bottom pane', factory: () => createBenchPanel('bench-bottom', 'Bottom', '⬇') });
-  manager.show();
-  manager.open('bench-top', 'top');
-  manager.open('bench-bottom', 'bottom');
-  const input = { panelFocused: true } as unknown as InputHandler;
-  return { manager, input };
-}
-
 // ---------------------------------------------------------------------------
 // Bench runner
 // ---------------------------------------------------------------------------
@@ -437,32 +372,6 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
       unit: 'ms',
       timeMeanMs: t.mean, timeP50Ms: t.p50, timeP95Ms: t.p95,
       iterations: 12, linesProduced,
-      heapBytesPerOp: heap.bytesPerOp, objectsPerOp: heap.objectsPerOp,
-    });
-  }
-
-  // --- panel.two_pane_build --------------------------------------------------
-  {
-    const { manager, input } = makeTwoPaneManager();
-    const topPanel = manager.getTopPane().panels[0]!;
-    const bottomPanel = manager.getBottomPane().panels[0]!;
-    const build = () => {
-      topPanel.invalidate();
-      bottomPanel.invalidate();
-      return buildPanelCompositeData(manager, input, 60, 40);
-    };
-    const first = build();
-    const linesProduced = (first.panelData?.topContent.length ?? 0)
-      + (first.panelData?.bottomContent?.length ?? 0)
-      + (first.panelData?.workspaceBar.length ?? 0);
-    const t = timeOp(build, 500, 50);
-    const heap = measureHeap(build, 300);
-    cases.push({
-      id: 'panel.two_pane_build_ms',
-      label: 'panel-workspace two-pane frame build',
-      unit: 'ms',
-      timeMeanMs: t.mean, timeP50Ms: t.p50, timeP95Ms: t.p95,
-      iterations: 500, linesProduced,
       heapBytesPerOp: heap.bytesPerOp, objectsPerOp: heap.objectsPerOp,
     });
   }

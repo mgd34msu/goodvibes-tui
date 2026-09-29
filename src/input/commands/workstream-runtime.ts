@@ -126,7 +126,7 @@ async function launchApprovedDraft(ctx: CommandContext, service: WorkstreamComma
     ctx.print(`Could not launch ${id}.`);
     return;
   }
-  ctx.print(`Launched workstream ${result.workstreamId}: track it with /workstream status ${result.workstreamId} or the Fleet panel.`);
+  ctx.print(`Launched workstream ${result.workstreamId}: track it with /workstream status ${result.workstreamId} or in Agents (F2).`);
 }
 
 /**

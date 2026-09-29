@@ -48,7 +48,7 @@ describe('security modal surface', () => {
     expect(gov).toContain('critical 1');
   });
 
-  test('preflight routes to /policy; jumpToIncident routes to fleet only when an incident exists', () => {
+  test('preflight routes to /policy; jumpToIncident opens Agents only when an incident exists', () => {
     const surface = securityModalGoldenSurface();
     open(surface);
     const preflight = captureCommands();
@@ -58,7 +58,7 @@ describe('security modal surface', () => {
     expect(findAction(surface, 'jumpToIncident')?.enabledFor?.(null, 'tokens')).toBe(true);
     const jump = captureCommands();
     surface.onAction?.('jumpToIncident', actionCtx(null, jump.extra));
-    expect(jump.calls).toEqual([['panel', ['open', 'incident']]]);
+    expect(jump.calls).toEqual([['agents', []]]);
 
     const noIncident = createSecurityModalSurface({ readModel: fixedReadModel(EMPTY_SNAPSHOT) });
     open(noIncident);

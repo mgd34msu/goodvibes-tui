@@ -317,7 +317,7 @@ Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
 `/model` opens the fullscreen provider/model workspace. The left rail chooses the target route (`Main Chat`, `Helper Model`, `Tool LLM`, or `TTS LLM`), and the main table filters large model catalogs by search, price tier, capability, availability, benchmark sort, and grouping. `/provider` opens the same workspace in provider-first mode so users can choose a provider and then a model for the active target.
 
-`/project-plan` (alias `/planning`) inspects or seeds the TUI-owned project-planning state. The primary planning UX is natural conversation in the TUI; daemon and companion surfaces only get passive SDK storage/evaluation routes. Use `/project-plan panel` to open the Planning panel, `/project-plan approve` to record explicit execution approval, or `/project-plan <goal>` to seed the current workspace planning artifact. This is a distinct command from `/plan`, which only toggles the read-only permission plan mode (see [Keyboard shortcuts](#keyboard-shortcuts) below, `Shift+Tab`); it does not touch project-planning state.
+`/project-plan` (alias `/planning`) inspects or seeds the TUI-owned project-planning state. The primary planning UX is natural conversation in the TUI; daemon and companion surfaces only get passive SDK storage/evaluation routes. Use `/project-plan panel` to open the Planning modal, `/project-plan approve` to record explicit execution approval, or `/project-plan <goal>` to seed the current workspace planning artifact. This is a distinct command from `/plan`, which only toggles the read-only permission plan mode (see [Keyboard shortcuts](#keyboard-shortcuts) below, `Shift+Tab`); it does not touch project-planning state.
 
 `/paste` (`/clip`) explicitly reads the system clipboard and inserts supported text or image data into the prompt. Use this when terminal paste does not deliver image clipboard contents to the TUI; the command uses the clipboard helper path instead of relying on the terminal paste stream.
 
@@ -327,7 +327,7 @@ Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
 Most shortcuts are customizable via `~/.goodvibes/tui/keybindings.json`. Use `/keybindings` to view current bindings.
 
-Five keys are fixed and are not in the rebindable table: `F2` (toggle the Fleet panel), `Shift+Tab` (cycle the session permission mode), `Esc` (exit the current mode), `?` (help/command picker on an empty prompt), and `@` (file picker). Everything else below resolves through the keybindings table and can be reassigned.
+Five keys are fixed and are not in the rebindable table: `F2` (open or close Agents), `Shift+Tab` (cycle the session permission mode), `Esc` (exit the current mode), `?` (help/command picker on an empty prompt), and `@` (file picker). Everything else below resolves through the keybindings table and can be reassigned.
 
 ### Input and editing
 
@@ -335,7 +335,7 @@ Five keys are fixed and are not in the rebindable table: `F2` (toggle the Fleet 
 |-----|--------|
 | `Enter` | Send message |
 | `Shift+Enter` | Insert newline |
-| `Tab` | Toggle block collapse / path completion |
+| `Tab` | Path completion, else toggle block collapse |
 | `Ctrl+U` | Kill from cursor to start of line (push to kill ring) |
 | `Alt+U` | Clear entire prompt (no kill-ring push) |
 | `Ctrl+W` | Kill word backward (push to kill ring) |
@@ -365,11 +365,11 @@ Five keys are fixed and are not in the rebindable table: `F2` (toggle the Fleet 
 | `Ctrl+R` | Reverse input history search |
 | `Ctrl+E` | Move to end of line / next error |
 | `Ctrl+A` | Move to start of line / apply nearest diff |
-| `Mouse wheel` | Scroll |
+| `Mouse wheel` | Scroll the conversation (or the open modal) |
 | `Click drag` | Select text |
 | `Middle click` | Paste |
 | `n` / `N` | Next / previous match in locked search mode; wraps with a `(wrap)` marker |
-| `Escape` | Exit current mode (search, command, modal) |
+| `Escape` | Close the top modal (one level), then clear the composer, then interrupt the turn; inside Agents it backs out one level and never stops work |
 
 ### Blocks and content
 
@@ -382,19 +382,18 @@ Five keys are fixed and are not in the rebindable table: `F2` (toggle the Fleet 
 | `Ctrl+L` | Clear screen |
 | `Ctrl+Shift+C` | Copy selection |
 
-### Panels
+### Views
+
+There are no side panes. Every view opens as a modal over the dimmed conversation, and `Esc` closes one level at a time.
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+P` | Toggle panel sidebar |
-| `F2` | Toggle the Fleet panel: the live unified process tree (open and focus, bring to front, or close) |
-| `Ctrl+]` / `Ctrl+PageDown` | Next panel tab |
-| `Ctrl+PageUp` | Previous panel tab |
-| `Alt+1`…`Alt+9` | Jump to panel tab 1–9 (shown as `⌥N` on the tab bar) |
-| `Ctrl+X` | Close the focused panel |
-| `Ctrl+Shift+X` | Close all panels |
-| `Ctrl+O` | Toggle the Fleet panel (same behavior as `F2`) |
-| `Ctrl+G` | Toggle focus between split panes |
+| `Ctrl+P` / `Ctrl+K` | Command palette: every command, view and setting; the old pane names (fleet, tokens, git, …) are search words |
+| `F2` / `Ctrl+O` | Agents: running and finished agents, WRFC chains, workflows and hosted sessions; steer (`s`), stop (`Ctrl+X`, asks first; `Ctrl+X` again confirms), open a transcript (`Enter`) |
+| `/usage` | Usage: context bar with the compaction threshold, session totals, per-turn bars, fleet cost split, compact now |
+| `/changes` | Changes: changed files with +/- counts, a tinted syntax-colored diff, the semantic summary, hunk navigation (`]` `[`), stage hunk (`space`), review comments (`c`), mark reviewed (`m`), open in editor (`o`) |
+| `/notifications` | Notification history |
+| `/sessions` | Session picker, with hosted sessions in a Hosted group |
 
 ### Selection modals
 
@@ -690,16 +689,17 @@ Beyond direct local plugins, a local-first curated distribution channel covers p
 
 ## Operator surfaces
 
-> **note.** Most operator read/navigate surfaces are now reached as
-> **config-modal surfaces** via `ctx.openModal` (or their panel-id modal
-> redirect), not standalone panels: providers/health, services, subscription,
-> remote, sandbox, settings-sync and marketplace, plugins, skills, hooks,
-> policy, security, knowledge, memory, docs→keybindings, qr-code→pairing,
-> work-plan, project-planning→planning. The runtime-ops consoles
-> (cockpit, orchestration, tasks, worktrees, approvals, communication, …)
-> redirect to the **Fleet** panel. The command front-doors below are unchanged.
+> **note.** There are no side panes. Operator read/navigate surfaces open as
+> **modals**: providers/health, services, subscription, remote, sandbox,
+> settings-sync and marketplace, plugins, skills, hooks, policy, security,
+> knowledge, memory, docs→keybindings, qr-code→pairing, work-plan,
+> project-planning→planning. The runtime-ops consoles (cockpit, orchestration,
+> tasks, worktrees, approvals, communication, …) open **Agents**; tokens and
+> cost open **Usage**; git, diff and review open **Changes**. The old names
+> still work as `/panel <name>` and as command palette search words. The
+> command front-doors below are unchanged.
 
-Many commands also have matching panels and control rooms. High-signal examples:
+Many commands also have matching modals and control rooms. High-signal examples:
 
 - provider accounts and health: `/health <pillar>` reviews one domain at a time, with pillars for `setup` (install/setup issues), `services` (service registry inspections), `sandbox` (isolation posture), `accounts` and `auth` (provider accounts and auth users), `settings` (settings integrity), `remote` (remote runtime), `continuity` (last-session pointer and recovery-file state), `worktrees` (tracked worktree cleanup state), `maintenance` (context usage and session upkeep), and `term` (terminal capability posture such as color depth and synchronized output)
 - knowledge and memory review
@@ -726,15 +726,15 @@ GoodVibes includes a post-execution and operator-repair stack:
 - idempotency keys prevent duplicate tool execution across replay, reconnect, and retry scenarios
 - operational playbooks describe symptoms, checks, and resolution steps for runtime failure classes
 
-Adjacent reliability subsystems: notifications; performance budgets and panel-health monitoring; retention and pruning; idempotency protection; and the machine-readable recovery playbooks used by the diagnostics surface.
+Adjacent reliability subsystems: notifications; performance budgets and render-health monitoring; retention and pruning; idempotency protection; and the machine-readable recovery playbooks used by the diagnostics surface.
 
 ## Project planning
 
-Project planning is TUI-owned. When a normal chat turn clearly asks for an implementation plan, dependency graph, verification strategy, or agent handoff, the TUI opens the Planning panel, stores state in the SDK `ProjectPlanningService`, evaluates readiness, and asks one focused planning question before execution.
+Project planning is TUI-owned. When a normal chat turn clearly asks for an implementation plan, dependency graph, verification strategy, or agent handoff, the TUI opens the Planning modal, stores state in the SDK `ProjectPlanningService`, evaluates readiness, and asks one focused planning question before execution.
 
 Planning artifacts are stored in a project knowledge space named `project:<projectId>`, where the project id is derived from the workspace path. The SDK supplies passive daemon routes and operator methods, but daemon/non-TUI surfaces do not enter planning loops.
 
-See [Project planning](project-planning.md) for the panel layout, `/project-plan` behavior, and route/method list.
+See [Project planning](project-planning.md) for the modal layout, `/project-plan` behavior, and route/method list.
 
 `/work-plan` is the separate persistent checklist surface. Use it when the work already has concrete tasks and you want durable status tracking rather than another planning interview.
 
@@ -754,7 +754,7 @@ The TUI displays the SDK-returned answer text, sources, facts, linked objects, g
 
 ## WRFC constraint visibility
 
-The WRFC panel surfaces constraint state at every level of a running chain:
+Agents surfaces WRFC constraint state at every level of a running chain:
 
 - Each chain renders a constraint badge (`c:N/M`) colored by aggregate satisfaction status (green = all satisfied, grey = unverified, red = unsatisfied; yellow when some constraints are verified and some are still pending).
 - Expanding a chain shows each constraint with a status marker: `[SAT]` (satisfied), `[UNS CRIT]` / `[UNS MAJOR]` / `[UNS MINOR]` (unsatisfied, severity-tagged), or `[UNV]` (unverified). Inherited constraints are marked with a trailing ` *`.
@@ -764,11 +764,11 @@ The WRFC panel surfaces constraint state at every level of a running chain:
 - The agent-detail modal surfaces the `systemPromptAddendum` field from the agent record when it contains a WRFC engineer addendum, so the full constraint injection is visible without leaving the TUI.
 - When constraints are loaded, the system-message router emits a `WORKFLOW_CONSTRAINTS_ENUMERATED` operator-visible message. This is routed through the standard `ui.wrfcMessages` setting (`panel`, `conversation`, or `both`).
 
-There is no dedicated `/wrfc` command. Open the chain-status view through the Fleet panel (`F2` or `Ctrl+O`), where WRFC chains are one of the tracked process kinds alongside agents, workstreams, workflows, and scheduled or triggered work.
+There is no dedicated `/wrfc` command. Open the chain-status view in Agents (`F2`, `Ctrl+O` or `/agents`), where WRFC chains are one of the tracked process kinds alongside agents, workstreams, workflows, and scheduled or triggered work.
 
-Each chain row and the selected-chain summary also show elapsed time (active chains, since `createdAt`) or total duration (terminal chains, `createdAt` to `completedAt`). Press `a` on a selected chain to jump straight to its owner agent in the Inspector panel. When an expanded chain's detail exceeds the panel's per-chain line cap, the truncated tail is replaced with a `+N more` indicator instead of being silently dropped.
+Each chain row and the selected-chain summary also show elapsed time (active chains, since `createdAt`) or total duration (terminal chains, `createdAt` to `completedAt`). When an expanded chain's detail exceeds the per-chain line cap, the truncated tail is replaced with a `+N more` indicator instead of being silently dropped.
 
-The panel's empty state points at the actual chain producer, `/teamwork create-mode <mode> <title>` (modes with `reviewMode: wrfc`; see `/teamwork modes`), rather than a `/wrfc run` command that does not exist.
+The empty state points at the actual chain producer, `/teamwork create-mode <mode> <title>` (modes with `reviewMode: wrfc`; see `/teamwork modes`), rather than a `/wrfc run` command that does not exist.
 
 ## Live TTS commands
 
@@ -815,7 +815,7 @@ Some command families are especially important when you are running GoodVibes as
 - `/remote` for dispatching and recovering distributed work
 - `/sandbox` for isolation review and QEMU/bootstrap flows
 
-There is no standalone `/wrfc` or `/workflow` command; WRFC chain state is visible in the Fleet panel (see [WRFC constraint visibility](#wrfc-constraint-visibility) below).
+There is no standalone `/wrfc` or `/workflow` command; WRFC chain state is visible in Agents (see [WRFC constraint visibility](#wrfc-constraint-visibility) below).
 
 For QEMU guest bootstrapping details, including the generated image script and guest runtime package list, see [QEMU sandbox bootstrapping](qemu-sandbox.md).
 

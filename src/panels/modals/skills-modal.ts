@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import type { ConfigModalActionContext, ConfigModalRow, ConfigModalSurface, ConfigModalView } from '../../input/config-modal-types.ts';
-import type { SkillOrigin, SkillRecord } from '../skills-panel.ts';
+import type { SkillOrigin, SkillRecord } from '../skills-discovery.ts';
 import { listInstalledEcosystemEntries, type EcosystemCatalogPathOptions, type ShellPathService } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------

@@ -17,7 +17,6 @@ import { handleBrokerApprovalChange, buildFixSessionAffordance, buildFixSessionE
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { requestedEffortLevel } from './providers/reasoning-effort-surface.ts';
-import { renderProcessIndicator } from './renderer/process-indicator.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { InputHistory } from './input/input-history.ts';
@@ -25,20 +24,21 @@ import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvi
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
-import { buildShellFooter, estimateShellFooterHeight, promptCursorOffset } from './renderer/shell-surface.ts';
+import { buildShellFooter, estimateShellFooterHeight, promptCursorOffset, statusCostText } from './renderer/shell-surface.ts';
+import { formatStatusReport } from './shell/status-report.ts';
+import { voiceCaptureDescription } from './renderer/voice-capture-chip.ts';
+import { voiceCaptureRowVisible } from './core/voice-capture-status.ts';
+import { resolveWebSurfaceUrl } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import { createFailoverTurnState, resolveActiveModelDisplay } from './core/active-model-identity.ts';
 import { computePromptContentWidth } from './renderer/prompt-content-width.ts';
-import { buildConversationViewport } from './renderer/conversation-layout.ts';
+import { buildConversationViewport, centerViewportContent } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays, buildConversationLayers } from './renderer/conversation-overlays.ts';
-import { buildPanelCompositeData } from './renderer/panel-composite.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
 import { selfUpdateAtLaunch } from './cli/launch-auto-update.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './runtime/orchestrator-core-services.ts';
 import { createSessionContinuityHintsBuilder } from './runtime/session-continuity-hints.ts';
-import { resolveWebSurfaceUrl } from '@pellux/goodvibes-sdk/platform/runtime/feature-announcements';
 import { readLastSessionPointer } from '@/runtime/index.ts';
 import { startRecoveryAutosave } from './runtime/recovery-autosave.ts';
 import { scheduleRecoveryOffer } from './runtime/recovery-prompt.ts';
@@ -61,13 +61,14 @@ import { createRenderScheduler } from '@pellux/goodvibes-terminal-shell';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { footerFleetCost } from './panels/fleet-read-model.ts';
+import { footerTargetRows } from './renderer/footer-targets.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, createStreamMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { resolveContextStatusHint } from './renderer/context-status-hint.ts';
 import { isEffectiveDangerMode } from '@pellux/goodvibes-sdk/platform/config';
 import { applyComposerCapture, applyAtModelDirective } from './input/composer-capture.ts';
-import { makeComposerEditorOpener } from './input/composer-editor.ts';
+import { makeComposerEditorOpener, makeFileEditorOpener } from './input/composer-editor.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import { createCancelGeneration } from './core/turn-cancellation.ts';
 import { wireInteractionSeams, createMemoryProvenanceUi } from './runtime/interaction-seams.ts';
@@ -75,7 +76,6 @@ import { createPowerChipSource } from './core/power-chip-source.ts';
 import { fetchDaemonPowerState, installKeepAwakeRemoteForward } from './runtime/power-keepawake-remote.ts';
 import { wrapRequestPermissionWithAlert } from './core/approval-alert.ts';
 import { createTerminalNotifier } from './core/terminal-notifier.ts';
-import { setPanelFrameRequester } from './panels/base-panel.ts';
 import { createDeferredRender } from './renderer/deferred-render.ts';
 import { wireSessionAmbience } from './runtime/session-ambience-wiring.ts';
 import { createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
@@ -159,8 +159,7 @@ async function main() {
   // that should compete with real session alerts for attention).
   for (const line of launchUpdateLines) systemMessageRouter.low(`[Update] ${line}`);
 
-  const panelManager = ctx.services.panelManager;
-  const buildSessionContinuityHints = createSessionContinuityHintsBuilder({ readModels: uiServices.readModels, panelManager });
+  const buildSessionContinuityHints = createSessionContinuityHintsBuilder({ readModels: uiServices.readModels });
 
   // Callable before the scheduler exists; see deferred-render.ts for why.
   const deferredRender = createDeferredRender();
@@ -203,8 +202,7 @@ async function main() {
     const currentModel = providerRegistry.getCurrentModel();
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const rows = stdout.rows || 24;
-    // Compact threshold must match buildShellFooter's `compact: height < 30` posture below, else estimateShellFooterHeight's cached-height fast path answers with the wrong mode.
-    return rows - 2 - estimateShellFooterHeight(promptLines, contextWindow, rows < 30, voiceCaptureStatus());
+    return rows - 1 - estimateShellFooterHeight(promptLines); // 1: the header row
   };
 
   const scroll = (delta: number) => {
@@ -391,7 +389,6 @@ async function main() {
       shell: {
         bookmarkManager: ctx.services.bookmarkManager,
         keybindingsManager: ctx.services.keybindingsManager,
-        panelManager,
         processManager,
         profileManager: ctx.services.profileManager,
       },
@@ -413,6 +410,7 @@ async function main() {
 
   input.setCommandRegistry(commandRegistry, commandContext);
   commandContext.openComposerEditor = makeComposerEditorOpener({ buffer: input, stdin, stdout, writeGuard: allowTerminalWrite, repaint: () => { compositor.resetDiff(); render(); }, cwd: workingDir, env: process.env, notify: (m) => systemMessageRouter.high(m) });
+  commandContext.openFileInEditor = makeFileEditorOpener({ stdin, stdout, writeGuard: allowTerminalWrite, repaint: () => { compositor.resetDiff(); render(); }, cwd: workingDir, env: process.env, notify: (m) => systemMessageRouter.high(m) });
   input.setConversationManager(conversation);
   input.setContentWidth(getPromptContentWidth()); input.filePicker.setOnUpdate(() => render());
   // retirement: agentDetailModal/processModal setOnRefresh wiring removed,
@@ -439,13 +437,13 @@ async function main() {
     // Cache the current model for consistent values across the entire render frame
     const currentModel = providerRegistry.getCurrentModel();
     // Resolve the effective context window (provider_api / configured_cap overrides) once,
-    // so the footer meter, footer-height, and context inspector agree with the Tokens panel.
+    // so the footer meter, footer-height, and context inspector agree with the Usage modal.
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
     const activeModel = resolveActiveModelDisplay({ serving: currentModel, configuredRegistryKey: configManager.get('provider.model') as string, configuredLabel: runtime.model, configuredProvider: runtime.provider, failover: failoverState.current() });
-    const headerLines = UIFactory.createHeader(width, activeModel.headerModel, activeModel.headerProvider, conversation.title || undefined, lastGitInfoRef.value, undefined, activeModel.divergenceNote);
+    const headerLines = UIFactory.createHeader(width, activeModel.headerModel, conversation.title || undefined, lastGitInfoRef.value);
     const managerAgents = agentManager.list().filter((a) => a.status === 'running' || a.status === 'pending');
     const runtimeAgents = agentSnapshot.active;
     const runningAgentSummary = summarizeRunningAgents(managerAgents, runtimeAgents, ctx.services.wrfcController.listChains());
@@ -457,7 +455,6 @@ async function main() {
     const composerState = deriveComposerState({
       text: input.prompt,
       commandMode: input.commandMode,
-      panelFocused: input.panelFocused,
       pendingApproval: pendingPermission !== null,
       hasAttachments: input.getImageAttachments().size > 0, turnState: sessionSnapshot.turnState,
     });
@@ -465,74 +462,62 @@ async function main() {
       evaluate: (args) => evaluateSessionMaintenance({ configManager, ...args, sessionMemoryCount: ctx.services.sessionMemoryStore.list().length }),
       currentTokens: orchestrator.lastInputTokens, contextWindow,
     });
+    // A running turn takes the status line's left side: spinner, honest waiting phrase, elapsed, esc.
+    const busy = orchestrator.isThinking ? {
+      spinner: orchestrator.getSpinner(),
+      frame: orchestrator.thinkingFrame,
+      phrase: UIFactory.busyPhrase(orchestrator.thinkingFrame, orchestrator.streamingOutputTokens, UIFactory.computeRenderStallInfo(streamMetrics, Date.now()), pendingPermission !== null),
+      elapsedMs: streamMetrics.startTime > 0 ? Date.now() - streamMetrics.startTime : undefined,
+      tokenSpeed: (configManager.get('display.showTokenSpeed') as boolean) ? streamMetrics.tokenSpeed : undefined, ttftMs: streamMetrics.ttftMs,
+      approvalPending: pendingPermission !== null,
+    } : null;
     const footerLines = buildShellFooter({
       width,
       promptText: promptInfo.visibleLines.join('\n'),
       promptLineCount: promptInfo.visibleLines.length,
       promptCursorPos: promptCursorOffset(promptInfo),
-      usage: { up: orchestrator.usage.input, down: orchestrator.usage.output, fleetCostUsd: footerFleetCost(() => ctx.services.processRegistry.query().nodes, runningAgentCount > 0) },
+      usage: { up: orchestrator.usage.input, down: orchestrator.usage.output, cacheRead: orchestrator.usage.cacheRead, cacheWrite: orchestrator.usage.cacheWrite, fleetCostUsd: footerFleetCost(() => ctx.services.processRegistry.query().nodes, runningAgentCount > 0) },
       showExitNotice: input.showExitNotice,
       lastCopyTime: input.lastCopyTime,
       model: activeModel.footerModel, modelNote: activeModel.divergenceNote,
-      toolCount: toolRegistry.list().length,
       workingDir,
+      branch: lastGitInfoRef.value?.branch,
       provider: activeModel.footerProvider,
       contextWindow,
       contextStatusHint,
       retryHint: retryAffordanceHint(retryAffordance),
       scriptableStatusLine: scriptableStatusline.current(),
-      // Compact footer posture on short terminals so the shell stays usable.
-      compact: height < 30,
       // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
-      // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
+      // the bar expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
       compactThreshold: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),
       dangerMode: isEffectiveDangerMode(configManager),
       lastInputTokens: orchestrator.lastInputTokens,
       commandArgsHint,
-      hitlMode: modeManager.getHITLMode(),
-      // Cross-surface spine posture segment (adopted-daemon mode only).
-      sessionSpineStatus: (() => { const s = uiServices.platform.externalServices?.inspect(); return s?.sessionSpineActive && s.sessionSpineStatus && s.sessionSpineStatus !== 'unknown' ? s.sessionSpineStatus : undefined; })(), runningAgentCount, runningProcessCount,
-      webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,
+      runningAgentCount, runningProcessCount,
       // Always-visible "sleep disabled" chip, topology-aware: the DAEMON's state in adopted-external mode, the in-process manager otherwise (power-chip-source.ts).
       powerKeepAwake: powerChipSource.get().keepAwake,
-      // Composer must not read as focused while the panel/process indicator owns keyboard focus.
-      promptFocused: !input.panelFocused && !input.indicatorFocused,
+      // Composer must not read as focused while the process indicator owns keyboard focus.
+      promptFocused: !input.indicatorFocused,
       indicatorFocused: input.indicatorFocused,
       runningAgentProgress: runningAgentSummary.progress,
-      composerMode: composerState.modeLabel,
-      composerStatus: composerState.statusLabel,
       composerFlags: composerState.flags,
       composerPendingRisk: composerState.pendingRisk, permissionMode: configManager.get('permissions.mode') as string, voiceCapture: voiceCaptureStatus(),
+      busy,
     }).lines;
 
     const onboardingOwnsScreen = input.onboardingWizard.active;
     const shellHeaderLines = onboardingOwnsScreen ? [] : headerLines;
     const shellFooterLines = onboardingOwnsScreen ? [] : footerLines;
-    const panelWidth = !onboardingOwnsScreen && panelManager.isVisible() && panelManager.getAllOpen().length > 0
-      ? panelManager.getRightWidth(width)
-      : 0;
+    input.footerTargets = footerTargetRows(shellFooterLines, height - shellFooterLines.length); // clickable usage rows open Usage
     const shellLayout = createShellLayout({
       width,
       height,
       headerHeight: shellHeaderLines.length,
       footerHeight: shellFooterLines.length,
-      panelWidth,
     });
-    input.setPanelMouseLayout(shellLayout.panel
-      ? {
-          x: shellLayout.panel.x,
-          y: shellLayout.panel.y,
-          width: shellLayout.panel.width,
-          height: shellLayout.panel.height,
-          hasBottomPane: panelManager.isBottomPaneVisible() && panelManager.getBottomPane().panels.length > 0,
-          verticalSplitRatio: panelManager.getVerticalSplitRatio(),
-        }
-      : null);
     const vHeight = shellLayout.body.height;
     const conversationWidth = shellLayout.conversation.width;
     activeConversationWidth = conversationWidth;
-    const hasPanelWorkspace = !onboardingOwnsScreen && panelManager.isVisible() && panelManager.getAllOpen().length > 0;
-    conversation.setSplashSuppressed(hasPanelWorkspace);
 
     // Flush pending renders after updating the width provider and splash posture
     // so the transcript and splash rebuild against the current shell layout.
@@ -541,7 +526,6 @@ async function main() {
 
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
-    if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     // File picker and model picker overlay rows computed from actual rendered line count below
     // Selection modal overlay rows are computed from actual rendered line count below
@@ -559,30 +543,15 @@ async function main() {
     });
     scrollTop = conversationViewport.nextScrollTop;
     lastMaxScroll = conversationViewport.maxScroll;
-    let viewport = conversationViewport.viewport;
+    let viewport = conversation.isSplashShowing()
+      ? centerViewportContent(conversationViewport.viewport, conversationViewport.effectiveHeight, conversationWidth)
+      : conversationViewport.viewport;
 
     if (orchestrator.isThinking) {
-      const showSpeed = configManager.get('display.showTokenSpeed') as boolean;
-      const showPreview = configManager.get('display.showToolPreview') as boolean;
-      const partialToolPreview = showPreview ? sessionSnapshot.streamToolPreview : undefined;
-      // Elapsed from turn start (stream or tool execution), used for the thinking indicator timer.
-      const turnElapsedMs = streamMetrics.startTime > 0 ? Date.now() - streamMetrics.startTime : undefined;
-      // Suppressed while a tool executes, its ticking timer is the honest indicator then.
-      const stallInfo = UIFactory.computeRenderStallInfo(streamMetrics, Date.now());
-      const thinking = UIFactory.createThinkingFragment(
-        conversationWidth,
-        orchestrator.getSpinner(),
-        orchestrator.thinkingFrame,
-        showSpeed ? streamMetrics.tokenSpeed : undefined,
-        showPreview ? partialToolPreview : undefined,
-        orchestrator.streamingInputTokens > 0 ? orchestrator.streamingInputTokens : undefined,
-        orchestrator.streamingOutputTokens > 0 ? orchestrator.streamingOutputTokens : undefined,
-        turnElapsedMs,
-        streamMetrics.ttftMs,
-        stallInfo,
-        pendingPermission !== null,
-      );
-      viewport.push(...thinking);
+      // The spinner and phrase live on the status line now; the opt-in partial
+      // tool preview keeps its own faint row under the transcript.
+      const partialToolPreview = (configManager.get('display.showToolPreview') as boolean) ? sessionSnapshot.streamToolPreview : undefined;
+      if (partialToolPreview) viewport.push(UIFactory.createToolPreviewRow(conversationWidth, partialToolPreview));
       // Live tool timer: render the currently executing tool row with ticking elapsed.
       if (streamMetrics.activeToolName !== undefined && streamMetrics.activeToolStartedAtMs !== undefined) {
         const liveToolCall = { id: streamMetrics.activeToolCallId ?? 'live', name: streamMetrics.activeToolName, arguments: {} };
@@ -595,16 +564,6 @@ async function main() {
 
     const overlayContext = { input, conversation, commandRegistry, keybindingsManager: ctx.services.keybindingsManager, contextWindow };
     viewport = applyConversationOverlays(viewport, { ...overlayContext, conversationWidth, viewportHeight: vHeight });
-
-    // Panel composite data
-    const panelComposite = onboardingOwnsScreen
-      ? { panelData: undefined, panelWidth: 0 }
-      : buildPanelCompositeData(
-        panelManager,
-        input,
-        shellLayout.panel?.width ?? 0,
-        shellLayout.panel?.height ?? vHeight,
-      );
 
     compositor.composite({
       width, height,
@@ -621,8 +580,6 @@ async function main() {
         scrollTop,
         viewportStartY: shellHeaderLines.length,
       } : undefined,
-      panel: panelComposite.panelData,
-      panelWidth: panelComposite.panelWidth,
       layers: buildConversationLayers({ ...overlayContext, screenWidth: width, screenHeight: height, permission: pendingPermission ? PermissionPromptUI.renderPromptModal(width, height, pendingPermission, pendingPermission, approvalBroker) : null }),
     });
   };
@@ -631,14 +588,36 @@ async function main() {
   const terminalOutputGuard = installFullScreenTerminalOutputGuard({ stdout, stderr: process.stderr, onCapture: (total) => { commandContext.session.runtime.terminalWritesIntercepted = total; render(); } });
 
   setRenderRequest(() => renderScheduler.flushNow()); // bootstrap's 16ms coalescer composites via the (restore-gated) scheduler
-  setPanelFrameRequester(render); // live panels repaint when idle (a replay finding: fleet sat stale until keypress)
   orchestratorRefs.requestRender = render;
   commandContext.renderRequest = render;
+  // /status: what the footer rows used to show, from the same sources (shell/status-report.ts).
+  commandContext.describeStatus = () => {
+    const serving = providerRegistry.getCurrentModel();
+    const active = resolveActiveModelDisplay({ serving, configuredRegistryKey: configManager.get('provider.model') as string, configuredLabel: runtime.model, configuredProvider: runtime.provider, failover: failoverState.current() });
+    const spine = uiServices.platform.externalServices?.inspect();
+    const voice = voiceCaptureStatus();
+    const git = lastGitInfoRef.value;
+    return formatStatusReport({
+      workingDirectory: workingDir, branch: git?.branch, dirty: git?.dirty,
+      model: active.footerModel, provider: active.footerProvider, modelNote: active.divergenceNote,
+      permissionMode: configManager.get('permissions.mode') as string, toolCount: toolRegistry.list().length, notifyMode: modeManager.getHITLMode(),
+      usage: orchestrator.usage,
+      cost: statusCostText({ up: orchestrator.usage.input, down: orchestrator.usage.output, cacheRead: orchestrator.usage.cacheRead, cacheWrite: orchestrator.usage.cacheWrite, fleetCostUsd: footerFleetCost(() => ctx.services.processRegistry.query().nodes, true) }, active.footerModel),
+      contextTokens: orchestrator.lastInputTokens, contextWindow: providerRegistry.getContextWindowForModel(serving),
+      compactFraction: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),
+      sessionSpine: spine?.sessionSpineActive && spine.sessionSpineStatus && spine.sessionSpineStatus !== 'unknown' ? spine.sessionSpineStatus : undefined,
+      webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,
+      autoApprove: isEffectiveDangerMode(configManager), keepAwake: powerChipSource.get().keepAwake,
+      microphone: voice && voiceCaptureRowVisible(voice) ? voiceCaptureDescription(voice) : null,
+      runningAgents: agentManager.list().filter((a) => a.status === 'running' || a.status === 'pending').length,
+      runningProcesses: processManager.list().filter((p) => !p.status.startsWith('done')).length,
+    });
+  };
   wireShellUiOpeners({
     commandContext,
     input,
-    panelManager,
-    conversation,
+    views: ctx.views,
+    viewPanels: ctx.services.panelManager,
     configManager,
     providerRegistry,
     runtime,

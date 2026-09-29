@@ -25,14 +25,13 @@ function usernameOf(row: ConfigModalRow | null): string | null {
 }
 
 /**
- * Local-auth config-modal surface (migrated from the `local-auth` panel).
- * `inspect()` is synchronous, so buildView reads it live every tick. All
- * mutations (add-user, rotate-password, delete-user, clear-bootstrap-file)
- * dispatch through the existing `/local-auth` command rather than touching
- * the auth manager directly, the command opens masked password entry for
- * add-user/rotate-password when no password argument is supplied, which is
- * exactly how the retired panel kept plaintext out of history and the
- * transcript. This surface never renders, accepts, or holds a password.
+ * Local-auth config-modal surface. `inspect()` is synchronous, so buildView
+ * reads it live every tick. add-user and rotate-password open the masked
+ * password prompt (input/masked-entry-modal.ts) on top of this modal, the one
+ * path that keeps a plaintext password out of argv, history and the
+ * transcript; delete-user and clear-bootstrap-file dispatch through the
+ * `/local-auth` command. This surface never renders, accepts, or holds a
+ * password.
  */
 class LocalAuthModalSurface implements ConfigModalSurface {
   readonly name = 'local-auth-modal';
@@ -42,7 +41,10 @@ class LocalAuthModalSurface implements ConfigModalSurface {
    *  consulted; see settings-sync-modal's `hasStaged` for the same idiom). */
   private bootstrapPresent = false;
 
-  constructor(private readonly authManager: LocalAuthInspectionQuery) {}
+  constructor(
+    private readonly authManager: LocalAuthInspectionQuery,
+    private readonly openMaskedEntry: (kind: 'add-user' | 'rotate-password', username?: string) => void,
+  ) {}
 
   readonly actions: ConfigModalAction[] = [
     { key: 'a', id: 'add-user', label: 'add user' },
@@ -93,20 +95,16 @@ class LocalAuthModalSurface implements ConfigModalSurface {
 
   onAction(id: string, ctx: ConfigModalActionContext): void {
     switch (id) {
-      // add-user / rotate-password require the masked password-entry sub-mode,
-      // which renders on the LocalAuthPanel and cannot draw or capture input
-      // underneath this fullscreen modal. Point the operator at the command
-      // (which opens masked entry) rather than dispatching it into a hidden
-      // surface, the secure flow stays a keystroke away, just not from here.
+      // The password prompt opens on top of this modal and never echoes.
       case 'add-user':
-        ctx.print('To add a user securely, run  /local-auth add-user <username>  (opens masked password entry).');
-        ctx.setStatus('Run /local-auth add-user <username> for masked entry.');
+        if (!hasLocalAuthMutations(this.authManager)) { ctx.setStatus('Local auth mutations are not available in this session.'); break; }
+        this.openMaskedEntry('add-user');
         break;
       case 'rotate-pw': {
         const username = usernameOf(ctx.row);
         if (!username) return;
-        ctx.print(`To rotate securely, run  /local-auth rotate-password ${username}  (opens masked password entry).`);
-        ctx.setStatus(`Run /local-auth rotate-password ${username} for masked entry.`);
+        if (!hasLocalAuthMutations(this.authManager)) { ctx.setStatus('Local auth mutations are not available in this session.'); break; }
+        this.openMaskedEntry('rotate-password', username);
         break;
       }
       case 'delete': {
@@ -127,6 +125,9 @@ class LocalAuthModalSurface implements ConfigModalSurface {
   }
 }
 
-export function createLocalAuthModalSurface(authManager: LocalAuthInspectionQuery): ConfigModalSurface {
-  return new LocalAuthModalSurface(authManager);
+export function createLocalAuthModalSurface(
+  authManager: LocalAuthInspectionQuery,
+  openMaskedEntry: (kind: 'add-user' | 'rotate-password', username?: string) => void = () => {},
+): ConfigModalSurface {
+  return new LocalAuthModalSurface(authManager, openMaskedEntry);
 }

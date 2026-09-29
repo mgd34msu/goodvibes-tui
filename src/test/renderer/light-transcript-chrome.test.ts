@@ -22,7 +22,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { renderToolCallBlock } from '../../renderer/tool-call.ts';
-import { renderProcessIndicator } from '../../renderer/process-indicator.ts';
+import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { renderSystemMessage } from '../../renderer/system-message.ts';
 import { renderThinkingBlock } from '../../renderer/thinking.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
@@ -85,16 +85,16 @@ describe('tool-call status glyph flips with themeMode', () => {
   });
 });
 
-// ── footer risk:remote marker (chrome.remote) ──────────────────────────────
-describe('footer risk:remote marker flips with themeMode', () => {
-  const footer = (): Line[] => UIFactory.createFooter(
-    W, '> Ask me anything', { up: 1024, down: 512 }, false, 0,
-    'claude-opus-4', 7, undefined, '/workspace/my-project', 'anthropic',
-    100_000, 0.80, false, 60_000, undefined, undefined, true,
-    'plan', 'idle', undefined, 'remote', false,
-  );
+// ── composer orchestration flag (chrome.remote) ─────────────────────────────
+describe('composer remote flag flips with themeMode', () => {
+  const footer = (): Line[] => buildShellFooter({
+    width: W, promptText: 'Ask me anything', promptLineCount: 1, usage: { up: 1024, down: 512 }, showExitNotice: false, lastCopyTime: 0,
+    model: 'claude-opus-4', provider: 'anthropic', workingDir: '/workspace/my-project', contextWindow: 100_000, compactThreshold: 0.8,
+    lastInputTokens: 60_000, runningAgentCount: 0, runningProcessCount: 0, indicatorFocused: false,
+    composerFlags: ['orchestration'], composerPendingRisk: 'remote', permissionMode: 'plan',
+  }).lines;
 
-  test('risk:remote uses chrome.remote; #a78bfa dark, #6d28d9 light (distinct from reasoningAccent #7c3aed)', () => {
+  test('the orchestration flag uses chrome.remote: #a78bfa dark, #6d28d9 light (distinct from reasoningAccent #7c3aed)', () => {
     const dark = fgSet(footer());
     const light = fgSet(underLight(footer));
     expect(dark.has('#a78bfa')).toBe(true);
@@ -102,18 +102,6 @@ describe('footer risk:remote marker flips with themeMode', () => {
     expect(light.has('#6d28d9')).toBe(true);
     expect(light.has('#a78bfa')).toBe(false);
     expect(light.has('#7c3aed')).toBe(false); // never collides with the reasoning accent
-  });
-});
-
-// ── idle process-indicator status line (accent.brand) ──────────────────────
-describe('process-indicator plain status flips with themeMode', () => {
-  test('active status uses accent.brand: #00ffff dark, #0077aa light', () => {
-    const dark = fgSet(renderProcessIndicator(W, 1, 0));
-    const light = fgSet(underLight(() => renderProcessIndicator(W, 1, 0)));
-    expect(dark.has('#00ffff')).toBe(true);
-    expect(dark.has('#0077aa')).toBe(false);
-    expect(light.has('#0077aa')).toBe(true);
-    expect(light.has('#00ffff')).toBe(false);
   });
 });
 

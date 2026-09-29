@@ -13,7 +13,6 @@ import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
-import type { PanelManager, PanelDeepLinkTarget } from '../panels/panel-manager.ts';
 import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
 import type { OpsApi } from '@/runtime/index.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
@@ -55,7 +54,6 @@ import type { PeerClient } from '@/runtime/index.ts';
 import type { DirectTransport } from '@/runtime/index.ts';
 import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { LocalAuthPanel } from '../panels/local-auth-panel.ts';
 
 export type BootstrapCommandSessionSection = CommandContext['session'];
 export type BootstrapCommandProviderSection = CommandContext['provider'];
@@ -71,7 +69,6 @@ export interface BootstrapCommandActionOptions {
   readonly conversation: ConversationManager;
   readonly runtime: MutableRuntimeState;
   readonly requestRender: () => void;
-  readonly panelManager: PanelManager;
   readonly loadSystemPrompt: () => string;
   readonly activatePlan: (planId: string, task: string) => void;
   readonly requestPermission: PermissionRequestHandler;
@@ -87,7 +84,6 @@ export interface BootstrapCommandSectionOptions {
   readonly conversation: ConversationManager;
   readonly runtime: MutableRuntimeState;
   readonly keybindingsManager?: KeybindingsManager;
-  readonly panelManager: PanelManager;
   readonly requestRender: () => void;
   readonly requestPermission: PermissionRequestHandler;
   readonly toolRegistry: ToolRegistry;
@@ -183,7 +179,6 @@ export function createBootstrapCommandActions(
   | 'print'
   | 'exit'
   | 'reloadSystemPrompt'
-  | 'showPanel'
   | 'openForensicsPanel'
   | 'openIncidentPanel'
   | 'openPolicyPanel'
@@ -205,24 +200,16 @@ export function createBootstrapCommandActions(
     conversation,
     runtime,
     requestRender,
-    panelManager,
     loadSystemPrompt,
     activatePlan,
     requestPermission,
     completeModelSelectionSideEffect,
-    localUserAuthManager,
   } = options;
 
-  const showPanel = (panelId: string, pane?: 'top' | 'bottom', target?: PanelDeepLinkTarget) => {
-    // (the purge): a MIGRATE-TO-MODAL id resolves to a modal, not a panel.
-    // panelManager.open() fires the injected openModal callback and returns a
-    // no-op sentinel, so skip panelManager.show() (which would reveal an empty
-    // panel workspace behind the modal) when this id redirects. Keeps every
-    // showPanel-based front-door (openHooksPanel/openSecurityPanel/… and the
-    // migrated command runtimes) opening the modal cleanly.
-    const redirected = panelManager.getModalRedirect(panelId) !== undefined;
-    panelManager.open(panelId, pane, target);
-    if (!redirected) panelManager.show();
+  // The views these open are kit modals, which exist once the shell attaches
+  // (shell/ui-openers.ts replaces every one of these with the real opener).
+  const viewNotAttached = (what: string) => (): void => {
+    conversation.log(`${what} opens once the terminal UI is attached.`, { fg: activeTokens().textMuted });
     requestRender();
   };
 
@@ -312,58 +299,20 @@ export function createBootstrapCommandActions(
     },
     exit: () => unwiredShellAction('exit'),
     reloadSystemPrompt: loadSystemPrompt,
-    showPanel,
-    openForensicsPanel: () => {
-      showPanel('forensics');
-    },
-    openIncidentPanel: () => {
-      showPanel('incident');
-    },
-    openPolicyPanel: () => {
-      showPanel('policy');
-    },
-    openHooksPanel: () => {
-      showPanel('hooks');
-    },
-    openCommunicationPanel: () => {
-      showPanel('communication');
-    },
-    openOrchestrationPanel: () => {
-      showPanel('orchestration');
-    },
-    openCockpitPanel: () => {
-      showPanel('cockpit');
-    },
+    openForensicsPanel: viewNotAttached('Agents'),
+    openIncidentPanel: viewNotAttached('Agents'),
+    openPolicyPanel: viewNotAttached('Policy'),
+    openHooksPanel: viewNotAttached('Hooks'),
+    openCommunicationPanel: viewNotAttached('Agents'),
+    openOrchestrationPanel: viewNotAttached('Agents'),
+    openCockpitPanel: viewNotAttached('Agents'),
     openMcpWorkspace: () => unwiredShellAction('openMcpWorkspace'),
-    openSecurityPanel: () => {
-      showPanel('security');
-    },
-    openKnowledgePanel: () => {
-      showPanel('knowledge');
-    },
-    openMemoryPanel: () => {
-      showPanel('memory');
-    },
-    // remote/subscription migrated to config-modal surfaces. open() hits
-    // the modal redirect and invokes the openModal callback, do NOT go through
-    // showPanel here, which would additionally reveal + focus an (empty) panel
-    // workspace behind the fullscreen modal.
-    openRemotePanel: () => {
-      panelManager.open('remote');
-    },
-    openSubscriptionPanel: () => {
-      panelManager.open('subscription');
-    },
-    openLocalAuthMaskedEntry: (kind, username) => {
-      showPanel('local-auth');
-      const panel = panelManager.getPanel('local-auth');
-      if (panel instanceof LocalAuthPanel && localUserAuthManager) {
-        panel.openMaskedEntry(kind, username, localUserAuthManager);
-      } else {
-        conversation.log('Masked entry unavailable: local auth is not configured in this session.', { fg: activeTokens().error });
-        requestRender();
-      }
-    },
+    openSecurityPanel: viewNotAttached('Security'),
+    openKnowledgePanel: viewNotAttached('Knowledge'),
+    openMemoryPanel: viewNotAttached('Memory'),
+    openRemotePanel: viewNotAttached('Remote'),
+    openSubscriptionPanel: viewNotAttached('Subscriptions'),
+    openLocalAuthMaskedEntry: viewNotAttached('The password prompt'),
   };
 }
 
@@ -407,7 +356,7 @@ export function createBootstrapCommandProviderSection(
 export function createBootstrapCommandWorkspaceSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'surface' | 'keybindingsManager' | 'fileUndoManager' | 'workspaceCheckpointManager' | 'gatewayMethods' | 'workspaceTrustManager' | 'workspaceRegistrationManager' | 'panelManager' | 'profileManager' | 'bookmarkManager'
+    'surface' | 'keybindingsManager' | 'fileUndoManager' | 'workspaceCheckpointManager' | 'gatewayMethods' | 'workspaceTrustManager' | 'workspaceRegistrationManager' | 'profileManager' | 'bookmarkManager'
     | 'projectPlanningService' | 'projectPlanningProjectId' | 'workPlanStore'
   >,
   shellServices: BootstrapCommandShellServices,
@@ -420,7 +369,6 @@ export function createBootstrapCommandWorkspaceSection(
     gatewayMethods: options.gatewayMethods,
     workspaceTrustManager: options.workspaceTrustManager,
     workspaceRegistrationManager: options.workspaceRegistrationManager,
-    panelManager: options.panelManager,
     profileManager: options.profileManager,
     bookmarkManager: options.bookmarkManager,
     projectPlanningService: options.projectPlanningService,

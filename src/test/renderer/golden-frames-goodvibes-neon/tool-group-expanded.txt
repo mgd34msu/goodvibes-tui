@@ -1,9 +1,9 @@
 # GV_GOLDEN surface=tool-group-expanded width=100 height=5
 |   ●  tool result  read  ▾ 2 lines                                                                  |
-|    File contents:                                                                                  |
-|      1  export const x = 1;                                                                        |
+|     File contents:                                                                                 |
+|       1  export const x = 1;                                                                       |
 |   ●  tool result  write  ▾ 1 line                                                                  |
-|    Wrote 3 lines to output.ts                                                                      |
+|     Wrote 3 lines to output.ts                                                                     |
 @STYLES
 0 3 fg=#38bdf8
 0 3 bold=1

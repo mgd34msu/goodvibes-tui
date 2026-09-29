@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { discoverSkills } from '../../panels/skills-panel.ts';
+import { discoverSkills } from '../../panels/skills-discovery.ts';
 import {
   installEcosystemCatalogEntry,
   listInstalledEcosystemEntries,
@@ -169,7 +169,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
           `  source: ${entry.source}`,
           `  tags: ${entry.tags.join(', ') || '(none)'}`,
           `  trust notes: ${entry.trustNotes ?? '(none)'}`,
-          `  install hint: ${entry.installHint ?? 'Place the skill pack under a configured skill directory and refresh the skills panel.'}`,
+          `  install hint: ${entry.installHint ?? 'Place the skill pack under a configured skill directory and refresh the skills modal.'}`,
         ].join('\n'));
         return;
       }

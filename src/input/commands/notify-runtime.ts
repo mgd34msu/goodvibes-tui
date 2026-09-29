@@ -3,6 +3,15 @@ import { requireWebhookNotifier } from './runtime-services.ts';
 
 export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
+    name: 'notifications',
+    aliases: [],
+    description: 'Open the notification history: everything collected, newest first; Enter goes to its subject',
+    handler(_args, ctx) {
+      if (ctx.openNotifications) ctx.openNotifications();
+      else ctx.print('The Notifications view is not available in this session.');
+    },
+  });
+  registry.register({
     name: 'notify',
     aliases: [],
     description: 'Manage webhook notification URLs (ntfy.sh format)',

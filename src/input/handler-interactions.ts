@@ -277,7 +277,6 @@ export function handleEscapeForHandler(handler: InputHandler): void {
       commandMode: handler.commandMode,
       modalStack: handler.modalStack,
       modalReturnFocus: handler.modalReturnFocus,
-      panelFocused: handler.panelFocused,
       indicatorFocused: handler.indicatorFocused,
       prompt: handler.prompt,
       cursorPos: handler.cursorPos,
@@ -300,7 +299,6 @@ export function handleEscapeForHandler(handler: InputHandler): void {
     handler.shortcutsOverlayActive = result.shortcutsOverlayActive;
     handler.shortcutsScrollOffset = result.shortcutsScrollOffset;
     handler.selectionCallback = result.selectionCallback;
-    handler.panelFocused = result.panelFocused;
     handler.indicatorFocused = result.indicatorFocused;
     handler.modalReturnFocus = result.modalReturnFocus;
 }

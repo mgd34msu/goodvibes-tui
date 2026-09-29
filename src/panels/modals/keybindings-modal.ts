@@ -15,9 +15,8 @@ import { KeybindingsManager } from '../../input/keybindings.ts';
 // shortcuts-overlay reference. Three tabs: 'Tools', 'Models', and 'Shortcuts'
 // (the categorized keyboard reference, driven live off keybindingsManager so
 // user overrides show up, followed by an exhaustive 'All Bindings (live)'
-// table). Enter opens the tool-inspector successor ('fleet') or switches the
-// active model, both via the command path (fleet is a panel; /model is a
-// settings mutation). Selection-blind port: the panel's selected tool/model
+// table). Enter opens Agents on processes running the selected tool
+// (/agents --target <tool>:tool) or switches the active model (/model). Selection-blind port: the panel's selected tool/model
 // detail is folded into each row label. The panel's live '/' filter is dropped
 // (the host has no query state).
 // ---------------------------------------------------------------------------
@@ -71,7 +70,7 @@ class KeybindingsModalSurface implements ConfigModalSurface {
       const detail = [d.description, meta.join('  |  ') || null].filter((s): s is string => Boolean(s)).join(' · ');
       return { id: `tool:${d.name}`, label: detail ? `${d.name.padEnd(22)} ${detail}` : d.name };
     });
-    return { id: 'tools', label: 'Tools', rows, emptyText: 'No tools registered.', hints: ['enter open in fleet'] };
+    return { id: 'tools', label: 'Tools', rows, emptyText: 'No tools registered.', hints: ['enter open in agents'] };
   }
 
   private modelsTab(): ConfigModalTab {
@@ -95,11 +94,10 @@ class KeybindingsModalSurface implements ConfigModalSurface {
       rows.push(headerRow(`sc:t:${n++}`, title));
       for (const [key, desc] of entries) rows.push(infoRow(`sc:${n++}`, `${key.padEnd(20)} ${desc}`));
     };
-    category('Navigation', [['Up / Down', 'Scroll / history recall'], ['PageUp / PageDn', 'Scroll by full page'], ['Home / End', 'Jump to start / end of line'], [kb('search'), 'Search conversation'], ['n / N (search)', 'Next / previous match'], ['Mouse wheel', 'Scroll conversation or hovered panel']]);
+    category('Navigation', [['Up / Down', 'Scroll / history recall'], ['PageUp / PageDn', 'Scroll by full page'], ['Home / End', 'Jump to start / end of line'], [kb('search'), 'Search conversation'], ['n / N (search)', 'Next / previous match'], ['Mouse wheel', 'Scroll the conversation']]);
     category('Editing', [['Enter', 'Submit message'], ['Shift+Enter', 'Insert newline'], ['@', 'Open file picker'], ['/', 'Slash command mode'], [kb('paste'), 'Paste (image priority)'], [`${kb('undo')} / ${kb('redo')}`, 'Undo / redo'], [kb('clear-prompt'), 'Clear prompt'], [kb('delete-word'), 'Delete word backward'], [kb('kill-line'), 'Kill to end of line']]);
-    category('Actions', [['Tab', 'Collapse/expand block'], [kb('bookmark'), 'Bookmark block'], [kb('block-copy'), 'Copy block to clipboard'], [kb('block-save'), 'Save block to file'], [kb('copy-selection'), 'Copy selection'], ['F2', 'Process monitor'], ['?', 'Help overlay'], [`${kb('clear-cancel')} x2`, 'Exit']]);
-    category('Panels', [['Tab', 'Swap focus between input and panel workspace'], [kb('panel-picker'), 'Open / focus / hide panel workspace'], [kb('panel-tab-next'), 'Next workspace panel tab'], [kb('panel-tab-prev'), 'Previous workspace panel tab'], [`${kb('panel-tab-1')}...${kb('panel-tab-9')}`, 'Jump to workspace tab 1-9'], [kb('panel-focus-toggle'), 'Swap focus between top / bottom pane'], [kb('panel-close'), 'Close active panel'], [kb('panel-close-all'), 'Close all panels'], [kb('panel-ops'), 'Open the Ops Control panel']]);
-    category('In-Panel Controls', [['j / k', 'Move selection down / up'], ['g / G', 'Jump to top / bottom'], ['/', 'Filter the list']]);
+    category('Actions', [['Tab', 'Collapse/expand block'], [kb('bookmark'), 'Bookmark block'], [kb('block-copy'), 'Copy block to clipboard'], [kb('block-save'), 'Save block to file'], [kb('copy-selection'), 'Copy selection'], ['F2', 'Agents'], ['?', 'Help overlay'], [`${kb('clear-cancel')} x2`, 'Exit']]);
+    category('Views', [[kb('command-palette'), 'Command palette: every command and view'], [`F2 / ${kb('open-agents')}`, 'Agents'], ['/usage', 'Usage: context, tokens and cost'], ['/changes', 'Changes: files, diff, review'], ['/notifications', 'Notification history'], ['Esc', 'Close the top modal (one level)']]);
     const allBindings = km.getAll().map((entry) => [entry.combos.length > 0 ? entry.combos.map((combo) => km.formatCombo(combo)).join(', ') : '(unbound)', entry.description] as const);
     category('All Bindings (live)', allBindings);
     return { id: 'shortcuts', label: 'Shortcuts', rows, emptyText: 'No shortcuts recorded.' };
@@ -113,19 +111,12 @@ class KeybindingsModalSurface implements ConfigModalSurface {
     if (id === 'refresh') { ctx.setStatus('Docs & shortcuts are read live.'); ctx.requestRender(); return; }
     if (id !== 'activate') return;
     if (ctx.tabId === 'tools') {
-      // item 4: pass the tool name through as a deep-link target.
-      // Honest caveat (documented, not a bug to silently paper over): fleet's
-      // ProcessKind set has no 'tool' node, a docs Tools row names a static
-      // tool DEFINITION, not a live process, so FleetPanel.receiveDeepLink
-      // will not currently find a match and shows its honest "node no longer
-      // present" line. The plumbing is still worth wiring now (matches the
-      // work-plan agent/wrfc jumps' shape), it starts resolving for free the
-      // day fleet grows a per-tool-call node (the retired DocsPanel's own
-      // comment already anticipated this: "no filter-by-tool equivalent
-      // there yet").
+      // The tool name rides as a `<tool>:tool` target: the Agents modal
+      // selects the first process whose current step is that tool, or says
+      // nothing is running it right now.
       const toolName = ctx.row?.id.startsWith('tool:') ? ctx.row.id.slice('tool:'.length) : null;
-      void ctx.executeCommand?.('panel', toolName ? ['open', 'fleet', '--target', `${toolName}:tool`] : ['open', 'fleet']);
-      ctx.setStatus('Opened the tool inspector (fleet).');
+      void ctx.executeCommand?.('agents', toolName ? ['--target', `${toolName}:tool`] : []);
+      ctx.setStatus(toolName ? `Opened Agents on ${toolName}.` : 'Opened Agents.');
       return;
     }
     if (ctx.tabId === 'models') {

@@ -2,7 +2,6 @@ import { type Line, type Cell, createStyledCell } from '@pellux/goodvibes-sdk/pl
 import { UIFactory } from './ui-factory.ts';
 import { renderCodeBlock } from './code-block.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { LAYOUT } from './layout.ts';
 import { activeTheme, activeTokens } from './theme.ts';
 import { renderInlineMarkdown, type InlineToken } from './markdown-inline.ts';
 import { isLikelyTableHeaderRow, isLikelyTableSeparatorRow, renderTable } from './markdown-table.ts';
@@ -25,6 +24,11 @@ export interface MarkdownRenderOptions {
  * renderMarkdown - Parse markdown text into styled Line[].
  * Thin wrapper over renderMarkdownTracked for callers that don't need code-block metadata.
  */
+/** Column where markdown prose starts (the Measurements table's text column). */
+export const MARKDOWN_TEXT_COL = 5;
+/** Columns kept clear on the right: wrapped prose ends at width-6 or earlier. */
+const MARKDOWN_RIGHT_GUTTER = 5;
+
 export function renderMarkdown(text: string, width: number, options: MarkdownRenderOptions = {}): Line[] {
   return renderMarkdownTracked(text, width, options).lines;
 }
@@ -58,14 +62,39 @@ export function renderMarkdownTracked(
   let codeBlockLines: string[] = [];
   let fenceChar = '`';
   let fenceIndent = 0;
-  const indent = LAYOUT.LEFT_MARGIN;
-  const contentWidth = LAYOUT.contentWidth(width);
+  // Prose starts at column 5 (the Measurements table's text column, the
+  // same column user-message and composer text use) and wraps before
+  // width-5, so the right edge never reaches a fill's padding band.
+  const indent = MARKDOWN_TEXT_COL;
+  const contentWidth = Math.max(1, width - MARKDOWN_RIGHT_GUTTER - indent);
+  const tk = activeTokens();
+
+  // Code blocks, tables, block quotes and rules get exactly one blank row
+  // above and below, whatever the source had. `openBlock` trims the blank
+  // rows already emitted to one; `blankAfter` owes one blank row to whatever
+  // comes next (and swallows extra source blanks until then).
+  const isBlankLine = (line: Line): boolean => line.every((c) => c.char === ' ' || c.char === '');
+  let blankAfter = false;
+  let inQuote = false;
+  const openBlock = (): void => {
+    blankAfter = false;
+    while (lines.length > 0 && isBlankLine(lines[lines.length - 1]!)) lines.pop();
+    if (lines.length > 0) lines.push(UIFactory.stringToLine('', width));
+  };
+  const closeBlock = (): void => { blankAfter = true; };
+  const beforeContent = (): void => {
+    if (blankAfter) {
+      lines.push(UIFactory.stringToLine('', width));
+      blankAfter = false;
+    }
+  };
 
   for (let i = 0; i < rawLines.length; i++) {
     const raw = rawLines[i];
 
     const fenceMatch = raw.match(/^(\s*)(```|~~~)\s*([\w-]*)/);
     if (fenceMatch && !inCodeBlock) {
+      if (inQuote) { inQuote = false; closeBlock(); }
       inCodeBlock = true;
       fenceIndent = fenceMatch[1].length;
       fenceChar = fenceMatch[2][0]; // '`' or '~'
@@ -77,6 +106,7 @@ export function renderMarkdownTracked(
       // Close fence: same char, same or less indentation, at least 3 of that char
       const closeFenceRe = new RegExp(`^\\s{0,${fenceIndent}}${fenceChar === '`' ? '```' : '~~~'}`);
       if (closeFenceRe.test(raw)) {
+        openBlock();
         const blockStart = lines.length;
         const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width, {
           showLineNumbers: options.codeBlockLineNumbers ?? true,
@@ -88,6 +118,7 @@ export function renderMarkdownTracked(
           rawContent: codeBlockLines.join('\n'),
         });
         lines.push(...rendered);
+        closeBlock();
         inCodeBlock = false;
         codeBlockLang = '';
         codeBlockLines = [];
@@ -100,25 +131,32 @@ export function renderMarkdownTracked(
     }
 
     if (raw.trim() === '') {
+      if (inQuote) { inQuote = false; closeBlock(); }
+      if (blankAfter) continue; // the owed blank row is emitted before the next content
       lines.push(UIFactory.stringToLine('', width));
       continue;
     }
 
+    const isQuoteLine = /^> ?/.test(raw);
+    if (inQuote && !isQuoteLine) { inQuote = false; closeBlock(); }
+    const isRule = /^[-*_]{3,}$/.test(raw.trim());
+    const isTableStart = raw.includes('|') && i + 1 < rawLines.length && isLikelyTableHeaderRow(raw) && isLikelyTableSeparatorRow(rawLines[i + 1]);
+    if (!isQuoteLine && !isRule && !isTableStart) beforeContent();
+
     const h3 = raw.match(/^### (.+)/);
     const h2 = raw.match(/^## (.+)/);
     const h1 = raw.match(/^# (.+)/);
-    if (h1) {
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h1[1].toUpperCase(), width, { fg: T.heading1, bold: true }));
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + '━'.repeat(Math.min(getDisplayWidth(h1[1]), contentWidth)), width, { fg: activeTokens().textMuted }));
-      continue;
-    }
-    if (h2) {
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h2[1], width, { fg: T.heading2, bold: true }));
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + '─'.repeat(Math.min(getDisplayWidth(h2[1]), contentWidth)), width, { fg: activeTokens().textFaint }));
-      continue;
-    }
-    if (h3) {
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h3[1], width, { fg: T.heading3, bold: true }));
+    // Headings keep their own case and carry no rule rows; the heading
+    // color and weight are what mark them.
+    const heading = h1?.[1] ?? h2?.[1] ?? h3?.[1];
+    if (heading !== undefined) {
+      // A heading is a block: one blank row above (unless it opens the
+      // message) and one below.
+      openBlock();
+      lines.push(...compositeInlineLine(' '.repeat(indent), renderInlineMarkdown(heading).map((tok) => (
+        tok.type === 'text' ? { ...tok, style: { ...tok.style, fg: tk.markdownHeading, bold: true } } : tok
+      )), width, {}, indent));
+      closeBlock();
       continue;
     }
 
@@ -143,7 +181,7 @@ export function renderMarkdownTracked(
       const textStartX = bulletX + 2;
       const rendered = renderInlineMarkdown(ulMatch[2]);
       const prefix = ' '.repeat(bulletX) + '• ';
-      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: activeTokens().secondary, bold: false }, textStartX));
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: tk.textMuted, bold: false }, textStartX));
       continue;
     }
 
@@ -155,24 +193,32 @@ export function renderMarkdownTracked(
       const textStartX = bulletX + numStr.length;
       const rendered = renderInlineMarkdown(olMatch[3]);
       const prefix = ' '.repeat(bulletX) + numStr;
-      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: activeTokens().secondary, bold: false }, textStartX));
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: tk.textMuted, bold: false }, textStartX));
       continue;
     }
 
-    if (/^[-*_]{3,}$/.test(raw.trim())) {
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + '─'.repeat(contentWidth), width, { fg: activeTokens().textFaint }));
+    if (isRule) {
+      openBlock();
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + '─'.repeat(contentWidth), width, { fg: tk.markdownHorizontalRule }));
+      closeBlock();
       continue;
     }
 
-    const bqMatch = raw.match(/^> (.*)/);
+    const bqMatch = raw.match(/^> ?(.*)/);
     if (bqMatch) {
-      const rendered = renderInlineMarkdown(bqMatch[1]);
-      const prefix = ' '.repeat(indent) + '┃ ';
-      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: T.blockquote, italic: true }, indent + 3));
+      if (!inQuote) { openBlock(); inQuote = true; }
+      // The thin bar runs down every wrapped row of the quote, and the text
+      // keeps the quote color and italic on every row.
+      const rendered = renderInlineMarkdown(bqMatch[1]).map((tok) => (
+        tok.type === 'text' ? { ...tok, style: { fg: tk.markdownBlockQuote, italic: true, ...tok.style } } : tok
+      ));
+      const prefix = ' '.repeat(indent) + '│ ';
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: tk.markdownBlockQuote }, indent + 2, prefix));
       continue;
     }
 
-    if (raw.includes('|') && i + 1 < rawLines.length && isLikelyTableHeaderRow(raw) && isLikelyTableSeparatorRow(rawLines[i + 1])) {
+    if (isTableStart) {
+      openBlock();
       const tableRows: string[] = [];
       let j = i;
       while (j < rawLines.length && rawLines[j].includes('|')) {
@@ -180,7 +226,8 @@ export function renderMarkdownTracked(
         j++;
       }
       i = j - 1;
-      lines.push(...renderTable(tableRows, width, indent));
+      lines.push(...renderTable(tableRows, width, indent, MARKDOWN_RIGHT_GUTTER));
+      closeBlock();
       continue;
     }
 
@@ -189,6 +236,7 @@ export function renderMarkdownTracked(
   }
 
   if (inCodeBlock && codeBlockLines.length > 0) {
+    openBlock();
     const blockStart = lines.length;
     const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width, {
       showLineNumbers: options.codeBlockLineNumbers ?? true,
@@ -214,9 +262,12 @@ function compositeInlineLine(
   tokens: InlineToken[],
   width: number,
   prefixStyle: Partial<Cell>,
-  textStartX: number
+  textStartX: number,
+  /** Drawn on every wrapped row after the first (a block quote's bar); blank when omitted. */
+  continuationPrefix?: string,
 ): Line[] {
   const T = activeTheme();
+  const tk = activeTokens();
   const lines: Line[] = [];
 
   // Flatten tokens to [char, style] pairs
@@ -227,7 +278,7 @@ function compositeInlineLine(
     if (token.type === 'text') {
       for (const ch of token.text) chars.push({ char: ch, style: token.style });
     } else if (token.type === 'code') {
-      for (const ch of token.text) chars.push({ char: ch, style: { fg: T.inlineCodeFg, bold: true } });
+      for (const ch of token.text) chars.push({ char: ch, style: { fg: tk.markdownCode } });
     } else if (token.type === 'link') {
       // Resolve URL: if url is empty or relative, treat as text; if it's a file path, use file:// protocol
       let resolvedUrl = token.url;
@@ -238,8 +289,8 @@ function compositeInlineLine(
     }
   }
 
-  // Render with simple line-breaking at width
-  const availW = width - textStartX;
+  // Wrap before the right gutter so text keeps clear of the screen edge.
+  const availW = width - MARKDOWN_RIGHT_GUTTER - textStartX;
   if (availW <= 0) return lines;
 
   let lineChars: StyledChar[] = [];
@@ -248,9 +299,10 @@ function compositeInlineLine(
   const flushLine = (isFirst: boolean) => {
     const line = new Array(width).fill(null).map(() => createStyledCell(' ')) as Cell[];
     // Write prefix on first line
-    if (isFirst) {
+    const rowPrefix = isFirst ? prefix : continuationPrefix;
+    if (rowPrefix !== undefined) {
       let px = 0;
-      for (const ch of prefix) {
+      for (const ch of rowPrefix) {
         if (px >= width) break;
         const cw = getDisplayWidth(ch);
         line[px] = createStyledCell(ch, { fg: prefixStyle.fg, bg: prefixStyle.bg, bold: prefixStyle.bold, dim: prefixStyle.dim, underline: prefixStyle.underline, italic: prefixStyle.italic, strikethrough: prefixStyle.strikethrough });

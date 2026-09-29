@@ -10,7 +10,7 @@ Responsibility is split cleanly between the two layers:
 | --- | --- |
 | Natural-language planning intent detection in the main terminal conversation | TUI |
 | The planning interview loop and one-question-at-a-time clarification | TUI |
-| The project planning panel | TUI |
+| The project planning modal | TUI |
 | Execution approval | TUI |
 | Agent handoff metadata and future agent assignment UX | TUI |
 | Durable project-scoped planning artifacts in knowledge spaces named `project:<projectId>` | SDK |
@@ -25,15 +25,15 @@ Daemon, web, webhook, ntfy, Home Assistant, Slack, Discord, and companion surfac
 
 The TUI derives a stable `projectId` from the workspace path and passes it to the SDK `ProjectPlanningService`. Planning artifacts are stored under the matching `project:<projectId>` knowledge space, so unrelated workspaces do not share planning state.
 
-Normal conversation can start planning when the user uses planning language such as implementation plan, execution strategy, dependency graph, verification gates, or agent handoff. The TUI then opens the `Planning` panel and persists the current planning state through the SDK, recording active open questions and user answers as they accumulate. It calls SDK readiness evaluation to find gaps and the suggested next question, and injects a planning-only system instruction for that turn so the assistant asks one focused question instead of executing.
+Normal conversation can start planning when the user uses planning language such as implementation plan, execution strategy, dependency graph, verification gates, or agent handoff. The TUI then opens the `Planning` modal and persists the current planning state through the SDK, recording active open questions and user answers as they accumulate. It calls SDK readiness evaluation to find gaps and the suggested next question, and injects a planning-only system instruction for that turn so the assistant asks one focused question instead of executing.
 
 The planning loop can be paused with natural language such as "stop planning" or "pause planning".
 
-## Planning panel
+## Planning modal
 
-Open the panel through the panel picker or with `/project-plan panel`.
+Open the modal from the command palette (`Ctrl+P`, type "planning") or with `/project-plan panel`.
 
-The panel shows:
+The modal shows:
 
 - workspace project id and knowledge space, and live SDK artifact counts (states/decisions/language) from the planning status route
 - readiness and approval state
@@ -45,18 +45,18 @@ The panel shows:
 - durable decisions
 - project language and ambiguity resolutions
 
-The panel's keys:
+The modal's keys:
 
 | Key | Action |
 | --- | --- |
 | `r` | Refresh SDK-backed planning artifacts |
 | `a` | Mark the current structurally ready plan as approved for execution |
-| `Ctrl+R` / `Ctrl+A` | Alternate refresh/approve bindings that stay reachable while a question is active; plain `r`/`a` type into the draft answer in that mode instead |
-| Up/Down | Choose answer actions when a question is active, or scroll panel content otherwise |
-| Any typing | Draft a custom answer while the panel is focused |
-| `Enter` | Submit the selected or drafted answer through the normal planning chat path |
+| `d` | Dismiss planning (asks first) |
+| Up/Down | Choose an answer action when a question is active |
+| `Enter` | Submit the selected answer through the normal planning chat path |
+| `Esc` | Close the modal |
 
-The answer list includes a dismiss action that pauses planning for the workspace and returns focus to normal chat. Keyword-matched canned answer suggestions (scope/task/verification/recommended) are de-duplicated by answer text, so a question that matches more than one category never shows the same suggested answer twice.
+A custom answer is typed in the normal composer, or recorded with `/project-plan answer`. Dismissing pauses planning for the workspace and returns to normal chat. Keyword-matched canned answer suggestions (scope/task/verification/recommended) are de-duplicated by answer text, so a question that matches more than one category never shows the same suggested answer twice.
 
 ## `/project-plan`
 
@@ -64,11 +64,11 @@ The answer list includes a dismiss action that pauses planning for the workspace
 
 | Command | Does |
 | --- | --- |
-| `/project-plan` | Print current project-planning readiness and open the panel |
-| `/project-plan panel` | Open the panel |
+| `/project-plan` | Print current project-planning readiness and open the modal |
+| `/project-plan panel` | Open the modal |
 | `/project-plan approve` | Record explicit execution approval |
 | `/project-plan dismiss` | Archive the active plan and mark the interview inactive so the next `/project-plan <goal>` starts fresh; refused while a plan is mid-execution (run `/workstream cancel` first) |
-| `/project-plan answer <question-number\|question-id> <text>` | Record an answer to an open planning question outside the panel |
+| `/project-plan answer <question-number\|question-id> <text>` | Record an answer to an open planning question outside the modal |
 | `/project-plan <goal>` | Seed project planning state |
 | `/project-plan list` and `/project-plan show <id>` | Inspect older execution-plan records |
 | `/project-plan mode\|explain\|override\|status\|clear` | Route to the adaptive runtime controls |

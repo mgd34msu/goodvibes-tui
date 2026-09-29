@@ -23,7 +23,7 @@
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { RuntimeTask, TaskLifecycleState } from '@/runtime/index.ts';
 import { reviewWorktreeAttachments } from '@/runtime/index.ts';
-import { requireOperatorClient, requireOpsApi, requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { requireOperatorClient, requireOpsApi, requireShellPaths } from './runtime-services.ts';
 import { createTasksClient, type TasksClient, type UnionTask } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { createDaemonVerbCaller } from '../../runtime/client/operator-endpoint.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -85,13 +85,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
     usage: '[list [status|kind] | show <taskId> | output <taskId> | create <kind> <owner> <title...> | update <taskId> <title|description|result> <value...> | complete <taskId> [result] | fail <taskId> <error...> | cancel <taskId> [note] | pause <taskId> [note] | resume <taskId> [note] | retry <taskId> [note]]',
     async handler(args, ctx) {
       if (args.length === 0) {
-        if (ctx.showPanel) ctx.showPanel('tasks');
-        else {
-          const panelManager = requirePanelManager(ctx);
-          panelManager.open('tasks');
-          panelManager.show();
-          ctx.renderRequest();
-        }
+        if (!ctx.openView?.('tasks')) ctx.print('The Agents view is not available in this session; /tasks list prints them.');
         return;
       }
 

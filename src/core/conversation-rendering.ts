@@ -1,5 +1,5 @@
 import { UIFactory } from '../renderer/ui-factory.ts';
-import { renderMarkdownTracked } from '../renderer/markdown.ts';
+import { MARKDOWN_TEXT_COL, renderMarkdownTracked } from '../renderer/markdown.ts';
 import { isDiffContent, renderExpandedToolResultLines } from '../renderer/tool-result-expanded-lines.ts';
 import { activeTheme, activeTokens, activeUiTones } from '../renderer/theme.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
@@ -85,7 +85,7 @@ export function renderConversationUserMessage(
   const T = activeTheme();
   const displayText = extractUserDisplayText(message.content);
   if (message.cancelled) {
-    context.history.addLines(UIFactory.createMessageBar(width, displayText, T.errorBarBg, activeTokens().error, ' x ', true));
+    context.history.addLines(UIFactory.createMessageBar(width, displayText, T.errorBarBg, activeTokens().textMuted, activeTokens().error, true));
     return;
   }
   // Compaction-continuation handoff: a user-ROLE message the compactor
@@ -116,54 +116,44 @@ export function renderConversationAssistantMessage(
   const turnCollapsed = isTurnCollapsed(turn, context.collapseState);
 
   if (isHead) {
-    const assistantHeaderDetails = [];
-    if (message.model) {
-      assistantHeaderDetails.push({ text: ` ${message.model}${message.provider ? ` (${message.provider})` : ''} `, fg: activeTokens().textFaint });
-    }
+    // A quiet header: "◆ model · N tools · reasoning", all faint. It stays a
+    // row (not a footer after the answer) because it is the turn's collapse
+    // anchor: the block registry points at it, and a footer would not exist
+    // until the turn ended.
+    const faint = activeTokens().textFaint;
+    const assistantHeaderDetails: Array<{ text: string; fg: string; dim?: boolean }> = [];
+    const addDetail = (text: string): void => {
+      assistantHeaderDetails.push({ text: assistantHeaderDetails.length > 0 ? ` · ${text}` : ` ${text}`, fg: faint });
+    };
+    if (message.model) addDetail(message.model);
     // The count spans the whole run, not just this message, that is the point
     // of merging. `tools:1` repeated over five headers becomes one `5 tools`.
     const toolCount = turn?.toolCallCount ?? message.toolCalls?.length ?? 0;
-    if (toolCount > 0) {
-      assistantHeaderDetails.push({ text: ` ${GLYPHS.status.pending} ${toolCount} tool${toolCount === 1 ? '' : 's'} `, fg: T.toolAccent });
-    }
+    if (toolCount > 0) addDetail(`${toolCount} tool${toolCount === 1 ? '' : 's'}`);
     // A label every call in the run shares belongs here, once, instead of on
-    // every branch, the branches then lead with what distinguishes them.
-    //
-    // Hoisted ONLY when it fits whole. A label chopped mid-word ("Calling the
-    // assistant serv") is worse than no label: it costs a third of the header
-    // and tells you less than the rows below it already do, since each row
-    // leads with its own distinguishing token. So it either fits or it goes,
-    // never a truncated stub. Dropping it loses nothing reachable: the rows
-    // still name every call, and omitToolName is unaffected either way.
+    // every branch; hoisted ONLY when it fits whole (a label chopped mid-word
+    // tells you less than the rows below it already do).
     if (turn?.sharedToolLabel) {
       const usedCols = assistantHeaderDetails.reduce((sum, seg) => sum + getDisplayWidth(seg.text), 0);
-      const availCols = width - LAYOUT.RIGHT_MARGIN - (LAYOUT.LEFT_MARGIN + 1)
-        - getDisplayWidth(' assistant ') - usedCols;
-      const labelText = ` ${turn.sharedToolLabel} `;
-      if (getDisplayWidth(labelText) <= availCols) {
-        assistantHeaderDetails.push({ text: labelText, fg: T.toolNameFg });
-      }
+      const availCols = width - LAYOUT.RIGHT_MARGIN - (LAYOUT.LEFT_MARGIN + 1) - usedCols;
+      if (getDisplayWidth(` · ${turn.sharedToolLabel}`) <= availCols) addDetail(turn.sharedToolLabel);
     }
     // Aggregated across the run so suppressing a non-head's header never loses
     // the signal that reasoning happened.
     const hasReasoning = turn?.hasReasoning ?? Boolean(message.reasoningContent || message.reasoningSummary);
-    if (hasReasoning) {
-      assistantHeaderDetails.push({ text: ` ${GLYPHS.status.active} reasoning `, fg: T.reasoningAccent, dim: true });
-    }
-    if (turnCollapsed && toolCount > 0) {
-      assistantHeaderDetails.push({ text: ` ${GLYPHS.navigation.collapsed} hidden `, fg: activeTokens().textFaint });
-    }
+    if (hasReasoning) addDetail('reasoning');
+    if (turnCollapsed && toolCount > 0) addDetail(`${GLYPHS.navigation.collapsed} hidden`);
     // An empty run, no model, no tools, no reasoning, emits no header rather
     // than a bare `● assistant` with nothing under it.
     if (assistantHeaderDetails.length > 0) {
       const headerStartLine = context.history.getLineCount();
       const headerBlockIdx = context.blockRegistry.length;
       context.history.addLine(renderConversationEventLine(width, {
-        marker: GLYPHS.status.active,
-        markerFg: T.assistantHeader,
-        label: 'assistant',
-        labelFg: T.assistantHeader,
-        detailFg: activeTokens().textMuted,
+        marker: '◆',
+        markerFg: activeTokens().brand,
+        label: '',
+        labelFg: faint,
+        detailFg: faint,
       }, assistantHeaderDetails));
 
       // Turns are collapsible as a unit and default to EXPANDED, a turn
@@ -486,7 +476,9 @@ export function renderConversationToolMessage(
   // The body is a continuation of its row, so it starts at the row's own text
   // column; the shift is that column expressed relative to the flush left
   // margin the body renders with internally.
-  const bodyShift = inTree ? Math.max(0, treeTextCol(indent) - LAYOUT.LEFT_MARGIN) : 0;
+  // Markdown bodies start at MARKDOWN_TEXT_COL; diff views at the flush margin.
+  const bodyOrigin = isDiffContent(message.content) ? LAYOUT.LEFT_MARGIN : MARKDOWN_TEXT_COL;
+  const bodyShift = inTree ? Math.max(0, treeTextCol(indent) - bodyOrigin) : 0;
   const bodyWidth = Math.max(LAYOUT.LEFT_MARGIN + LAYOUT.RIGHT_MARGIN + 8, width - bodyShift);
   const expandedLines = renderExpandedToolResultLines(message.content, bodyWidth);
   const lineCount = expandedLines.length;
@@ -703,9 +695,8 @@ export function addConversationSplashScreen(
     }
     context.history.addLine(line);
   });
-  for (let i = 0; i < 5; i++) {
-    context.history.addLine(createEmptyLine(width));
-  }
+  // No trailing blank rows: the shell centers the splash in whatever height
+  // the conversation area has (conversation-layout.ts centerViewportContent).
 }
 
 export function conversationTextToLines(

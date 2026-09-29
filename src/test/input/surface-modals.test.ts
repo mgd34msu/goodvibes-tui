@@ -88,8 +88,7 @@ function escapeState(host: SurfaceModalHost, prompt = '') {
     shortcutsOverlayActive: false,
     commandMode: false,
     modalStack: [] as string[],
-    modalReturnFocus: 'prompt' as 'prompt' | 'panel' | 'indicator',
-    panelFocused: false,
+    modalReturnFocus: 'prompt' as 'prompt' | 'indicator',
     indicatorFocused: false,
     prompt,
     cursorPos: prompt.length,
@@ -139,11 +138,13 @@ describe('handleEscape with kit modals', () => {
 });
 
 const COMMANDS: SlashCommand[] = [
+  { name: 'changes', description: 'Changed files and review.', handler: () => {} },
   { name: 'diff', description: 'Show the working-tree diff.', handler: () => {} },
   { name: 'model', description: 'Select the model.', aliases: ['m'], handler: () => {} },
   { name: 'compact', description: 'Compact context.', handler: () => {} },
   { name: 'resume', description: 'Resume a session.', usage: '<id|name>', handler: () => {} },
-  { name: 'panel', description: 'Open a panel.', handler: () => {} },
+  { name: 'agents', description: 'Everything running.', handler: () => {} },
+  { name: 'usage', description: 'Context and cost.', handler: () => {} },
   { name: 'settings', description: 'Open the settings.', handler: () => {} },
   { name: 'zzz-extra', description: 'Something else entirely.', handler: () => {} },
 ];
@@ -157,7 +158,7 @@ describe('command palette', () => {
     resetPaletteUsageForTests();
     const groups = palette().sections().map((s) => s.group);
     expect(groups).toEqual(['Suggested', 'Session', 'Views', 'Settings', 'Commands']);
-    expect(palette().sections()[0]!.entries.map((e) => e.id)).toEqual(['diff', 'model', 'compact']);
+    expect(palette().sections()[0]!.entries.map((e) => e.id)).toEqual(['changes', 'model', 'compact']);
   });
 
   test('Suggested learns from what is run', () => {
@@ -171,7 +172,10 @@ describe('command palette', () => {
   test('typing searches names, aliases, titles and search words (old pane names find their home)', () => {
     const entries = buildPaletteEntries(COMMANDS, new Map());
     const byId = (id: string) => entries.find((e) => e.id === id)!;
-    expect(paletteScore(byId('panel'), 'fleet')).toBeGreaterThan(0);
+    expect(paletteScore(byId('agents'), 'fleet')).toBeGreaterThan(0);
+    expect(paletteScore(byId('agents'), 'cockpit')).toBeGreaterThan(0);
+    expect(paletteScore(byId('usage'), 'tokens')).toBeGreaterThan(0);
+    expect(paletteScore(byId('changes'), 'git')).toBeGreaterThan(0);
     expect(paletteScore(byId('model'), 'm')).toBeGreaterThan(paletteScore(byId('compact'), 'm'));
     expect(paletteScore(byId('diff'), 'nothing-like-this')).toBe(0);
     const p = palette();
@@ -185,7 +189,7 @@ describe('command palette', () => {
     const p = palette((id, mode) => runs.push(`${id}:${mode}`));
     host.push(p);
     host.handleToken(key('enter'));
-    expect(runs).toEqual(['diff:run']);
+    expect(runs).toEqual(['changes:run']);
     expect(host.active).toBe(false);
 
     const q = palette((id, mode) => runs.push(`${id}:${mode}`));
@@ -197,7 +201,7 @@ describe('command palette', () => {
     const r = palette((id, mode) => runs.push(`${id}:${mode}`));
     host.push(r);
     host.handleToken(key('tab'));
-    expect(runs[2]).toBe('diff:fill');
+    expect(runs[2]).toBe('changes:fill');
   });
 
   test('ctrl+p closes the palette again', () => {
@@ -207,20 +211,22 @@ describe('command palette', () => {
     expect(host.active).toBe(false);
   });
 
-  test('ctrl+p (and ctrl+k) are bound to the command palette; the pane picker moved to ctrl+shift+p', () => {
+  test('ctrl+p (and ctrl+k) are bound to the command palette; ctrl+shift+p (the old pane picker) is bound to nothing', () => {
     const km = new KeybindingsManager({ configPath: '/nonexistent/keybindings.json' });
     expect(km.matches('command-palette', key('p', { ctrl: true }) as never)).toBe(true);
     expect(km.matches('command-palette', key('k', { ctrl: true }) as never)).toBe(true);
-    expect(km.matches('panel-picker', key('p', { ctrl: true }) as never)).toBe(false);
-    expect(km.matches('panel-picker', key('p', { ctrl: true, shift: true }) as never)).toBe(true);
     expect(km.matches('command-palette', key('p', { ctrl: true, shift: true }) as never)).toBe(false);
+    expect(km.lookup(key('p', { ctrl: true, shift: true }) as never)).toBeNull();
   });
 
   test('renders as a kit modal with the slash command right-aligned and a preview', () => {
     const frame = frameFromLayer(palette().render(120, 34), 120, 34).map((l) => l.map((c) => c.char).join('')).join('\n');
     expect(frame).toContain('✦ Commands');
-    expect(frame).toMatch(/Changes +\/diff/);
+    expect(frame).toMatch(/Changes +\/changes/);
+    expect(frame).toMatch(/Show the working-tree diff +\/diff/);
     expect(frame).toContain('Enter runs it now');
+    // The preview names the search words an entry answers to (old pane names included).
+    expect(frame).toMatch(/Finds: changes, git, diff, review/);
   });
 });
 

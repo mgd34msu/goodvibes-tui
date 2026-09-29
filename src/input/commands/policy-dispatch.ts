@@ -289,7 +289,7 @@ async function handleStatus(_args: string[], context: CommandContext): Promise<v
 export function renderPolicyUsage(): string {
   return [
     'Usage: /policy <subcommand>',
-    '  /policy                        — open the policy/governance panel',
+    '  /policy                        — open the policy/governance modal',
     '  load <bundle-id> [rule-count]  — Load a candidate bundle',
     '  simulate [mode]               — Run simulation (silent|warn|enforce)',
     '  diff                          — Show rule diff (current vs candidate)',

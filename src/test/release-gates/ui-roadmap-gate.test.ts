@@ -7,6 +7,7 @@ import { GLYPHS } from '../../renderer/ui-primitives.ts';
 import { modalGeometry, standardModalWidth } from '../../renderer/surface-kit.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
+import { makeTestShellViews } from '../helpers/shell-views.ts';
 
 describe('UI roadmap gate', () => {
   test('locks the canonical Unicode primitive set', () => {
@@ -42,15 +43,11 @@ describe('UI roadmap gate', () => {
     expect(conversation.prevTranscriptEventLine(999, 'tool_result')).toBe(toolLine);
   });
 
-  // item 1a: showPanel is the command path (every registered caller is a
-  // slash command), it now opens/shows the panel but leaves keyboard focus
-  // in the composer by default ("the user is mid-command-flow"). A chord
-  // (F2/Ctrl+O/Ctrl+P/Alt+N) still grabs focus via panelManager.focusPanels()
-  // directly, unaffected by this test.
-  test('opens and shows panels through the shared shell opener path, leaving composer focus untouched by default', () => {
+  test('opens views through the shared shell opener path: an old pane name lands on its modal, focus stays in the composer', () => {
     const testManagers = createTestManagers();
+    const surfaceModals = new SurfaceModalHost();
     const input = {
-      panelFocused: false,
+      indicatorFocused: false,
       modalOpened: () => {},
       modelPicker: {} as never,
       openSelection: () => {},
@@ -63,32 +60,14 @@ describe('UI roadmap gate', () => {
       profilePickerModal: { open: () => {} },
       settingsModal: { open: () => {} },
       sessionPickerModal: { open: () => {} },
-      surfaceModals: new SurfaceModalHost(),
+      surfaceModals,
     } as unknown as Parameters<typeof wireShellUiOpeners>[0]['input'];
-    let visible = false;
-    let focused = false;
-    const panelManager = {
-      isVisible: () => visible,
-      getAllOpen: () => ['docs'],
-      getFocusTarget: () => (focused ? 'panel' : 'prompt') as 'panel' | 'prompt',
-      open: () => {},
-      show: () => { visible = true; },
-      hide: () => { visible = false; focused = false; },
-      focusPanels: () => { focused = true; },
-      focusPrompt: () => { focused = false; },
-      setOpenModalCallback: () => {},
-    };
-    const conversation = {
-      setSplashSuppressed: () => {},
-      rebuildHistory: () => {},
-    } as never;
-    const commandContext = {} as CommandContext;
+    const commandContext = { print: () => {} } as unknown as CommandContext;
 
     wireShellUiOpeners({
       commandContext,
       input,
-      panelManager: panelManager as unknown as Parameters<typeof wireShellUiOpeners>[0]['panelManager'],
-      conversation,
+      ...makeTestShellViews({ configManager: testManagers.configManager }),
       configManager: testManagers.configManager,
       providerRegistry: { getSelectableModels: () => [], listModels: () => [] } as never,
       runtime: { model: 'gpt-5.4', provider: 'openai' } as never,
@@ -105,17 +84,16 @@ describe('UI roadmap gate', () => {
       trustPromptRef: { requestTrustDecision: async () => 'restricted' as const },
     });
 
-    (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void }).showPanel?.('docs');
-    // the command path no longer auto-focuses (focus stays wherever it
-    // already was, the composer, since you can only type a command there).
-    expect(panelManager.getFocusTarget()).toBe('prompt');
-    expect(visible).toBe(true);
-
-    // The escape hatch: a caller that explicitly asks for focus still gets it.
-    // Reconciled signature (panelId, pane, target, opts), focus opt-in is arg 4.
-    (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom', target?: unknown, opts?: { focus?: boolean }) => void })
-      .showPanel?.('docs', undefined, undefined, { focus: true });
-    expect(panelManager.getFocusTarget()).toBe('panel');
+    expect(commandContext.openView?.('fleet')).toBe(true);
+    expect(surfaceModals.top()?.name).toBe('agents');
+    expect(commandContext.openView?.('tokens')).toBe(true);
+    expect(surfaceModals.top()?.name).toBe('usage');
+    // The agents modal is still on the stack under usage; opening it again brings it back to the top.
+    commandContext.openAgents?.();
+    expect(surfaceModals.top()?.name).toBe('agents');
+    expect(surfaceModals.depth).toBe(2);
+    expect((input as unknown as { indicatorFocused: boolean }).indicatorFocused).toBe(false);
+    surfaceModals.clear();
   });
 
   test('sizes every modal by the Measurements table: 86% wide (max 124), full width minus 1 per side below 90, top edge at 8%', () => {

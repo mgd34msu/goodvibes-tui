@@ -7,8 +7,7 @@ function buildState() {
     shortcutsOverlayActive: false,
     commandMode: false,
     modalStack: [] as string[],
-    modalReturnFocus: 'prompt' as 'prompt' | 'panel' | 'indicator',
-    panelFocused: false,
+    modalReturnFocus: 'prompt' as 'prompt' | 'indicator',
     indicatorFocused: false,
     prompt: '',
     cursorPos: 0,
@@ -34,22 +33,12 @@ function buildState() {
 }
 
 describe('modal focus restoration', () => {
-  test('records panel focus when the first modal opens', () => {
+  test('records indicator focus when the first modal opens', () => {
     const state = buildState();
-    state.panelFocused = true;
+    state.indicatorFocused = true;
     state.helpOverlayActive = true;
     modalOpened(state, 'help');
-    expect(state.modalReturnFocus).toBe('panel');
-  });
-
-  test('restores panel focus when the last modal closes', () => {
-    const state = buildState();
-    state.panelFocused = true;
-    state.helpOverlayActive = true;
-    modalOpened(state, 'help');
-    const result = handleEscape(state);
-    expect(result.panelFocused).toBe(true);
-    expect(result.indicatorFocused).toBe(false);
+    expect(state.modalReturnFocus).toBe('indicator');
   });
 
   test('restores indicator focus when the last modal closes', () => {
@@ -58,7 +47,6 @@ describe('modal focus restoration', () => {
     state.contextInspectorModal.active = true;
     modalOpened(state, 'contextInspector');
     const result = handleEscape(state);
-    expect(result.panelFocused).toBe(false);
     expect(result.indicatorFocused).toBe(true);
   });
 
@@ -100,7 +88,6 @@ describe('modal focus restoration', () => {
     expect(state.modalStack).toEqual(['bookmark']);
     expect(state.contextInspectorModal.active).toBe(false);
     expect(state.bookmarkModal.active).toBe(true);
-    expect(result.panelFocused).toBe(false);
     expect(result.indicatorFocused).toBe(false);
   });
 });

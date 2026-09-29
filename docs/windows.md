@@ -44,9 +44,8 @@ Each must be addressed (or explicitly gated off on Windows) before promotion:
 
 1. **Exec layer `/bin/sh` dependency.** Several command paths spawn a POSIX
    shell directly, e.g. `Bun.spawn(['/bin/sh', '-c', command], …)` in the
-   scriptable statusline (`src/core/scriptable-statusline.ts`), the diff
-   commands (`src/input/commands/diff-runtime.ts`,
-   `src/panels/diff-panel.ts`), and the SDK's WRFC gates
+   scriptable statusline (`src/core/scriptable-statusline.ts`) and the SDK's
+   WRFC gates
    (`platform/agents/wrfc-gates.js`). `/bin/sh` does not exist on native
    Windows; these need a `cmd.exe`/PowerShell branch or a shell abstraction.
 

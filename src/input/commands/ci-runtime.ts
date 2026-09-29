@@ -83,7 +83,7 @@ export function renderWatch(watch: CiWatchSubscription): string {
 export function registerCiRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'ci',
-    description: 'CI-watch: one-shot per-job status and standing watches over the operator panel',
+    description: 'CI-watch: one-shot per-job status and standing watches, surfaced in Agents',
     usage: 'status <repo-or-pr> | watch <repo-or-pr> <deliveryChannel> [--fix-session] | watches | unwatch <id>',
     argsHint: '[status|watch|watches|unwatch]',
     async handler(args, ctx) {

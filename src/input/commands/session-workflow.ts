@@ -6,8 +6,8 @@ import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationTitleSource } from '../../core/conversation';
 import type { SessionReturnContextSummary } from '@/runtime/index.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
-import { requirePanelManager, requireProviderApi, requireSessionManager, requireSurface } from './runtime-services.ts';
-import { resumeSessionCore, reopenPanelsWithModalSkip, DEFAULT_PANEL_REOPEN_LIMIT } from '../../core/session-resume-core.ts';
+import { requireProviderApi, requireSessionManager, requireSurface } from './runtime-services.ts';
+import { resumeSessionCore } from '../../core/session-resume-core.ts';
 import { checkSessionLiveness } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -80,24 +80,6 @@ function buildTranscriptReviewLines(
   ];
 }
 
-// Exported (test-only concern) so the MIGRATE-TO-MODAL redirect-skip honesty
-// (W6 review, finding 3: saved-layout restore with 'sessions' must not lie)
-// can be unit-tested directly instead of through a full /resume harness.
-// Delegates to the shared reopenPanelsWithModalSkip (core/session-resume-core.ts)
-//, the same routine resumeSessionCore uses, so this standalone entry point
-// and the canonical resume sequence can never diverge on panel-reopen behavior.
-export function reopenPanelsFromReturnContext(ctx: CommandContext, summary: SessionReturnContextSummary | undefined): string[] {
-  if (!summary?.openPanels || summary.openPanels.length === 0) return [];
-  const panelManager = requirePanelManager(ctx);
-  const { reopened, movedToModal, notReopened } = reopenPanelsWithModalSkip(panelManager, summary.openPanels, DEFAULT_PANEL_REOPEN_LIMIT);
-  if (movedToModal.length > 0) {
-    ctx.print(`Note: ${movedToModal.join(', ')} moved to a modal; reopen via its command instead of as a panel.`);
-  }
-  if (notReopened.length > 0) {
-    ctx.print(`  …and ${notReopened.length} more not reopened (/panels to open)`);
-  }
-  return [...reopened];
-}
 
 function printSessionExport(
   ctx: { print: (text: string) => void },
@@ -181,14 +163,11 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       const model = session.model ? ` [${session.model}]` : '';
       const active = session.name === ctx.session.runtime.sessionId ? ' ●' : '  ';
       lines.push(`${active} ${session.name.padEnd(28)} ${name.slice(0, 22).padEnd(22)} ${date}  ${session.messageCount} msgs${model}`);
-      if (session.returnContext?.activeTasks || session.returnContext?.blockedTasks || session.returnContext?.pendingApprovals || session.returnContext?.openPanels?.length) {
+      if (session.returnContext?.activeTasks || session.returnContext?.blockedTasks || session.returnContext?.pendingApprovals) {
         const posture = [
           session.returnContext.activeTasks ? `active=${session.returnContext.activeTasks}` : null,
           session.returnContext.blockedTasks ? `blocked=${session.returnContext.blockedTasks}` : null,
           session.returnContext.pendingApprovals ? `approvals=${session.returnContext.pendingApprovals}` : null,
-          session.returnContext.openPanels?.length
-            ? `panels=${session.returnContext.openPanels.slice(0, 3).join(',')}${session.returnContext.openPanels.length > 3 ? ` (+${session.returnContext.openPanels.length - 3} more)` : ''}`
-            : null,
         ].filter(Boolean).join('  ');
         if (posture) lines.push(`     posture: ${posture}`);
       }
@@ -270,11 +249,10 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
         conversation: ctx.session.conversationManager,
         runtime: ctx.session.runtime,
         surface: requireSurface(ctx),
-        panelManager: requirePanelManager(ctx),
         selectModel: (model) => providerApi.selectModel(model),
         hydrateSessionUsage: ctx.session.hydrateSessionUsage,
       });
-      const { meta, journalReplay, restoredAnchorCount, resumedMessageCount, panels } = outcome;
+      const { meta, journalReplay, restoredAnchorCount, resumedMessageCount } = outcome;
 
       ctx.renderRequest();
       ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${resumedMessageCount}\n  Model: ${meta.model || ctx.session.runtime.model}`);
@@ -289,19 +267,11 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       } else if (journalReplay.hadCorruptTail) {
         ctx.print('  [Recovery] Journal tail was partially corrupt (quarantined). Replay stopped at last good record.');
       }
-      if (panels.movedToModal.length > 0) {
-        ctx.print(`Note: ${panels.movedToModal.join(', ')} moved to a modal; reopen via its command instead of as a panel.`);
-      }
-      if (panels.notReopened.length > 0) {
-        ctx.print(`  …and ${panels.notReopened.length} more not reopened (/panels to open)`);
-      }
       const returnContextMode = getReturnContextMode(ctx.platform.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {
-        for (const line of formatReturnContextForDisplay(meta.returnContext)) {
+        // A session saved while the TUI had side panes lists them; there are none to reopen now.
+        for (const line of formatReturnContextForDisplay({ ...meta.returnContext, openPanels: undefined })) {
           ctx.print(`  ${line}`);
-        }
-        if (panels.reopened.length > 0) {
-          ctx.print(`  Reopened panels: ${panels.reopened.join(', ')}`);
         }
         if ((meta.returnContext.remoteRunners?.length ?? 0) > 0) {
           ctx.print(`  Remote re-entry: /remote recover ${meta.returnContext.remoteRunners![0]}`);

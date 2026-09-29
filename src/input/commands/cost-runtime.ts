@@ -1,6 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { CostTrackerPanel } from '../../panels/cost-tracker-panel.ts';
-import { openCommandPanel, requirePanelManager } from './runtime-services.ts';
+import { BUDGET_ALERT_USD_CONFIG_KEY } from '@pellux/goodvibes-sdk/platform/providers';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
 import {
   COST_ATTRIBUTION_OPTIONAL_DIMENSIONS,
@@ -11,23 +10,37 @@ import {
 } from './cost-attribution-format.ts';
 
 /**
- * /cost budget <usd>, makes the CostTrackerPanel's budget alert real.
- * Opens the cost panel (creating it via the registered factory if not already
- * open) and sets its budget threshold directly, so the meter+alert already
- * built into CostTrackerPanel.render() (:266-290) actually fires. 0 disables
- * the alert. Mirrors the /auth local rotate-password → panel-instance-call
- * pattern (local-auth-runtime.ts) rather than only printing a signpost.
+ * /usage and /cost. `/usage` (and `/cost` or `/cost panel`) opens the Usage
+ * modal. `/cost budget <usd>` sets the budget alert: it writes the
+ * behavior.budgetAlertUsd setting, the one the Usage modal's b key, the Usage
+ * modal's budget row and the background budget-breach notifier all read, so
+ * the alert is real wherever it shows. 0 turns it off.
  */
 export function registerCostRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
+    name: 'usage',
+    description: 'Context pressure, session tokens and cost, per-turn history, per-agent costs and the budget alert',
+    usage: '[turns|agents]',
+    handler(args, ctx) {
+      const tab = (args[0] ?? '').toLowerCase();
+      if (!ctx.openUsage) {
+        ctx.print('The Usage view is not available in this session.');
+        return;
+      }
+      ctx.openUsage({ tab: tab === 'turns' || tab === 'agents' ? tab : undefined });
+    },
+  });
+
+  registry.register({
     name: 'cost',
-    description: 'Inspect session/agent cost tracking, windowed cost attribution, and the budget alert threshold',
+    description: 'Open Usage, set the session budget alert, or show windowed cost attribution',
     usage: '[panel|budget <usd>|attribution [24h|7d] [--json]]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'panel').toLowerCase();
 
       if (sub === 'panel' || sub === 'open') {
-        openCommandPanel(ctx, 'cost');
+        if (ctx.openUsage) ctx.openUsage();
+        else ctx.print('The Usage view is not available in this session.');
         return;
       }
 
@@ -38,16 +51,12 @@ export function registerCostRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /cost budget <usd>  (0 disables the alert)');
           return;
         }
-        const panelManager = requirePanelManager(ctx);
-        const panel = panelManager.open('cost');
-        if (panel instanceof CostTrackerPanel) {
-          panel.setBudgetThreshold(usd);
-          ctx.print(usd > 0
-            ? `Cost budget alert set to $${usd.toFixed(2)}.`
-            : 'Cost budget alert disabled.');
-        } else {
-          ctx.print('Cost tracking is not available in this session.');
-        }
+        const config = ctx.platform.configManager;
+        config.set(BUDGET_ALERT_USD_CONFIG_KEY as Parameters<typeof config.set>[0], usd as never);
+        ctx.print(usd > 0
+          ? `Cost budget alert set to $${usd.toFixed(2)}.`
+          : 'Cost budget alert disabled.');
+        ctx.renderRequest();
         return;
       }
 

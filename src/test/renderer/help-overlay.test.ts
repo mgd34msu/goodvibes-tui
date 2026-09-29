@@ -56,12 +56,12 @@ describe('renderHelpOverlay', () => {
     const texts = renderAllText();
     expect(texts).toContain('core navigation');
     expect(texts).toContain('prompt and editing');
-    expect(texts).toContain('overlays and panels');
+    expect(texts).toContain('overlays and views');
   });
 
   test('contains Quick Start section when featured commands are registered', () => {
     // Quick Start is built from the live registry: need at least one featured command.
-    const cmds: SlashCommand[] = [{ name: 'cockpit', description: 'Control room', handler: () => {} }];
+    const cmds: SlashCommand[] = [{ name: 'agents', description: 'Agents', handler: () => {} }];
     const texts = renderAllText(cmds);
     expect(texts).toContain('quick start');
   });
@@ -77,16 +77,18 @@ describe('renderHelpOverlay', () => {
     expect(texts).toContain('/keybindings');
   });
 
-  test('enumerates workspace panel bindings including Alt+digit tab jumps', () => {
+  test('lists no pane bindings (the panes are gone) and names the modal views instead', () => {
     const texts = renderAllText();
-    // Bindings are pulled from KeybindingsManager.getAll(); the Alt+digit jumps
-    // are real, rebindable actions and must be discoverable here.
-    expect(texts).toContain('Alt+1');
-    expect(texts).toContain('Alt+9');
-    expect(texts).toContain('Jump to workspace panel tab');
-    // The shared in-panel contract is documented alongside the global bindings.
-    expect(texts).toContain('in-panel controls');
-    expect(texts).toContain('j / k');
+    // Pane tab jumps, pane toggles and the in-panel contract no longer exist.
+    expect(texts).not.toMatch(/Alt\+\d/);
+    expect(texts).not.toContain('workspace panel');
+    expect(texts).not.toMatch(/in-panel controls/i);
+    // The views that replaced them are discoverable here.
+    expect(texts).toContain('Agents');
+    expect(texts).toContain('/usage');
+    expect(texts).toContain('/changes');
+    expect(texts).toContain('/notifications');
+    expect(texts).toContain('Command palette');
   });
 
   test('shows the onboarding wizard quick-start row when onboarding is registered', () => {
@@ -159,8 +161,8 @@ describe('renderHelpOverlay', () => {
   test('registry traversal crash guard: throwing command getter does not crash overlay', () => {
     // Simulate a plugin command whose property getter throws (e.g. a broken plugin).
     const throwingCmd = {
-      name: 'cockpit',
-      description: 'Control room',
+      name: 'agents',
+      description: 'Agents',
       handler: () => {},
       get aliases(): string[] {
         throw new Error('plugin getter failure');

@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
-import { requireShellPaths, requirePanelManager } from './runtime-services.ts';
+import { requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export function registerGitRuntimeCommands(registry: CommandRegistry): void {
@@ -64,34 +64,17 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
           break;
         }
         case 'diff': {
-          // Route the full, uncapped working-tree diff (GitService.diffStructured
-          //, parsed per-file/per-hunk with no size limit) into the real diff
-          // panel. The old path sliced the raw text at 4,000 chars and printed a
-          // stub; a large diff now renders complete.
+          // The full, uncapped working-tree diff, in the Changes modal's
+          // "not staged" view (hunks can be staged from there).
           try {
             const structured = await git.diffStructured();
             if (structured.files.length === 0) {
               ctx.print('No unstaged changes.');
               break;
             }
-            const { DiffPanel } = await import('../../panels/diff-panel.ts');
-            const pm = requirePanelManager(ctx);
-            let panel = pm.getAllOpen().find((p) => p.id === 'diff');
-            if (!panel) {
-              try {
-                panel = pm.open('diff');
-              } catch {
-                ctx.print('Could not open diff panel.');
-                break;
-              }
-            }
-            pm.activateById('diff');
-            if (!pm.isVisible()) pm.show();
-            ctx.focusPanels?.();
-            (panel as InstanceType<typeof DiffPanel>).loadStructuredDiff(structured);
             const fileWord = structured.files.length === 1 ? 'file' : 'files';
-            ctx.print(`Diff panel updated: ${structured.files.length} ${fileWord}, +${structured.additions} -${structured.deletions} (complete, uncapped).`);
-            ctx.renderRequest();
+            ctx.print(`Unstaged: ${structured.files.length} ${fileWord}, +${structured.additions} -${structured.deletions}.`);
+            if (ctx.openChanges) ctx.openChanges({ source: 'working' });
           } catch (e) {
             ctx.print(`Git diff failed: ${summarizeError(e)}`);
           }

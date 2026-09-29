@@ -6,7 +6,7 @@
 
 GoodVibes is a terminal console for coding and operations work with an AI model. You run `goodvibes` in a project directory and get a full-screen terminal app where you talk to a model that can read and edit your files, run shell commands, search the web, and hand work off to background agents, asking your permission before anything that writes or executes.
 
-It talks to many model providers (OpenAI, Anthropic, Gemini, Bedrock, Copilot, OpenRouter and other OpenAI-compatible gateways, plus local servers like Ollama and LM Studio that `/scan` finds on your machine and LAN), keeps its settings, sessions, and secrets on your own machine, and shows you the token count and running cost of every turn. Alongside the conversation, panels turn background work into live control rooms: running agents, git state, diffs, tokens, cost.
+It talks to many model providers (OpenAI, Anthropic, Gemini, Bedrock, Copilot, OpenRouter and other OpenAI-compatible gateways, plus local servers like Ollama and LM Studio that `/scan` finds on your machine and LAN), keeps its settings, sessions, and secrets on your own machine, and shows you the token count and running cost of every turn. Background work opens in large modals over the conversation: running agents, changed files and diffs, tokens and cost.
 
 <img src="docs/assets/splash.png" alt="GoodVibes starting up in a terminal: a glitch-art GOODVIBES wordmark in cyan-to-magenta gradient, the version and tagline beneath it, the active model and tool count, the working directory, a line offering to resume the last session, and a hint line reading Ctrl+P panels / ? help / F2 fleet. A status footer shows mode, token usage, context usage, and the daemon and web listener addresses." width="900">
 
@@ -80,11 +80,11 @@ Models come from a live catalog, so the picker lists far more than a hardcoded s
 
 The `synthetic` provider groups the same model across every backend that serves it into one entry. Pick it and requests route to whichever backend is healthy, failing over on rate limits and transient errors without changing the model you chose, and without ever crossing the free, paid, and subscription boundaries. Any OpenAI-compatible API can be added as a custom provider by dropping a JSON file in `~/.goodvibes/tui/providers/`. It is hot-reloaded. See [docs/providers-and-routing.md](docs/providers-and-routing.md).
 
-### The Fleet control room
+### The Agents control room
 
 <img src="docs/assets/fleet-panel.png" alt="The Fleet panel open beside the conversation. It lists background work as rows with a kind, a name, elapsed time, token count, and cost: a CI watch poller and a runtime heartbeat watcher at 4 minutes 23 seconds each, and an idle code indexer. The detail region below shows the selected watcher's id, state idle, elapsed time, model, tokens, cost, a headline reading CI watch poller, healthy, an activity phase, and an approvals line. The action hints read j/k navigate, Enter attach, K kill, A archive finished, v archived, n host agent." width="900">
 
-Work that is not conversation goes into panels instead of scrolling past in the transcript. Fleet, reached with `F2`, is the live control room for agents, workstreams, watchers, and scheduled jobs: what is running, for how long, at what token cost, and what it is waiting on. You can attach to a running agent to watch or steer it, detach again without killing it, pause and resume, and archive finished work. Git, diff, cost, token, and local-auth panels sit alongside it. Heavier operator surfaces open as review modals.
+Work that is not conversation opens in modals instead of scrolling past in the transcript. Agents, reached with `F2`, is the live control room for agents, WRFC chains, workstreams, watchers, scheduled jobs and hosted sessions: what is running, for how long, at what token cost, and what it is waiting on. You can open a running agent to watch its live tail or steer it, back out with `Esc` without stopping it, stop it with `Ctrl+X` (it asks first), pause and resume, and archive finished work. Usage (`/usage`) shows context pressure, tokens and cost; Changes (`/changes`) shows changed files with a tinted diff, a semantic summary, hunk staging and review comments; Notifications (`/notifications`) keeps the history. The screenshot above predates the modal redesign.
 
 ### Everything else is a command
 
@@ -99,14 +99,13 @@ Press `?` for a searchable, categorized list of every slash command with its arg
 | `Enter` / `Shift+Enter` | Send the message / insert a newline |
 | `?` | Help and command picker (on an empty prompt) |
 | `@` | File picker: insert a path into the prompt |
-| `Tab` | Toggle collapse on the nearest block, or complete a path |
+| `Tab` | Complete a path, or toggle collapse on the nearest block |
 | `Ctrl+F` | Search the conversation |
 | `Ctrl+Y` / `Ctrl+S` | Copy / save the nearest block |
-| `Ctrl+P` | Toggle the panel sidebar |
-| `F2` | Toggle Fleet: open and focus it, bring it to front, or close it |
-| `Ctrl+K` | Command palette: search and run any command |
+| `Ctrl+P` / `Ctrl+K` | Command palette: search and run any command, view or setting |
+| `F2` / `Ctrl+O` | Open or close Agents |
 | `Shift+Tab` | Cycle the session permission mode |
-| `Esc` | Leave the current mode: search, command, or modal |
+| `Esc` | Close the top modal (one level), clear the composer, or interrupt the turn |
 | `Ctrl+C` | Clear input, cancel a running turn. Press twice to quit |
 
 Most bindings are customizable in `~/.goodvibes/tui/keybindings.json`, and `/keybindings` shows what is currently bound. Five keys are fixed and stay out of that file: `F2` (Fleet), `Shift+Tab` (permission-mode cycle), `Esc` (leave the current mode), `?` (help), and `@` (file picker). The full reference is in [docs/tools-and-commands.md](docs/tools-and-commands.md).
@@ -129,7 +128,7 @@ Each row links to the page that documents it. The product's own `?` overlay and 
 | CLI flags | Session lifecycle (`--continue`, `--resume`, `--fork`), non-interactive mode, output formats, host selection | [cli-flags.md](docs/cli-flags.md) |
 | Knowledge and memory | Session and durable memory, a structured knowledge store with connectors and extractors, embeddings and retrieval, artifacts, multimodal analysis | [knowledge-artifacts-and-multimodal.md](docs/knowledge-artifacts-and-multimodal.md) |
 | Session durability | Post-turn snapshots plus an fsync-per-record transcript journal replayed at every resume | [session-durability.md](docs/session-durability.md) |
-| Planning | Conversational planning loop, project-scoped knowledge spaces, readiness evaluation, the Planning panel | [project-planning.md](docs/project-planning.md) |
+| Planning | Conversational planning loop, project-scoped knowledge spaces, readiness evaluation, the Planning modal | [project-planning.md](docs/project-planning.md) |
 | Sharing and export | `/share` to HTML, JSON, or Markdown with redaction, upload, and clipboard options | [share-command.md](docs/share-command.md) |
 | Daemon and services | Connecting to the standalone GoodVibes daemon, browser operator surface, background service and autostart, inbound TLS, outbound trust | [deployment-and-services.md](docs/deployment-and-services.md) |
 | Remote access | A worked home-server setup: always-on daemon, browser access, TUI over SSH, reachability and TLS | [remote-access.md](docs/remote-access.md) |
@@ -137,7 +136,7 @@ Each row links to the page that documents it. The product's own `?` overlay and 
 | Voice | Live `/tts` playback, TTS and STT providers, streaming voice API | [voice-and-live-tts.md](docs/voice-and-live-tts.md) |
 | Sandboxing | Bounded eval and isolated MCP execution, with a QEMU-backed VM path | [qemu-sandbox.md](docs/qemu-sandbox.md) |
 | Integrations | Home Assistant surface, Cloudflare Workers/Queues batch, GitHub Action | [homeassistant-surface.md](docs/homeassistant-surface.md) · [cloudflare-batch.md](docs/cloudflare-batch.md) · [github-action.md](docs/github-action.md) |
-| Contributing surfaces | Writing a new TUI panel; the checked-in operator/peer contracts and knowledge schemas | [panel-authoring.md](docs/panel-authoring.md) · [foundation-artifacts](docs/foundation-artifacts/README.md) |
+| Contributing surfaces | The checked-in operator/peer contracts and knowledge schemas | [foundation-artifacts](docs/foundation-artifacts/README.md) |
 
 Full index: [docs/README.md](docs/README.md).
 
@@ -223,7 +222,7 @@ Tests live under `src/test/`, mirroring the source tree, and cover contract, sec
 Some decisions worth knowing before you read the source:
 
 - **Bun runtime.** Native TypeScript execution, fast startup, built-in test runner.
-- **Raw ANSI renderer.** It writes the UI straight to the alternate screen buffer, giving direct control over every byte sent to the terminal. Conversation, panels, modals, overlays, and the footer all share that one renderer.
+- **Raw ANSI renderer.** It writes the UI straight to the alternate screen buffer, giving direct control over every byte sent to the terminal. Conversation, modals, overlays, and the footer all share that one renderer.
 - **In-process agents.** Agents run in the same process rather than over IPC, staying isolated through scoped tool registries and namespaced state.
 - **Typed runtime store.** A plain `zustand/vanilla` store with typed selectors and dispatch paths, reachable from agents, tools, renderer, hooks, channels, and daemon surfaces alike.
 - **Tree-sitter and bundled language servers.** Grammars for structural analysis, outlines, and AST-level edits, several embedded as WASM for instant startup. TypeScript, Python, Bash, CSS, HTML, and JSON language servers ship as dependencies, while `rust-analyzer` and `gopls` are fetched on first use with checksum verification.
@@ -239,7 +238,7 @@ Source layout, in brief:
 src/
 ├── main.ts, core/          terminal entrypoint, orchestrator, conversation and transcript state
 ├── renderer/               raw ANSI compositor, overlays, modals, fullscreen workspaces
-├── panels/                 panel manager, the Fleet control room, git/diff/cost/token consoles
+├── panels/                 modal surfaces, the fleet read model and acts behind Agents, view wiring
 ├── input/                  slash commands, keybindings, composer, pickers, settings modals
 ├── runtime/                bootstrap wiring, typed store, service composition, session recovery
 ├── shell/                  shell-level modal openers, blocking input, retry affordances

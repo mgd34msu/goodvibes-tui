@@ -727,14 +727,12 @@ export class ConversationManager extends SdkConversationManager {
   }
 
   /** Retire the splash for the run, any submission does it (SplashGateState). */
-  public dismissSplash(): void {
-    if (this.splashGate.dismiss()) this.markDirty();
-  }
+  public dismissSplash(): void { if (this.splashGate.dismiss()) this.markDirty(); }
 
+  /** True while the conversation area is showing the splash (the shell centers it). */
+  public isSplashShowing(): boolean { return this.splashGate.showing; }
   /** True once, on the frame the splash gives way to transcript content. */
-  public consumeSplashTransition(): boolean {
-    return this.splashGate.consumeTransition();
-  }
+  public consumeSplashTransition(): boolean { return this.splashGate.consumeTransition(); }
 
   private addSplashScreen(width: number): void {
     addConversationSplashScreen(this.renderingContext(), width);

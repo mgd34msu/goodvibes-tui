@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { FEATURE_SETTINGS } from '@pellux/goodvibes-sdk/platform/runtime/state';
@@ -564,15 +564,17 @@ function listSlashCommands(): string[] {
   return registry.getAll().map((command) => command.name);
 }
 
-function countBuiltinPanels(root: string): number {
-  const builtinDir = join(root, 'src', 'panels', 'builtin');
-  let count = 0;
-  for (const file of readdirSync(builtinDir)) {
-    if (!file.endsWith('.ts')) continue;
-    const text = readFileSync(join(builtinDir, file), 'utf8');
-    count += [...text.matchAll(/registerType\(\s*\{\s*id:\s*['"][^'"]+['"]/g)].length;
-  }
-  return count;
+/**
+ * Built-in modals and views: every config-modal surface builtin-modals.ts
+ * registers, plus every kit view modal the shell's view openers construct
+ * (Agents, Usage, Changes, Notifications, the masked password prompt).
+ */
+function countBuiltinModals(root: string): number {
+  const surfaces = readFileSync(join(root, 'src', 'panels', 'builtin-modals.ts'), 'utf8');
+  const openers = readFileSync(join(root, 'src', 'shell', 'view-openers.ts'), 'utf8');
+  const surfaceCount = [...surfaces.matchAll(/registerModalSurface\(/g)].length;
+  const viewModals = new Set([...openers.matchAll(/new ([A-Za-z]+Modal)\(/g)].map((m) => m[1]));
+  return surfaceCount + viewModals.size;
 }
 
 /**
@@ -590,7 +592,7 @@ export function buildVerificationLedger(root: string): VerificationLedger {
   const slashCommandNames = listSlashCommands();
   const cliCommandNames = listCliCommands();
   const slashCommands = slashCommandNames.length;
-  const panels = countBuiltinPanels(root);
+  const modals = countBuiltinModals(root);
   const cliCommands = cliCommandNames.length;
   const featureFlags = FEATURE_SETTINGS.length;
   const settings = CONFIG_SCHEMA.length;
@@ -623,12 +625,12 @@ export function buildVerificationLedger(root: string): VerificationLedger {
       notes: 'Every command can be routed and invoked with a fake context; external/provider/device commands need live outcome checks.',
     },
     {
-      area: 'Built-in panels',
-      total: panels,
-      localSignalVerified: panels,
-      localBehaviorVerified: panels,
+      area: 'Built-in modals and views',
+      total: modals,
+      localSignalVerified: modals,
+      localBehaviorVerified: modals,
       externalOutcomeRequired: 0,
-      notes: 'Panels can be rendered and input-tested against fake read models and real cached state.',
+      notes: 'Modals and views can be rendered and input-tested against fake read models and real cached state.',
     },
     {
       area: 'Top-level CLI commands',

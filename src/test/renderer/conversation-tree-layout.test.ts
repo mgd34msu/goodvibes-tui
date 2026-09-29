@@ -129,11 +129,11 @@ describe('tree column grid', () => {
 });
 
 describe('rendered turn: status markers align with the assistant bullet', () => {
-  test('every tool row puts its glyph in the same column as the header\'s ●', () => {
+  test('every tool row puts its glyph in the same column as the header\'s ◆', () => {
     const rows = renderRows(mixedStatusTurn());
-    const header = rows.find((row) => row.includes('assistant'));
+    const header = rows.find((row) => row.includes('◆'));
     expect(header).toBeDefined();
-    const bulletCol = colOf(header!, '●');
+    const bulletCol = colOf(header!, '◆');
     expect(bulletCol).toBe(STATUS_COL);
 
     for (const glyph of ['✓', '✕', '◌']) {
@@ -181,7 +181,7 @@ describe('rendered turn: the exact rows', () => {
   test('golden layout of a three-call turn', () => {
     const rows = renderRows(mixedStatusTurn()).filter((row) => row.length > 0);
     expect(rows).toEqual([
-      '   ●  assistant  gpt-5.6-sol (openai)  • 3 tools',
+      '   ◆  gpt-5.6-sol · 3 tools',
       '   ✓ ├  process  poll',
       '     │ └  ▾ 1 line',
       '     │    polled 3 jobs',

@@ -147,7 +147,7 @@ export function registerChannelRuntimeCommands(registry: CommandRegistry): void 
       const asJson = args.includes('--json');
 
       if (!sub || sub === 'open' || sub === 'panel') {
-        if (ctx.showPanel) ctx.showPanel('routes');
+        ctx.openView?.('routes');
         return;
       }
 
@@ -269,7 +269,7 @@ export function registerChannelRuntimeCommands(registry: CommandRegistry): void 
 
       ctx.print(
         'Usage: /channel <subcommand>\n'
-        + '  (no args)  — open the Routes panel\n'
+        + '  (no args)  — open Agents (where routes live now)\n'
         + '  pair [surface] — guided channel pairing: list adapters, enter declared credentials, verify\n'
         + '  status     — channel overview: routes, sessions, tasks, pending approvals\n'
         + '  routes     — active route binding snapshot\n'

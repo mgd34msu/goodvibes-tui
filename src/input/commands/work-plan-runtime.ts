@@ -24,7 +24,7 @@ function getStore(ctx: import('../command-registry.ts').CommandContext): WorkPla
   return ctx.workspace.workPlanStore ?? null;
 }
 
-function openPanel(ctx: import('../command-registry.ts').CommandContext): void {
+function openWorkPlanModal(ctx: import('../command-registry.ts').CommandContext): void {
   // work-plan migrated to the 'work-plan' modal, open it via the seam.
   openModalCommand(ctx, 'work-plan-modal');
 }
@@ -86,8 +86,8 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
       const subcommand = (args[0] ?? 'panel').toLowerCase();
       try {
         if (subcommand === 'panel' || subcommand === 'open') {
-          openPanel(ctx);
-          ctx.print('Opened work plan panel.');
+          openWorkPlanModal(ctx);
+          ctx.print('Opened the work plan.');
           return;
         }
         if (subcommand === 'list') {
@@ -118,7 +118,7 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
             ...(parsed.notes ? { notes: parsed.notes } : {}),
           };
           const item = store.addItem(parsed.title, addOptions);
-          openPanel(ctx);
+          openWorkPlanModal(ctx);
           ctx.print(`Added work plan item ${item.id}.`);
           return;
         }

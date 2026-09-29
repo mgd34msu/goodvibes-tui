@@ -45,17 +45,17 @@ describe('KeybindingsManager.lookup()', () => {
     expect(km.lookup({})).toBeNull();
   });
 
-  it('b: panel-tab-prev is Ctrl+PageUp and Ctrl+[ (the ESC-byte split-brain) no longer binds it', () => {
+  it('the old pane chords resolve to nothing now (Ctrl+PageUp/PageDown, Ctrl+], Ctrl+[ )', () => {
     const km = makeKm();
-    expect(km.lookup({ logicalName: 'pageup', ctrl: true })).toBe('panel-tab-prev');
-    // Ctrl+[ is byte 0x1B (ESC); it must no longer resolve to panel-tab-prev.
+    expect(km.lookup({ logicalName: 'pageup', ctrl: true })).toBeNull();
+    expect(km.lookup({ logicalName: 'pagedown', ctrl: true })).toBeNull();
+    expect(km.lookup({ logicalName: ']', ctrl: true })).toBeNull();
     expect(km.lookup({ logicalName: '[', ctrl: true })).toBeNull();
   });
 
-  it('b: panel-tab-next keeps Ctrl+] and gains Ctrl+PageDown', () => {
+  it('Ctrl+O resolves to open-agents', () => {
     const km = makeKm();
-    expect(km.lookup({ logicalName: ']', ctrl: true })).toBe('panel-tab-next');
-    expect(km.lookup({ logicalName: 'pagedown', ctrl: true })).toBe('panel-tab-next');
+    expect(km.lookup({ logicalName: 'o', ctrl: true })).toBe('open-agents');
   });
 
   it('returns null when modifier mismatch (ctrl required but absent)', () => {

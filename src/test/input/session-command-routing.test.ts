@@ -386,7 +386,7 @@ describe('session-command-routing (TASK-032)', () => {
     expect(output).toContain('Saved sessions:');
   });
 
-  test('/session list notes overflow honestly when a saved layout has more than 3 open panels (item 7)', async () => {
+  test('/session list tolerates a legacy saved layout (returnContext.openPanels) and prints nothing about panes', async () => {
     const cmd = registry.get('session')!;
     const ctx = makeCtx({
       sessionManager: {
@@ -407,11 +407,14 @@ describe('session-command-routing (TASK-032)', () => {
     await cmd.handler(['list'], ctx as unknown as CommandContext);
 
     const output = ctx.printed.join('\n');
-    expect(output).toContain('panels=git,tasks,diff');
-    expect(output).toContain('(+2 more)');
+    expect(output).toContain('sess-many-panels');
+    expect(output).toContain('4 msgs');
+    expect(output).not.toContain('panels=');
+    expect(output).not.toContain('more)');
+    expect(output).not.toMatch(/ops-control/);
   });
 
-  test('/session list omits the overflow note when a saved layout has 3 or fewer open panels', async () => {
+  test('/session list still prints the posture line for a legacy session that carries openPanels', async () => {
     const cmd = registry.get('session')!;
     const ctx = makeCtx({
       sessionManager: {
@@ -420,7 +423,7 @@ describe('session-command-routing (TASK-032)', () => {
           {
             name: 'sess-few-panels', title: 'Few panels', timestamp: Date.now(), messageCount: 4, model: 'm', provider: 'p', filePath: '/tmp/y',
             returnContext: {
-              activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 0, toolCallCount: 0,
+              activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 1, activeTasks: 2, toolCallCount: 0,
               toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
               openPanels: ['git', 'tasks'],
             },
@@ -432,8 +435,8 @@ describe('session-command-routing (TASK-032)', () => {
     await cmd.handler(['list'], ctx as unknown as CommandContext);
 
     const output = ctx.printed.join('\n');
-    expect(output).toContain('panels=git,tasks');
-    expect(output).not.toContain('more)');
+    expect(output).toContain('posture: active=2  approvals=1');
+    expect(output).not.toContain('panels=');
   });
 
   test('/sessions excludes subagent transcripts (agent-* names) from the listing; mixed fixture', async () => {

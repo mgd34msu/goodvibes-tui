@@ -96,37 +96,11 @@ describe('applyConversationOverlays onboarding shell', () => {
 
   test('preserves modalReturnFocus while escape unwinds nested onboarding modals', () => {
     const input = makeInput();
-    // Panel focus is only real while a panel workspace is actually open, focus
-    // ownership now lives in PanelManager and self-heals against visibility, so
-    // open a panel before claiming panel focus for this modalReturnFocus test.
-    const pm = input.uiServices.shell.panelManager;
-    pm.registerType({
-      id: 'focus-fixture',
-      name: 'Focus Fixture',
-      icon: 'F',
-      category: 'runtime-ops',
-      description: '',
-      factory: () => ({
-        id: 'focus-fixture',
-        name: 'Focus Fixture',
-        icon: 'F',
-        category: 'runtime-ops',
-        isTransient: false,
-        isPinned: false,
-        needsRender: true,
-        onActivate() {},
-        onDeactivate() {},
-        onDestroy() {},
-        render: () => [],
-        invalidate() {},
-        markRendered() {},
-      }) as never,
-    });
-    pm.open('focus-fixture');
-    input.panelFocused = true;
-    expect(input.panelFocused).toBe(true);
+    // The process indicator is the one non-composer focus; it is what a
+    // nested modal stack must hand back when it fully unwinds.
+    input.indicatorFocused = true;
     input.openOnboardingWizard({ mode: 'edit', preload: () => {} });
-    input.panelFocused = false;
+    input.indicatorFocused = false;
     input.modelPicker.openProviders(['openai'], 'openai');
     input.modalOpened('modelPicker');
 
@@ -135,15 +109,15 @@ describe('applyConversationOverlays onboarding shell', () => {
     expect(input.modelPicker.active).toBe(false);
     expect(input.onboardingWizard.active).toBe(true);
     expect(input.modalStack).toEqual(['onboarding']);
-    expect(input.modalReturnFocus).toBe('panel');
-    expect(input.panelFocused).toBe(false);
+    expect(input.modalReturnFocus).toBe('indicator');
+    expect(input.indicatorFocused).toBe(false);
 
     input.feed('\x1b');
 
     expect(input.onboardingWizard.active).toBe(false);
     expect(input.modalStack).toEqual([]);
     expect(input.modalReturnFocus).toBe('prompt');
-    expect(input.panelFocused).toBe(true);
+    expect(input.indicatorFocused).toBe(true);
   });
 
   test('restores onboarding snapshot when a nested model picker is cancelled', () => {

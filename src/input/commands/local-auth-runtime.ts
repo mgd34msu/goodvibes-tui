@@ -1,5 +1,5 @@
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { openCommandPanel, requireLocalUserAuthManager } from './runtime-services.ts';
+import { requireLocalUserAuthManager } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function formatRoles(roles: readonly string[]): string {
@@ -7,12 +7,11 @@ function formatRoles(roles: readonly string[]): string {
 }
 
 export function handleLocalAuthCommand(args: string[], ctx: CommandContext): void {
-  const sub = (args[0] ?? 'review').toLowerCase();
+  // Bare /local-auth opens the Local Auth modal where one can open; the text
+  // review stays at /local-auth review.
+  const sub = (args[0] ?? (ctx.openModal ? 'open' : 'review')).toLowerCase();
   const auth = requireLocalUserAuthManager(ctx);
   if (sub === 'panel' || sub === 'open') {
-    // browse view moved to local-auth-modal. The LocalAuthPanel itself is
-    // kept (masked password-entry host) but is no longer the /local-auth panel
-    // destination, masked entry is reached via add-user/rotate-password below.
     ctx.openModal?.('local-auth-modal');
     return;
   }
@@ -21,11 +20,11 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
     const username = args[1];
     const password = args[2];
     if (!username) {
-      ctx.print('Usage: /auth local add-user <username> <password> [roles]\nTip: invoke without a password to use the masked panel: /auth local add-user <username>');
+      ctx.print('Usage: /auth local add-user <username> <password> [roles]\nTip: invoke without a password to type it in the masked prompt: /auth local add-user <username>');
       return;
     }
     if (!password) {
-      // No password supplied, open masked-entry mode on the LocalAuthPanel.
+      // No password supplied: open the masked password prompt.
       if (ctx.openLocalAuthMaskedEntry) {
         ctx.openLocalAuthMaskedEntry('add-user', username);
       } else {
@@ -64,11 +63,11 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
     const username = args[1];
     const password = args[2];
     if (!username) {
-      ctx.print('Usage: /auth local rotate-password <username> <password>\nTip: invoke without a password to use the masked panel: /auth local rotate-password <username>');
+      ctx.print('Usage: /auth local rotate-password <username> <password>\nTip: invoke without a password to type it in the masked prompt: /auth local rotate-password <username>');
       return;
     }
     if (!password) {
-      // No password supplied, open masked-entry mode on the LocalAuthPanel.
+      // No password supplied: open the masked password prompt.
       if (ctx.openLocalAuthMaskedEntry) {
         ctx.openLocalAuthMaskedEntry('rotate-password', username);
       } else {

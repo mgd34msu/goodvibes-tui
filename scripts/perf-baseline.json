@@ -50,16 +50,6 @@
       "lines": 6800,
       "note": "transcript resize (full width-change re-render). Gated on p50. Budget carries CI headroom (runners run 2-4× slower). Ratchet: tighten when measured p50 drops below budget/2."
     },
-    "panel.two_pane_build_ms": {
-      "measured_p50_ms": 0.211,
-      "measured_p95_ms": 0.3,
-      "budget_ms": 4,
-      "gate_stat": "p95",
-      "heap_bytes_per_op": 251642,
-      "objects_per_op": 2627,
-      "lines": 98,
-      "note": "panel-workspace two-pane frame build. Gated on p95. Budget carries CI headroom (runners run 2-4× slower). Ratchet: tighten when measured p95 drops below budget/2."
-    },
     "markdown.render_ms": {
       "measured_p50_ms": 0.216,
       "measured_p95_ms": 0.268,

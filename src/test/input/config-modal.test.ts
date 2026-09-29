@@ -8,7 +8,7 @@ import type {
 } from '../../input/config-modal-types.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
 import type { SurfaceLayer } from '../../renderer/surface-kit.ts';
-import { PanelManager } from '../../panels/panel-manager.ts';
+import { ModalSurfaceRegistry } from '../../panels/modal-surface-registry.ts';
 import { handleConfigModalToken } from '../../input/handler-modal-routes.ts';
 import { memoryModalGoldenSurface } from '../../panels/modals/memory-modal.ts';
 import { marketplaceModalGoldenSurface } from '../../panels/modals/marketplace-modal.ts';
@@ -329,25 +329,22 @@ describe('ConfigModal host', () => {
     expect(closes).toBe(1);
   });
 
-  test('PanelManager: modal-redirect fires the openModal callback without constructing a panel', () => {
-    const pm = new PanelManager();
-    const opened: string[] = [];
-    pm.setOpenModalCallback((name) => opened.push(name));
-    pm.registerModalRedirect('services', 'services-modal');
-    const returned = pm.open('services');
-    expect(opened).toEqual(['services-modal']);
-    // sentinel: transient, never retained, carries the modal name honestly
-    expect(returned.isTransient).toBe(true);
-    expect(returned.name).toBe('services-modal');
-    expect(pm.getAllOpen().length).toBe(0);
+  test('ModalSurfaceRegistry: an old name redirects to its modal', () => {
+    const registry = new ModalSurfaceRegistry();
+    registry.registerModalRedirect('services', 'services-modal');
+    registry.registerModalRedirect('accounts', 'providers-modal');
+    expect(registry.getModalRedirect('services')).toBe('services-modal');
+    expect(registry.getModalRedirect('accounts')).toBe('providers-modal');
+    expect(registry.getModalRedirect('nope')).toBeUndefined();
+    expect(registry.listRedirects()).toEqual([['services', 'services-modal'], ['accounts', 'providers-modal']]);
   });
 
-  test('PanelManager: surface registry roundtrips by modal name', () => {
-    const pm = new PanelManager();
+  test('ModalSurfaceRegistry: surface registry roundtrips by modal name', () => {
+    const registry = new ModalSurfaceRegistry();
     const surface = makeSurface({ name: 'services-modal', view: () => ({ title: 'S', tabs: [] }) });
-    pm.registerModalSurface(surface);
-    expect(pm.getModalSurface('services-modal')).toBe(surface);
-    expect(pm.getModalSurface('nope')).toBeUndefined();
+    registry.registerModalSurface(surface);
+    expect(registry.getModalSurface('services-modal')).toBe(surface);
+    expect(registry.getModalSurface('nope')).toBeUndefined();
   });
 });
 

@@ -39,6 +39,7 @@ import type { UiRuntimeServices } from './ui-services.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { ensureBootModelResolvable } from './provider-fallback.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
+import type { ShellViews } from '../panels/builtin-views.ts';
 import { announceResumeState } from './resume-notice.ts';
 import { announceInstallHealth } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
@@ -86,6 +87,8 @@ export type BootstrapContext = RuntimeContext & {
   commandContext: CommandContext;
   /** Shell-facing read models, events, and narrow runtime services. */
   uiServices: UiRuntimeServices;
+  /** The always-on read models and config-modal surfaces behind the built-in modals. */
+  views: ShellViews;
   /** Persists and navigates input history across sessions. */
   inputHistory: InputHistory;
   /** Provides git branch/dirty state for the header. */
@@ -195,7 +198,6 @@ export async function bootstrapRuntime(
   const {
     automationManager,
     hookDispatcher,
-    panelManager,
     pluginManager,
   } = services;
   // A saved custom-provider model must never crash boot, see provider-fallback.ts.
@@ -689,6 +691,7 @@ export async function bootstrapRuntime(
     selection,
     commandContext,
     uiServices,
+    views: shell.views,
     inputHistory,
     gitStatusProvider,
     lastGitInfoRef,
@@ -754,11 +757,7 @@ export async function bootstrapRuntime(
   ctx.commandContext.ops.acpManager = acpManager;
   if (opsControlPlane) {
     ctx.commandContext.openOpsPanel = () => {
-      if (ctx.commandContext.showPanel) ctx.commandContext.showPanel('ops-control');
-      else {
-        panelManager.open('ops-control');
-        requestRender();
-      }
+      ctx.commandContext.openView?.('ops-control');
     };
   }
 

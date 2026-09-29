@@ -3,7 +3,6 @@ import type { SubmissionIntent } from './submission-intent.ts';
 export interface SubmissionRouterInput {
   readonly text: string;
   readonly commandMode?: boolean;
-  readonly panelFocused?: boolean;
   readonly hasAttachments?: boolean;
 }
 
@@ -30,11 +29,7 @@ export function routeSubmissionIntent(input: SubmissionRouterInput): SubmissionI
   const hasAttachments = input.hasAttachments ?? false;
 
   if (!trimmed) {
-    return {
-      kind: input.panelFocused ? 'panel-action' : 'empty',
-      label: input.panelFocused ? 'panel action' : 'prompt',
-      hasAttachments,
-    };
+    return { kind: 'empty', label: 'prompt', hasAttachments };
   }
 
   if (trimmed.startsWith('!#')) {
@@ -54,7 +49,7 @@ export function routeSubmissionIntent(input: SubmissionRouterInput): SubmissionI
       return { kind: 'review', label: 'review', commandName, hasAttachments };
     }
     if (PANEL_COMMANDS.has(commandName)) {
-      return { kind: 'panel-action', label: 'panel action', commandName, hasAttachments };
+      return { kind: 'panel-action', label: 'open view', commandName, hasAttachments };
     }
     if (ORCHESTRATION_COMMANDS.has(commandName)) {
       return { kind: 'orchestration', label: 'orchestration', commandName, hasAttachments };

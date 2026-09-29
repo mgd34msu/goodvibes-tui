@@ -298,6 +298,30 @@ function tokenizePlain(line: string): SyntaxToken[] {
   return [{ text: line, fg: th.plain }];
 }
 
+// ─── Line highlighting outside a code block ─────────────────────────────────
+
+/**
+ * Syntax colors for lines of code in `lang` (a fence tag or a file extension),
+ * one token list per line: the tree-sitter result once it is cached, the regex
+ * tokenizer until then. The Changes modal colors diff lines with this.
+ */
+export function highlightCodeLines(codeLines: readonly string[], lang: string): SyntaxToken[][] {
+  const hl = lang ? _sharedHighlighter.highlight(codeLines.join('\n'), lang) : null;
+  const language = detectLanguage(lang);
+  return codeLines.map((line, i) => {
+    const fromTree = hl?.[i];
+    if (fromTree && fromTree.length > 0) return fromTree as HLToken[];
+    switch (language) {
+      case 'ts': return tokenizeTsJs(line);
+      case 'python': return tokenizePython(line);
+      case 'bash': return tokenizeBash(line);
+      case 'json': return tokenizeJson(line);
+      case 'yaml': return tokenizeYaml(line);
+      default: return tokenizePlain(line);
+    }
+  });
+}
+
 // ─── Main Renderer ───────────────────────────────────────────────────────────
 
 /**
@@ -320,7 +344,9 @@ export function renderCodeBlock(
 ): Line[] {
   const lines: Line[] = [];
   const language = detectLanguage(lang);
-  const leftMargin = LAYOUT.LEFT_MARGIN;
+  // The fill starts at column 3 like every other fill (user messages, the
+  // composer), so code text lands on column 5 after the 2-column padding.
+  const leftMargin = LAYOUT.LEFT_MARGIN - 1;
   const showLineNumbers = opts.showLineNumbers ?? true;
   const lineNumW = showLineNumbers ? String(codeLines.length).length + 1 : 0; // e.g. "10 "
   // Text keeps 2 columns from both edges of the code fill (the Measurements
@@ -350,18 +376,9 @@ export function renderCodeBlock(
   };
 
   // Header bar: language label
-  const langLabel = lang ? ` ${lang} ` : ' code ';
-  const headerLine = createEmptyLine(width);
-  const headerStr = langLabel.padEnd(effectiveWidth - leftMargin);
-  let hx = leftMargin;
-  for (const ch of headerStr) {
-    if (hx >= effectiveWidth) break;
-    headerLine[hx] = createStyledCell(ch, { fg: palette.selectedListItemText, bg: palette.accent, bold: true });
-    hx++;
-  }
-  lines.push(headerLine);
-
-  // Padding row: the code fill opens with an empty row.
+  // No header bar: the language (when the fence names one) sits muted on the
+  // right of the first code row, and only when the code leaves room for it.
+  const langLabel = lang;
   const padLine = createEmptyLine(width);
   for (let px = leftMargin; px < effectiveWidth; px++) padLine[px] = createStyledCell(' ', { bg: BG });
   lines.push(padLine);
@@ -413,6 +430,14 @@ export function renderCodeBlock(
         // into the reserved right-margin band the header/footer stop at.
         if (cw === 2 && cx + 1 < textEnd) line[cx + 1] = { ...line[cx], char: '' };
         cx += cw;
+      }
+    }
+
+    if (i === 0 && langLabel) {
+      const labelX = textEnd - getDisplayWidth(langLabel);
+      if (labelX > cx + 1) {
+        let lx = labelX;
+        for (const ch of langLabel) line[lx++] = createStyledCell(ch, { fg: palette.textMuted, bg: BG });
       }
     }
 

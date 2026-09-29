@@ -64,11 +64,8 @@ class WorkPlanModalSurface implements ConfigModalSurface {
 
   private readonly hasRow = (row: ConfigModalRow | null): boolean => row !== null;
 
-  /** 'i'/'w' jump to the selected item's linked agent/WRFC chain in Fleet
-   *  (item 4, restores the retired WorkPlanPanel's per-item deep-link,
-   *  lost when migrated this surface to a modal without it). Gated on
-   *  the link actually being present, same as the retired panel gated the key
-   *  on `item?.linked?.agentId`/`wrfcId` before ever reaching the jump. */
+  /** 'i'/'w' open the Agents modal on the selected item's linked agent or
+   *  WRFC chain. Gated on the link actually being present. */
   private readonly hasAgentLink = (row: ConfigModalRow | null): boolean =>
     !!(row && this.itemFrom(row.id)?.linked?.agentId);
   private readonly hasWrfcLink = (row: ConfigModalRow | null): boolean =>
@@ -137,17 +134,17 @@ class WorkPlanModalSurface implements ConfigModalSurface {
     if (id === 'jumpAgent') {
       const agentId = item.linked?.agentId;
       if (!agentId) return;
-      // 'agent' matches the SDK's ProcessKind for a live agent node, see
-      // FleetPanel.receiveDeepLink's id+kind match.
-      void ctx.executeCommand?.('panel', ['open', 'fleet', '--target', `${agentId}:agent`]);
-      ctx.setStatus(`Opened Fleet on agent ${agentId}.`);
+      // 'agent' matches the SDK's ProcessKind for a live agent node, which
+      // AgentsModal.reveal matches on id and kind.
+      void ctx.executeCommand?.('agents', ['--target', `${agentId}:agent`]);
+      ctx.setStatus(`Opened Agents on agent ${agentId}.`);
       return;
     }
     if (id === 'jumpWrfc') {
       const wrfcId = item.linked?.wrfcId;
       if (!wrfcId) return;
-      void ctx.executeCommand?.('panel', ['open', 'fleet', '--target', `${wrfcId}:wrfc-chain`]);
-      ctx.setStatus(`Opened Fleet on WRFC chain ${wrfcId}.`);
+      void ctx.executeCommand?.('agents', ['--target', `${wrfcId}:wrfc-chain`]);
+      ctx.setStatus(`Opened Agents on WRFC chain ${wrfcId}.`);
       return;
     }
     const status: WorkPlanItemStatus | null =

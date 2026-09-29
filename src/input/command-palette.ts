@@ -6,7 +6,8 @@
  * query the palette shows four curated groups (Suggested, Session, Views,
  * Settings) and then every other command; typing filters across names,
  * aliases, titles, descriptions, categories and search words (old pane names
- * such as "fleet", "cockpit" and "git" find their new homes). The slash
+ * such as "fleet", "cockpit", "tokens" and "git" find the modal that holds
+ * them now: Agents, Usage, Changes, Notifications). The slash
  * command sits right-aligned on every row, so the palette also teaches it.
  *
  * Suggested learns from what you use (per process); until it has something
@@ -22,6 +23,7 @@ import type { SurfaceModal, SurfaceModalHost } from './surface-modal-host.ts';
 import type { SurfaceLayer } from '../renderer/surface-kit.ts';
 import { renderCommandPalette } from '../renderer/command-palette.ts';
 import { isTextBackspace } from './delete-key-policy.ts';
+import { AGENT_VIEW_NAMES, CHANGES_VIEW_NAMES, USAGE_VIEW_NAMES } from './views.ts';
 import type { PaletteEntry, PaletteGroup, PaletteRunMode, PaletteSection, PaletteView } from './command-palette-types.ts';
 export type { PaletteEntry, PaletteGroup, PaletteRunMode, PaletteSection } from './command-palette-types.ts';
 
@@ -46,18 +48,13 @@ const CURATED: ReadonlyArray<readonly [string, CuratedEntry]> = [
   ['fork', { title: 'Fork from here', group: 'Session', keywords: ['branch'] }],
   ['bookmarks', { title: 'Bookmarks', group: 'Session' }],
   ['replay', { title: 'Replay a session', group: 'Session' }],
-  ['agents', { title: 'Hosted agents', group: 'Views', keywords: ['acp', 'claude code', 'codex', 'opencode'] }],
-  ['cost', { title: 'Usage', group: 'Views', keywords: ['tokens', 'budget', 'cost', 'context'] }],
-  ['diff', { title: 'Changes', group: 'Views', keywords: ['git', 'diff', 'review', 'files'] }],
-  ['git', { title: 'Git', group: 'Views', keywords: ['status', 'commit'] }],
-  ['review', { title: 'Review', group: 'Views' }],
+  ['agents', { title: 'Agents', group: 'Views', keywords: [...AGENT_VIEW_NAMES, 'hosted', 'acp', 'claude code', 'codex', 'opencode', 'steer', 'stop'] }],
+  ['usage', { title: 'Usage', group: 'Views', keywords: [...USAGE_VIEW_NAMES, 'budget', 'compact', 'price'] }],
+  ['changes', { title: 'Changes', group: 'Views', keywords: [...CHANGES_VIEW_NAMES, 'files', 'stage', 'commit', 'hunk'] }],
+  ['notifications', { title: 'Notifications', group: 'Views', keywords: ['notifications', 'alerts', 'messages', 'history', 'toasts'] }],
   ['context', { title: 'Context inspector', group: 'Views', keywords: ['tokens', 'window'] }],
-  ['tasks', { title: 'Tasks', group: 'Views' }],
   ['work-plan', { title: 'Work plan', group: 'Views', keywords: ['todo', 'plan'] }],
-  ['notify', { title: 'Notifications', group: 'Views', keywords: ['alerts', 'messages'] }],
   ['hosted', { title: 'Hosted sessions', group: 'Views', keywords: ['daemon'] }],
-  ['cockpit', { title: 'Cockpit', group: 'Views', keywords: ['control room', 'operations'] }],
-  ['panel', { title: 'Panels', group: 'Views', keywords: ['pane', 'panes', 'workspace', 'fleet', 'processes', 'tokens'] }],
   ['health', { title: 'Health', group: 'Views', keywords: ['doctor'] }],
   ['settings', { title: 'Settings', group: 'Settings', keywords: ['preferences', 'options', 'theme'] }],
   ['model', { title: 'Switch model', group: 'Settings', keywords: ['provider', 'llm'] }],
@@ -66,11 +63,12 @@ const CURATED: ReadonlyArray<readonly [string, CuratedEntry]> = [
   ['keybindings', { title: 'Keybindings', group: 'Settings', keywords: ['keys'] }],
   ['mode', { title: 'Approval mode', group: 'Settings', keywords: ['permissions', 'hitl'] }],
   ['profiles', { title: 'Profiles', group: 'Settings' }],
+  ['local-auth', { title: 'Local accounts', group: 'Settings', keywords: ['accounts', 'users', 'auth', 'password', 'local-auth'] }],
   ['tts', { title: 'Voice and speech', group: 'Settings', keywords: ['voice'] }],
 ];
 
 /** The Suggested group before there is any usage to learn from. */
-const DEFAULT_SUGGESTED = ['diff', 'model', 'compact'];
+const DEFAULT_SUGGESTED = ['changes', 'model', 'compact'];
 const SUGGESTED_COUNT = 3;
 
 /** How often each command was run from the palette in this process. */

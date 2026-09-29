@@ -54,7 +54,7 @@ import type { RuntimeEventBus, DistributedRuntimeManager, RemoteRunnerRegistry, 
 import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import type { CacheRegistry, PauseController, MemoryGovernor } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 import type { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search';
-import type { PanelManager } from '../panels/panel-manager.ts';
+import type { ViewPanelAdapter } from '../panels/view-panel-adapter.ts';
 import type { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { HookDispatcher, HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins';
@@ -118,7 +118,11 @@ export interface RuntimeServices {
   readonly runtimeBus: RuntimeEventBus;
   readonly runtimeStore: RuntimeStore;
   readonly runtimeDispatch: DomainDispatch;
-  readonly panelManager: PanelManager;
+  /**
+   * The SDK's panel-manager contract (the operator API's panels.list /
+   * panels.open), answered by the modal views; there are no panes.
+   */
+  readonly panelManager: ViewPanelAdapter;
   readonly keybindingsManager: KeybindingsManager;
   readonly routeBindings: RouteBindingManager;
   readonly surfaceRegistry: SurfaceRegistry;

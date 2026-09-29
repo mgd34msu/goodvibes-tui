@@ -14,7 +14,7 @@ function makeCtx(overrides: {
     getDeliverySnapshot: () => Record<string, unknown>;
   }>;
   configGet?: (key: string) => unknown;
-  showPanel?: (id: string) => void;
+  openView?: (name: string) => boolean;
 } = {}): CommandContext & { printed: string[] } {
   const printed: string[] = [];
   const helpers = overrides.integrationHelpers ?? {
@@ -36,7 +36,7 @@ function makeCtx(overrides: {
     print: (text: string) => { printed.push(text); },
     renderRequest: () => {},
     exit: () => {},
-    showPanel: overrides.showPanel,
+    openView: overrides.openView,
     session: {} as CommandContext['session'],
     provider: {} as CommandContext['provider'],
     workspace: {} as CommandContext['workspace'],
@@ -74,18 +74,18 @@ describe('/channel command', () => {
     expect(registry.get('channel')).toBeDefined();
   });
 
-  test('opens routes panel when called with no args', () => {
+  test('opens the routes view (the Agents modal) when called with no args', () => {
     const registry = makeRegistry();
     const panelIds: string[] = [];
-    const ctx = makeCtx({ showPanel: (id) => panelIds.push(id) });
+    const ctx = makeCtx({ openView: (id) => { panelIds.push(id); return true; } });
     registry.get('channel')!.handler([], ctx);
     expect(panelIds).toEqual(['routes']);
   });
 
-  test('opens routes panel when called with "panel"', () => {
+  test('opens the routes view when called with "panel"', () => {
     const registry = makeRegistry();
     const panelIds: string[] = [];
-    const ctx = makeCtx({ showPanel: (id) => panelIds.push(id) });
+    const ctx = makeCtx({ openView: (id) => { panelIds.push(id); return true; } });
     registry.get('channel')!.handler(['panel'], ctx);
     expect(panelIds).toEqual(['routes']);
   });

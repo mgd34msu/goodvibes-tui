@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { requireShellPaths } from './runtime-services.ts';
 import { createVoiceProvisionGateway, renderVoiceProvision, runVoiceSetupWithProgress, VOICE_SETUP_ANNOUNCEMENT } from '../../core/voice-provision-gateway.ts';
 import { resolveWakeRuntimeSettings } from '@pellux/goodvibes-sdk/platform/voice/wake/runtime';
 import { terminalWakeCapabilities } from '../../core/wake-provision-status.ts';
@@ -158,12 +158,8 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
     handler(args, ctx) {
       const sub = (args[0] ?? 'matrix').toLowerCase();
       if (sub === 'open' || sub === 'panel') {
-        if (ctx.showPanel) ctx.showPanel('approval');
-        else {
-          const panelManager = requirePanelManager(ctx);
-          panelManager.open('approval');
-          panelManager.show();
-        }
+        // Approvals waiting on you are rows in the Agents view (b jumps to them).
+        if (!ctx.openView?.('approval')) ctx.print('The Agents view is not available in this session.');
         return;
       }
       const matrix = [

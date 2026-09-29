@@ -4,7 +4,7 @@ import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence';
 import type { DocumentSymbol } from '@pellux/goodvibes-sdk/platform/intelligence';
 import type { SymbolInfo } from '@pellux/goodvibes-sdk/platform/intelligence';
-import { openCommandPanel, requireReadModels, requireShellPaths } from './runtime-services.ts';
+import { openCommandView, requireReadModels, requireShellPaths } from './runtime-services.ts';
 
 function resolveTargetPath(pathArg: string, ctx: CommandContext): string {
   return requireShellPaths(ctx).resolveWorkspacePath(pathArg);
@@ -55,16 +55,13 @@ export function registerIntelligenceRuntimeCommands(registry: CommandRegistry): 
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'panel' || sub === 'open') {
-        // (the purge): 'intelligence'/IntelligencePanel was
-        // DELETE-disposition (no surviving human surface, its read model
-        // stays and still backs every subcommand below). There is no alias
-        // to resolve through, so this prints an honest notice and opens
-        // Fleet instead of throwing "Unknown panel".
-        ctx.print('Intelligence panel retired: use /intelligence review|diagnostics|symbols|outline|definition|references|hover|repair for the live data. Opening Fleet.');
+        // There is no intelligence view; its read model backs every
+        // subcommand below. Say so and open Agents rather than failing.
+        ctx.print('There is no intelligence view: use /intelligence review|diagnostics|symbols|outline|definition|references|hover|repair for the live data. Opening Agents.');
         try {
-          openCommandPanel(ctx, 'fleet');
+          openCommandView(ctx, 'agents');
         } catch {
-          // Panel registry may be unavailable in lightweight command-only contexts.
+          // The view openers may be absent in lightweight command-only contexts.
         }
         return;
       }

@@ -7,10 +7,10 @@
 // pickAttemptWinner, the same seam the fleet.attempts.* gateway verbs use).
 // This module drives that seam from the /workstream command:
 //   • list            , the held-merge groups awaiting a pick, with candidates.
-//   • diff <c>        , one candidate's worktree diff in the existing DiffPanel.
+//   • diff <c>        , one candidate's worktree diff in a Changes preview.
 //   • judge           , the OPTIONAL model proposal, clearly labelled a model
 //                        judgment (scoredBy 'model'), with its reasons; never a pick.
-//   • pick <c>        , behind a DiffPanel confirm; merges the winner and lets
+//   • pick <c>        , behind a question on its Changes preview; merges the winner and lets
 //                        the engine clean the losers, then renders the receipt.
 // ---------------------------------------------------------------------------
 
@@ -24,7 +24,6 @@ import { AttemptError } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CommandContext } from '../command-registry.ts';
 import type { WorkstreamCommandService } from '@pellux/goodvibes-sdk/platform/orchestration';
-import { requirePanelManager } from './runtime-services.ts';
 import { describeFailureReason, isTurnBudgetReason } from '../../core/turn-budget-outcome.ts';
 import { type AttemptGraphItem, renderDependentHoldLines } from './workstream-attempt-dependents.ts';
 
@@ -183,15 +182,9 @@ export async function handleAttemptsSubcommand(ctx: CommandContext, service: Wor
       ctx.print(`Attempt ${cand.attemptIndex + 1} has no viewable diff (${cand.state === 'failed' ? 'it failed' : 'its worktree was already cleaned'}).`);
       return true;
     }
-    const { DiffPanel } = await import('../../panels/diff-panel.ts');
-    const pm = requirePanelManager(ctx);
-    let panel = pm.getAllOpen().find((p) => p.id === 'diff');
-    if (!panel) { try { panel = pm.open('diff'); } catch { ctx.print('Could not open the diff panel.'); return true; } }
-    pm.activateById('diff');
-    if (!pm.isVisible()) pm.show();
-    ctx.focusPanels?.();
-    (panel as InstanceType<typeof DiffPanel>).loadRawDiff(cand.diff.unifiedDiff);
-    ctx.print(`Showing attempt ${cand.attemptIndex + 1} ("${cand.title}") diff in the diff panel.`);
+    if (!ctx.previewChanges) { ctx.print('Showing a diff needs the Changes view, which is not available in this session.'); return true; }
+    void ctx.previewChanges({ title: `attempt ${cand.attemptIndex + 1}: ${cand.title}`, diff: cand.diff.unifiedDiff });
+    ctx.print(`Showing attempt ${cand.attemptIndex + 1} ("${cand.title}") in Changes.`);
     ctx.renderRequest();
     return true;
   }
@@ -204,42 +197,26 @@ export async function handleAttemptsSubcommand(ctx: CommandContext, service: Wor
     if ('error' in cand) { ctx.print(cand.error); return true; }
     if (cand.state !== 'held-merge') { ctx.print(`Attempt ${cand.attemptIndex + 1} failed: only a held (pick-ready) candidate can win.`); return true; }
 
-    const { DiffPanel } = await import('../../panels/diff-panel.ts');
-    const pm = requirePanelManager(ctx);
-    let panel = pm.getAllOpen().find((p) => p.id === 'diff');
-    if (!panel) { try { panel = pm.open('diff'); } catch { ctx.print('Could not open the diff panel to confirm.'); return true; } }
-    pm.activateById('diff');
-    if (!pm.isVisible()) pm.show();
-    ctx.focusPanels?.();
-    const diffPanel = panel as InstanceType<typeof DiffPanel>;
-    if (cand.diff?.unifiedDiff.trim()) diffPanel.loadRawDiff(cand.diff.unifiedDiff);
-    else diffPanel.showDiff(cand.title, '@@ pick @@\n (no diff to preview for this candidate)');
-
-    diffPanel.confirmOverlay.arm({
-      id: `${group.groupId}:${cand.itemId}`,
-      label: `Pick attempt ${cand.attemptIndex + 1} ("${cand.title}"): merge it, clean the ${group.candidates.length - 1} other worktree(s)`,
-      verb: 'Pick',
-      onConfirm: async () => {
-        try {
-          const result = await service.engine.pickAttemptWinner(group.groupId, cand.itemId);
-          pm.close('diff');
-          ctx.focusPrompt?.();
-          ctx.print(renderPickReceipt(result));
-        } catch (err) {
-          pm.close('diff');
-          ctx.focusPrompt?.();
-          ctx.print(err instanceof AttemptError ? `Pick refused: ${err.message}` : `Pick failed: ${summarizeError(err)}`);
-        }
-        ctx.renderRequest();
-      },
-      onCancel: () => {
-        pm.close('diff');
-        ctx.focusPrompt?.();
-        ctx.print('Pick cancelled: nothing merged, no worktree cleaned.');
-        ctx.renderRequest();
-      },
+    if (!ctx.previewChanges) { ctx.print('Confirming a pick needs the Changes view, which is not available in this session.'); return true; }
+    ctx.print(`Confirm the pick in Changes: Enter or y merges attempt ${cand.attemptIndex + 1} and cleans the losers, n or Esc cancels.`);
+    ctx.renderRequest();
+    const confirmed = await ctx.previewChanges({
+      title: `attempt ${cand.attemptIndex + 1}: ${cand.title}`,
+      diff: cand.diff?.unifiedDiff.trim() ? cand.diff.unifiedDiff : undefined,
+      note: cand.diff?.unifiedDiff.trim() ? undefined : 'This candidate has no diff to preview.',
+      question: { text: `Pick attempt ${cand.attemptIndex + 1} ("${cand.title}")? It merges, and the ${group.candidates.length - 1} other worktree(s) are cleaned.`, confirmLabel: 'Pick', tone: 'warning' },
     });
-    ctx.print(`Confirm the pick in the diff panel: Enter/y to merge attempt ${cand.attemptIndex + 1} and clean the losers, n/Esc to cancel.`);
+    if (!confirmed) {
+      ctx.print('Pick cancelled: nothing merged, no worktree cleaned.');
+      ctx.renderRequest();
+      return true;
+    }
+    try {
+      const result = await service.engine.pickAttemptWinner(group.groupId, cand.itemId);
+      ctx.print(renderPickReceipt(result));
+    } catch (err) {
+      ctx.print(err instanceof AttemptError ? `Pick refused: ${err.message}` : `Pick failed: ${summarizeError(err)}`);
+    }
     ctx.renderRequest();
     return true;
   }

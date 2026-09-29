@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { atomicWriteFileSync } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionAction, SelectionItem } from '../selection-modal.ts';
-import { openCommandPanel, requireServiceRegistry, requireShellPaths } from './runtime-services.ts';
+import { requireServiceRegistry, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export function registerServicesRuntimeCommands(registry: CommandRegistry): void {

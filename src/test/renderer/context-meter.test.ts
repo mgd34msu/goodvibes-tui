@@ -1,200 +1,126 @@
 /**
- * Context meter threshold rendering tests, TASK-055.
- *
- * Validates:
- *   1. Threshold marker ('▸') appears in the bar at the threshold column.
- *   2. Color switches at the threshold boundary (green below, yellow at/above, red at 100%).
- *   3. No marker when compactThreshold is not provided (legacy path).
- *   4. Boundary values: 0% usage, exact-threshold usage, 100% usage.
+ * The status line's context bar: "context" + 16 cells + percent + used / total.
+ * Filled cells carry the brand gradient while healthy, the warning color from
+ * 65%, the error color at or past the compaction threshold; the track is the
+ * border color and an amber │ marks the threshold.
  */
-import { describe, test, expect } from 'bun:test';
-import { UIFactory } from '../../renderer/ui-factory.ts';
+import { describe, expect, test } from 'bun:test';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { renderStatusLine } from '../../renderer/status-line.ts';
 import { activeTokens } from '../../renderer/theme.ts';
-import { linesToText, lineToString } from '../setup.ts';
+import { lineToString } from '../setup.ts';
+import { interpolateColor } from '../../utils/terminal-width.ts';
 
-const W = 120;
+const WINDOW = 200_000;
 
-// UIFactory.createFooter is the public surface; we exercise createProgressBarLine
-// indirectly through createFooter with a contextWindow + lastInputTokens.
-
-/**
- * Build a minimal footer and return the text of the context-meter bar line.
- * The bar line immediately follows the blank line after the token-usage line.
- */
-function buildFooterLines(
-  usedTokens: number,
-  contextWindow: number,
-  compactThreshold?: number,
-): string[] {
-  const lines = UIFactory.createFooter(
-    W,
-    '',                // prompt
-    { up: 0, down: 0 },
-    false,             // showExitNotice
-    0,                 // lastCopyTime
-    undefined,         // model
-    undefined,         // toolCount
-    undefined,         // cursorPos
-    undefined,         // workingDir
-    undefined,         // provider
-    contextWindow,
-    compactThreshold,
-    false,             // dangerMode
-    usedTokens,        // lastInputTokens
-  );
-  return linesToText(lines);
+function bar(usedFraction: number, compactFraction = 0.8, width = 120): Line {
+  return renderStatusLine({
+    width,
+    branch: 'main',
+    context: { usedTokens: Math.round(WINDOW * usedFraction), windowTokens: WINDOW, compactFraction },
+  });
 }
 
-describe('context meter threshold marker', () => {
-  test('threshold marker \'▸\' present when usage is below compact threshold', () => {
-    // 50% usage, threshold at 80%, marker should appear in the empty region
-    const texts = buildFooterLines(50_000, 100_000, 0.8);
-    const barLine = texts.find((t) => t.includes('Context Usage'));
-    expect(barLine).toBeDefined();
-    expect(barLine).toContain('▸');
+/** The 16 bar cells after the "context " label. */
+function cells(line: Line): Line {
+  const start = lineToString(line).indexOf('context ') + 'context '.length;
+  return line.slice(start, start + 16);
+}
+
+describe('context bar geometry', () => {
+  test('16 cells between the label and the percent', () => {
+    const text = lineToString(bar(0.25));
+    expect(text).toMatch(/context [█░│]{16} 25% 50\.0k \/ 200\.0k/);
   });
 
-  test('no threshold marker when no compactThreshold provided', () => {
-    const texts = buildFooterLines(50_000, 100_000, undefined);
-    const barLine = texts.find((t) => t.includes('Context Usage'));
-    expect(barLine).toBeDefined();
-    expect(barLine).not.toContain('▸');
+  test('the threshold tick sits at the compaction fraction of the bar, in the warning color', () => {
+    const c = cells(bar(0.25, 0.8));
+    const tick = c.findIndex((cell) => cell.char === '│');
+    expect(tick).toBe(Math.round(16 * 0.8));
+    expect(c[tick]!.fg).toBe(activeTokens().warning);
   });
 
-  test('no threshold marker when usage has consumed the threshold column (filled region)', () => {
-    // 90% usage, threshold at 80%, bar is 90% filled, threshold col is inside filled region
-    const texts = buildFooterLines(90_000, 100_000, 0.8);
-    const barLine = texts.find((t) => t.includes('Context Usage'));
-    expect(barLine).toBeDefined();
-    // Marker is in the empty region only; at 90% fill the threshold col is filled
-    expect(barLine).not.toContain('▸');
+  test('the tick stays visible once the fill has passed it', () => {
+    expect(cells(bar(0.95, 0.8)).some((cell) => cell.char === '│')).toBe(true);
   });
 
-  test('bar line present at 0% usage', () => {
-    const texts = buildFooterLines(0, 100_000, 0.8);
-    const barLine = texts.find((t) => t.includes('Context Usage'));
-    expect(barLine).toBeDefined();
-    expect(barLine).toContain('▸');
+  test('0% draws an empty track; 100% fills every cell but the tick', () => {
+    expect(cells(bar(0)).filter((c) => c.char === '█')).toHaveLength(0);
+    expect(cells(bar(1)).filter((c) => c.char === '░')).toHaveLength(0);
   });
 
-  test('bar line present at exactly 100% usage', () => {
-    const texts = buildFooterLines(100_000, 100_000, 0.8);
-    const barLine = texts.find((t) => t.includes('Context Usage'));
-    expect(barLine).toBeDefined();
-    // At 100%, all cells are filled, no empty region for the marker
-    expect(barLine).not.toContain('▸');
+  test('the track is the border color', () => {
+    const track = cells(bar(0.1)).filter((c) => c.char === '░');
+    expect(track.length).toBeGreaterThan(0);
+    expect(track.every((c) => c.fg === activeTokens().border)).toBe(true);
   });
-});
 
-describe('context meter color at threshold', () => {
-  test('all lines have correct width', () => {
-    const lines = UIFactory.createFooter(
-      W, '', { up: 0, down: 0 }, false, 0,
-      undefined, undefined, undefined, undefined, undefined,
-      100_000, 0.8, false, 50_000,
-    );
-    for (const line of lines) {
-      expect(line.length).toBe(W);
+  test('the bar narrows (never below 6 cells) before it is dropped on a narrow screen', () => {
+    const narrow = lineToString(bar(0.25, 0.8, 70));
+    const m = narrow.match(/context ([█░│]+) /);
+    expect(m).not.toBeNull();
+    expect(m![1]!.length).toBeGreaterThanOrEqual(6);
+    expect(m![1]!.length).toBeLessThan(16);
+    expect(lineToString(bar(0.25, 0.8, 40))).not.toContain('context');
+  });
+
+  test('past 6 cells the used / total label goes first, then the word, then the bar', () => {
+    const widths = [60, 52, 48, 44, 40, 36, 30];
+    const forms = widths.map((w) => lineToString(bar(0.25, 0.8, w)));
+    // Every rendering that still shows the bar keeps at least 6 cells and the percent.
+    for (const text of forms) {
+      const m = text.match(/([█░│]+) 25%/);
+      if (m) expect(m[1]!.length).toBeGreaterThanOrEqual(6);
     }
+    // Somewhere in that range the label has gone while the word remains, and
+    // later the word has gone while the bare bar remains.
+    expect(forms.some((t) => t.includes('context ') && t.includes('25%') && !t.includes('/ 200.0k'))).toBe(true);
+    expect(forms.some((t) => !t.includes('context') && /[█░│]{6} 25%/.test(t))).toBe(true);
   });
 
-  test('footer renders without error for threshold=0 (edge: no marker)', () => {
-    // threshold=0 means compactThreshold > 0 guard prevents marker
-    const texts = buildFooterLines(10_000, 100_000, 0);
-    expect(texts.some((t) => t.includes('Context Usage'))).toBe(true);
-    const barLine = texts.find((t) => t.includes('Context Usage'));
-    // compactThreshold=0 is clamped to undefined (no marker)
-    expect(barLine).not.toContain('▸');
-  });
-
-  test('footer renders without error for threshold=1 (edge: marker at end)', () => {
-    const texts = buildFooterLines(50_000, 100_000, 1.0);
-    expect(texts.some((t) => t.includes('Context Usage'))).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Config path regression, verifies that main.ts converts percent → fraction
-// ---------------------------------------------------------------------------
-// behavior.autoCompactThreshold is stored as a percent integer (e.g. 80).
-// main.ts must divide by 100 before passing to UIFactory. Without the fix,
-// the raw value (80) reaches ui-factory, which clamps Math.min(1, 80) → 1.0,
-// making the threshold indistinguishable from 100%, no marker at 50% usage.
-describe('context meter config path regression (percent→fraction mapping)', () => {
-  test('raw integer 80 (uncorrected config value) is clamped to 1.0 by ui-factory: no marker at 50%', () => {
-    // This represents the OLD broken behavior: raw percent integer passed through.
-    // thresholdFraction = Math.min(1, 80) = 1.0; at 50% fill the threshold col is beyond filled,
-    // but thresholdCol = Math.round(1.0 * barWidth) which equals barWidth, outside the bar loop.
-    // Result: no marker rendered (the bug).
-    const texts = buildFooterLines(50_000, 100_000, 80);
-    const barLine = texts.find((t) => t.includes('Context Usage'));
-    expect(barLine).toBeDefined();
-    // With raw integer 80, the threshold column is off-screen, no marker.
-    expect(barLine).not.toContain('▸');
-  });
-
-  test('corrected fraction 0.8 (main.ts maps 80 → 0.8) shows marker at 50% usage', () => {
-    // main.ts fix: (80 / 100) = 0.8 → threshold at 80% of bar width.
-    // At 50% fill the threshold column is in the empty region → marker rendered.
-    const texts = buildFooterLines(50_000, 100_000, 0.8);
-    const barLine = texts.find((t) => t.includes('Context Usage'));
-    expect(barLine).toBeDefined();
-    expect(barLine).toContain('▸');
+  test('from the warning level a busy phrase truncates so the bare bar stays visible', () => {
+    const busy = { spinner: '◐', frame: 0, phrase: 'Recalibrating the vibe matrix while the long phrase keeps going', elapsedMs: 12_000 };
+    const render = (fraction: number): string => lineToString(renderStatusLine({
+      width: 80,
+      busy,
+      context: { usedTokens: Math.round(WINDOW * fraction), windowTokens: WINDOW, compactFraction: 0.8 },
+    }));
+    expect(render(0.85)).toMatch(/[█░│]{6} 85%/);
+    expect(render(0.7)).toMatch(/[█░│]{6} 70%/);
+    // Healthy: the phrase keeps its room.
+    expect(render(0.3)).not.toContain('30%');
   });
 });
 
-// ---------------------------------------------------------------------------
-// Color-switch assertions, fg codes: green=82, yellow=220, red=196
-// ---------------------------------------------------------------------------
-/**
- * Build a raw footer Line[] and find the bar line (Context Usage line).
- * Returns the fg color of the first non-space character on that line.
- */
-function buildFooterBarLineFg(
-  usedTokens: number,
-  contextWindow: number,
-  compactThreshold?: number,
-): string {
-  const lines = UIFactory.createFooter(
-    W,
-    '',
-    { up: 0, down: 0 },
-    false,
-    0,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    contextWindow,
-    compactThreshold,
-    false,
-    usedTokens,
-  );
-  const barLine = lines.find((line) => lineToString(line).includes('Context Usage'));
-  if (!barLine) throw new Error('Context Usage bar line not found');
-  // All cells on the bar line share the same fg (set by stringToLine with { fg: color }).
-  // Find the first cell with a non-space character to get the assigned fg.
-  const cell = barLine.find((c) => c.char !== ' ' && c.char !== '');
-  return cell?.fg ?? '';
-}
+describe('context bar color', () => {
+  const filled = (line: Line) => cells(line).filter((c) => c.char === '█');
 
-describe('context meter fg color switches at threshold', () => {
-  test('usage just below threshold → success', () => {
-    // 79% usage, threshold 0.8, pct (0.79) < compactThreshold (0.8) → success token
-    const fg = buildFooterBarLineFg(79_000, 100_000, 0.8);
-    expect(fg).toBe(activeTokens().success);
+  test('healthy: the brand gradient runs across the filled cells', () => {
+    const f = filled(bar(0.5));
+    expect(f[0]!.fg).toBe(interpolateColor(activeTokens().brand, activeTokens().brandEnd, 0));
+    expect(new Set(f.map((c) => c.fg)).size).toBeGreaterThan(1);
   });
 
-  test('usage at threshold → warning', () => {
-    // 80% usage, threshold 0.8, pct (0.8) >= compactThreshold (0.8), pct < 1.0 → warning token
-    const fg = buildFooterBarLineFg(80_000, 100_000, 0.8);
-    expect(fg).toBe(activeTokens().warning);
+  test('from 65%: the warning color', () => {
+    expect(filled(bar(0.7)).every((c) => c.fg === activeTokens().warning)).toBe(true);
   });
 
-  test('usage at 100% → error', () => {
-    // 100% usage, pct (1.0) >= 1.0 → error token
-    const fg = buildFooterBarLineFg(100_000, 100_000, 0.8);
-    expect(fg).toBe(activeTokens().error);
+  test('at or past the compaction threshold: the error color, and the percent too', () => {
+    const line = bar(0.8, 0.8);
+    expect(filled(line).every((c) => c.fg === activeTokens().error)).toBe(true);
+    const text = lineToString(line);
+    expect(line[text.indexOf('80%')]!.fg).toBe(activeTokens().error);
+  });
+});
+
+describe('context bar config path (percent -> fraction mapping)', () => {
+  test('main.ts maps behavior.autoCompactThreshold 80 to 0.8: 85% is past the threshold', () => {
+    expect(cells(bar(0.85, 80 / 100)).filter((c) => c.char === '█').every((c) => c.fg === activeTokens().error)).toBe(true);
+  });
+
+  test('an unmapped raw value is clamped to 1: no tick and no error color at 85%', () => {
+    const line = bar(0.85, 80);
+    expect(cells(line).some((c) => c.char === '│')).toBe(false);
+    expect(cells(line).filter((c) => c.char === '█').every((c) => c.fg === activeTokens().warning)).toBe(true);
   });
 });

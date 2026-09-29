@@ -1,7 +1,7 @@
 import { getPersistedWorktreeMeta, reviewWorktreeAttachments, summarizeWorktreeOwnership } from '@/runtime/index.ts';
 import type { ManagedWorktreeMeta } from '@/runtime/index.ts';
 import type { CommandRegistry } from '../command-registry.ts';
-import { openCommandPanel, requireShellPaths } from './runtime-services.ts';
+import { openCommandView, requireShellPaths } from './runtime-services.ts';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
 
 /** Compact per-row setup-state tag for /worktree review, absent when setup has never run; failure stands out. */
@@ -43,7 +43,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
         return;
       }
       if (sub === 'panel' || sub === 'open') {
-        openCommandPanel(ctx, 'worktrees');
+        openCommandView(ctx, 'worktrees');
         return;
       }
       if (sub === 'inspect') {

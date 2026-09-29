@@ -290,7 +290,6 @@ export async function initializeBootstrapCore(
     hookDispatcher,
     hookWorkbench,
     memoryStore,
-    panelManager,
     routeBindings,
     sessionBroker: sharedSessionBroker,
     surfaceRegistry,
@@ -337,13 +336,7 @@ export async function initializeBootstrapCore(
     sessionUnionCache,
   });
 
-  const conversation = new ConversationManager(() => {
-    const width = stdout.columns || 80;
-    if (panelManager.isVisible() && panelManager.getAllOpen().length > 0) {
-      return Math.max(1, panelManager.getLeftWidth(width) - 1);
-    }
-    return width;
-  });
+  const conversation = new ConversationManager(() => stdout.columns || 80);
   conversation.setConfigManager(configManager);
   getConversationTitle = () => conversation.title;
 

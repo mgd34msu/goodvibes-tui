@@ -4,7 +4,7 @@
 |                            |
 |     ✦ Help        esc      |
 |                            |
-|     ▏Filte   37 entrie     |
+|     ▏Filte   23 entrie     |
 |                            |
 |   ✦ core navigation        |
 |     Recall   Up / Down     |
@@ -13,7 +13,7 @@
 |     ; Down                 |
 |     at                     |
 |     bottom                 |
-|              36 more ↓     |
+|              22 more ↓     |
 |      ↑↓  scroll            |
 |      ?  close              |
 |                            |

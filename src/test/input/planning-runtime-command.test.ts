@@ -170,7 +170,7 @@ describe('submitInput plan-keyword regression (coordinator removed)', () => {
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
       getBlockAnchorLine: () => 0,
-      openFleetPanel: () => {},
+      openAgentsView: () => {},
       processModal: { open: () => {} },
       modalOpened: () => {},
       saveUndoState: () => {},

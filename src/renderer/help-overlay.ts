@@ -72,15 +72,6 @@ function helpGroups(keybindingsManager: KeybindingsManager, commands?: SlashComm
 
   const shortcutLine = (label: string, desc: string): string => `  ${label}\t${desc}`;
 
-  // Enumerate EVERY workspace/panel binding straight from the live keybindings
-  // table so each rebindable action (including user overrides) is discoverable
-  // here and stays in lockstep with /keybindings. Any action id prefixed
-  // `panel-` is a workspace affordance.
-  const panelBindingRows: string[] = keybindingsManager
-    .getAll()
-    .filter((entry) => entry.action.startsWith('panel-'))
-    .map((entry) => shortcutLine(keybindingsManager.getComboLabel(entry.action), entry.description));
-
   // Keyboard shortcut sections
   const shortcutRows: string[] = [
     '  Core Navigation',
@@ -97,26 +88,20 @@ function helpGroups(keybindingsManager: KeybindingsManager, commands?: SlashComm
     `  ${(kb('undo') + ' / ' + kb('redo'))}\tUndo / redo`,
     shortcutLine('(paste >8 lines)', 'Folds to [TEXT: pN, M lines]; /pastes previews it before you submit'),
     '',
-    '  Overlays And Panels',
+    '  Overlays And Views',
     '  ' + '\u2500'.repeat(40),
     shortcutLine('?  or  /help', 'Open the command browser (search & run any command)'),
     shortcutLine('/commands', 'This reference: keyboard shortcuts + full command list'),
     shortcutLine('/shortcuts', 'Keyboard-shortcuts-only reference (a separate, generated overlay)'),
-    // Precedence (highest first): a visible panel workspace claims Tab for
-    // focus-swap; failing that, a partial path under the cursor claims it for
-    // completion; only then does it fall through to collapse/expand.
-    shortcutLine('Tab', 'Panel focus-swap, else path-complete, else collapse/expand block'),
-    ...panelBindingRows,
-    '',
-    // The shared in-panel contract every workspace panel honors. These are not
-    // rebindable global actions \u2014 they are the common controls a focused panel
-    // interprets \u2014 so they are documented here rather than pulled from getAll().
-    '  In-Panel Controls',
-    '  ' + '\u2500'.repeat(40),
-    shortcutLine('j / k', 'Move selection down / up'),
-    shortcutLine('g / G', 'Jump to top / bottom'),
-    shortcutLine('Enter / Esc', 'Activate / dismiss or leave panel'),
-    shortcutLine('/', 'Filter the list'),
+    shortcutLine(kb('command-palette'), 'Command palette: every command and view'),
+    shortcutLine(`F2 / ${kb('open-agents')}`, 'Agents: running agents, chains and hosted sessions'),
+    shortcutLine('/usage', 'Usage: context, tokens and cost'),
+    shortcutLine('/changes', 'Changes: files, diff, review'),
+    shortcutLine('/notifications', 'Notification history'),
+    shortcutLine('Esc', 'Close the top modal (one level)'),
+    // A partial path under the cursor claims Tab for completion; otherwise it
+    // collapses or expands the nearest block.
+    shortcutLine('Tab', 'Path-complete, else collapse/expand block'),
     '',
   ];
 
@@ -125,7 +110,10 @@ function helpGroups(keybindingsManager: KeybindingsManager, commands?: SlashComm
   // Commands not registered in the live registry are omitted at render time.
   const FEATURED_COMMANDS: Array<[name: string, argHint: string, desc: string]> = [
     ['onboarding',   '',           'Open the onboarding wizard with current settings preloaded'],
-    ['cockpit',      '',           'Unified runtime control room'],
+    ['agents',       '',           'Agents: running agents, chains and hosted sessions'],
+    ['usage',        '',           'Usage: context, tokens and cost'],
+    ['changes',      '',           'Changes: files, tinted diff, review and staging'],
+    ['notifications','',           'Notification history'],
     ['settings',     '',           'Settings and config browser'],
     ['provider',     '',           'Choose provider or model family'],
     ['subscription', '',           'Review provider logins and subscriptions'],
@@ -137,8 +125,6 @@ function helpGroups(keybindingsManager: KeybindingsManager, commands?: SlashComm
     ['incident',     '',           'Incident workspace and export flows'],
     ['knowledge',    '',           'Durable knowledge and review queue'],
     ['hooks',        '',           'Hook workbench and runtime activity'],
-    ['orchestration','',           'Graph and recursive-agent control room'],
-    ['communication','',           'Structured agent communication workspace'],
     ['tasks',        '',           'Task surface for list/show/pause/resume/output'],
   ];
 

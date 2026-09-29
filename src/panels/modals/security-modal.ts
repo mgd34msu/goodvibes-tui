@@ -175,8 +175,8 @@ class SecurityModalSurface implements ConfigModalSurface {
     if (id === 'refresh') { ctx.setStatus('Security posture is read live.'); ctx.requestRender(); return; }
     if (id === 'preflight') { void ctx.executeCommand?.('policy', ['preflight']); ctx.setStatus('Dispatched /policy preflight.'); return; }
     if (id === 'jumpToIncident' && this.deps.readModel.getSnapshot().latestIncident) {
-      void ctx.executeCommand?.('panel', ['open', 'incident']);
-      ctx.setStatus('Opened the incident surface (fleet).');
+      void ctx.executeCommand?.('agents', []);
+      ctx.setStatus('Opened Agents on the running processes.');
       return;
     }
     if (id === 'manageDevices') {

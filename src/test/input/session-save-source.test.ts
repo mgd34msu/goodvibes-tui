@@ -21,7 +21,6 @@ import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { SessionSurface } from '@/runtime/index.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { ConversationManager } from '../../core/conversation.ts';
-import { PanelManager } from '../../panels/panel-manager.ts';
 import { handleSessionWorkflowCommand } from '../../input/commands/session-workflow.ts';
 import { registerSessionContentCommands } from '../../input/commands/session-content.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
@@ -52,7 +51,6 @@ function makeCtx(sm: SessionManager, printed: string[], seed: Array<{ role: stri
     workspace: {
       shellPaths: { workingDirectory: tmpDir, homeDirectory: tmpDir },
       surface,
-      panelManager: new PanelManager(),
     },
     platform: { configManager: { get: () => 'off', getCategory: () => ({}) } },
     clients: { providerApi: { selectModel: async (model: string) => ({ registryKey: model, providerId: 'p' }) } },

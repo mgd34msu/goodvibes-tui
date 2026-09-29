@@ -33,14 +33,10 @@ import type { ConfigModal } from './config-modal.ts';
 import type { ProfilePickerModal } from './profile-picker-modal.ts';
 import type { OnboardingWizardController } from './onboarding/onboarding-wizard.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
-import type { Panel } from '../panels/types.ts';
-import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { KillRing } from './kill-ring.ts';
-import type { PanelMouseLayout } from './handler-feed-routes.ts';
 import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 import type { SurfaceModalHost } from './surface-modal-host.ts';
 
 /**
@@ -49,7 +45,7 @@ import type { SurfaceModalHost } from './surface-modal-host.ts';
  * **Mutable fields** (synced per-feed via syncFeedContextMutableFields or inside
  * action closures that call syncFeedContextMutableFields):
  *   - `prompt`, `cursorPos`, current text buffer state
- *   - `commandMode`, `panelFocused`, `indicatorFocused`, focus-mode flags
+ *   - `commandMode`, `indicatorFocused`, focus-mode flags
  *   - `helpOverlayActive`, `helpScrollOffset`, help overlay state
  *   - `shortcutsOverlayActive`, `shortcutsScrollOffset`, shortcuts overlay state
  *   - `nextPasteId`, `nextImageId`, monotonically increasing ID counters
@@ -62,7 +58,6 @@ export interface FeedContextMutableInit {
   cursorPos: number;
   inputScrollTop: number;
   commandMode: boolean;
-  panelFocused: boolean;
   indicatorFocused: boolean;
   helpOverlayActive: boolean;
   helpScrollOffset: number;
@@ -73,7 +68,6 @@ export interface FeedContextMutableInit {
   mouseDownRow: number;
   mouseDownCol: number;
   contentWidth: number;
-  panelMouseLayout: PanelMouseLayout | null;
   selectionCallback: ((result: SelectionResult | null) => void) | null;
 }
 
@@ -86,7 +80,7 @@ export interface FeedContextMutableInit {
  *     `profilePickerModal`, modal objects constructed once
  *   - `filePicker`, `modelPicker`, `contextInspectorModal`, `blockActionsMenu`,
  *     `searchManager`, `historySearch`, `onboardingWizard`, service objects constructed once
- *   - `panelManager`, `keybindingsManager`, from uiServices, stable
+ *   - `keybindingsManager`, from uiServices, stable
  *   - `modalStack`, reference to the handler's shared array
  *   - `getHistory`, `getViewportHeight`, `getScrollTop`, `scroll`, `exitApp`, callbacks
  *   - `commandRegistry`, `commandContext`, `autocomplete`, `inputHistory`,
@@ -128,12 +122,9 @@ export interface FeedContextStableRefs {
   modalStack: string[];
   inputHistory: InputHistory | null;
   conversationManager: ConversationManager | null;
-  panelManager: PanelManager;
   keybindingsManager: KeybindingsManager;
   killRing: KillRing;
   focusTracker: FocusTracker;
-  /** item 5, paste-flood guard state, mutated in place (never reallocated). */
-  panelBurstGuard: PanelBurstGuardState;
   getHistory: () => InfiniteBuffer;
   getViewportHeight: () => number;
   getScrollTop: () => number;
@@ -164,11 +155,12 @@ export interface FeedContextClosures {
   ensureInputCursorVisible: (contentWidth?: number) => void;
   registerPaste: (content: string) => string;
   executeBlockAction: (id: string) => void;
-  cyclePanelTab: (direction: 'next' | 'prev') => void;
-  onPanelInputConsumed: (activePanel: Panel | null, key: string) => void;
   getWrappedPromptInfo: (contentWidth: number) => WrappedPromptInfo;
   moveCursorVertical: (direction: -1 | 1) => boolean;
   handlePathCompletion: () => boolean;
+  /** The view a clicked footer screen row opens (the usage rows open Usage), or undefined. */
+  footerTargetAt: (row: number) => import('../renderer/footer-targets.ts').FooterTarget | undefined;
+  openFooterTarget: (target: import('../renderer/footer-targets.ts').FooterTarget) => void;
   handleBlockToggle: () => void;
   findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   cleanupMarkerRegistry: (text: string) => void;
@@ -219,7 +211,6 @@ export function buildInitialFeedContext(
  *   - `prompt`, current prompt text buffer
  *   - `cursorPos`, caret position within prompt
  *   - `commandMode`, whether command-mode prefix is active
- *   - `panelFocused`, whether the active panel owns keyboard focus
  *   - `indicatorFocused`, whether the status indicator owns focus
  *   - `helpOverlayActive` / `helpScrollOffset`, help overlay visibility and scroll
  *   - `shortcutsOverlayActive` / `shortcutsScrollOffset`, shortcuts overlay state
@@ -254,7 +245,6 @@ export function syncFeedContextMutableFields(
   ctx.cursorPos = fields.cursorPos;
   ctx.inputScrollTop = fields.inputScrollTop;
   ctx.commandMode = fields.commandMode;
-  ctx.panelFocused = fields.panelFocused;
   ctx.indicatorFocused = fields.indicatorFocused;
   ctx.helpOverlayActive = fields.helpOverlayActive;
   ctx.helpScrollOffset = fields.helpScrollOffset;
@@ -266,5 +256,4 @@ export function syncFeedContextMutableFields(
   ctx.mouseDownRow = fields.mouseDownRow;
   ctx.mouseDownCol = fields.mouseDownCol;
   ctx.contentWidth = fields.contentWidth;
-  ctx.panelMouseLayout = fields.panelMouseLayout;
 }

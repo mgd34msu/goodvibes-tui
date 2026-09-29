@@ -136,3 +136,47 @@ export function makeComposerEditorOpener(deps: ComposerEditorOpenerDeps): () => 
     },
   });
 }
+
+/** Editors known to take `+<line> <file>` to open at a line. */
+const LINE_ARG_EDITORS = new Set(['vi', 'vim', 'nvim', 'nano', 'emacs', 'micro', 'kak', 'hx', 'helix', 'ne', 'joe', 'mg']);
+
+export interface FileEditorOpenerDeps {
+  readonly stdin: { setRawMode(on: boolean): unknown };
+  readonly stdout: { write(seq: string): unknown };
+  readonly writeGuard: (fn: () => void) => void;
+  readonly repaint: () => void;
+  readonly cwd: string;
+  readonly env: NodeJS.ProcessEnv;
+  readonly notify: (message: string) => void;
+  readonly spawn?: EditorSpawn;
+}
+
+/**
+ * Build `openFileInEditor`: suspend the TUI, run $VISUAL / $EDITOR on a file
+ * (at a line when the editor is known to take `+<line>`), then restore and
+ * repaint. The Changes modal's `o` uses this.
+ */
+export function makeFileEditorOpener(deps: FileEditorOpenerDeps): (path: string, line?: number) => void {
+  return (path, line) => {
+    const editor = resolveEditorCommand(deps.env);
+    if (!editor) {
+      deps.notify('[Editor] Set $EDITOR or $VISUAL to open files in an external editor.');
+      return;
+    }
+    const base = editor.cmd.split('/').pop() ?? editor.cmd;
+    const lineArgs = line !== undefined && line > 0 && LINE_ARG_EDITORS.has(base) ? [`+${line}`] : [];
+    const spawn = deps.spawn ?? defaultSpawn;
+    try { deps.stdin.setRawMode(false); } catch { /* stdin may not be a TTY */ }
+    deps.writeGuard(() => deps.stdout.write(LEAVE_TUI));
+    let result: EditorSpawnResult;
+    try {
+      result = spawn(editor.cmd, [...editor.args, ...lineArgs, path], { cwd: deps.cwd, env: deps.env });
+    } finally {
+      deps.writeGuard(() => deps.stdout.write(ENTER_TUI));
+      try { deps.stdin.setRawMode(true); } catch { /* stdin may not be a TTY */ }
+      deps.repaint();
+    }
+    if (result.error) deps.notify(`[Editor] Failed to launch ${editor.cmd}: ${result.error.message}`);
+    else if (result.status !== 0 && result.status !== null) deps.notify(`[Editor] ${editor.cmd} exited with code ${result.status}.`);
+  };
+}

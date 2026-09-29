@@ -5,7 +5,6 @@ import type { CommandContext, CommandRegistry } from './command-registry.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationManager } from '../core/conversation';
-import type { PanelManager } from '../panels/panel-manager.ts';
 import { handleClipboardPaste, type ClipboardPasteSource } from './handler-content-actions.ts';
 
 export type CommandModeRouteState = {
@@ -16,8 +15,6 @@ export type CommandModeRouteState = {
   modalStack: string[];
   commandRegistry: CommandRegistry | null;
   commandContext?: CommandContext;
-  panelFocused: boolean;
-  panelManager: PanelManager;
   conversationManager: ConversationManager | null;
   requestRender: () => void;
   handleEscape: () => void;
@@ -94,7 +91,7 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
       const parts = raw.slice(1).trim().split(/\s+/);
       const name = parts[0];
       const args = parts.slice(1);
-      const ctx = withPanelFocusSync(state.commandContext, state);
+      const ctx = withComposerBindings(state.commandContext, state);
       const commandPromise = state.commandRegistry.get(name)
         ? state.commandRegistry.execute(name, args, ctx)
         : (ctx.executeCommand?.(name, args) ?? Promise.resolve(false));
@@ -135,43 +132,10 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
   return token.logicalName !== 'left' && token.logicalName !== 'right' && token.logicalName !== 'home' && token.logicalName !== 'end';
 }
 
-function withPanelFocusSync(context: CommandContext, state: CommandModeRouteState): CommandContext {
-  const panelIsFocusable = (): boolean =>
-    state.panelManager.isVisible() && state.panelManager.getAllOpen().length > 0;
-
+/** The command context with the composer-bound actions (clipboard paste, nested commands) bound to this route's state. */
+function withComposerBindings(context: CommandContext, state: CommandModeRouteState): CommandContext {
   return {
     ...context,
-    openPanelPicker: context.openPanelPicker
-      ? () => {
-          context.openPanelPicker?.();
-          state.panelFocused = panelIsFocusable();
-        }
-      : undefined,
-    showPanel: context.showPanel
-      ? (panelId, pane, target, opts) => {
-          context.showPanel?.(panelId, pane, target, opts);
-          // showPanel no longer transfers focus by default, the command
-          // path leaves the composer focused (ui-openers.ts's showPanel only
-          // calls focusPanels() when opts.focus is set). Only flip the local
-          // panelFocused mirror when the caller explicitly asked for focus;
-          // otherwise leave it exactly as it was (the composer, since you can
-          // only type a command from there in the first place). `target` is the
-          // deep-link jump target, forwarded verbatim.
-          if (opts?.focus) state.panelFocused = true;
-        }
-      : undefined,
-    focusPanels: context.focusPanels
-      ? () => {
-          context.focusPanels?.();
-          state.panelFocused = panelIsFocusable();
-        }
-      : undefined,
-    focusPrompt: context.focusPrompt
-      ? () => {
-          context.focusPrompt?.();
-          state.panelFocused = false;
-        }
-      : undefined,
     pasteFromClipboard: () => {
       const result = handleClipboardPaste({
         prompt: state.prompt,
@@ -191,7 +155,7 @@ function withPanelFocusSync(context: CommandContext, state: CommandModeRouteStat
       return result;
     },
     executeCommand: async (name, args) => {
-      const wrapped = withPanelFocusSync(context, state);
+      const wrapped = withComposerBindings(context, state);
       const handled = state.commandRegistry?.get(name)
         ? await state.commandRegistry.execute(name, args, wrapped)
         : false;

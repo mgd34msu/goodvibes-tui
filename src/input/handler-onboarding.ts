@@ -348,7 +348,6 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
     }
     if (handler.modalStack.length === 0) {
       const returnFocus = handler.modalReturnFocus;
-      handler.panelFocused = returnFocus === 'panel';
       handler.indicatorFocused = returnFocus === 'indicator';
       handler.modalReturnFocus = 'prompt';
     }

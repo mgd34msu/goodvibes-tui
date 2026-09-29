@@ -194,7 +194,7 @@ async function attachSession(
     `[hosted] attached to ${hostedSessionLabel(attachment.session)} (${attachment.history.length} message(s) backfilled)`,
     `  ${describeDetachEffect(attachment.session)}`,
   ].join('\n'));
-  context.showPanel?.('hosted');
+  context.openAgents?.({ hosted: true });
 }
 
 /** Turn `attach 2` into the id the user just read off `/hosted list`. */
@@ -278,7 +278,7 @@ export function registerHostedRuntimeCommands(registry: CommandRegistry): void {
             if (sub === 'say') await seams.client.steer(attachedId, body);
             else await seams.client.followUp(attachedId, body);
             ctx.print(sub === 'say'
-              ? '[hosted] sent: its output arrives on the Hosted Session panel.'
+              ? '[hosted] sent: its output arrives in the Agents view under Hosted (/agents).'
               : '[hosted] queued: it runs after the current turn.');
             return;
           }

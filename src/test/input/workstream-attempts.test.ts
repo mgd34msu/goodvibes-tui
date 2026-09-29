@@ -16,7 +16,6 @@ import type { CommandContext } from '../../input/command-registry.ts';
 import type { WorkstreamCommandService } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { handleAttemptsSubcommand } from '../../input/commands/workstream-attempts.ts';
 import { validateAttempts } from '@pellux/goodvibes-sdk/platform/orchestration';
-import { DiffPanel } from '../../panels/diff-panel.ts';
 
 // ---- validateAttempts ----------------------------------------------------
 
@@ -105,24 +104,21 @@ function makeEngine(over: Partial<{
 
 function makeCtx() {
   const printed: string[] = [];
-  let diffPanel: DiffPanel | null = null;
-  const panelManager = {
-    getAllOpen: () => (diffPanel ? [diffPanel] : []),
-    open: (id: string) => { if (id === 'diff') { diffPanel = new DiffPanel('/tmp', () => {}); return diffPanel; } throw new Error('unknown'); },
-    close: (id: string) => { if (id === 'diff') diffPanel = null; },
-    activateById: () => {},
-    isVisible: () => true,
-    show: () => {},
-  };
+  const previews: Array<{ title: string; diff?: string; question?: { confirmLabel: string } }> = [];
+  let pendingAnswer: ((ok: boolean) => void) | null = null;
   const ctx = {
     print: (t: string) => { printed.push(t); },
     renderRequest: () => {},
-    focusPanels: () => {},
     focusPrompt: () => {},
-    workspace: { panelManager },
+    previewChanges: (opts: { title: string; diff?: string; question?: { confirmLabel: string } }) => {
+      previews.push(opts);
+      if (!opts.question) return Promise.resolve(false);
+      return new Promise<boolean>((resolve) => { pendingAnswer = resolve; });
+    },
     session: {}, provider: {}, platform: {}, ops: {}, extensions: {},
   } as unknown as CommandContext;
-  return { ctx, printed, getDiffPanel: () => diffPanel };
+  const answer = (ok: boolean): void => { const r = pendingAnswer; pendingAnswer = null; r?.(ok); };
+  return { ctx, printed, previews, answer, hasQuestion: () => pendingAnswer !== null };
 }
 
 const svc = (engine: OrchestrationEngine): WorkstreamCommandService => ({ engine } as unknown as WorkstreamCommandService);
@@ -183,23 +179,26 @@ describe('/workstream attempts', () => {
     expect(printed.join('\n')).toContain('No judge available');
   });
 
-  test('diff loads a candidate diff into the diff panel', async () => {
+  test('diff shows a candidate diff in a Changes preview', async () => {
     const { engine } = makeEngine();
-    const { ctx, printed, getDiffPanel } = makeCtx();
+    const { ctx, printed, previews } = makeCtx();
     await handleAttemptsSubcommand(ctx, svc(engine), ['attempts', 'diff', 'grp-000001', '2']);
-    expect(getDiffPanel()).not.toBeNull();
+    expect(previews).toHaveLength(1);
+    expect(previews[0]!.question).toBeUndefined();
     expect(printed.join('\n')).toContain('attempt 2');
   });
 
   test('pick is confirm-gated, then picks the winner and renders the losers-cleaned receipt', async () => {
     const { engine, calls } = makeEngine();
-    const { ctx, printed, getDiffPanel } = makeCtx();
-    await handleAttemptsSubcommand(ctx, svc(engine), ['attempts', 'pick', 'grp-000001', '2']);
-    // Armed the confirm, no pick yet.
-    expect(getDiffPanel()!.confirmOverlay.pending).toBe(true);
+    const { ctx, printed, previews, answer, hasQuestion } = makeCtx();
+    const running = handleAttemptsSubcommand(ctx, svc(engine), ['attempts', 'pick', 'grp-000001', '2']);
+    // The question is up, no pick yet.
+    await waitFor(hasQuestion);
+    expect(previews[0]!.question?.confirmLabel).toBe('Pick');
     expect(calls.some((c) => c.method === 'pick')).toBe(false);
 
-    getDiffPanel()!.handleInput('y');
+    answer(true);
+    await running;
     await waitFor(() => calls.some((c) => c.method === 'pick'));
     const pickCall = calls.find((c) => c.method === 'pick')!;
     expect(pickCall.args).toEqual(['grp-000001', 'item-b']); // attempt #2 → item-b

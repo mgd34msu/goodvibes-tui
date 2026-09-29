@@ -4,7 +4,6 @@ import type { SearchManager } from './search.ts';
 import type { HistorySearch } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation';
 import type { AutocompleteEngine } from './autocomplete.ts';
-import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { KillRing } from './kill-ring.ts';
 import { wordBoundaryBack, wordBoundaryForward } from './kill-ring.ts';
@@ -17,8 +16,6 @@ type WrappedPromptInfo = {
 };
 
 export type GlobalShortcutRouteState = {
-  panelFocused: boolean;
-  panelManager: PanelManager;
   keybindingsManager: KeybindingsManager;
   prompt: string;
   cursorPos: number;
@@ -45,7 +42,6 @@ export type GlobalShortcutRouteState = {
   handleRedo: () => void;
   handlePaste: () => void;
   handleEscape: () => void;
-  cyclePanelTab: (direction: 'next' | 'prev') => void;
   killRing: KillRing;
 };
 
@@ -56,40 +52,27 @@ export function handleGlobalShortcutToken(
 ): boolean {
   if (token.type !== 'key') return false;
 
-  // Fast-path: BARE pageup/pagedown scroll the transcript. The `!token.ctrl`
-  // guard is load-bearing: Ctrl+PageUp/PageDown are the panel-tab-prev/next
-  // chords, so they must fall through to the keybinding lookup below instead of
-  // being swallowed here as a scroll.
+  // Fast-path: BARE pageup/pagedown scroll the transcript (modified ones fall
+  // through to the keybinding lookup below).
   if (token.logicalName === 'pageup' && !token.ctrl) {
-    if (state.panelFocused) return false;
     state.scroll(-Math.max(1, viewportHeight - 2));
     return true;
   }
   if (token.logicalName === 'pagedown' && !token.ctrl) {
-    if (state.panelFocused) return false;
     state.scroll(Math.max(1, viewportHeight - 2));
     return true;
   }
   // Bare escape is also not in the keybinding table.
-  if (token.logicalName === 'escape' && !state.panelFocused) {
+  if (token.logicalName === 'escape') {
     state.handleEscape();
     return true;
   }
 
-  // Bare F2 is also not in the keybinding table (hardcoded, like pageup/
-  // pagedown/escape above), it must be handled here, GLOBALLY, rather than
-  // in handlePromptKeyToken (handler-feed-routes.ts) where it used to live.
-  // That location only ever runs when the panel workspace does NOT already
-  // own focus (handlePanelFocusToken, which runs before it, swallows every
-  // unclaimed key once panelFocused is true and reports it handled). The
-  // practical effect was that F2 could OPEN+focus the Fleet panel exactly
-  // once; every subsequent press while already focused vanished silently,
-  // "F2 pressed 4x never closed the panel" (evaluator finding). Routing
-  // it here, before handlePanelFocusToken ever sees the token, gives F2 the
-  // same toggle semantics as Ctrl+O below, matching how Ctrl+P/panel-picker
-  // was already reachable regardless of panelFocused.
+  // Bare F2 opens the Agents modal (hardcoded, like pageup/pagedown/escape;
+  // F2 inside the Agents modal closes it, see input/agents-modal.ts).
   if (token.logicalName === 'f2' && !token.ctrl && !token.meta) {
-    toggleFleetPanel(state);
+    state.commandContext?.openAgents?.();
+    state.requestRender();
     return true;
   }
 
@@ -98,10 +81,9 @@ export function handleGlobalShortcutToken(
   // escape/f2, because it is not in the keybinding table and bare Tab is
   // already heavily overloaded. Arrives as the legacy xterm backtab literal
   // ('\x1b[Z') OR, under a kitty/CSI-u terminal, as tab-with-shift. Only when
-  // the composer owns focus (a focused panel keeps its own Shift+Tab, e.g. the
-  // diff panel's previous-file); modal/picker routes run earlier and swallow
-  // the token before it reaches here, so overlays keep their reverse-tab too.
-  if (!state.panelFocused && (token.logicalName === '\x1b[Z' || (token.logicalName === 'tab' && token.shift))) {
+  // the composer owns focus; modal/picker routes run earlier and swallow the
+  // token before it reaches here, so overlays keep their reverse-tab too.
+  if (token.logicalName === '\x1b[Z' || (token.logicalName === 'tab' && token.shift)) {
     cycleSessionPermissionMode(state);
     return true;
   }
@@ -133,10 +115,9 @@ export function handleGlobalShortcutToken(
       return true;
 
     case 'voice-input':
-      // Start recording, or stop the recording already running. Routed globally so
-      // the key works whether focus is on the composer or the panel workspace,
-      // dictation is not a composer-only act. Still consumed when voice input is
-      // not wired, so a stray Alt+V never lands in the prompt as text.
+      // Start recording, or stop the recording already running. Routed globally;
+      // still consumed when voice input is not wired, so a stray Alt+V never
+      // lands in the prompt as text.
       state.commandContext?.toggleVoiceInput?.();
       return true;
 
@@ -154,109 +135,16 @@ export function handleGlobalShortcutToken(
       state.commandContext?.clearScreen?.();
       return true;
 
-    case 'panel-close-all': {
-      const pm = state.panelManager;
-      for (const p of pm.getAllOpen()) pm.close(p.id);
-      pm.hide();
-      state.panelFocused = false;
-      state.requestRender();
-      return true;
-    }
-
-    case 'panel-close': {
-      const pm = state.panelManager;
-      const active = pm.getActivePanel();
-      // Give the active panel a chance to consume Ctrl+X for an
-      // in-panel action (FleetPanel session-tab detach) before it closes the
-      // panel outright, see Panel.interceptPanelClose's doc comment.
-      if (active?.interceptPanelClose?.()) {
-        // fix: a consumed Ctrl+X (the Fleet panel's session-tab detach)
-        // used to leave panelFocused untouched, so focus stayed on the panel
-        //, the evaluator's "Ctrl+X detach landed focus in the panel and a
-        // typed question became nav keys". Detach is a leave-taking action:
-        // like the ordinary close below, it hands control back to the
-        // composer rather than leaving the user stranded on the fleet tree.
-        state.panelFocused = false;
-        state.requestRender();
-        return true;
-      }
-      if (active) {
-        pm.close(active.id);
-        state.requestRender();
-      }
-      state.panelFocused = false;
-      return true;
-    }
-
     case 'command-palette':
       state.commandContext?.openCommandPalette?.();
       state.requestRender();
       return true;
 
-    case 'panel-picker':
-      state.commandContext?.openPanelPicker?.();
-      state.panelFocused = state.panelManager.isVisible() && state.panelManager.getAllOpen().length > 0;
+    case 'open-agents':
+      // Ctrl+O: the Agents modal (the same as F2).
+      state.commandContext?.openAgents?.();
       state.requestRender();
       return true;
-
-    case 'panel-focus-toggle': {
-      // Global entry point for the focus-toggle key (Ctrl+G): from the prompt
-      // it grabs focus for the panel workspace. Once the workspace already has
-      // focus we let it fall through (return false) so handlePanelFocusToken
-      // can do the top/bottom pane swap, keeping that behavior in one place.
-      if (state.panelFocused) return false;
-      const pm = state.panelManager;
-      if (pm.isVisible() && pm.getAllOpen().length > 0) {
-        state.panelFocused = true;
-        state.requestRender();
-        return true;
-      }
-      return false;
-    }
-
-    case 'panel-tab-next':
-      state.cyclePanelTab('next');
-      return true;
-
-    case 'panel-tab-prev':
-      state.cyclePanelTab('prev');
-      return true;
-
-    case 'panel-tab-1':
-    case 'panel-tab-2':
-    case 'panel-tab-3':
-    case 'panel-tab-4':
-    case 'panel-tab-5':
-    case 'panel-tab-6':
-    case 'panel-tab-7':
-    case 'panel-tab-8':
-    case 'panel-tab-9': {
-      // Alt+1..9: jump directly to the Nth workspace tab. Routed globally (like
-      // panel-tab-next/prev) so the jump works whether focus is on the prompt or
-      // the workspace; gated on visibility, matching cyclePanelTab semantics.
-      // a chord jump is "I'm going panel-driving" (focus rule 1a), the
-      // jump now also grabs keyboard focus, matching F2/Ctrl+O/Ctrl+P, so j/k
-      // land in the newly-active tab immediately instead of the composer.
-      const pm = state.panelManager;
-      if (pm.isVisible()) {
-        const index = Number(action.slice('panel-tab-'.length)) - 1;
-        pm.activateWorkspaceIndex(index);
-        pm.focusPanels();
-        state.panelFocused = true;
-        state.requestRender();
-      }
-      return true;
-    }
-
-    case 'panel-ops': {
-      // Ctrl+O: TOGGLE the Fleet panel (same semantics as F2 above; see
-      // toggleFleetPanel's doc comment). The former Ops Control panel was
-      // retired to an 'ops-control' -> 'fleet' alias; rather than route
-      // through the now-aliased openOpsPanel callback (which opens without
-      // transferring focus), this operates on 'fleet' directly.
-      toggleFleetPanel(state);
-      return true;
-    }
 
     case 'history-search':
       state.historySearch.open(state.prompt);
@@ -434,17 +322,6 @@ export function handleGlobalShortcutToken(
 }
 
 /**
- * toggleFleetPanel, the shared F2 / Ctrl+O TOGGLE (item 2): if the
- * Fleet panel is open AND the panel workspace currently owns keyboard focus
- * with Fleet as the active tab, the chord CLOSES it and returns focus to the
- * composer; if Fleet is open but not the focused/active tab, the chord brings
- * it to front and focuses it; if Fleet isn't open at all, the chord opens and
- * focuses it. Uses `state.panelFocused` (not a panelManager query) for the
- * focus check, consistent with every other case in this file and with what
- * the mocked PanelManager test doubles in global-shortcuts.test.ts actually
- * implement.
- */
-/**
  * Cycle the session permission mode (Shift+Tab). The change goes through the
  * SDK config surface, configManager.set('permissions.mode', ...), which is
  * what the SDK PermissionManager reads and what the orchestrator consults for
@@ -459,20 +336,5 @@ function cycleSessionPermissionMode(state: GlobalShortcutRouteState): void {
   const next = nextPermissionMode(current);
   configManager.set('permissions.mode', next);
   state.commandContext?.print(`[Permissions] Mode: ${permissionModeLabel(next)}`);
-  state.requestRender();
-}
-
-function toggleFleetPanel(state: GlobalShortcutRouteState): void {
-  const pm = state.panelManager;
-  const fleetOpen = pm.getAllOpen().some((p) => p.id === 'fleet');
-  const fleetIsFocusedActive = fleetOpen && state.panelFocused && pm.getActivePanel()?.id === 'fleet';
-  if (fleetIsFocusedActive) {
-    pm.close('fleet');
-    state.panelFocused = false;
-  } else {
-    pm.open('fleet');
-    pm.focusPanels();
-    state.panelFocused = true;
-  }
   state.requestRender();
 }

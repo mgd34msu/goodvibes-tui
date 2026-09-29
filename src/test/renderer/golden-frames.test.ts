@@ -28,9 +28,8 @@
 //
 // Surfaces covered:
 //   1. shell-footer      , buildShellFooter (fixed inputs, no timestamps)
-//   2. context-meter     , UIFactory.createFooter with context window + threshold
+//   2. context-meter     , buildShellFooter with context window + threshold (the status line's bar)
 //   3. markdown-transcript, renderMarkdown with code fence, headings, inline code
-//   4. panel-workspace   , A static mock panel render (Panel.render contract)
 //
 // Determinism exclusions:
 //   - UIFactory.createHeader: gradient phase depends on frame counter; excluded.
@@ -45,6 +44,8 @@ import { describe, test, expect } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildShellFooter } from '../../renderer/shell-surface.ts';
+import { centerViewportContent } from '../../renderer/conversation-layout.ts';
+import { renderConversationEventLine } from '../../renderer/conversation-surface.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
 import type { GitHeaderInfo } from '../../renderer/git-status.ts';
 import { renderMarkdown } from '../../renderer/markdown.ts';
@@ -81,13 +82,25 @@ import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
-import { FleetPanel } from '../../panels/fleet-panel.ts';
+import { AgentsModal, type FleetActionCallbacks } from '../../input/agents-modal.ts';
+import { SurfaceModalHost } from '../../input/surface-modal-host.ts';
+import { confirmThrough } from '../../input/confirm-dialog.ts';
+import { UsageModal } from '../../input/usage-modal.ts';
+import { UsageTracker } from '../../runtime/usage-tracker.ts';
+import { ChangesModal } from '../../input/changes-modal.ts';
+import { parseChanges } from '../../input/changes-model.ts';
+import type { SemanticDiff } from '../../renderer/semantic-diff.ts';
+import { NotificationsModal } from '../../input/notifications-modal.ts';
+import { PanelNotificationFeed } from '../../panels/notifications-feed.ts';
+import { MaskedEntryModal } from '../../input/masked-entry-modal.ts';
+import { setModelPricingResolver, type ResolvedModelPricing } from '@pellux/goodvibes-sdk/platform/providers';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
 import { ConfigModal } from '../../input/config-modal.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
 import type { ConfigModalView } from '../../input/config-modal-types.ts';
 import { statusGlyph, toneStyle, pad, postureLine, kv } from '../../panels/modals/modal-surface-helpers.ts';
-import { resolveUiTones, setActiveThemeMode, setActiveThemeName } from '../../renderer/theme.ts';
+import { activeTokens, setActiveThemeMode, setActiveThemeName } from '../../renderer/theme.ts';
 import { PermissionPromptUI } from '../../permissions/prompt.ts';
 import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import { resolveApprovalRequester } from '../../permissions/hunk-selection.ts';
@@ -102,10 +115,10 @@ import { FilePickerModal } from '../../input/file-picker.ts';
 import { renderModelWorkspace } from '../../renderer/model-workspace.ts';
 import { ModelPickerModal } from '../../input/model-picker.ts';
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
-import type { Cell, Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createEmptyLine as emptyLine, type Cell, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { frameFromLayer } from '../helpers/surface-frame.ts';
+import { frameFromLayer, frameFromLayers } from '../helpers/surface-frame.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -324,14 +337,15 @@ function assertGolden(surface: string, lines: Line[]): string {
 function renderShellFooterSurface(): Line[] {
   const result = buildShellFooter({
     width: W,
-    promptText: '> Ask me anything',
+    promptText: 'Ask me anything',
     promptLineCount: 1,
+    promptCursorPos: 15,
     usage: { up: 1024, down: 512 },
     showExitNotice: false,
     lastCopyTime: 0,          // frozen: no copy-flash
     model: 'claude-opus-4',
-    toolCount: 7,
     workingDir: '/workspace/my-project',
+    branch: 'main',
     provider: 'anthropic',
     contextWindow: 0,
     runningAgentCount: 0,
@@ -346,23 +360,26 @@ function renderShellFooterSurface(): Line[] {
  * Fixed token values ensure stable bar fill and color.
  */
 function renderContextMeterSurface(): Line[] {
-  // 60_000 used / 100_000 window = 60% fill; threshold 0.80 → marker in empty zone
-  return UIFactory.createFooter(
-    W,
-    '> Ask me anything',
-    { up: 1024, down: 512 },
-    false,          // showExitNotice
-    0,              // lastCopyTime, frozen
-    'claude-opus-4',
-    7,              // toolCount
-    undefined,      // cursorPos
-    '/workspace/my-project',
-    'anthropic',
-    100_000,        // contextWindow
-    0.80,           // compactThreshold
-    false,          // dangerMode
-    60_000,         // lastInputTokens → 60% fill
-  );
+  // 60_000 used / 100_000 window = 60% fill; threshold 0.80 → tick in the empty zone
+  return buildShellFooter({
+    width: W,
+    promptText: 'Ask me anything',
+    promptLineCount: 1,
+    promptCursorPos: 15,
+    usage: { up: 1024, down: 512 },
+    showExitNotice: false,
+    lastCopyTime: 0,
+    model: 'claude-opus-4',
+    workingDir: '/workspace/my-project',
+    branch: 'main',
+    provider: 'anthropic',
+    contextWindow: 100_000,
+    compactThreshold: 0.80,
+    lastInputTokens: 60_000,
+    runningAgentCount: 0,
+    runningProcessCount: 0,
+    indicatorFocused: false,
+  }).lines;
 }
 
 /**
@@ -396,74 +413,6 @@ function renderMarkdownTranscriptSurface(): Line[] {
   ].join('\n');
 
   return renderMarkdown(md, W);
-}
-
-/**
- * Render a static panel workspace surface.
- * The panel content is entirely deterministic (static text rows).
- * This exercises the Panel.render contract and grid encoding.
- */
-function renderPanelWorkspaceSurface(): Line[] {
-  // Build a static panel surface matching a typical panel layout:
-  // a tab bar line, a content area, and a status line.
-  // We construct the grid directly using createEmptyLine + overrides
-  // rather than importing a live panel (live panels may pull in state).
-  //
-  // Pattern: simulate what a minimal panel would return from render().
-  const { createStyledCell, createEmptyLine } = {
-    createStyledCell: (char: string, overrides: Partial<Omit<Cell, 'char'>> = {}): Cell => ({
-      char,
-      fg: overrides.fg ?? '',
-      bg: overrides.bg ?? '',
-      bold: overrides.bold ?? false,
-      dim: overrides.dim ?? false,
-      underline: overrides.underline ?? false,
-      italic: overrides.italic ?? false,
-      strikethrough: overrides.strikethrough ?? false,
-    }),
-    createEmptyLine: (width: number): Line =>
-      Array.from({ length: width }, () => ({
-        char: ' ', fg: '', bg: '', bold: false,
-        dim: false, underline: false, italic: false, strikethrough: false,
-      })),
-  };
-
-  const lines: Line[] = [];
-
-  // Row 0: tab bar (panel name in accent colour)
-  const tabBar = createEmptyLine(W);
-  const tabLabel = '  ⊞ OPERATIONS  ';
-  for (let i = 0; i < tabLabel.length && i < W; i++) {
-    tabBar[i] = createStyledCell(tabLabel[i]!, { fg: '#38bdf8', bold: true });
-  }
-  lines.push(tabBar);
-
-  // Row 1: separator
-  const sep = createEmptyLine(W);
-  for (let i = 0; i < W; i++) sep[i] = createStyledCell('─', { fg: '#334155' });
-  lines.push(sep);
-
-  // Rows 2-5: static content rows
-  const contentRows = [
-    '  Session: gv-20260612-a1b2c3                    status: idle         ',
-    '  Model:   claude-opus-4   Provider: anthropic   Tools: 7             ',
-    '  Context: 0 / 0 tokens   Usage: ↑1024 ↓512                          ',
-    '  Agents:  0 running   Processes: 0 running                           ',
-  ];
-  for (const rowText of contentRows) {
-    const row = createEmptyLine(W);
-    for (let i = 0; i < rowText.length && i < W; i++) {
-      row[i] = createStyledCell(rowText[i]!, {});
-    }
-    lines.push(row);
-  }
-
-  // Row 6: bottom separator
-  const sep2 = createEmptyLine(W);
-  for (let i = 0; i < W; i++) sep2[i] = createStyledCell('─', { fg: '#334155' });
-  lines.push(sep2);
-
-  return lines;
 }
 
 // ---------------------------------------------------------------------------
@@ -509,20 +458,6 @@ describe('golden-frames', () => {
     test('render is deterministic (two consecutive renders match)', () => {
       const a = snapshotEncode('markdown-transcript', renderMarkdownTranscriptSurface());
       const b = snapshotEncode('markdown-transcript', renderMarkdownTranscriptSurface());
-      expect(a).toBe(b);
-    });
-  });
-
-  describe('panel-workspace', () => {
-    test('matches committed golden snapshot', () => {
-      const lines = renderPanelWorkspaceSurface();
-      expect(lines.length).toBeGreaterThan(0);
-      assertGolden('panel-workspace', lines);
-    });
-
-    test('render is deterministic (two consecutive renders match)', () => {
-      const a = snapshotEncode('panel-workspace', renderPanelWorkspaceSurface());
-      const b = snapshotEncode('panel-workspace', renderPanelWorkspaceSurface());
       expect(a).toBe(b);
     });
   });
@@ -581,7 +516,7 @@ describe('golden-frames', () => {
 //      session picker, profile picker, agent detail, process, context
 //      inspector, history search, selection modal, each at a normal size
 //      and a hostile size (<24 rows or ~28 cols).
-//   8. shell-footer (compact), buildShellFooter with compact:true.
+//   8. shell-footer (busy), the status line while a turn runs, at 80 columns.
 //
 // Determinism notes for the additions below:
 //   - Every fixture uses fixed epoch timestamps, never a bare Date.now()
@@ -1083,7 +1018,7 @@ describe('golden-frames : conversation: streaming partial frame', () => {
 // ─── 7. Overlays, normal size + hostile size (<24 rows or ~28 cols) ──────
 
 interface OverlaySizeVariant {
-  readonly label: 'normal' | 'hostile';
+  readonly label: 'normal' | 'hostile' | '80x24' | '120x40';
   readonly width: number;
   readonly height: number;
 }
@@ -1215,10 +1150,7 @@ function renderProfilePickerSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('profile-picker-modal', renderProfilePickerSurface);
 
-// retirement: the agent-detail-modal and process-modal golden surfaces
-// (and their goldens) were removed, those modals were deleted once the F2
-// repoint made them unreachable; the Fleet panel subsumes the live process
-// tree (its own golden is defined below).
+// The Agents modal holds the live process tree (its goldens are below).
 
 // fleet, a deterministic multi-level tree (WRFC owner->engineer->reviewer
 // chain, one exec node, one terminal agent) with a FIXED `now` passed into
@@ -1329,45 +1261,7 @@ function buildFleetGoldenNodes(): ProcessNode[] {
   ];
 }
 
-function renderFleetSurface(width: number, height: number): Line[] {
-  const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
-  const readModel = createStaticFleetReadModel(snapshot);
-  const panel = new FleetPanel(readModel);
-  panel.handleInput('j'); // select the second row (engineer) so the detail region is non-trivial
-  return panel.render(width, height);
-}
-
-describeOverlayGolden('fleet-panel', renderFleetSurface);
-
-// One attached agent session tab, deterministic
-// transcript content via a stub getConversationSnapshot. Separate golden
-// surface (not folded into 'fleet-panel' above) so the root-tab-only
-// fixture's bytes stay stable independent of tab-view layout changes.
-function renderFleetTabSurface(width: number, height: number): Line[] {
-  const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
-  const readModel = createStaticFleetReadModel(snapshot);
-  const panel = new FleetPanel(readModel, {
-    getConversationSnapshot: (agentId: string) =>
-      agentId === 'wrfc-owner-01'
-        ? [
-          { role: 'user', content: 'Fix the golden fixture' },
-          { role: 'assistant', content: 'On it — reading fleet-panel.ts first.' },
-        ]
-        : [],
-  });
-  panel.handleInput('j'); // select row 1: wrfc-owner-01 (a running agent; row 0 is the terminal agent-done-01)
-  panel.handleInput('enter'); // attach it
-  return panel.render(width, height);
-}
-
-describeOverlayGolden('fleet-panel-tab', renderFleetTabSurface);
-
-// A steerable agent's attached tab. Two separate surfaces
-// (not folded into 'fleet-panel-tab' above) since the composer and the
-// queued badge are mutually-exclusive views (the composer input line
-// replaces the badge line while open; the badge reappears once the draft
-// closes), one fixed frame cannot honestly show both at once, so each
-// state gets its own deterministic golden.
+// A steerable running agent, for the steer and stop-confirm goldens.
 function fleetSteerGoldenNode(): ProcessNode {
   return {
     id: 'agent-steer-01',
@@ -1387,64 +1281,238 @@ function fleetSteerGoldenNode(): ProcessNode {
   };
 }
 
-// State 1: the composer is open with in-progress typed text (pre-submit),
-// exercises the 's' gate, the one-line input, and the Enter/Esc footer hints.
-function renderFleetSteerComposeSurface(width: number, height: number): Line[] {
-  const snapshot = buildFleetSnapshot([fleetSteerGoldenNode()], FIXED_FLEET_NOW);
-  const readModel = createStaticFleetReadModel(snapshot);
-  const panel = new FleetPanel(readModel);
-  panel.handleInput('enter'); // attach + focus the tab
-  panel.handleInput('s'); // open the steer composer
-  for (const ch of 'please add a regression test') panel.handleInput(ch);
-  return panel.render(width, height);
+// The four modals that replaced the side panes (Agents, Usage, Changes,
+// Notifications) plus the local-auth password prompt. Each renders at the
+// shared sizes and at 80x24 and 120x40. Every clock the modals read is fixed:
+// the fleet snapshot's `now`, recorded turn timestamps, and the
+// notifications' local-time fixtures.
+const MODAL_SIZES: readonly OverlaySizeVariant[] = [
+  ...OVERLAY_SIZES,
+  { label: '80x24', width: 80, height: 24 },
+  { label: '120x40', width: 120, height: 40 },
+];
+
+function keyToken(name: string): InputToken {
+  return { type: 'key', name, logicalName: name, ctrl: false, shift: false, meta: false } as InputToken;
 }
 
-describeOverlayGolden('fleet-panel-steer-compose', renderFleetSteerComposeSurface);
-
-// State 2: post-submit, the composer has closed and a queued badge is
-// visible (both in the tab footer's status line and the tree row's
-// activity-column glyph, once switched back to the root tab).
-function renderFleetSteerQueuedSurface(width: number, height: number): Line[] {
-  const snapshot = buildFleetSnapshot([fleetSteerGoldenNode()], FIXED_FLEET_NOW);
-  const readModel = createStaticFleetReadModel(snapshot);
-  const panel = new FleetPanel(readModel, {
-    steer: (_id: string, _text: string) => ({ queued: true, messageId: 'golden-msg-1' }),
-  });
-  panel.handleInput('enter'); // attach + focus the tab
-  panel.handleInput('s');
-  for (const ch of 'please add a regression test') panel.handleInput(ch);
-  panel.handleInput('enter'); // submit -> queued badge
-  return panel.render(width, height);
+function typeInto(host: SurfaceModalHost, text: string): void {
+  for (const ch of text) host.handleToken({ type: 'text', value: ch });
 }
 
-describeOverlayGolden('fleet-panel-steer-queued', renderFleetSteerQueuedSurface);
+// Assistant turns only: the user-message box comes from the main transcript
+// renderer (ui-factory), whose padding is outside this change.
+const GOLDEN_TRANSCRIPT = [
+  { role: 'assistant', content: 'On it, reading the fixture first.' },
+  { role: 'assistant', content: 'The fixture pins `now`, so the elapsed column is stable. Updating the expected rows next.' },
+];
 
-//, a terminal agent's tab whose full-fidelity snapshot is unavailable
-// (evicted from the SDK's retention ring, or never registered), degraded to
-// the on-disk ledger fallback. Attaches 'agent-done-01' (row 0, the same
-// terminal fixture node the base fleet-panel golden already uses) with
-// getConversationSnapshot always empty, then populates the tab's
-// ledgerEntries directly (bypassing the async fs read, same technique as
-// fleet-panel.test.ts) so the golden is fully synchronous and deterministic.
-function renderFleetLedgerTabSurface(width: number, height: number): Line[] {
-  const snapshot = buildFleetSnapshot(buildFleetGoldenNodes(), FIXED_FLEET_NOW);
-  const readModel = createStaticFleetReadModel(snapshot);
-  const panel = new FleetPanel(readModel, {
-    getConversationSnapshot: () => [], // evicted/never-registered, forces the ledger fallback
+function goldenFleetActions(steerable: boolean): FleetActionCallbacks {
+  return {
+    interrupt: () => true,
+    resume: () => true,
+    kill: () => [],
+    getConversationSnapshot: (id: string) => (id === 'wrfc-owner-01' || id === 'agent-steer-01' ? GOLDEN_TRANSCRIPT : []) as never,
+    resolveSessionLogPath: (id: string) => `/nonexistent/${id}.jsonl`,
+    steer: () => (steerable ? { queued: true, messageId: 'golden-msg-1' } : { queued: false, reason: 'not steerable' }),
+  };
+}
+
+function goldenAgentsModal(nodes: ProcessNode[], steerable = false): { host: SurfaceModalHost; modal: AgentsModal } {
+  const host = new SurfaceModalHost();
+  const modal = new AgentsModal({
+    readModel: createStaticFleetReadModel(buildFleetSnapshot(nodes, FIXED_FLEET_NOW)),
+    actions: goldenFleetActions(steerable),
+    sessionCost: () => 1.25,
+    confirm: (options) => confirmThrough(host, options),
+    requestRender: () => {},
+    tickMs: 0,
   });
-  panel.handleInput('enter'); // row 0 is 'agent-done-01' (terminal) by default selection
-  const tab = panel.getTabsState().tabs[0]!;
-  tab.ledgerEntries = [
-    { type: 'meta', agentId: 'agent-done-01', model: 'claude-haiku-4-5', provider: 'anthropic', title: '', timestamp: FIXED_FLEET_NOW - 500_000 },
-    { type: 'session_config', task: 'Regenerate splash goldens', timestamp: FIXED_FLEET_NOW - 499_000 },
-    { type: 'tool_execution', turn: 1, toolName: 'Bash', success: true, resultPreview: 'goldens regenerated: 12 files', timestamp: FIXED_FLEET_NOW - 450_000 },
-    { type: 'session_end', status: 'completed', toolCallCount: 1, durationMs: 100_000, timestamp: FIXED_FLEET_NOW - 400_000 },
+  host.push(modal);
+  return { host, modal };
+}
+
+function hostFrame(host: SurfaceModalHost, width: number, height: number): Line[] {
+  return frameFromLayers(host.modals().map((m) => m.render(width, height)), width, height);
+}
+
+function renderAgentsListSurface(width: number, height: number): Line[] {
+  const { host } = goldenAgentsModal(buildFleetGoldenNodes());
+  host.handleToken(keyToken('down'));
+  return hostFrame(host, width, height);
+}
+describeOverlayGolden('agents-modal', renderAgentsListSurface, MODAL_SIZES);
+
+function renderAgentsFullSurface(width: number, height: number): Line[] {
+  const { host } = goldenAgentsModal(buildFleetGoldenNodes());
+  host.handleToken(keyToken('enter'));
+  return hostFrame(host, width, height);
+}
+describeOverlayGolden('agents-modal-full', renderAgentsFullSurface, MODAL_SIZES);
+
+function renderAgentsSteerSurface(width: number, height: number): Line[] {
+  const { host } = goldenAgentsModal([fleetSteerGoldenNode()], true);
+  typeInto(host, 's');
+  typeInto(host, 'please add a regression test');
+  return hostFrame(host, width, height);
+}
+describeOverlayGolden('agents-modal-steer', renderAgentsSteerSurface, MODAL_SIZES);
+
+function renderAgentsStopConfirmSurface(width: number, height: number): Line[] {
+  const { host } = goldenAgentsModal([fleetSteerGoldenNode()], true);
+  typeInto(host, 'x');
+  return hostFrame(host, width, height);
+}
+describeOverlayGolden('agents-modal-stop-confirm', renderAgentsStopConfirmSurface, MODAL_SIZES);
+
+// Usage: a synchronous fake event feed drives the tracker, a fixed catalog
+// price keeps the dollars stable, and turns are recorded with fixed times.
+function goldenUsageModal(tab?: 'overview' | 'turns' | 'agents'): UsageModal {
+  const handlers = new Map<string, (payload: never) => void>();
+  const feed = { on: (type: string, handler: (payload: never) => void) => { handlers.set(type, handler); return () => {}; } };
+  const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, model: 'anthropic:claude-sonnet-4-6' };
+  const config = { get: (key: string) => (key === 'behavior.autoCompactThreshold' ? 80 : undefined), set: () => {} };
+  const agentUsage = new Map<string, { inputTokens: number; outputTokens: number }>([
+    ['agent-a', { inputTokens: 42_000, outputTokens: 6_100 }],
+    ['agent-b', { inputTokens: 18_500, outputTokens: 2_300 }],
+  ]);
+  const tracker = new UsageTracker({
+    turnEvents: feed as never,
+    agentEvents: feed as never,
+    getUsage: () => usage,
+    getContextTokens: () => 118_000,
+    getContextWindow: () => 200_000,
+    getModelId: () => usage.model,
+    getAgentStatus: (id: string) => {
+      const u = agentUsage.get(id);
+      // Only the fields the tracker reads (model and usage) matter here.
+      return u ? ({ model: 'anthropic:claude-sonnet-4-6', usage: { ...u, cacheReadTokens: 0, cacheWriteTokens: 0 } } as never) : null;
+    },
+    configManager: config as never,
+  });
+  const steps = [
+    [12_000, 1_800, 0], [9_500, 2_400, 11_000], [14_200, 900, 20_000], [6_800, 3_100, 31_000],
+    [11_300, 1_500, 30_500], [7_900, 2_700, 41_000], [15_600, 1_200, 44_000], [8_400, 2_000, 52_000],
+  ] as const;
+  steps.forEach(([input, output, cacheRead], i) => {
+    usage.input += input;
+    usage.output += output;
+    usage.cacheRead += cacheRead;
+    tracker.recordTurn(FIXED_FLEET_NOW + i * 60_000);
+  });
+  handlers.get('AGENT_SPAWNING')?.({ agentId: 'agent-a', task: 'Port the fleet goldens' } as never);
+  handlers.get('AGENT_SPAWNING')?.({ agentId: 'agent-b', task: 'Review the change' } as never);
+  handlers.get('AGENT_COMPLETED')?.({ agentId: 'agent-a' } as never);
+  return new UsageModal({ tracker, compact: () => {}, pollMs: 0, ...(tab ? { tab } : {}) });
+}
+
+function withGoldenPricing<T>(fn: () => T): T {
+  setModelPricingResolver(() => ({ status: 'priced', source: 'catalog', asOf: '2026-07-01', rates: { inputPerMTok: 3, outputPerMTok: 15, cacheReadPerMTok: 0.3, cacheWritePerMTok: 3.75 } } as ResolvedModelPricing));
+  try { return fn(); } finally { setModelPricingResolver(null); }
+}
+
+describeOverlayGolden('usage-modal', (w, h) => withGoldenPricing(() => frameFromLayer(goldenUsageModal().render(w, h), w, h)), MODAL_SIZES);
+describeOverlayGolden('usage-modal-turns', (w, h) => withGoldenPricing(() => frameFromLayer(goldenUsageModal('turns').render(w, h), w, h)), MODAL_SIZES);
+describeOverlayGolden('usage-modal-agents', (w, h) => withGoldenPricing(() => frameFromLayer(goldenUsageModal('agents').render(w, h), w, h)), MODAL_SIZES);
+
+// Changes: the workspace view over a fixed two-file diff, a fixed repo
+// summary and commits, and a semantic summary for the first file. No git runs.
+const GOLDEN_DIFF = [
+  'diff --git a/src/retry.ts b/src/retry.ts',
+  'index 1111111..2222222 100644',
+  '--- a/src/retry.ts',
+  '+++ b/src/retry.ts',
+  '@@ -1,8 +1,10 @@',
+  " import { sleep } from './sleep.ts';",
+  ' ',
+  '-export async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {',
+  '+const backoff = (attempt: number): number => Math.min(2_000, 100 * 2 ** attempt);',
+  '+',
+  '+export async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {',
+  '   for (let i = 0; i < attempts; i++) {',
+  '     try { return await fn(); }',
+  '-    catch { await sleep(100); }',
+  '+    catch { await sleep(backoff(i)); }',
+  '   }',
+  "   throw new Error('retries exhausted');",
+  ' }',
+  '@@ -20,3 +22,4 @@ export function describeRetry(): string {',
+  "   return 'retry with backoff';",
+  ' }',
+  "+export const MAX_BACKOFF_MS = 2_000;",
+  'diff --git a/README.md b/README.md',
+  'index 3333333..4444444 100644',
+  '--- a/README.md',
+  '+++ b/README.md',
+  '@@ -4,2 +4,2 @@',
+  ' ## Retries',
+  '-Retries wait 100ms.',
+  '+Retries back off up to two seconds.',
+  '',
+].join('\n');
+
+function renderChangesWorkspaceSurface(width: number, height: number): Line[] {
+  const modal = new ChangesModal({ workingDirectory: '/nonexistent/golden-repo', getSessionFiles: () => [], requestRender: () => {} });
+  modal.files = parseChanges(GOLDEN_DIFF);
+  modal.label = 'this session';
+  modal.summary = { branch: 'main', staged: 0, unstaged: 2 };
+  modal.commits = [
+    { hash: 'a1b2c3d4e5f6a7b8', message: 'Retries back off exponentially', date: '2026-09-27' },
+    { hash: 'b2c3d4e5f6a7b8c9', message: 'Add the retry helper', date: '2026-09-26' },
   ];
-  tab.ledgerLoadStarted = true;
-  return panel.render(width, height);
+  modal.reviewed.add('README.md');
+  // The semantic map is private (it fills from tree-sitter asynchronously); the
+  // golden sets a fixed summary so the chips row is covered without a parser.
+  (modal as unknown as { semantic: Map<string, SemanticDiff | null | undefined> }).semantic.set('src/retry.ts', {
+    symbols: [
+      { kind: 'added', symbolKind: 'variable', name: 'backoff' } as SemanticDiff['symbols'][number],
+      { kind: 'modified', symbolKind: 'function', name: 'withRetry' } as SemanticDiff['symbols'][number],
+    ],
+    imports: [],
+    totalChanges: 2,
+  });
+  return frameFromLayer(modal.render(width, height), width, height);
 }
+describeOverlayGolden('changes-modal', renderChangesWorkspaceSurface, MODAL_SIZES);
 
-describeOverlayGolden('fleet-panel-ledger-tab', renderFleetLedgerTabSurface);
+function renderChangesPreviewQuestionSurface(width: number, height: number): Line[] {
+  const modal = new ChangesModal({ workingDirectory: '/nonexistent/golden-repo', getSessionFiles: () => [], requestRender: () => {} }, 'preview');
+  modal.loadPreview('Rewind to turn 3', GOLDEN_DIFF, null);
+  void modal.ask({ text: 'Rewind the files to turn 3? The changes shown are undone.', confirmLabel: 'Rewind', tone: 'warning' });
+  return frameFromLayer(modal.render(width, height), width, height);
+}
+describeOverlayGolden('changes-modal-preview-question', renderChangesPreviewQuestionSurface, MODAL_SIZES);
+
+// Notifications: local-time fixtures, so "today" and the clock column are the
+// same in every time zone.
+function renderNotificationsSurface(width: number, height: number): Line[] {
+  const now = new Date(2026, 8, 28, 16, 30).getTime();
+  const feed = new PanelNotificationFeed();
+  const note = (id: string, level: string, title: string, body: string, ts: Date, domain = 'system') =>
+    ({ id, level, title, body, timestamp: ts.getTime(), domain } as never);
+  const single = { target: 'panel_only', reasonCode: 'routed' } as never;
+  feed.record(note('n1', 'info', 'Ollama (192.168.0.85): 4 models available', '', new Date(2026, 8, 25, 10, 5)), single);
+  for (let i = 0; i < 4; i++) {
+    feed.record(note(`n2-${i}`, 'warning', 'Control plane is network-reachable with TLS off', 'Set controlPlane.tls or bind to localhost.', new Date(2026, 8, 28, 9, 10 + i)),
+      { target: 'panel_only', reasonCode: 'burst_collapsed', batchKey: 'tls' } as never);
+  }
+  feed.record(note('n3', 'critical', 'Daemon restarted after a crash', 'The previous run exited with signal 9.', new Date(2026, 8, 28, 15, 48)), single);
+  feed.record(note('n4', 'info', 'Agent finished: Regenerate splash goldens', '', new Date(2026, 8, 28, 16, 2), 'agents'), single);
+  feed.markAllSeen();
+  feed.record(note('n5', 'info', 'Build passed on main', '', new Date(2026, 8, 28, 16, 20)), single);
+  const modal = new NotificationsModal({ feed, resolveSubject: () => null, now: () => now });
+  return frameFromLayer(modal.render(width, height), width, height);
+}
+describeOverlayGolden('notifications-modal', renderNotificationsSurface, MODAL_SIZES);
+
+function renderMaskedEntrySurface(width: number, height: number): Line[] {
+  const host = new SurfaceModalHost();
+  const modal = new MaskedEntryModal({ kind: 'rotate-password', username: 'alice', auth: { addUser: () => { throw new Error('unused'); }, rotatePassword: () => {} } as never });
+  host.push(modal);
+  typeInto(host, 'hunter22');
+  return frameFromLayer(modal.render(width, height), width, height);
+}
+describeOverlayGolden('masked-entry-modal', renderMaskedEntrySurface, MODAL_SIZES);
 
 // context inspector, ConversationManager with fixed message content, no
 // timestamps rendered by this surface.
@@ -1545,38 +1613,45 @@ describe('golden-frames : consequence-time trust modal (full detail text never c
   }
 });
 
-// ─── 8. Shell footer (compact) ─────────────────────────────────────────────
+// ─── 8. Shell footer (busy) ────────────────────────────────────────────────
+//
+// A running turn: the spinner, phrase, elapsed and the esc keycap take the
+// status line's left side; at 80 columns the directory is already gone and the
+// context bar narrows to make room.
 
-function renderShellFooterCompactSurface(): Line[] {
-  const result = buildShellFooter({
-    width: NORMAL_W,
-    promptText: '> Ask me anything',
+function renderShellFooterBusySurface(): Line[] {
+  return buildShellFooter({
+    width: 80,
+    promptText: '',
     promptLineCount: 1,
+    promptCursorPos: 0,
     usage: { up: 1024, down: 512 },
     showExitNotice: false,
     lastCopyTime: 0,
     model: 'claude-opus-4',
-    toolCount: 7,
     workingDir: '/workspace/my-project',
+    branch: 'main',
     provider: 'anthropic',
-    contextWindow: 0,
+    contextWindow: 100_000,
+    compactThreshold: 0.8,
+    lastInputTokens: 70_000,
     runningAgentCount: 0,
     runningProcessCount: 0,
     indicatorFocused: false,
-    compact: true,
-  });
-  return result.lines;
+    permissionMode: 'accept-edits',
+    busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 12_000 },
+  }).lines;
 }
 
-describe('golden-frames : shell-footer (compact)', () => {
+describe('golden-frames : shell-footer (busy)', () => {
   test('matches committed golden snapshot', () => {
-    const lines = renderShellFooterCompactSurface();
+    const lines = renderShellFooterBusySurface();
     expect(lines.length).toBeGreaterThan(0);
-    assertGolden('shell-footer-compact', lines);
+    assertGolden('shell-footer-busy', lines);
   });
   test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('shell-footer-compact', renderShellFooterCompactSurface());
-    const b = snapshotEncode('shell-footer-compact', renderShellFooterCompactSurface());
+    const a = snapshotEncode('shell-footer-busy', renderShellFooterBusySurface());
+    const b = snapshotEncode('shell-footer-busy', renderShellFooterBusySurface());
     expect(a).toBe(b);
   });
 });
@@ -1591,14 +1666,15 @@ describe('golden-frames : shell-footer (compact)', () => {
 function renderShellFooterVoiceSurface(indicator: 'statusline' | 'banner'): Line[] {
   return buildShellFooter({
     width: W,
-    promptText: '> Ask me anything',
+    promptText: 'Ask me anything',
     promptLineCount: 1,
+    promptCursorPos: 15,
     usage: { up: 1024, down: 512 },
     showExitNotice: false,
     lastCopyTime: 0,
     model: 'claude-opus-4',
-    toolCount: 7,
     workingDir: '/workspace/my-project',
+    branch: 'main',
     provider: 'anthropic',
     contextWindow: 0,
     runningAgentCount: 0,
@@ -1876,39 +1952,39 @@ const CHROME_GIT: GitHeaderInfo = { branch: 'main', dirty: true, ahead: 0, behin
 const CHROME_FIXTURE_VERSION = '0.29.0';
 
 function renderChromeHeaderFooterSurface(): Line[] {
-  const header = UIFactory.createHeader(W, 'claude-opus-4', 'anthropic', 'Chrome golden', CHROME_GIT, CHROME_FIXTURE_VERSION);
-  const footer = UIFactory.createFooter(
-    W,
-    '> Ask me anything',
-    { up: 1024, down: 512 },
-    false,          // showExitNotice
-    0,              // lastCopyTime, frozen
-    'claude-opus-4',
-    7,              // toolCount
-    undefined,      // cursorPos
-    '/workspace/my-project',
-    'anthropic',
-    100_000,        // contextWindow
-    0.80,           // compactThreshold
-    true,           // dangerMode → chrome.bad banner
-    60_000,         // lastInputTokens → 60% fill
-    undefined,      // commandArgsHint
-    undefined,      // hitlMode
-    true,           // promptFocused
-    'plan',         // composerMode → state.info
-    'idle',         // composerStatus
-    undefined,      // composerFlags
-    'approval-wait',// composerPendingRisk → chrome.warn
-    false,          // compact
-  );
+  const header = UIFactory.createHeader(W, 'claude-opus-4', 'Chrome golden', CHROME_GIT, CHROME_FIXTURE_VERSION);
+  const footer = buildShellFooter({
+    width: W,
+    promptText: 'Ask me anything',
+    promptLineCount: 1,
+    promptCursorPos: 15,
+    usage: { up: 1024, down: 512 },
+    showExitNotice: false,
+    lastCopyTime: 0,
+    model: 'claude-opus-4',
+    workingDir: '/workspace/my-project',
+    branch: 'main',
+    provider: 'anthropic',
+    contextWindow: 100_000,
+    compactThreshold: 0.80,
+    dangerMode: true,              // the auto-approve chip, error color
+    lastInputTokens: 60_000,
+    runningAgentCount: 0,
+    runningProcessCount: 0,
+    indicatorFocused: false,
+    permissionMode: 'plan',        // info-colored bar
+    composerPendingRisk: 'approval-wait',
+  }).lines;
   return [...header, ...footer];
 }
 
 function renderChromeThinkingSurface(): Line[] {
-  // frame=0 → phrase 'Thinking...' (no rotation); no elapsedMs/tokenSpeed so no
-  // dynamic suffixes. inputTokens/outputTokens present → the 'out' segment
-  // exercises accent.brand; the phrase gradient exercises accent.gradient*.
-  return UIFactory.createThinkingFragment(W, '⠋', 0, undefined, undefined, 1000, 2000);
+  // The status line while a turn waits on an approval: frame 0, no timers.
+  return buildShellFooter({
+    width: W, promptText: '', promptLineCount: 1, usage: { up: 0, down: 0 }, showExitNotice: false, lastCopyTime: 0,
+    runningAgentCount: 0, runningProcessCount: 0, indicatorFocused: false,
+    busy: { spinner: '⠋', frame: 0, phrase: 'Waiting for your approval', approvalPending: true },
+  }).lines.slice(-1);
 }
 
 describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
@@ -1937,9 +2013,9 @@ describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
   });
 
   test('each chrome surface (header/footer/thinking) flips its roles under light', () => {
-    // Header: separator + version = chrome.faint; dirty git = chrome.warn.
-    // Footer: DANGER banner = chrome.bad; approval-wait risk = chrome.warn.
-    // Thinking: 'out' token = accent.brand.
+    // Header: version = textFaint; dirty dot = warning.
+    // Footer: auto-approve chip = error; plan bar = info.
+    // Status line: the phrase = textMuted.
     const headerDark = snapshotEncode('c-h', renderChromeHeaderFooterSurface());
     const thinkDark = snapshotEncode('c-t', renderChromeThinkingSurface());
     const headerLight = snapshotEncode('c-h', underLight(() => renderChromeHeaderFooterSurface()));
@@ -1951,16 +2027,18 @@ describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
 
     // Concrete role assertions: each role's resolved colour for the mode must
     // appear in that mode's render (read from the active theme, not pinned).
-    const darkTones = resolveUiTones('dark');
-    const lightTones = resolveUiTones('light');
-    expect(headerDark).toContain(`fg=${darkTones.chrome.faint}`); // chrome.faint (dark)
-    expect(headerLight).toContain(`fg=${lightTones.chrome.faint}`); // chrome.faint (light)
-    expect(headerDark).toContain(`fg=${darkTones.chrome.warn}`); // chrome.warn (dark, dirty git)
-    expect(headerLight).toContain(`fg=${lightTones.chrome.warn}`); // chrome.warn (light)
-    expect(headerDark).toContain(`fg=${darkTones.chrome.bad}`); // chrome.bad (dark, DANGER)
-    expect(headerLight).toContain(`fg=${lightTones.chrome.bad}`); // chrome.bad (light)
-    expect(thinkDark).toContain(`fg=${darkTones.accent.brand}`); // accent.brand (dark)
-    expect(thinkLight).toContain(`fg=${lightTones.accent.brand}`); // accent.brand (light)
+    const dark = activeTokens();
+    const light = underLight(() => ({ ...activeTokens() }));
+    expect(headerDark).toContain(`fg=${dark.textFaint}`); // version (dark)
+    expect(headerLight).toContain(`fg=${light.textFaint}`); // version (light)
+    expect(headerDark).toContain(`fg=${dark.warning}`); // dirty dot (dark)
+    expect(headerLight).toContain(`fg=${light.warning}`); // dirty dot (light)
+    expect(headerDark).toContain(`fg=${dark.error}`); // auto-approve (dark)
+    expect(headerLight).toContain(`fg=${light.error}`); // auto-approve (light)
+    expect(headerDark).toContain(`fg=${dark.info}`); // plan bar (dark)
+    expect(headerLight).toContain(`fg=${light.info}`); // plan bar (light)
+    expect(thinkDark).toContain(`fg=${dark.textMuted}`); // phrase (dark)
+    expect(thinkLight).toContain(`fg=${light.textMuted}`); // phrase (light)
 
     // Restore is handled by underLight(); confirm the shared default is dark.
     const headerDarkAgain = snapshotEncode('c-h', renderChromeHeaderFooterSurface());
@@ -2197,4 +2275,107 @@ describeOverlayGolden('permission-edit-hunks', (width, height) => {
   } as unknown as PermissionRequest;
   const hunkState = { hunks: edits, cursor: 0, selected: new Set([0]) };
   return frameFromLayer(PermissionPromptUI.renderPromptModal(width, height, request, { callId: request.callId, hunkState, requestedBy: 'engineer' }), width, height);
+});
+
+// ─── The main screen, whole ────────────────────────────────────────────────
+//
+// Header (1 row), the conversation area, the composer (5 rows) and the status
+// line (1 row): about 7 rows of chrome at rest. The home screen centers the
+// protected splash in the conversation area and must not clip it at 100x30.
+
+function screenFrame(width: number, height: number, body: Line[], footer: Line[], header: Line[]): Line[] {
+  const room = height - header.length - footer.length;
+  const visible = body.slice(Math.max(0, body.length - room));
+  while (visible.length < room) visible.unshift(emptyLine(width));
+  return [...header, ...visible, ...footer];
+}
+
+function baseFooter(width: number, overrides: Partial<Parameters<typeof buildShellFooter>[0]> = {}): Line[] {
+  return buildShellFooter({
+    width,
+    promptText: '',
+    promptLineCount: 1,
+    promptCursorPos: 0,
+    usage: { up: 53_000, down: 1_700 },
+    showExitNotice: false,
+    lastCopyTime: 0,
+    model: 'claude-opus-4',
+    workingDir: '/workspace/goodvibes-tui',
+    branch: 'main',
+    provider: 'anthropic',
+    contextWindow: 1_000_000,
+    compactThreshold: 0.8,
+    lastInputTokens: 340_000,
+    runningAgentCount: 0,
+    runningProcessCount: 0,
+    indicatorFocused: false,
+    permissionMode: 'prompt',
+    ...overrides,
+  }).lines;
+}
+
+function renderHomeScreenSurface(width: number, height: number): Line[] {
+  const header = UIFactory.createHeader(width, 'claude-opus-4', undefined, CHROME_GIT, CHROME_FIXTURE_VERSION);
+  const footer = baseFooter(width);
+  const room = height - header.length - footer.length;
+  return [...header, ...centerViewportContent(renderSplashSurface(width), room, width), ...footer];
+}
+
+function renderBaseScreenSurface(width: number, height: number): Line[] {
+  const t = activeTokens();
+  const body: Line[] = [emptyLine(width)];
+  body.push(...UIFactory.createMessageBar(width, "The retry helper in src/net/retry.ts never backs off, so we hammer the API when it's down. Can you fix it and add a test?"));
+  body.push(emptyLine(width));
+  body.push(renderConversationEventLine(width, { marker: '◆', markerFg: t.brand, label: '', labelFg: t.textFaint, detailFg: t.textFaint }, [
+    { text: ' claude-opus-4', fg: t.textFaint }, { text: ' · 4 tools', fg: t.textFaint },
+  ]));
+  body.push(...renderMarkdown([
+    '## Fixed: exponential backoff with jitter',
+    'The loop slept a **constant** `baseDelayMs` between attempts, so a flapping API got hit at a steady rate.',
+    '1. Delay now doubles each attempt: `baseDelayMs * 2 ** i`',
+    '2. Up to 20% random jitter so concurrent callers spread out',
+    '- No sleep after the final attempt',
+    '> The cap on the delay is a follow-up; this quote wraps so its bar shows on every row it takes up on screen.',
+    '```ts',
+    'const backoff = opts.baseDelayMs * 2 ** i;',
+    'await sleep(backoff + Math.random() * backoff * 0.2);',
+    '```',
+    'The schedule becomes:',
+    '| Attempt | Delay (ms) |',
+    '|---|---|',
+    '| 1 | 200 |',
+    '| 2 | 400 |',
+  ].join('\n'), width));
+  const header = UIFactory.createHeader(width, 'claude-opus-4', 'Fix retry backoff', CHROME_GIT, CHROME_FIXTURE_VERSION);
+  return screenFrame(width, height, body, baseFooter(width, { dangerMode: true }), header);
+}
+
+describe('golden-frames : the main screen', () => {
+  test('home screen at 100x30: the splash is centered and not clipped', () => {
+    const lines = renderHomeScreenSurface(100, 30);
+    expect(lines).toHaveLength(30);
+    const splash = renderSplashSurface(100);
+    const text = lines.map((l) => l.map((c) => c.char).join(''));
+    for (const row of splash) {
+      const want = row.map((c) => c.char).join('');
+      if (want.trim()) expect(text).toContain(want);
+    }
+    // Centered: the blank rows above and below the splash differ by at most one.
+    const body = text.slice(1, 30 - 6);
+    const first = body.findIndex((r) => r.trim() !== '');
+    let last = body.length - 1;
+    while (last > first && body[last]!.trim() === '') last--;
+    expect(Math.abs(first - (body.length - 1 - last))).toBeLessThanOrEqual(1);
+    assertGolden('home-screen-100x30', lines);
+  });
+
+  test('base screen at 120x40 and 80x24', () => {
+    assertGolden('base-screen-120x40', renderBaseScreenSurface(120, 40));
+    assertGolden('base-screen-80x24', renderBaseScreenSurface(80, 24));
+  });
+
+  test('chrome at rest is 7 rows: header 1, composer 5, status line 1', () => {
+    expect(UIFactory.createHeader(120, 'claude-opus-4')).toHaveLength(1);
+    expect(baseFooter(120)).toHaveLength(6);
+  });
 });

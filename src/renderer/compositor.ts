@@ -1,19 +1,12 @@
 import { TerminalBuffer } from './buffer.ts';
 import { DiffEngine } from './diff.ts';
-import { type Line, createEmptyCell, createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { type Line, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import type { SearchManager } from '../input/search.ts';
 import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 import { probeTermCaps, type TermColorCaps } from './term-caps.ts';
-import { activeTheme, activeTokens, activeUiTones } from './theme.ts';
+import { activeTheme, activeTokens } from './theme.ts';
 import type { SurfaceLayer } from './surface-kit.ts';
 import { composeLayers } from './surface-compose.ts';
-
-// Accent / dim colors for the panel focus border. The focused pane's left
-// border column is drawn in the accent tone; the unfocused pane stays dim.
-// Panel separator colours, read per call so they follow the active theme.
-function panelFocusAccent(): string { return activeUiTones().state.active; }
-function panelBorderDim(): string { return activeTokens().textFaint; }
 
 export interface SelectionInfo {
   isCellSelected: (col: number, absoluteRow: number) => boolean;
@@ -27,29 +20,6 @@ export interface SearchInfo {
   viewportStartY: number;
 }
 
-export interface PanelCompositeData {
-  /**
-   * The single consolidated workspace tab bar spanning all open panels across
-   * both panes. There are no per-pane tab bars, pane focus is shown by the
-   * accent border (see `topFocused`/`bottomFocused`).
-   */
-  workspaceBar: Line;
-  /** Top pane: panel content lines */
-  topContent: Line[];
-  /** Whether the top pane is focused (drives the accent border) */
-  topFocused: boolean;
-  /** Whether a bottom pane is present (splits the panel area). */
-  hasBottomPane: boolean;
-  /** Bottom pane content lines. Undefined = no bottom pane. */
-  bottomContent?: Line[];
-  /** Whether the bottom pane is focused */
-  bottomFocused?: boolean;
-  /** Separator between left and right panel area */
-  separator: boolean;
-  /** Ratio of panel height for the top pane (0–1). Only used when bottom pane is present. */
-  verticalSplitRatio: number;
-}
-
 export interface CompositeRequest {
   width: number;
   height: number;
@@ -58,8 +28,6 @@ export interface CompositeRequest {
   footer: Line[];
   selection?: SelectionInfo;
   search?: SearchInfo;
-  panel?: PanelCompositeData;
-  panelWidth?: number; // width of the right panel area (0 = no panel)
   /**
    * Surfaces stamped over the finished screen, in order: modals (which dim
    * everything underneath first), toasts. Screen coordinates.
@@ -131,7 +99,7 @@ export class Compositor {
   }
 
   public composite(params: CompositeRequest): void {
-    const { width, height, header, viewport, footer, selection, search, panel, panelWidth, layers } = params;
+    const { width, height, header, viewport, footer, selection, search, layers } = params;
     // A size change reallocates the buffer, which drops every record of what
     // the terminal is currently showing, repaint in full rather than diff
     // against a model that no longer describes the screen.
@@ -151,10 +119,6 @@ export class Compositor {
     }
     const newBuffer = this.backBuffer;
 
-    const hasPanel = panel !== undefined && panelWidth !== undefined && panelWidth > 0;
-    const leftWidth = hasPanel ? Math.max(1, width - panelWidth - 1) : width;
-    const sepX = hasPanel ? leftWidth : -1;
-
     // 1. Draw Header, always full width
     header.forEach((line, i) => newBuffer.blitLine(i, line));
 
@@ -165,33 +129,6 @@ export class Compositor {
     // Calculate the offset for bottom-anchored short history
     const lineCount = selection?.lineCount ?? 0;
     const offset = Math.max(0, vHeight - lineCount);
-
-    // --- Pre-compute panel row layout when split pane is active ---
-    // A single consolidated workspace bar heads the panel area; there are no
-    // per-pane tab bars. When both panes are visible the layout is:
-    //   row 0:              workspace tab bar
-    //   rows 1..topH:       top content
-    //   row topH+1:         horizontal separator (───)
-    //   rows topH+2..end:   bottom content
-    const hasBottomPane = hasPanel && panel!.hasBottomPane;
-    let topPaneHeight = 0;   // number of content rows in top pane
-    let hSepRow = -1;        // viewport row of the horizontal separator
-    if (hasPanel && hasBottomPane) {
-      const panelAreaRows = Math.max(0, vHeight - 1); // subtract workspace bar
-      const contentRows = Math.max(0, panelAreaRows - 1); // subtract h-separator
-      topPaneHeight = Math.max(1, Math.floor(contentRows * panel!.verticalSplitRatio));
-      hSepRow = 1 + topPaneHeight; // workspace bar + top content rows
-    }
-
-    const panelFocused = hasPanel && (panel!.topFocused || panel!.bottomFocused);
-    // Per-row left-border color: the focused pane's rows get the accent tone.
-    const borderFgForRow = (i: number): string => {
-      if (!hasPanel || !panel!.separator || !panelFocused) return panelBorderDim();
-      if (!hasBottomPane) return panel!.topFocused ? panelFocusAccent() : panelBorderDim();
-      if (i === 0) return panelFocusAccent(); // workspace bar, panel is focused
-      if (i <= topPaneHeight) return panel!.topFocused ? panelFocusAccent() : panelBorderDim();
-      return panel!.bottomFocused ? panelFocusAccent() : panelBorderDim();
-    };
 
     // Every body row is written every frame, including rows the caller did not
     // supply a line for. A viewport array shorter than the body (a docked
@@ -208,99 +145,13 @@ export class Compositor {
       const screenY = viewportStartY + i;
       if (screenY >= height) break;
 
-      if (!hasPanel) {
-        // No panel: existing fast path
-        newBuffer.blitLine(screenY, line);
-      } else {
-        // Panel active: write cells individually to support split layout
-        // Left side: viewport cells 0..leftWidth-1
-        for (let x = 0; x < leftWidth; x++) {
-          const cell = line[x];
-          if (cell !== undefined) {
-            // If this is a wide char (2-cell) at the last left-side column,
-            // it would bleed into the separator column visually.
-            // Replace with a space to keep the separator aligned.
-            if (x === leftWidth - 1 && cell.char && cell.char.length > 0 && getDisplayWidth(cell.char) > 1) {
-              newBuffer.setCell(x, screenY, { ...cell, char: ' ' });
-              continue;
-            }
-            newBuffer.setCell(x, screenY, cell);
-          }
-        }
+      newBuffer.blitLine(screenY, line);
 
-        const p = panel!;
-
-        // Separator column (vertical bar between left and panel area).
-        // Colored per-row so the focused pane shows a bright accent border.
-        if (p.separator) {
-          newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: borderFgForRow(i) }));
-        }
-
-        const panelStartX = sepX + 1;
-        const clearPanelRemainder = (fromX = 0) => {
-          for (let x = Math.max(0, fromX); x < panelWidth; x++) {
-            newBuffer.setCell(panelStartX + x, screenY, createEmptyCell());
-          }
-        };
-        const drawPanelLine = (panelLine: Line | undefined) => {
-          if (panelLine === undefined) {
-            clearPanelRemainder();
-            return;
-          }
-          const limit = Math.min(panelLine.length, panelWidth);
-          for (let x = 0; x < limit; x++) {
-            const cell = panelLine[x];
-            if (cell !== undefined) {
-              newBuffer.setCell(panelStartX + x, screenY, cell);
-            }
-          }
-          clearPanelRemainder(limit);
-        };
-
-        if (!hasBottomPane) {
-          // --- Single pane mode ---
-          // viewport row 0 → workspace bar, viewport rows 1+ → panel content
-          const panelLine = i === 0 ? p.workspaceBar : p.topContent[i - 1];
-          drawPanelLine(panelLine);
-        } else {
-          // --- Two pane mode (single consolidated workspace bar) ---
-          // Row layout (by viewport row i):
-          //   i = 0:                      workspace tab bar
-          //   1 <= i <= topPaneHeight:    top content[i-1]
-          //   i = hSepRow:                horizontal separator
-          //   i >= hSepRow+1:             bottom content[i - (hSepRow+1)]
-          let panelLine: Line | undefined;
-
-          if (i === 0) {
-            panelLine = p.workspaceBar;
-          } else if (i <= topPaneHeight) {
-            panelLine = p.topContent[i - 1];
-          } else if (i === hSepRow) {
-            // Horizontal separator between the two panes. Accent when the bottom
-            // pane has focus so the divider reinforces the focus border.
-            const focusFg = p.bottomFocused ? panelFocusAccent() : panelBorderDim();
-            for (let x = 0; x < panelWidth; x++) {
-              newBuffer.setCell(panelStartX + x, screenY, createStyledCell('─', { fg: focusFg }));
-            }
-            // T-junction (├) joins the vertical left-border with the pane divider.
-            if (p.separator) {
-              newBuffer.setCell(sepX, screenY, createStyledCell('├', { fg: focusFg }));
-            }
-          } else {
-            panelLine = p.bottomContent?.[i - (hSepRow + 1)];
-          }
-
-          if (i !== hSepRow) {
-            drawPanelLine(panelLine);
-          }
-        }
-      }
-
-      // Apply Selection Highlighting Overlay (left side only)
+      // Apply Selection Highlighting Overlay
       // Only highlight rows that actually contain history (past the bottom-anchor offset)
       if (selection && i >= offset) {
         const absoluteRow = selection.scrollTop + (i - offset);
-        for (let x = 0; x < leftWidth; x++) {
+        for (let x = 0; x < width; x++) {
           if (selection.isCellSelected(x, absoluteRow)) {
             // Mouse selection: the theme's selection fill with body text (the
             // inverse selectedListItemText is unreadable on this fill).
@@ -310,14 +161,14 @@ export class Compositor {
         }
       }
 
-      // Apply Search Match Highlighting Overlay (left side only)
+      // Apply Search Match Highlighting Overlay
       if (search && search.manager.active && search.manager.query.length > 0 && i >= offset) {
         const T = activeTheme();
         const absoluteRow = search.scrollTop + (i - offset);
         const lineMatches = search.manager.getMatchesOnLine(absoluteRow);
         for (const match of lineMatches) {
           const isCurrent = search.manager.isCurrentMatch(absoluteRow, match.col);
-          for (let x = match.col; x < match.col + match.length && x < leftWidth; x++) {
+          for (let x = match.col; x < match.col + match.length && x < width; x++) {
             if (isCurrent) {
               newBuffer.setCell(x, screenY, { bg: T.searchCurrentBg, fg: T.searchCurrentFg, bold: true, dim: false });
             } else {
@@ -328,7 +179,7 @@ export class Compositor {
       }
     }
     // (rows past the supplied viewport lines are covered by the loop above,
-    // separator column included, so they can no longer keep a stale frame.)
+    // so they can no longer keep a stale frame.)
 
     // 3. Draw Footer (Pinned to Bottom), always full width
     const footerStart = height - footer.length;

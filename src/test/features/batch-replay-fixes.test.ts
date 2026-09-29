@@ -7,32 +7,27 @@ import { describe, test, expect } from 'bun:test';
 import { UIFactory } from '../../renderer/ui-factory.ts';
 import { handleCtrlC } from '../../input/handler-content-actions.ts';
 
-function fragmentText(lines: ReturnType<typeof UIFactory.createThinkingFragment>): string {
-  return lines.map((line) => line.map((cell) => cell.char ?? '').join('')).join('\n');
+/** The waiting phrase the status line shows for a running turn. */
+function busyText(outputTokens: number, stallInfo: { msSinceLastDelta: number }, approvalPending?: boolean): string {
+  return UIFactory.busyPhrase(0, outputTokens, stallInfo, approvalPending);
 }
 
 describe('pre-first-token silence is not "Stalled"', () => {
   const stallInfo = { msSinceLastDelta: 6_000 };
 
   test('out=0 renders waiting-for-model wording', () => {
-    const text = fragmentText(UIFactory.createThinkingFragment(
-      120, '⠇', 0, undefined, undefined, 61, 0, 6_000, undefined, stallInfo,
-    ));
+    const text = busyText(0, stallInfo);
     expect(text).toContain('Waiting for model 6s');
     expect(text).not.toContain('Stalled');
   });
 
   test('mid-stream silence (out>0) keeps the honest Stalled label', () => {
-    const text = fragmentText(UIFactory.createThinkingFragment(
-      120, '⠇', 0, undefined, undefined, 61, 400, 30_000, 900, stallInfo,
-    ));
+    const text = busyText(400, stallInfo);
     expect(text).toContain('Stalled 6s');
   });
 
   test('approval wait still wins over both', () => {
-    const text = fragmentText(UIFactory.createThinkingFragment(
-      120, '⠇', 0, undefined, undefined, 61, 0, 6_000, undefined, stallInfo, true,
-    ));
+    const text = busyText(0, stallInfo, true);
     expect(text).toContain('Waiting for your approval');
   });
 });

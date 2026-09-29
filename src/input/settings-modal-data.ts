@@ -337,7 +337,7 @@ export const BUDGET_ALERT_USD_SYNTHETIC_SETTING: ConfigSetting = {
   key: BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey,
   type: 'number',
   default: BUDGET_ALERT_USD_DEFAULT,
-  description: 'Session cost-budget alert threshold in USD (0 = no budget configured). Set via the Cost panel\'s "b" key or /cost budget <usd>; this entry only displays the current effective value.',
+  description: 'Session cost-budget alert threshold in USD (0 = no budget configured). Set via the Usage modal\'s "b" key or /cost budget <usd>; this entry only displays the current effective value.',
 };
 
 /**
@@ -370,7 +370,7 @@ export function buildBudgetAlertUsdSyntheticEntry(configManager: Pick<ConfigMana
 const NOTIFY_ALERT_SYNTHETIC_SETTINGS: ReadonlyArray<{ readonly key: string; readonly description: string }> = [
   {
     key: 'behavior.notifyOnBudgetBreach',
-    description: 'Alert when session cost crosses the configured budget (set via the Cost panel\'s "b" key).',
+    description: 'Alert when session cost crosses the configured budget (set via the Usage modal\'s "b" key).',
   },
   {
     key: 'behavior.notifyOnAgentFailure',

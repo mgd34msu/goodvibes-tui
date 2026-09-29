@@ -1,5 +1,5 @@
-import type { PanelManager } from './panel-manager.ts';
-import { requireUiServices, type ResolvedBuiltinPanelDeps } from './builtin/shared.ts';
+import type { ModalSurfaceRegistry } from './modal-surface-registry.ts';
+import type { ResolvedBuiltinViewDeps } from './view-deps.ts';
 import type { ConfigModalSurface, ConfigModalView } from '../input/config-modal-types.ts';
 import { createProviderRuntimeInspectionQuery } from '@/runtime/index.ts';
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
@@ -32,20 +32,23 @@ import { createDevicesModalSurface } from './modals/devices-modal.ts';
 import { createPlanningModalSurface } from './modals/planning-modal.ts';
 
 /**
- * Register the config-modal surfaces + their panel-id redirects, from a prior
- * panel-consolidation cleanup. Called once at startup from registerBuiltinPanels, AFTER the panels'
- * deps are resolved (the surfaces close over the same read-models the retired
- * panels used). For each surface migrated from a standalone panel this does two things:
+ * Register the config-modal surfaces and the old names that open them. Called
+ * once at startup from createShellViews (builtin-views.ts). For each surface
+ * this does two things:
  *   1. registerModalSurface, the data + actions the config-modal host renders.
- *   2. registerModalRedirect, so `/panel open <old-id>`, saved layouts, and any
- *      alias still resolve to the modal.
+ *   2. registerModalRedirect, so `/panel open <old-id>`, notifications and any
+ *      alias still resolve to the modal (views.ts consults these).
  *
- * The Providers & Connectivity + Security subset is registered first, followed by the
- * Ecosystem & Governance set, the 12 ported config-modal
- * surfaces plus the `sessions` fold into the existing session-picker modal.
+ * `openMaskedEntry` opens the local-auth password prompt (a kit modal), which
+ * is how the Local Auth modal's add-user and rotate-password actions keep the
+ * password out of argv, history and the transcript.
  */
-export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
-  const ui = requireUiServices(deps);
+export function registerBuiltinModals(
+  manager: ModalSurfaceRegistry,
+  deps: ResolvedBuiltinViewDeps,
+  openMaskedEntry: (kind: 'add-user' | 'rotate-password', username?: string) => void,
+): void {
+  const ui = deps.uiServices;
 
   // ── Providers & Connectivity ─────────────────────────────────────────────────
   manager.registerModalSurface(createServicesModalSurface(deps.serviceRegistry, deps.subscriptionManager));
@@ -71,10 +74,8 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
   manager.registerModalSurface(createSettingsSyncModalSurface(deps.configManager));
   manager.registerModalRedirect('settings-sync', 'settings-sync-modal');
 
-  // local-auth-modal is reached via the /local-auth front-door only; no
-  // redirect (the 'local-auth' panel id must keep resolving to LocalAuthPanel
-  // for the masked password-entry path). See builtin/operations.ts.
-  manager.registerModalSurface(createLocalAuthModalSurface(deps.localUserAuthManager));
+  manager.registerModalSurface(createLocalAuthModalSurface(deps.localUserAuthManager, openMaskedEntry));
+  manager.registerModalRedirect('local-auth', 'local-auth-modal');
 
   manager.registerModalSurface(createSandboxModalSurface(deps.configManager, deps.sandboxSessionRegistry, deps.requestRender));
   manager.registerModalRedirect('sandbox', 'sandbox-modal');
@@ -190,9 +191,9 @@ export function registerBuiltinModals(manager: PanelManager, deps: ResolvedBuilt
  * degrades to an honest "unavailable" modal instead of throwing at startup.
  * Mirrors the retired QrPanel factory's construction.
  */
-function buildPairingConnectionInfo(deps: ResolvedBuiltinPanelDeps): PairingModalConnectionInfo | null {
+function buildPairingConnectionInfo(deps: ResolvedBuiltinViewDeps): PairingModalConnectionInfo | null {
   try {
-    const ui = requireUiServices(deps);
+    const ui = deps.uiServices;
     const configManager = deps.configManager;
     // Freeze a stable web origin once (never clobbering a user-set value).
     const webOrigin = ensurePublicBaseUrl(configManager);

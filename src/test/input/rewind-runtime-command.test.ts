@@ -3,8 +3,9 @@
 // /undo rewind and /redo rewind reversals.
 //
 // Uses the real WorkspaceCheckpointManager against a scratch workspace (turn
-// checkpoints carry the same turnId the rewind anchor keys on) and the real
-// DiffPanel confirm overlay; the conversation is a small fake that faithfully
+// checkpoints carry the same turnId the rewind anchor keys on) and a recording
+// ctx.previewChanges (the Changes preview with its question) that the test
+// answers; the conversation is a small fake that faithfully
 // models truncation (removeMessagesAfter) + snapshot/restore (toJSON/fromJSON)
 // so the conversation-scope rewind can be asserted end-to-end.
 // ---------------------------------------------------------------------------
@@ -21,7 +22,6 @@ import {
   resetRewindState,
 } from '../../input/commands/rewind-runtime.ts';
 import { recordTurnAnchor, clearTurnAnchors } from '@pellux/goodvibes-sdk/platform/rewind';
-import { DiffPanel } from '../../panels/diff-panel.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 const SESSION = 's-rewind';
@@ -68,30 +68,37 @@ function makeFakeConversation(count: number) {
   };
 }
 
-function makeCtx(dir: string, mgr: WorkspaceCheckpointManager | undefined, conv: ReturnType<typeof makeFakeConversation>['conv']) {
+interface PreviewCall {
+  readonly title: string;
+  readonly diff?: string;
+  readonly note?: string;
+  readonly question?: { readonly text: string; readonly confirmLabel: string };
+}
+
+function makeCtx(_dir: string, mgr: WorkspaceCheckpointManager | undefined, conv: ReturnType<typeof makeFakeConversation>['conv']) {
   const printed: string[] = [];
-  const opened: string[] = [];
-  const closed: string[] = [];
-  let diffPanel: DiffPanel | null = null;
-  const panelManager = {
-    getAllOpen: () => (diffPanel ? [diffPanel] : []),
-    open: (id: string) => { opened.push(id); diffPanel = new DiffPanel(dir, () => {}); return diffPanel; },
-    close: (id: string) => { closed.push(id); if (id === 'diff') diffPanel = null; },
-    activateById: () => {},
-    isVisible: () => true,
-    show: () => {},
-  };
+  const previews: PreviewCall[] = [];
+  let pendingAnswer: ((ok: boolean) => void) | null = null;
   const ctx = {
     print: (t: string) => { printed.push(t); },
     renderRequest: () => {},
-    focusPanels: () => {},
     focusPrompt: () => {},
     exit: () => {},
+    previewChanges: (opts: PreviewCall) => {
+      previews.push(opts);
+      if (!opts.question) return Promise.resolve(false);
+      return new Promise<boolean>((resolve) => { pendingAnswer = resolve; });
+    },
     session: { conversationManager: conv, runtime: { model: 'm', provider: 'p', debugMode: false, systemPrompt: '', reasoningEffort: 'medium', sessionId: SESSION } },
-    workspace: { workspaceCheckpointManager: mgr, panelManager },
+    workspace: { workspaceCheckpointManager: mgr },
     provider: {}, platform: {}, ops: {}, extensions: {},
   } as unknown as CommandContext;
-  return { ctx, printed, opened, closed, getDiffPanel: () => diffPanel };
+  const answer = (ok: boolean): void => {
+    const resolve = pendingAnswer;
+    pendingAnswer = null;
+    resolve?.(ok);
+  };
+  return { ctx, printed, previews, answer, hasQuestion: () => pendingAnswer !== null };
 }
 
 // ---------------------------------------------------------------------------
@@ -143,17 +150,19 @@ describe('/rewind both: files + conversation confirm flow', () => {
     const fake = makeFakeConversation(4); // 4 messages now; anchor keeps 2 → drop 2
     recordTurnAnchor(SESSION, { turnId: 't1', label: 'refactor the parser', messageCount: 2, at: Date.now() });
 
-    const { ctx, printed, opened, getDiffPanel } = makeCtx(dir, mgr, fake.conv);
+    const { ctx, printed, previews, answer, hasQuestion } = makeCtx(dir, mgr, fake.conv);
     const registry = new CommandRegistry();
     registerRewindRuntimeCommands(registry);
 
-    await registry.execute('rewind', ['1', 'both'], ctx);
-    expect(opened).toEqual(['diff']);
-    const panel = getDiffPanel()!;
-    expect(panel.confirmOverlay.pending).toBe(true);
+    const running = registry.execute('rewind', ['1', 'both'], ctx);
+    await waitFor(hasQuestion);
+    expect(previews).toHaveLength(1);
+    expect(previews[0]!.diff).toContain('a.txt');
+    expect(previews[0]!.question?.confirmLabel).toBe('Rewind');
     expect(printed.some((l) => l.includes('Previewing rewind'))).toBe(true);
 
-    expect(panel.handleInput('y')).toBe(true);
+    answer(true);
+    await running;
     await waitFor(() => fake.systemMessages.length > 0);
 
     // Files restored to the checkpoint state.
@@ -177,14 +186,15 @@ describe('/rewind conversation: no checkpoint required', () => {
     const fake = makeFakeConversation(5); // keep 3 → drop 2
     recordTurnAnchor(SESSION, { turnId: 't1', label: 'do the thing', messageCount: 3, at: Date.now() });
 
-    const { ctx, getDiffPanel } = makeCtx(dir, mgr, fake.conv);
+    const { ctx, previews, answer, hasQuestion } = makeCtx(dir, mgr, fake.conv);
     const registry = new CommandRegistry();
     registerRewindRuntimeCommands(registry);
 
-    await registry.execute('rewind', ['1', 'conversation'], ctx);
-    const panel = getDiffPanel()!;
-    expect(panel.confirmOverlay.pending).toBe(true);
-    expect(panel.handleInput('y')).toBe(true);
+    const running = registry.execute('rewind', ['1', 'conversation'], ctx);
+    await waitFor(hasQuestion);
+    expect(previews[0]!.note).toContain('drop 2');
+    answer(true);
+    await running;
     await waitFor(() => fake.systemMessages.length > 0);
     expect(fake.getMessages().length).toBe(3);
 
@@ -251,18 +261,19 @@ describe('/rewind: checkpoint-only fallback (no completed turns recorded this ru
     writeFileSync(join(dir, 'a.txt'), 'v2: drifted after the checkpoint');
 
     const fake = makeFakeConversation(3);
-    const { ctx, printed, opened, getDiffPanel } = makeCtx(dir, mgr, fake.conv);
+    const { ctx, printed, previews, answer, hasQuestion } = makeCtx(dir, mgr, fake.conv);
     const registry = new CommandRegistry();
     registerRewindRuntimeCommands(registry);
 
-    await registry.execute('rewind', ['1'], ctx);
-    expect(opened).toEqual(['diff']);
+    const running = registry.execute('rewind', ['1'], ctx);
+    await waitFor(hasQuestion);
+    expect(previews).toHaveLength(1);
     expect(printed.some((l) => l.includes('Previewing checkpoint restore'))).toBe(true);
-    expect(printed.some((l) => l.includes('FILES ONLY'))).toBe(true);
+    expect(printed.some((l) => /files only/i.test(l))).toBe(true);
+    expect(previews[0]!.question?.confirmLabel).toBe('Restore');
 
-    const panel = getDiffPanel()!;
-    expect(panel.confirmOverlay.pending).toBe(true);
-    expect(panel.handleInput('y')).toBe(true);
+    answer(true);
+    await running;
     await waitFor(() => fake.systemMessages.length > 0);
 
     expect(readFileSync(join(dir, 'a.txt'), 'utf-8')).toBe('v1');
@@ -273,7 +284,7 @@ describe('/rewind: checkpoint-only fallback (no completed turns recorded this ru
     expect(receipt).toContain('Files only');
   });
 
-  test('an unknown checkpoint ref reports an honest error instead of opening the diff panel', async () => {
+  test('an unknown checkpoint ref reports an honest error instead of opening a preview', async () => {
     const dir = makeScratchWorkspace();
     writeFileSync(join(dir, 'a.txt'), 'v1');
     const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
@@ -281,13 +292,13 @@ describe('/rewind: checkpoint-only fallback (no completed turns recorded this ru
     expect(cp).not.toBeNull();
 
     const { conv } = makeFakeConversation(0);
-    const { ctx, printed, opened } = makeCtx(dir, mgr, conv);
+    const { ctx, printed, previews } = makeCtx(dir, mgr, conv);
     const registry = new CommandRegistry();
     registerRewindRuntimeCommands(registry);
 
     await registry.execute('rewind', ['99'], ctx);
 
-    expect(opened).toEqual([]);
+    expect(previews).toEqual([]);
     expect(printed.some((l) => l.includes('No checkpoint #99'))).toBe(true);
   });
 });
@@ -298,18 +309,40 @@ describe('/rewind: single-use confirm token', () => {
     const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
     const fake = makeFakeConversation(4);
     recordTurnAnchor(SESSION, { turnId: 't1', label: 'x', messageCount: 2, at: Date.now() });
-    const { ctx, printed, getDiffPanel } = makeCtx(dir, mgr, fake.conv);
+    const { ctx, printed, answer, hasQuestion } = makeCtx(dir, mgr, fake.conv);
     const registry = new CommandRegistry();
     registerRewindRuntimeCommands(registry);
 
-    await registry.execute('rewind', ['1', 'conversation'], ctx);
-    const panel = getDiffPanel()!;
-    panel.handleInput('y');
+    const running = registry.execute('rewind', ['1', 'conversation'], ctx);
+    await waitFor(hasQuestion);
+    answer(true);
+    await running;
     await waitFor(() => fake.systemMessages.length > 0);
     expect(fake.getMessages().length).toBe(2);
-    // The plan/token is single-use; re-confirming the same (now closed) panel
-    // does nothing because the overlay resolved. No second receipt, no throw.
+    // The plan/token is single-use; answering again after the question
+    // resolved does nothing. No second receipt, no throw.
+    answer(true);
     expect(fake.systemMessages.length).toBe(1);
     expect(printed.some((l) => /Rewind failed/i.test(l))).toBe(false);
+  });
+});
+
+describe('/rewind: cancelling the question changes nothing', () => {
+  test('answering no keeps the conversation and prints the cancel line', async () => {
+    const dir = makeScratchWorkspace();
+    const mgr = new WorkspaceCheckpointManager({ workspaceRoot: dir });
+    const fake = makeFakeConversation(4);
+    recordTurnAnchor(SESSION, { turnId: 't1', label: 'x', messageCount: 2, at: Date.now() });
+    const { ctx, printed, answer, hasQuestion } = makeCtx(dir, mgr, fake.conv);
+    const registry = new CommandRegistry();
+    registerRewindRuntimeCommands(registry);
+
+    const running = registry.execute('rewind', ['1', 'conversation'], ctx);
+    await waitFor(hasQuestion);
+    answer(false);
+    await running;
+    expect(fake.getMessages().length).toBe(4);
+    expect(fake.systemMessages).toEqual([]);
+    expect(printed.some((l) => l.includes('Rewind cancelled'))).toBe(true);
   });
 });

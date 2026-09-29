@@ -4,11 +4,10 @@
  * Extracted from main.ts (which sits at the architecture line cap) so the
  * startup wiring there stays within budget. Builds the small counts/paths
  * bundle written into the recovery file so a resumed session can describe what
- * was in flight (pending approvals, active/blocked tasks, remotes, worktrees,
- * open panels) without re-reading live state.
+ * was in flight (pending approvals, active/blocked tasks, remotes, worktrees)
+ * without re-reading live state.
  */
 import type { UiReadModels } from './ui-read-models.ts';
-import type { PanelManager } from '../panels/panel-manager.ts';
 
 /**
  * The continuity summary written into the recovery file. A loose serializable
@@ -17,7 +16,6 @@ import type { PanelManager } from '../panels/panel-manager.ts';
  */
 export function createSessionContinuityHintsBuilder(deps: {
   readonly readModels: UiReadModels;
-  readonly panelManager: Pick<PanelManager, 'getAllOpen'>;
 }): () => Record<string, unknown> {
   return () => {
     const sessionSnapshot = deps.readModels.session.getSnapshot();
@@ -32,7 +30,6 @@ export function createSessionContinuityHintsBuilder(deps: {
       remoteRunners: remoteSnapshot.contracts.slice(0, 4).map((contract) => contract.runnerId),
       worktreeCount: worktreeSnapshot.records.length,
       worktreePaths: worktreeSnapshot.records.slice(0, 3).map((record) => record.path),
-      openPanels: deps.panelManager.getAllOpen().map((panel) => panel.id),
     };
   };
 }

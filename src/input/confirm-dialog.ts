@@ -4,7 +4,8 @@
  * The safe choice sits on the left and is chosen by default for destructive
  * and warning dialogs; the confirming button carries its tone (a red chip for
  * destructive actions). Arrows or tab move between the buttons, Enter presses
- * the chosen one, y and n answer directly, Esc cancels.
+ * the chosen one, y and n answer directly, Esc cancels. An optional confirm
+ * chord (the chord that opened the dialog) pressed again also confirms.
  */
 
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
@@ -42,6 +43,8 @@ export class ConfirmDialog implements SurfaceModal, ConfirmView {
     }
     if (token.type !== 'key') return;
     const key = token.logicalName ?? '';
+    const chord = this.options.confirmChord;
+    if (chord && key === chord.key && Boolean(token.ctrl) === Boolean(chord.ctrl)) { this.answer(host, true); return; }
     if (key === 'left' || key === 'right' || key === 'tab') this.chosen = this.chosen === 0 ? 1 : 0;
     else if (key === 'enter') this.answer(host, this.chosen === 1);
     else if (key === 'y') this.answer(host, true);

@@ -1,46 +1,29 @@
 // ---------------------------------------------------------------------------
-// review-hunk-revert.test.ts, the /review panel's reject action: reverse-apply
-// exactly one hunk via checkpoints.revertHunkPreview → DiffPanel confirm →
+// review-hunk-revert.test.ts, the Changes modal's revert action (x): reverse-
+// apply exactly one hunk via checkpoints.revertHunkPreview → a confirm dialog →
 // checkpoints.revertHunk (with the token), rendering a [Revert] receipt.
 //
 // Two levels:
 //  1. The real composed-daemon gateway surface (getTestRuntimeServices): a real
 //     working-tree hunk is previewed, confirmed with the minted token, and
 //     reverse-applied; a stale hunk is an honest applies:false, never a partial.
-//  2. The panel + command wiring end-to-end against a stubbed gateway: pressing
-//     `r` arms the DiffPanel confirm, confirming invokes revertHunk with the
-//     token, and the receipt lands in the transcript; a 409 refreshes instead of
-//     writing partially.
+//  2. The revert flow (revertReviewHunk) against a stubbed gateway: it asks
+//     through ctx.confirm, confirming invokes revertHunk with the token, and the
+//     receipt lands in the transcript; a stale hunk never asks; a 409 writes
+//     nothing partial.
 // ---------------------------------------------------------------------------
 
-import { describe, expect, test, afterEach } from 'bun:test';
-import { rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { describe, expect, test } from 'bun:test';
 import { assertEveryDescriptorHasHandler } from '@pellux/goodvibes-terminal-shell/conformance';
 import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
-import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
-import { registerReviewRuntimeCommands } from '../../input/commands/review-runtime.ts';
-import { parseReviewDiff } from '../../panels/diff-review-model.ts';
-import { DiffReviewPanel } from '../../panels/diff-review-panel.ts';
-import { DiffPanel } from '../../panels/diff-panel.ts';
-import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import type { CommandContext } from '../../input/command-registry.ts';
+import { revertReviewHunk } from '../../input/commands/review-runtime.ts';
+import { parseReviewDiff, flattenHunks } from '../../panels/diff-review-model.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
 disposeTestRuntimeServicesAfterAll();
 
-const tempDirs: string[] = [];
-afterEach(() => { while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true }); });
-
-async function waitFor(predicate: () => boolean, timeoutMs = 4000): Promise<void> {
-  const start = Date.now();
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) throw new Error('waitFor: timed out');
-    await new Promise((r) => setTimeout(r, 15));
-  }
-}
-
-// A single-hunk unified diff (added one line) for the panel-level test.
 const SAMPLE_DIFF = [
   'diff --git a/sample.txt b/sample.txt',
   '--- a/sample.txt',
@@ -58,8 +41,8 @@ describe('the hunk-revert verbs are the daemon\'s to answer, and this app knows 
 
   for (const id of IDS) {
     test(`${id} is in the contract this app calls against`, () => {
-      // The descriptor is cataloged, the contract is shared, and the panel
-      // below builds its request from it. What is NOT here is a handler.
+      // The descriptor is cataloged, the contract is shared, and the revert
+      // flow below builds its request from it. What is NOT here is a handler.
       expect(services.gatewayMethods.get(id)).toBeTruthy();
     });
   }
@@ -76,7 +59,7 @@ describe('the hunk-revert verbs are the daemon\'s to answer, and this app knows 
   test('invoking one here fails loudly rather than pretending', async () => {
     // Not a silent empty result: a surface that got `{}` back from an
     // unimplemented verb would render "nothing to revert" for a file that has
-    // plenty to revert. The panel path below is driven through the gateway
+    // plenty to revert. The revert flow below is driven through the gateway
     // seam it is handed, which in production is the adopted daemon.
     const staleHunk = ['@@ -1,2 +1,3 @@', ' a', '+b', ' c'].join('\n');
     await expect(services.gatewayMethods.invoke('checkpoints.revertHunk', {
@@ -85,39 +68,25 @@ describe('the hunk-revert verbs are the daemon\'s to answer, and this app knows 
   });
 });
 
-// ---- Panel + command wiring against a stubbed gateway --------------------
+// ---- The revert flow against a stubbed gateway ---------------------------
 
 interface GatewayStubOptions {
   previewApplies?: boolean;
   applyThrows?: unknown;
 }
 
-function makeCtx(dir: string, gateway: { invoke: (id: string, inv: { body?: unknown }) => Promise<unknown> }) {
+function makeCtx(gateway: { invoke: (id: string, inv: { body?: unknown }) => Promise<unknown> }, confirmAnswer: boolean) {
   const systemMessages: string[] = [];
-  let diffPanel: DiffPanel | null = null;
-  let reviewPanel: DiffReviewPanel | null = null;
-  const panelManager = {
-    getAllOpen: () => [reviewPanel, diffPanel].filter(Boolean) as (DiffPanel | DiffReviewPanel)[],
-    open: (id: string) => {
-      if (id === 'diff') { diffPanel = new DiffPanel(dir, () => {}); return diffPanel; }
-      reviewPanel = new DiffReviewPanel(dir, () => {}); return reviewPanel;
-    },
-    close: (id: string) => { if (id === 'diff') diffPanel = null; },
-    activateById: () => {},
-    isVisible: () => true,
-    show: () => {},
-  };
+  const confirms: Array<{ title: string; body: string }> = [];
   const ctx = {
     print: () => {},
     renderRequest: () => {},
-    focusPanels: () => {},
-    focusPrompt: () => {},
-    submitInput: () => {},
+    confirm: async (opts: { title: string; body: string }) => { confirms.push(opts); return confirmAnswer; },
     session: { conversationManager: { addTypedSystemMessage: (t: string) => { systemMessages.push(t); } }, runtime: { sessionId: 's-review-revert' } },
-    workspace: { gatewayMethods: gateway, workspaceCheckpointManager: {}, panelManager },
+    workspace: { gatewayMethods: gateway, workspaceCheckpointManager: {} },
     provider: {}, platform: {}, ops: {}, extensions: {},
   } as unknown as CommandContext;
-  return { ctx, systemMessages, getDiffPanel: () => diffPanel, getReviewPanel: () => reviewPanel };
+  return { ctx, systemMessages, confirms };
 }
 
 function stubGateway(opts: GatewayStubOptions) {
@@ -140,67 +109,58 @@ function stubGateway(opts: GatewayStubOptions) {
   };
 }
 
-async function openReviewWithHunk(ctx: CommandContext): Promise<DiffReviewPanel> {
-  const registry = new CommandRegistry();
-  registerReviewRuntimeCommands(registry);
-  await registry.execute('review', [], ctx);
-  const pm = (ctx.workspace as unknown as { panelManager: { getAllOpen: () => { id: string }[] } }).panelManager;
-  const panel = pm.getAllOpen().find((p) => p.id === 'review') as unknown as DiffReviewPanel;
-  panel.loadReview(parseReviewDiff(SAMPLE_DIFF), 'test diff');
-  return panel;
+function sampleHunk() {
+  return flattenHunks(parseReviewDiff(SAMPLE_DIFF))[0]!;
 }
 
-describe('/review reject action drives checkpoints.revertHunk with the token', () => {
-  test('r → confirm → revertHunk(token) → [Revert] receipt in the transcript', async () => {
-    const dir = makeProjectTempDir('gv-review-revert'); tempDirs.push(dir);
+describe('the Changes revert action drives checkpoints.revertHunk with the token', () => {
+  test('preview → confirm → revertHunk(token) → [Revert] receipt in the transcript', async () => {
     const gateway = stubGateway({ previewApplies: true });
-    const { ctx, systemMessages, getDiffPanel } = makeCtx(dir, gateway);
-    const panel = await openReviewWithHunk(ctx);
+    const { ctx, systemMessages, confirms } = makeCtx(gateway, true);
 
-    panel.handleInput('r'); // reject the current hunk
-    await waitFor(() => getDiffPanel() !== null && getDiffPanel()!.confirmOverlay.pending);
-    expect(getDiffPanel()!.confirmOverlay.pending).toBe(true);
+    const message = await revertReviewHunk(ctx, sampleHunk());
 
-    getDiffPanel()!.handleInput('y'); // confirm the revert
-    await waitFor(() => systemMessages.length > 0);
-
-    // revertHunk was invoked with the token minted by the preview.
+    expect(confirms).toHaveLength(1);
+    expect(confirms[0]!.title).toBe('Revert this hunk?');
     const applyCall = gateway.calls.find((c) => c.id === 'checkpoints.revertHunk');
     expect(applyCall).toBeTruthy();
     expect((applyCall!.body as { confirmToken: string }).confirmToken).toBe('tok-1');
-    // The receipt is a distinct force-surfaced [Revert] block.
     expect(systemMessages[0]!.startsWith('[Revert] Receipt')).toBe(true);
     expect(systemMessages[0]!).toContain('sample.txt');
+    expect(message).toContain('Reverted the hunk');
   });
 
-  test('a preview that does not apply reports "changed since captured" and never opens a confirm', async () => {
-    const dir = makeProjectTempDir('gv-review-revert'); tempDirs.push(dir);
+  test('a preview that does not apply reports "changed since captured" and never asks', async () => {
     const gateway = stubGateway({ previewApplies: false });
-    const { ctx, systemMessages, getDiffPanel } = makeCtx(dir, gateway);
-    const panel = await openReviewWithHunk(ctx);
+    const { ctx, systemMessages, confirms } = makeCtx(gateway, true);
 
-    panel.handleInput('r');
-    await waitFor(() => gateway.calls.some((c) => c.id === 'checkpoints.revertHunkPreview'));
-    await new Promise((r) => setTimeout(r, 30));
+    const message = await revertReviewHunk(ctx, sampleHunk());
 
-    expect(getDiffPanel()).toBeNull(); // no confirm overlay for a stale hunk
-    expect(gateway.calls.some((c) => c.id === 'checkpoints.revertHunk')).toBe(false); // never applied
-    expect(systemMessages.length).toBe(0); // no receipt
+    expect(confirms).toEqual([]);
+    expect(gateway.calls.some((c) => c.id === 'checkpoints.revertHunk')).toBe(false);
+    expect(systemMessages.length).toBe(0);
+    expect(message).toContain('Cannot revert');
   });
 
-  test('a 409 on apply refreshes with a conflict message and writes nothing partial', async () => {
-    const dir = makeProjectTempDir('gv-review-revert'); tempDirs.push(dir);
+  test('answering no to the confirm changes nothing', async () => {
+    const gateway = stubGateway({ previewApplies: true });
+    const { ctx, systemMessages } = makeCtx(gateway, false);
+
+    const message = await revertReviewHunk(ctx, sampleHunk());
+
+    expect(gateway.calls.some((c) => c.id === 'checkpoints.revertHunk')).toBe(false);
+    expect(systemMessages.length).toBe(0);
+    expect(message).toContain('cancelled');
+  });
+
+  test('a 409 on apply reports the conflict and writes nothing partial', async () => {
     const gateway = stubGateway({ previewApplies: true, applyThrows: Object.assign(new Error('hunk drifted'), { status: 409, code: 'CONFLICT' }) });
-    const { ctx, systemMessages, getDiffPanel } = makeCtx(dir, gateway);
-    const panel = await openReviewWithHunk(ctx);
+    const { ctx, systemMessages } = makeCtx(gateway, true);
 
-    panel.handleInput('r');
-    await waitFor(() => getDiffPanel() !== null && getDiffPanel()!.confirmOverlay.pending);
-    getDiffPanel()!.handleInput('y');
-    await waitFor(() => gateway.calls.some((c) => c.id === 'checkpoints.revertHunk'));
-    await new Promise((r) => setTimeout(r, 30));
+    const message = await revertReviewHunk(ctx, sampleHunk());
 
-    expect(systemMessages.length).toBe(0); // no receipt, nothing was written
-    expect(getDiffPanel()).toBeNull(); // confirm closed
+    expect(gateway.calls.some((c) => c.id === 'checkpoints.revertHunk')).toBe(true);
+    expect(systemMessages.length).toBe(0);
+    expect(message).toContain('Not reverted');
   });
 });

@@ -104,21 +104,21 @@ export function requirePluginPathOptions(
   };
 }
 
-export function openCommandPanel(
-  context: Pick<CommandContext, 'showPanel'>,
-  panelId: string,
-  pane?: 'top' | 'bottom',
+/**
+ * Open the modal that holds a view, by its current or old name (views.ts):
+ * 'fleet' and 'worktrees' open Agents, 'cost' opens Usage, and so on.
+ */
+export function openCommandView(
+  context: Pick<CommandContext, 'openView' | 'print'>,
+  name: string,
 ): void {
-  const showPanel = requireContextValue(context.showPanel, 'showPanel');
-  showPanel(panelId, pane);
+  const openView = requireContextValue(context.openView, 'openView');
+  if (!openView(name)) context.print(`Nothing holds "${name}" in this build.`);
 }
 
 /**
- * (group-B migration): open a config-modal surface by name via the
- * ctx.openModal seam (ui-openers wires it; the host replaces the interim
- * "not available yet" implementation with real dispatch). Front-doors for
- * panels that migrated to modals call this instead of openCommandPanel, the
- * modal is the surface's new home. Stubbed in tests by setting ctx.openModal.
+ * Open a config-modal surface by name via the ctx.openModal seam (ui-openers
+ * wires it). Stubbed in tests by setting ctx.openModal.
  */
 export function openModalCommand(
   context: Pick<CommandContext, 'openModal'>,
@@ -143,10 +143,6 @@ export function requireKeybindingsManager(context: CommandContext) {
 
 export function requireProfileManager(context: CommandContext) {
   return requireContextValue(context.workspace.profileManager, 'workspace.profileManager');
-}
-
-export function requirePanelManager(context: CommandContext) {
-  return requireContextValue(context.workspace.panelManager, 'workspace.panelManager');
 }
 
 export function requireBookmarkManager(context: CommandContext) {

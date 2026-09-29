@@ -29,7 +29,6 @@ import { McpWorkspace } from './mcp-workspace.ts';
 import { SessionPickerModal, getSharedHostedSessionRoster } from './session-picker-modal.ts';
 import { ConfigModal } from './config-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
-import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import {
   applyOnboardingRequest,
@@ -65,10 +64,8 @@ import { pasteFromClipboard, pasteImageFromClipboard } from '../utils/clipboard.
 import {
   handleIndicatorFocusToken,
   handleMouseToken,
-  handlePanelFocusToken,
   handlePromptKeyToken,
   handlePromptTextToken,
-  type PanelMouseLayout,
 } from './handler-feed-routes.ts';
 import {
   ensureInputCursorVisible,
@@ -116,10 +113,7 @@ import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
 import { feedInputTokens } from './handler-feed.ts';
 import type { InputHandlerLike } from './handler-types.ts';
 import { buildInitialFeedContext, syncFeedContextMutableFields } from './feed-context-factory.ts';
-import { handlePanelIntegrationAction as runPanelIntegrationAction } from './panel-integration-actions.ts';
-import type { Panel } from '../panels/types.ts';
 import type { UiRuntimeServices } from '../runtime/ui-services.ts';
-export { handlePanelIntegrationAction } from './panel-integration-actions.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import { SurfaceModalHost } from './surface-modal-host.ts';
 
@@ -150,34 +144,6 @@ export class InputHandler implements InputHandlerLike {
   public commandMode = false;
   /** True when the process indicator bar has keyboard focus. */
   public indicatorFocused = false;
-  /**
-   * Fallback focus store used only when the panel manager does not implement
-   * focus ownership (lightweight test stubs). Production always delegates to
-   * PanelManager, which is the single source of truth.
-   */
-  private _panelFocusedFallback = false;
-  /**
-   * True when keyboard focus is on the active panel (arrow/enter go to panel,
-   * not prompt). Ownership lives in PanelManager (focusTarget); this reads and
-   * writes through to it so handler focus can never disagree with what the
-   * panel workspace actually shows.
-   */
-  public get panelFocused(): boolean {
-    const pm = this.uiServices.shell.panelManager;
-    return typeof pm.getFocusTarget === 'function'
-      ? pm.getFocusTarget() === 'panel'
-      : this._panelFocusedFallback;
-  }
-  public set panelFocused(value: boolean) {
-    const pm = this.uiServices.shell.panelManager;
-    if (typeof pm.focusPanels === 'function' && typeof pm.focusPrompt === 'function') {
-      if (value) pm.focusPanels();
-      else pm.focusPrompt();
-    } else {
-      this._panelFocusedFallback = value;
-    }
-  }
-
   public tokenizer = new InputTokenizer();
   public pasteRegistry = new Map<string, string>();
   public nextPasteId = 1;
@@ -201,8 +167,6 @@ export class InputHandler implements InputHandlerLike {
   public surfaceModals = new SurfaceModalHost();
   public settingsModal = new SettingsModal();
   public configModal = new ConfigModal();
-  /** item 5, paste-flood guard state, mutated in place across tokens (never reallocated). */
-  private panelBurstGuard: PanelBurstGuardState = { timestamps: [], suspended: false, hintShown: false };
   public mcpWorkspace = new McpWorkspace();
   public onboardingWizard = new OnboardingWizardController();
   public onboardingModelPickerCancelSnapshot: OnboardingWizardSnapshot | null = null;
@@ -215,7 +179,7 @@ export class InputHandler implements InputHandlerLike {
    * Used to support back-navigation via Escape.
    */
   public modalStack: string[] = [];
-  public modalReturnFocus: 'prompt' | 'panel' | 'indicator' = 'prompt';
+  public modalReturnFocus: 'prompt' | 'indicator' = 'prompt';
   public sessionPickerModal: SessionPickerModal;
   public profilePickerModal: ProfilePickerModal;
   /** True when the help overlay is visible. */
@@ -235,6 +199,9 @@ export class InputHandler implements InputHandlerLike {
   public lastBlockCopyTime = 0;
   public mouseDownRow = -1;
   public mouseDownCol = -1;
+  /** Clickable footer screen rows (set by the shell each frame) and what opens them. */
+  public footerTargets: ReadonlyMap<number, import('../renderer/footer-targets.ts').FooterTarget> = new Map();
+  public onFooterTarget: ((target: import('../renderer/footer-targets.ts').FooterTarget) => void) | null = null;
 
   /** Pasted images: maps marker IDs to base64 image data. */
   public imageRegistry = new Map<string, { data: string; mediaType: string }>();
@@ -286,8 +253,6 @@ export class InputHandler implements InputHandlerLike {
       uiServices.providers.benchmarkStore,
       uiServices.providers.providerRegistry,
     );
-    // retirement: ProcessModal/LiveTailModal/AgentDetailModal were removed
-    //, F2 now opens the Fleet panel, which subsumes the live process tree.
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager, uiServices.sessions.sessionBroker, getSharedHostedSessionRoster(), () => this.requestRender()); // third source: the daemon-hosted roster
     this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
@@ -303,12 +268,12 @@ export class InputHandler implements InputHandlerLike {
     this.feedContext = buildInitialFeedContext(
       {
         prompt: this.prompt, cursorPos: this.cursorPos, inputScrollTop: this.inputScrollTop, commandMode: this.commandMode,
-        panelFocused: this.panelFocused, indicatorFocused: this.indicatorFocused,
+        indicatorFocused: this.indicatorFocused,
         helpOverlayActive: this.helpOverlayActive, helpScrollOffset: this.helpScrollOffset,
         shortcutsOverlayActive: this.shortcutsOverlayActive, shortcutsScrollOffset: this.shortcutsScrollOffset,
         nextPasteId: this.nextPasteId, nextImageId: this.nextImageId,
         mouseDownRow: this.mouseDownRow, mouseDownCol: this.mouseDownCol,
-        contentWidth: this.contentWidth, panelMouseLayout: this.panelMouseLayout,
+        contentWidth: this.contentWidth,
         selectionCallback: this.selectionCallback,
       },
       {
@@ -338,11 +303,9 @@ export class InputHandler implements InputHandlerLike {
         modalStack: this.modalStack,
         inputHistory: this.inputHistory,
         conversationManager: this.conversationManager,
-        panelManager: this.uiServices.shell.panelManager,
         keybindingsManager: this.uiServices.shell.keybindingsManager,
         killRing: this.killRing,
         focusTracker: this.uiServices.platform.focusTracker,
-        panelBurstGuard: this.panelBurstGuard,
         getHistory: this.getHistory,
         getViewportHeight: this.getViewportHeight,
         getScrollTop: this.getScrollTop,
@@ -368,11 +331,11 @@ export class InputHandler implements InputHandlerLike {
         ensureInputCursorVisible: (contentWidth?: number) => this.ensureInputCursorVisible(contentWidth),
         registerPaste: (content: string) => this.registerPaste(content),
         executeBlockAction: (id: string) => this.executeBlockAction(id),
-        cyclePanelTab: (direction: 'next' | 'prev') => this.cyclePanelTab(direction),
-        onPanelInputConsumed: (activePanel: Panel | null, key: string) => this.handlePanelIntegrationAction(activePanel, key),
         getWrappedPromptInfo: (contentWidth: number) => this.getWrappedPromptInfo(contentWidth),
         moveCursorVertical: (direction: -1 | 1) => this.moveCursorVertical(direction),
         handlePathCompletion: () => this.handlePathCompletion(),
+        footerTargetAt: (row: number) => this.footerTargets.get(row),
+        openFooterTarget: (target) => { this.onFooterTarget?.(target); },
         handleBlockToggle: () => this.handleBlockToggle(),
         findMarkerAtPos: (pos: number) => this.findMarkerAtPos(pos),
         cleanupMarkerRegistry: (text: string) => this.cleanupMarkerRegistry(text),
@@ -392,12 +355,11 @@ export class InputHandler implements InputHandlerLike {
   public syncFeedContextMutableFields(): void {
     const h = this;
     syncFeedContextMutableFields({ prompt: h.prompt, cursorPos: h.cursorPos, inputScrollTop: h.inputScrollTop, commandMode: h.commandMode,
-      panelFocused: h.panelFocused, indicatorFocused: h.indicatorFocused, helpOverlayActive: h.helpOverlayActive,
+      indicatorFocused: h.indicatorFocused, helpOverlayActive: h.helpOverlayActive,
       helpScrollOffset: h.helpScrollOffset, shortcutsOverlayActive: h.shortcutsOverlayActive,
       shortcutsScrollOffset: h.shortcutsScrollOffset, selectionCallback: h.selectionCallback,
       nextPasteId: h.nextPasteId, nextImageId: h.nextImageId, mouseDownRow: h.mouseDownRow,
-      mouseDownCol: h.mouseDownCol, contentWidth: h.contentWidth,
-      panelMouseLayout: h.panelMouseLayout }, this.feedContext);
+      mouseDownCol: h.mouseDownCol, contentWidth: h.contentWidth }, this.feedContext);
   }
 
   /** Wire in the InputHistory instance. Optional; disables history navigation if unset. */
@@ -472,7 +434,6 @@ export class InputHandler implements InputHandlerLike {
   public openModelPickerWithTarget(target: ModelPickerTarget, source: 'settings' | 'onboarding' = 'settings'): boolean { return openModelPickerWithTargetForHandler(this, target, source); }
   public openProviderModelPickerWithTarget(target: ModelPickerTarget, source: 'settings' | 'onboarding' = 'settings'): boolean { return openProviderModelPickerWithTargetForHandler(this, target, source); }
   public openMcpWorkspace(context: CommandContext): void {
-    this.panelFocused = false;
     this.indicatorFocused = false;
     this.modalOpened('mcpWorkspace');
     this.mcpWorkspace.open(context);
@@ -524,7 +485,6 @@ export class InputHandler implements InputHandlerLike {
       context.cursorPos = this.cursorPos;
       context.inputScrollTop = this.inputScrollTop;
       context.commandMode = this.commandMode;
-      context.panelFocused = this.panelFocused;
       context.indicatorFocused = this.indicatorFocused;
       context.helpOverlayActive = this.helpOverlayActive;
       context.helpScrollOffset = this.helpScrollOffset;
@@ -536,7 +496,6 @@ export class InputHandler implements InputHandlerLike {
       context.mouseDownRow = this.mouseDownRow;
       context.mouseDownCol = this.mouseDownCol;
       context.contentWidth = this.contentWidth;
-      context.panelMouseLayout = this.panelMouseLayout;
       // Sync semi-stable refs that may be wired after construction.
       context.commandRegistry = this.commandRegistry;
       context.commandContext = this.commandContext;
@@ -553,7 +512,6 @@ export class InputHandler implements InputHandlerLike {
       this.cursorPos = context.cursorPos;
       this.inputScrollTop = context.inputScrollTop;
       this.commandMode = context.commandMode;
-      this.panelFocused = context.panelFocused;
       this.indicatorFocused = context.indicatorFocused;
       // Overlay flags: only apply the pipeline's value when the pipeline
       // itself changed it (e.g. Escape closing the overlay). Otherwise keep
@@ -594,15 +552,10 @@ export class InputHandler implements InputHandlerLike {
 
   /** Content width for wrapping, set by main.ts via setContentWidth(). */
   public contentWidth = 76;
-  public panelMouseLayout: PanelMouseLayout | null = null;
 
   /** Set the content width used for wrapping calculations. Call from main.ts. */
   public setContentWidth(w: number): void {
     this.contentWidth = w;
-  }
-
-  public setPanelMouseLayout(layout: PanelMouseLayout | null): void {
-    this.panelMouseLayout = layout;
   }
 
   /**
@@ -777,19 +730,6 @@ export class InputHandler implements InputHandlerLike {
    * Word-wrap a single line to fit within maxW columns.
    * Breaks at spaces; words wider than maxW are force-broken.
    */
-  public cyclePanelTab(direction: 'next' | 'prev'): void {
-    const pm = this.uiServices.shell.panelManager;
-    if (pm.isVisible()) {
-      if (direction === 'next') pm.nextWorkspaceTab();
-      else pm.prevWorkspaceTab();
-      this.requestRender();
-    }
-  }
-
-  public handlePanelIntegrationAction(activePanel: Panel | null, key: string): void {
-    runPanelIntegrationAction(this.uiServices.shell.panelManager, activePanel, key, this.commandContext);
-  }
-
   public wordWrapLine(line: string, maxW: number): string[] {
     return wordWrapLine(line, maxW);
   }

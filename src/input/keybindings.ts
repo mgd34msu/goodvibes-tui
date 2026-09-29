@@ -34,22 +34,7 @@ export type KeyAction =
   | 'clear-cancel'
   | 'screen-clear'
   | 'command-palette'
-  | 'panel-picker'
-  | 'panel-close'
-  | 'panel-close-all'
-  | 'panel-tab-next'
-  | 'panel-tab-prev'
-  | 'panel-tab-1'
-  | 'panel-tab-2'
-  | 'panel-tab-3'
-  | 'panel-tab-4'
-  | 'panel-tab-5'
-  | 'panel-tab-6'
-  | 'panel-tab-7'
-  | 'panel-tab-8'
-  | 'panel-tab-9'
-  | 'panel-ops'
-  | 'panel-focus-toggle'
+  | 'open-agents'
   | 'history-search'
   | 'search'
   | 'block-copy'
@@ -80,22 +65,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'clear-cancel':          'Clear input / cancel generation / exit (double)',
   'screen-clear':          'Repaint the screen',
   'command-palette':       'Open the command palette (search & run any command)',
-  'panel-picker':          'Open, focus, or hide the panel workspace',
-  'panel-close':            'Close the currently active panel',
-  'panel-close-all':         'Close all open panels',
-  'panel-tab-next':        'Next workspace panel tab',
-  'panel-tab-prev':        'Previous workspace panel tab',
-  'panel-tab-1':           'Jump to workspace panel tab 1',
-  'panel-tab-2':           'Jump to workspace panel tab 2',
-  'panel-tab-3':           'Jump to workspace panel tab 3',
-  'panel-tab-4':           'Jump to workspace panel tab 4',
-  'panel-tab-5':           'Jump to workspace panel tab 5',
-  'panel-tab-6':           'Jump to workspace panel tab 6',
-  'panel-tab-7':           'Jump to workspace panel tab 7',
-  'panel-tab-8':           'Jump to workspace panel tab 8',
-  'panel-tab-9':           'Jump to workspace panel tab 9',
-  'panel-ops':             'Open, focus, or close the Fleet panel (toggle)',
-  'panel-focus-toggle':    'Switch keyboard focus between top and bottom pane',
+  'open-agents':           'Open the Agents view (same as F2)',
   'history-search':        'Reverse input history search',
   'search':                'Toggle conversation search',
   'block-copy':            'Copy nearest block to clipboard',
@@ -134,41 +104,9 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   // readline kill-to-end-of-line that historically owned Ctrl+K is repointed to
   // Alt+K below so the capability is kept, not lost.
   'command-palette':       [{ key: 'p', ctrl: true }, { key: 'k', ctrl: true }],
-  // The pane picker gave Ctrl+P to the palette and moves to Ctrl+Shift+P
-  // (it is also the palette's "Panels" entry, /panel).
-  'panel-picker':          [{ key: 'p', ctrl: true, shift: true }],
-  'panel-close':            [{ key: 'x', ctrl: true }],
-  'panel-close-all':         [{ key: 'x', ctrl: true, shift: true }],
-  // Ctrl+] stays the primary next-tab chord; Ctrl+PageDown is added as a second
-  // binding. Ctrl+[ was REMOVED as prev-tab: it is byte 0x1B (ESC), so the
-  // legacy tokenizer path emits it as 'escape', the binding never matched on
-  // most terminals AND the key fired Escape (a split-brain chord). Ctrl+PageUp
-  // replaces it: Ctrl+PageUp/PageDown tokenize consistently (\x1b[5;5~ /
-  // \x1b[6;5~ -> pageup/pagedown ctrl:true) in both the legacy and CSI-u paths.
-  'panel-tab-next':        [{ key: ']', ctrl: true }, { key: 'pagedown', ctrl: true }],
-  'panel-tab-prev':        [{ key: 'pageup', ctrl: true }],
-  // Alt+1..9: jump directly to the Nth workspace panel tab (across both panes).
-  // The tokenizer delivers Alt as the token's `meta` modifier; comboMatches /
-  // lookup treat `meta` as an alias for `alt`, so these alt-combos route through
-  // the same rebindable path as every other action.
-  'panel-tab-1':           [{ key: '1', alt: true }],
-  'panel-tab-2':           [{ key: '2', alt: true }],
-  'panel-tab-3':           [{ key: '3', alt: true }],
-  'panel-tab-4':           [{ key: '4', alt: true }],
-  'panel-tab-5':           [{ key: '5', alt: true }],
-  'panel-tab-6':           [{ key: '6', alt: true }],
-  'panel-tab-7':           [{ key: '7', alt: true }],
-  'panel-tab-8':           [{ key: '8', alt: true }],
-  'panel-tab-9':           [{ key: '9', alt: true }],
-  // Ctrl+O: TOGGLE the Fleet panel (open+focus / bring-to-front+focus / close
-  //, see toggleFleetPanel in handler-shortcuts.ts). The former Ops
-  // Control panel was retired to an 'ops-control' -> 'fleet' alias; the
-  // binding is KEPT (repointed, not removed) so the Ctrl+O muscle memory still
-  // lands somewhere useful. Routed globally in handleGlobalShortcutToken.
-  'panel-ops':             [{ key: 'o', ctrl: true }],
-  // Ctrl+G: toggle keyboard focus between the top and bottom panes. Ctrl+G is
-  // otherwise unbound in the default table.
-  'panel-focus-toggle':    [{ key: 'g', ctrl: true }],
+  // Ctrl+O: the Agents modal (same as F2), where the old Fleet and Ops
+  // consoles' content lives now. Routed globally in handleGlobalShortcutToken.
+  'open-agents':           [{ key: 'o', ctrl: true }],
   'history-search':        [{ key: 'r', ctrl: true }],
   'search':                [{ key: 'f', ctrl: true }],
   'block-copy':            [{ key: 'y', ctrl: true }],
@@ -330,7 +268,7 @@ export class KeybindingsManager {
     if (!token.logicalName) return null;
     // The tokenizer delivers the Alt modifier as `meta`; the binding table stores
     // it as `alt`. Treat the two as one modifier at the matching boundary so
-    // Alt-based combos (word-nav, kill-ring, panel-tab-1..9) resolve at runtime.
+    // Alt-based combos (word-nav, kill-ring) resolve at runtime.
     const alt = token.alt ?? token.meta;
     const key = `${token.logicalName}:${token.ctrl ? 1 : 0}:${token.shift ? 1 : 0}:${alt ? 1 : 0}`;
     return this.lookupMap.get(key) ?? null;

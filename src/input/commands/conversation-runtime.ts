@@ -79,7 +79,6 @@ function buildComposerReview(ctx: CommandContext): string[] {
   const composer = deriveComposerState({
     text: '',
     commandMode: false,
-    panelFocused: false,
     pendingApproval: session.pendingApproval,
     hasAttachments: false,
     turnState: session.turnState,

@@ -12,7 +12,6 @@ import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnC
 import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { SessionSpineClient } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
-import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { resumeSessionCore } from '../core/session-resume-core.ts';
@@ -32,7 +31,6 @@ export interface ResumeSessionOptions {
   readonly writeLastSessionPointer: (sessionId: string) => void;
   readonly hookDispatcher: HookDispatcher;
   readonly sessionManager: SessionManager;
-  readonly panelManager: PanelManager;
   /** The app's declare-once session-storage handle, the same one /session resume threads. */
   readonly surface: SessionSurface;
   /**
@@ -59,7 +57,7 @@ export interface ResumeSessionOptions {
  * Delegates the mechanical resume sequence to resumeSessionCore (the same
  * routine session-workflow.ts's `/session resume` calls) so the two seams
  * cannot diverge on restoreTurnAnchors, resetAll-before-fromJSON, model
- * reselection, or the modal-redirect panel-reopen skip, see
+ * reselection, see
  * core/session-resume-core.ts's header doc for the full list of divergences
  * this closes. Everything below the resumeSessionCore call is plumbing only
  * this seam performs (hook fire, session-spine mirror, shared-broker
@@ -96,11 +94,10 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
         conversation: options.conversation,
         runtime: options.runtime,
         surface: options.surface,
-        panelManager: options.panelManager,
         selectModel: options.selectModel,
         hydrateSessionUsage: options.hydrateSessionUsage,
       });
-      const { meta, panels } = outcome;
+      const { meta } = outcome;
 
       options.onSessionIdChanged?.(sessionId);
       options.writeLastSessionPointer(sessionId);
@@ -108,19 +105,11 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       // Fire-and-forget spine mirror (reopen:true, the user resume verb).
       options.sessionSpine.reopen({ sessionId, project: options.project, title: options.conversation.title || meta.title });
       options.conversation.log(`Resumed session: ${sessionId}`, { fg: activeTokens().secondary });
-      if (panels.movedToModal.length > 0) {
-        options.conversation.log(`Resume: ${panels.movedToModal.join(', ')} moved to a modal; reopen via its command instead of as a panel.`, { fg: activeTokens().textMuted });
-      }
-      if (panels.notReopened.length > 0) {
-        options.conversation.log(`Resume: …and ${panels.notReopened.length} more not reopened (/panels to open)`, { fg: activeTokens().textMuted });
-      }
       const returnContextMode = getReturnContextMode(options.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {
-        for (const line of formatReturnContextForDisplay(meta.returnContext)) {
+        // A session saved while the TUI had side panes lists them; there are none to reopen now.
+        for (const line of formatReturnContextForDisplay({ ...meta.returnContext, openPanels: undefined })) {
           options.conversation.log(`Resume: ${line}`, { fg: activeTokens().textMuted });
-        }
-        if (panels.reopened.length > 0) {
-          options.conversation.log(`Resume: Reopened panels: ${panels.reopened.join(', ')}`, { fg: activeTokens().textMuted });
         }
         if ((meta.returnContext.remoteRunners?.length ?? 0) > 0) {
           options.conversation.log(`Resume: Remote re-entry -> /remote recover ${meta.returnContext.remoteRunners![0]}`, { fg: activeTokens().textMuted });

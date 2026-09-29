@@ -6,10 +6,11 @@
 
 # Command Reference
 
-GoodVibes ships **156** built-in slash commands across **75** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
+GoodVibes ships **160** built-in slash commands across **75** categories. Every command below is generated directly from the command registry, so this list is always complete and current. Type a command in the composer prefixed with `/`, or press `Ctrl+K` (or run `/palette`) to search them all in the command palette.
 
 ## Categories
 
+- [Agents](#agents): 1
 - [Automation](#automation): 1
 - [Branches](#branches): 3
 - [Channels](#channels): 1
@@ -22,16 +23,15 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 - [Configuration](#configuration): 1
 - [Control Room](#control-room): 5
 - [Conversation](#conversation): 1
-- [Cost](#cost): 1
-- [Diff & Review](#diff-review): 2
+- [Cost](#cost): 2
+- [Diff & Review](#diff-review): 3
 - [Discovery](#discovery): 1
 - [Editor](#editor): 1
 - [Eval](#eval): 1
 - [Experience](#experience): 8
-- [Fleet](#fleet): 1
 - [Git](#git): 1
 - [Guidance](#guidance): 2
-- [Health](#health): 1
+- [Health](#health): 2
 - [Hooks](#hooks): 1
 - [Image](#image): 1
 - [Incidents](#incidents): 1
@@ -46,7 +46,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 - [Marketplace](#marketplace): 1
 - [MCP](#mcp): 1
 - [Memory](#memory): 5
-- [Notifications](#notifications): 1
+- [Notifications](#notifications): 2
 - [Onboarding](#onboarding): 1
 - [Operator](#operator): 10
 - [Owner Profile](#owner-profile): 1
@@ -86,6 +86,12 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 - [Workstreams](#workstreams): 1
 - [Worktrees](#worktrees): 1
 
+## Agents
+
+| Command | Aliases | Usage | Description |
+| --- | --- | --- | --- |
+| `/agents` | `/acp` | `[--target <id>[:<kind>]] \| list \| host <agentId> [directory]` | Open Agents (everything running: agents, chains, workflows, hosted sessions); list or host third-party coding agents over ACP |
+
 ## Automation
 
 | Command | Aliases | Usage | Description |
@@ -124,7 +130,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/ci` | None | `status <repo-or-pr> \| watch <repo-or-pr> <deliveryChannel> [--fix-session] \| watches \| unwatch <id>` | CI-watch: one-shot per-job status and standing watches over the operator panel |
+| `/ci` | None | `status <repo-or-pr> \| watch <repo-or-pr> <deliveryChannel> [--fix-session] \| watches \| unwatch <id>` | CI-watch: one-shot per-job status and standing watches, surfaced in Agents |
 
 ## Cloudflare
 
@@ -154,7 +160,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/cockpit` | None | None | Open the unified operator cockpit |
+| `/cockpit` | None | None | Open Agents (the old operator cockpit) |
 | `/communication` | `/comms` | None | Inspect structured agent communication routes and recent activity |
 | `/orchestration` | `/orch` | `[show [graphId] \| cancel graph <graphId> \| cancel subtree <agentId>]` | Inspect orchestration graphs and cancel active graphs or subtrees |
 | `/project-memory` | `/pmem` | `[open \| queue [limit] \| explain <task...> [--scope <path> ...]]` | Inspect durable project memory: risks, runbooks, and architecture notes |
@@ -170,13 +176,15 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/cost` | None | `[panel\|budget <usd>\|attribution [24h\|7d] [--json]]` | Inspect session/agent cost tracking, windowed cost attribution, and the budget alert threshold |
+| `/cost` | None | `[panel\|budget <usd>\|attribution [24h\|7d] [--json]]` | Open Usage, set the session budget alert, or show windowed cost attribution |
+| `/usage` | None | `[turns\|agents]` | Context pressure, session tokens and cost, per-turn history, per-agent costs and the budget alert |
 
 ## Diff & Review
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/diff` | `/d` | `[session\|head\|working\|staged\|<git-ref>]` | Show unified diff of session file changes. Uses git diff HEAD if in a git repo |
+| `/changes` | None | `[session\|working\|staged\|head]` | Changed files with a tinted diff and semantic summary: stage hunks, comment for the model, mark reviewed |
+| `/diff` | `/d` | `[session\|head\|working\|staged]` | Show the diff of this session's file changes (or working, staged, or everything vs HEAD) in Changes |
 | `/review` | None | None | Review this session's diff hunk-by-hunk, steer comments, or revert a hunk |
 
 ## Discovery
@@ -210,12 +218,6 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | `/tunnel` | None | `[review\|export <path>]` | Dedicated front-door for remote tunnel review and export flows |
 | `/voice` | None | `[review\|status\|setup\|enable\|disable\|wake status\|wake setup\|bundle export <path>\|bundle inspect <path>]` | Review or toggle always-speak mode, provision the managed local voice runtime and the wake-word models (setup/status), and package portable voice metadata |
 
-## Fleet
-
-| Command | Aliases | Usage | Description |
-| --- | --- | --- | --- |
-| `/agents` | `/acp` | `list \| host <agentId> [directory]` | Host third-party coding agents (Claude Code, Codex, opencode) as fleet rows over ACP |
-
 ## Git
 
 | Command | Aliases | Usage | Description |
@@ -234,6 +236,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
 | `/health` | `/doctor` | `[report\|review\|open\|setup\|services\|sandbox\|provider\|accounts\|auth\|settings\|intelligence\|remote\|mcp\|memory\|metrics\|continuity\|worktrees\|maintenance\|term\|repair [domain]]: bare and report stay a cross-domain transcript report (see also /health provider for the providers modal)` | Health workspace for startup posture, service readiness, sandbox posture, and provider health |
+| `/status` | None | None | Show session status: model, tools, token totals and cost, context use, surfaces and safety states |
 
 ## Hooks
 
@@ -337,6 +340,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
+| `/notifications` | None | None | Open the notification history: everything collected, newest first; Enter goes to its subject |
 | `/notify` | None | `add <url> \| remove <url> \| list \| clear \| test` | Manage webhook notification URLs (ntfy.sh format) |
 
 ## Onboarding
@@ -354,7 +358,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 | `/mode` | `/hitl` | `[quiet\|balanced\|operator\|show\|set-domain <domain> <verbosity>]` | Manage HITL UX notification mode (quiet/balanced/operator) |
 | `/next-error` | `/ne` | None | Jump to the next error message in the conversation |
 | `/ops` | None | `view \| task <cancel\|pause\|resume\|retry> <id> [note] \| agent cancel <id> [note]` | Operator Control Plane: view audit log, cancel/pause/resume/retry tasks and agents |
-| `/panel` | `/panels` | `[open <id> [top\|bottom] [--target <id>[:<kind>]]\|close <id>\|list\|toggle\|move <top\|bottom\|other> [id]\|focus <top\|bottom\|toggle>\|split [show\|hide\|toggle]\|width <left\|right\|reset>\|height <up\|down\|reset>]` | Open, place, resize, or list panels. Usage: /panel [open <id> [top\|bottom]\|close <id>\|list\|toggle\|move\|focus\|split\|width\|height] |
+| `/panel` | `/panels` | `[<name> \| open <name> [--target <id>[:<kind>]] \| list]` | Open a view by its old pane name (fleet, tokens, git, …) in its modal; /panel list shows where each goes |
 | `/prev-error` | `/pe` | None | Jump to the previous error message in the conversation |
 | `/profiles` | None | None | Browse and load config profiles |
 | `/settings` | `/cfg-ui` | None | Open the fullscreen configuration workspace |
@@ -419,7 +423,7 @@ GoodVibes ships **156** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/policy` | `/pol` | `<subcommand> [args]` | Open the policy panel or manage versioned policy bundles (load, simulate, diff, promote, rollback) |
+| `/policy` | `/pol` | `<subcommand> [args]` | Open the policy modal or manage versioned policy bundles (load, simulate, diff, promote, rollback) |
 
 ## Principals
 

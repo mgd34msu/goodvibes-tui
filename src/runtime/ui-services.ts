@@ -20,7 +20,6 @@ export interface UiEnvironmentServices {
 
 export interface UiShellServices {
   readonly keybindingsManager: RuntimeServices['keybindingsManager'];
-  readonly panelManager: RuntimeServices['panelManager'];
   readonly processManager: RuntimeServices['processManager'];
   readonly profileManager: RuntimeServices['profileManager'];
   readonly bookmarkManager: RuntimeServices['bookmarkManager'];
@@ -161,7 +160,6 @@ export function createUiRuntimeServices(
     },
     shell: {
       keybindingsManager: runtimeServices.keybindingsManager,
-      panelManager: runtimeServices.panelManager,
       processManager: runtimeServices.processManager,
       profileManager: runtimeServices.profileManager,
       bookmarkManager: runtimeServices.bookmarkManager,

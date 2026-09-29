@@ -104,30 +104,43 @@ describe('local-auth modal surface', () => {
     expect(calls).toEqual([['local-auth', ['delete-user', 'alice']]]);
   });
 
-  test('add-user points at the masked /local-auth command instead of dispatching under the modal', () => {
-    const surface = createLocalAuthModalSurface(makeAuthManager(true));
+  test('add-user opens the masked password prompt on top of the modal and dispatches no command', () => {
+    const opened: Array<[string, string | undefined]> = [];
+    const surface = createLocalAuthModalSurface(makeAuthManager(true), (kind, username) => opened.push([kind, username]));
     const calls: Array<[string, string[]]> = [];
     const printed: string[] = [];
     surface.onAction?.('add-user', ctx(null, {
       print: (m) => printed.push(m),
       executeCommand: async (name, args) => { calls.push([name, args]); return true; },
     }));
-    // Masked entry cannot render under a fullscreen modal, no command is
-    // dispatched into a hidden surface; the operator is pointed at the command.
+    expect(opened).toEqual([['add-user', undefined]]);
+    // Nothing goes through argv or the transcript: no command, no print.
     expect(calls).toEqual([]);
-    expect(printed.join('\n')).toContain('/local-auth add-user');
+    expect(printed).toEqual([]);
   });
 
-  test('rotate-pw points at the masked /local-auth command for the selected username', () => {
-    const surface = createLocalAuthModalSurface(makeAuthManager(true));
+  test('rotate-pw opens the masked password prompt for the selected username', () => {
+    const opened: Array<[string, string | undefined]> = [];
+    const surface = createLocalAuthModalSurface(makeAuthManager(true), (kind, username) => opened.push([kind, username]));
     const calls: Array<[string, string[]]> = [];
-    const printed: string[] = [];
     surface.onAction?.('rotate-pw', ctx({ id: 'user:bob', label: '' }, {
-      print: (m) => printed.push(m),
       executeCommand: async (name, args) => { calls.push([name, args]); return true; },
     }));
+    expect(opened).toEqual([['rotate-password', 'bob']]);
     expect(calls).toEqual([]);
-    expect(printed.join('\n')).toContain('/local-auth rotate-password bob');
+  });
+
+  test('add-user and rotate-pw say so (and open nothing) when the auth manager has no mutations', () => {
+    const opened: string[] = [];
+    const statuses: string[] = [];
+    const surface = createLocalAuthModalSurface(makeAuthManager(false), (kind) => opened.push(kind));
+    surface.onAction?.('add-user', ctx(null, { setStatus: (m) => statuses.push(m) }));
+    surface.onAction?.('rotate-pw', ctx({ id: 'user:bob', label: '' }, { setStatus: (m) => statuses.push(m) }));
+    expect(opened).toEqual([]);
+    expect(statuses).toEqual([
+      'Local auth mutations are not available in this session.',
+      'Local auth mutations are not available in this session.',
+    ]);
   });
 
   test('clear-bootstrap dispatches /local-auth clear-bootstrap-file', () => {

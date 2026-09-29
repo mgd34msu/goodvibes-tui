@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { renderStatusLine, type StatusBusyState } from '../../renderer/status-line.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
 import { getDisplayWidth } from '../../utils/terminal-width.ts';
 
@@ -15,6 +16,13 @@ function makeTmpDir(): string {
 // ---------------------------------------------------------------------------
 // Config diff tests
 // ---------------------------------------------------------------------------
+
+
+/** The status line's text for a running turn. */
+function statusText(busy: Partial<StatusBusyState>): string {
+  const line = renderStatusLine({ width: 120, busy: { spinner: '-', frame: 0, phrase: 'Thinking...', ...busy } });
+  return line.map((c) => c.char).join('');
+}
 
 describe('config diff logic', () => {
   let tmpDir: string;
@@ -142,77 +150,38 @@ describe('tool preview truncation', () => {
     expect(preview).toBe(shortArgs);
   });
 
-  it('UIFactory.createThinkingFragment includes tool preview line when provided', () => {
-    const width = 80;
-    const toolPreview = 'read_file({"path":"/home/user/test.ts"})';
-    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, toolPreview);
-    // Should have 4 lines: blank + spinner + preview + blank
-    expect(lines).toHaveLength(4);
-    // The preview line chars should include the tool name
-    const previewLine = lines[2];
-    const text = previewLine.map(c => c.char).join('');
-    expect(text).toContain('read_file');
-  });
-
-  it('UIFactory.createThinkingFragment without tool preview has 3 lines', () => {
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined);
-    // blank + spinner + blank (no preview line)
-    expect(lines).toHaveLength(3);
+  it('the tool preview row names the tool', () => {
+    const line = UIFactory.createToolPreviewRow(80, 'read_file({"path":"/home/user/test.ts"})');
+    expect(line.map((c) => c.char).join('')).toContain('read_file');
   });
 
   it('tool preview display width does not exceed terminal width', () => {
     const width = 40;
-    const longPreview = 'some_tool(' + 'a'.repeat(100) + ')';
-    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, longPreview);
-    // The preview line should not exceed width cells
-    const previewLine = lines[2];
-    expect(previewLine).toHaveLength(width);
-    // Compute display width of non-space content
-    const text = previewLine.map(c => c.char).join('');
-    const displayW = getDisplayWidth(text.trimEnd());
-    expect(displayW).toBeLessThanOrEqual(width);
+    const line = UIFactory.createToolPreviewRow(width, 'some_tool(' + 'a'.repeat(100) + ')');
+    expect(line).toHaveLength(width);
+    expect(getDisplayWidth(line.map((c) => c.char).join('').trimEnd())).toBeLessThanOrEqual(width);
   });
 
-  it('UIFactory.createThinkingFragment includes elapsed suffix when elapsedMs provided', () => {
-    const width = 80;
-    const elapsedMs = 12_000; // 12 seconds
-    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined, undefined, undefined, elapsedMs);
-    // blank + spinner + blank (no preview line)
-    expect(lines).toHaveLength(3);
-    const spinnerLine = lines[1];
-    const text = spinnerLine.map(c => c.char).join('');
-    // Should include the elapsed time suffix e.g. '(12s)'
-    expect(text).toContain('(12s)');
+  it('the status line shows the elapsed time of a running turn', () => {
+    expect(statusText({ elapsedMs: 12_000 })).toContain('12s');
   });
 
-  it('UIFactory.createThinkingFragment includes TTFT suffix when ttftMs provided', () => {
-    const width = 80;
-    const ttftMs = 350;
-    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined, undefined, undefined, undefined, ttftMs);
-    expect(lines).toHaveLength(3);
-    const spinnerLine = lines[1];
-    const text = spinnerLine.map(c => c.char).join('');
-    // Human phrasing, e.g. '(first token 0.3s)', not the raw 'ttft:350ms' form.
-    expect(text).toContain('(first token 0.3s)');
+  it('the status line shows time to first token once known', () => {
+    expect(statusText({ ttftMs: 350 })).toContain('first token 0.3s');
   });
 
-  it('UIFactory.createThinkingFragment includes both elapsed and TTFT when both provided', () => {
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined, undefined, undefined, 5000, 280);
-    expect(lines).toHaveLength(3);
-    const spinnerLine = lines[1];
-    const text = spinnerLine.map(c => c.char).join('');
-    expect(text).toContain('(5s)');
-    expect(text).toContain('(first token 0.2s)');
+  it('the status line shows both elapsed and first-token time', () => {
+    const text = statusText({ elapsedMs: 5000, ttftMs: 280 });
+    expect(text).toContain('5s');
+    expect(text).toContain('first token 0.2s');
   });
 
-  it('UIFactory.createThinkingFragment elapsed suffix omitted when elapsedMs is undefined', () => {
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined);
-    const spinnerLine = lines[1];
-    const text = spinnerLine.map(c => c.char).join('');
-    expect(text).not.toMatch(/\(\d+/);
+  it('no elapsed time is shown when none is known', () => {
+    expect(statusText({})).not.toMatch(/ \d+(\.\d)?s\b/);
+  });
+
+  it('the status line offers esc to interrupt a running turn', () => {
+    expect(statusText({})).toMatch(/esc +interrupt/);
   });
 
   // -------------------------------------------------------------------------
@@ -221,34 +190,20 @@ describe('tool preview truncation', () => {
   // -------------------------------------------------------------------------
 
   it('shows a rotating whimsical phrase when no stallInfo is provided (unchanged baseline)', () => {
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(width, '-', 0);
-    const text = lines[1].map(c => c.char).join('');
-    expect(text).toContain('Thinking...');
+    expect(UIFactory.busyPhrase(0)).toContain('Thinking...');
   });
 
   it('keeps the whimsical phrase when msSinceLastDelta is under the freeze threshold', () => {
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(
-      width, '-', 0, undefined, undefined, undefined, undefined, undefined, undefined,
-      { msSinceLastDelta: 500 },
-    );
-    const text = lines[1].map(c => c.char).join('');
+    const text = UIFactory.busyPhrase(0, undefined, { msSinceLastDelta: 500 });
     expect(text).toContain('Thinking...');
     expect(text).not.toContain('Stalled');
   });
 
   it('freezes the phrase rotation and shows "Stalled Ns" once msSinceLastDelta crosses the freeze threshold (mid-stream)', () => {
-    const width = 80;
-    // frame=1000 would normally rotate past "Thinking..." (PHRASE_ROTATION_FRAMES=375);
-    // with a stall in effect, the rotated phrase must NOT appear at all.
-    // outputTokens > 0: "Stalled" is the MID-STREAM label, pre-first-token
-    // silence renders "Waiting for model" instead (an earlier replay fix).
-    const lines = UIFactory.createThinkingFragment(
-      width, '-', 1000, undefined, undefined, 40, 200, undefined, undefined,
-      { msSinceLastDelta: 12_000 },
-    );
-    const text = lines[1].map(c => c.char).join('');
+    // frame=1000 would normally rotate past "Thinking..."; with a stall in
+    // effect the rotated phrase must NOT appear. outputTokens > 0: "Stalled"
+    // is the MID-STREAM label (pre-first-token silence says "Waiting for model").
+    const text = UIFactory.busyPhrase(1000, 200, { msSinceLastDelta: 12_000 });
     expect(text).toContain('Stalled 12s');
     for (const p of ['Thinking...', 'Vibing...', 'Manifesting...']) {
       expect(text).not.toContain(p);
@@ -256,77 +211,42 @@ describe('tool preview truncation', () => {
   });
 
   it('pre-first-token silence renders "Waiting for model", never "Stalled"', () => {
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(
-      width, '-', 1000, undefined, undefined, 40, 0, undefined, undefined,
-      { msSinceLastDelta: 12_000 },
-    );
-    const text = lines[1].map(c => c.char).join('');
+    const text = UIFactory.busyPhrase(1000, 0, { msSinceLastDelta: 12_000 });
     expect(text).toContain('Waiting for model 12s');
     expect(text).not.toContain('Stalled');
   });
 
   it('shows "Reconnecting (attempt k/n)" instead of "Stalled Ns" when reconnect info is present', () => {
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(
-      width, '-', 0, undefined, undefined, undefined, undefined, undefined, undefined,
-      { msSinceLastDelta: 5_000, reconnect: { attempt: 2, maxAttempts: 4 } },
-    );
-    const text = lines[1].map(c => c.char).join('');
+    const text = UIFactory.busyPhrase(0, undefined, { msSinceLastDelta: 5_000, reconnect: { attempt: 2, maxAttempts: 4 } });
     expect(text).toContain('Reconnecting (attempt 2/4)');
     expect(text).not.toContain('Stalled');
   });
 
   it('reconnect label takes precedence even before the freeze threshold is crossed', () => {
-    // A reconnect attempt is itself proof the stream is not "thinking",
-    // show it immediately, do not wait for THINKING_STALL_FREEZE_MS.
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(
-      width, '-', 0, undefined, undefined, undefined, undefined, undefined, undefined,
-      { msSinceLastDelta: 100, reconnect: { attempt: 1, maxAttempts: 3 } },
-    );
-    const text = lines[1].map(c => c.char).join('');
+    const text = UIFactory.busyPhrase(0, undefined, { msSinceLastDelta: 100, reconnect: { attempt: 1, maxAttempts: 3 } });
     expect(text).toContain('Reconnecting (attempt 1/3)');
   });
 
   it('shows "Waiting for your approval" (no stall/provider framing) when an approval is pending', () => {
-    // An approval card is waiting on the USER: the stream is silent because we asked a question,
-    // not because the model stalled. Even with a stall clock long past the freeze threshold, the
-    // honest label wins, never "Stalled Ns...".
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(
-      width, '-', 1000, undefined, undefined, undefined, undefined, undefined, 280,
-      { msSinceLastDelta: 45_000 }, true,
-    );
-    const text = lines[1].map(c => c.char).join('');
-    expect(text).toContain('Waiting for your approval');
-    expect(text).not.toContain('Stalled');
-    // No token-rate / ttft readouts that would imply the model is still working.
+    // The stream is silent because we asked the user a question, not because
+    // the model stalled: the honest label wins, and no token-rate or
+    // first-token readout implies the model is still working.
+    const phrase = UIFactory.busyPhrase(1000, undefined, { msSinceLastDelta: 45_000 }, true);
+    expect(phrase).toContain('Waiting for your approval');
+    expect(phrase).not.toContain('Stalled');
+    const text = statusText({ phrase, approvalPending: true, ttftMs: 280, tokenSpeed: 40 });
     expect(text).not.toContain('tok/s');
-    expect(text).not.toContain('ttft');
+    expect(text).not.toContain('first token');
   });
 
   it('approval label takes precedence over a reconnect label', () => {
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(
-      width, '-', 0, undefined, undefined, undefined, undefined, undefined, undefined,
-      { msSinceLastDelta: 5_000, reconnect: { attempt: 2, maxAttempts: 4 } }, true,
-    );
-    const text = lines[1].map(c => c.char).join('');
+    const text = UIFactory.busyPhrase(0, undefined, { msSinceLastDelta: 5_000, reconnect: { attempt: 2, maxAttempts: 4 } }, true);
     expect(text).toContain('Waiting for your approval');
     expect(text).not.toContain('Reconnecting');
   });
 
   it('a genuine mid-stream stall is unchanged when no approval is pending', () => {
-    // Regression guard: the honest stall label must still appear for a real
-    // provider silence AFTER tokens started flowing (out>0; pre-first-token
-    // silence is "Waiting for model" per an earlier replay fix).
-    const width = 80;
-    const lines = UIFactory.createThinkingFragment(
-      width, '-', 1000, undefined, undefined, 40, 200, undefined, undefined,
-      { msSinceLastDelta: 12_000 }, false,
-    );
-    const text = lines[1].map(c => c.char).join('');
+    const text = UIFactory.busyPhrase(1000, 200, { msSinceLastDelta: 12_000 }, false);
     expect(text).toContain('Stalled 12s');
     expect(text).not.toContain('Waiting for your approval');
   });

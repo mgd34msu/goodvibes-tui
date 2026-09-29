@@ -81,3 +81,23 @@ export function replaceViewportWithOverlay(
   next.push(...overlay);
   return next;
 }
+
+/**
+ * Center the non-blank rows of a viewport vertically (the home splash). A
+ * body that already fills the height is returned unchanged.
+ */
+export function centerViewportContent(viewport: readonly Line[], height: number, width: number): Line[] {
+  const isBlank = (line: Line): boolean => line.every((cell) => cell.char === ' ' || cell.char === '');
+  const first = viewport.findIndex((line) => !isBlank(line));
+  if (first < 0) return [...viewport];
+  let last = viewport.length - 1;
+  while (last > first && isBlank(viewport[last]!)) last--;
+  const body = viewport.slice(first, last + 1);
+  if (body.length >= height) return [...viewport];
+  const top = Math.floor((height - body.length) / 2);
+  const out: Line[] = [];
+  for (let i = 0; i < top; i++) out.push(createEmptyLine(width));
+  out.push(...body);
+  while (out.length < height) out.push(createEmptyLine(width));
+  return out;
+}

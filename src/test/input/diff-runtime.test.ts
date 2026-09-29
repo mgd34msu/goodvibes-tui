@@ -2,9 +2,9 @@
 // diff-runtime.test.ts, regression coverage:
 //   (a) every Bun.spawn() call reachable from /diff captures stderr instead
 //       of letting git's `fatal: ...` write straight to the real tty.
-//   (b) /diff short-circuits with a friendly message in a non-git directory
-//       instead of running git per-subcommand and surfacing inconsistent
-//       error shapes.
+//   (b) /diff in a non-git directory opens the Changes modal, which
+//       short-circuits with a friendly message (and an init offer) instead of
+//       running git per view and surfacing inconsistent error shapes.
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
@@ -14,6 +14,9 @@ import { CommandRegistry, type CommandContext } from '../../input/command-regist
 import { registerDiffRuntimeCommands } from '../../input/commands/diff-runtime.ts';
 import { createShellPathService } from '@/runtime/index.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { ChangesModal } from '../../input/changes-modal.ts';
+import type { ChangesSource } from '../../input/changes-git.ts';
+import { layerTextBlock } from '../helpers/surface-frame.ts';
 
 /**
  * Every `Bun.spawn(` call site's option object must include `stderr:`, a
@@ -47,76 +50,66 @@ function assertEverySpawnCapturesStderr(filePath: string): void {
 }
 
 describe('(a) every /diff-reachable Bun.spawn call captures stderr', () => {
-  test('diff-runtime.ts', () => {
-    assertEverySpawnCapturesStderr(join(import.meta.dir, '../../input/commands/diff-runtime.ts'));
+  test('changes-git.ts (every git read and write behind /diff and the Changes modal)', () => {
+    assertEverySpawnCapturesStderr(join(import.meta.dir, '../../input/changes-git.ts'));
   });
 
-  test('diff-panel.ts', () => {
-    assertEverySpawnCapturesStderr(join(import.meta.dir, '../../panels/diff-panel.ts'));
+  test('diff-runtime.ts spawns nothing itself (it only opens the Changes modal)', () => {
+    const src = readFileSync(join(import.meta.dir, '../../input/commands/diff-runtime.ts'), 'utf-8');
+    expect(src).not.toContain('Bun.spawn(');
   });
 });
 
 // ── (b) /diff in a non-git directory ────────────────────────────────────────
 
-function makeCtx(dir: string): { ctx: CommandContext; printed: string[]; opened: string[]; fullRepaints: number } {
+function makeCtx(dir: string): { ctx: CommandContext; printed: string[]; opened: Array<ChangesSource | undefined> } {
   const printed: string[] = [];
-  const opened: string[] = [];
-  let fullRepaints = 0;
-  const panelManager = {
-    getAllOpen: () => [] as { id: string }[],
-    open: (id: string) => { opened.push(id); throw new Error('panel open should not be reached when not a git repo'); },
-    activateById: () => {},
-    isVisible: () => false,
-    show: () => {},
-  };
+  const opened: Array<ChangesSource | undefined> = [];
   const ctx = {
     print: (text: string) => { printed.push(text); },
     renderRequest: () => {},
-    requestFullRepaint: () => { fullRepaints++; },
-    focusPanels: () => {},
+    openChanges: (options?: { readonly source?: ChangesSource }) => { opened.push(options?.source); },
     exit: () => {},
     session: { changeTracker: { getChangedFiles: () => [] } },
     workspace: {
       shellPaths: createShellPathService({ workingDirectory: dir, homeDirectory: dir }),
-      panelManager,
     },
     provider: {},
     platform: {},
     ops: {},
     extensions: {},
   } as unknown as CommandContext;
-  return { ctx, printed, opened, fullRepaints };
+  return { ctx, printed, opened };
 }
 
-describe('(b) /diff short-circuits in a non-git directory', () => {
-  test('prints a friendly "not a git repository" message and never opens the diff panel', async () => {
+describe('(b) /diff in a non-git directory', () => {
+  test('/diff and its subcommands open the Changes modal on the matching view', async () => {
     const dir = makeProjectTempDir('gv-diff-runtime-nogit');
     try {
       const registry = new CommandRegistry();
       registerDiffRuntimeCommands(registry);
-      const { ctx, printed, opened } = makeCtx(dir);
-
+      const { ctx, opened } = makeCtx(dir);
       await registry.execute('diff', [], ctx);
-
-      expect(printed.some((line) => /not a git repository/i.test(line))).toBe(true);
-      // None of the misleading per-subcommand success/failure text should appear.
-      expect(printed.some((line) => /Diff panel updated/i.test(line))).toBe(false);
-      expect(opened).toEqual([]);
+      for (const sub of ['working', 'head', 'staged']) await registry.execute('diff', [sub], ctx);
+      expect(opened).toEqual(['session', 'working', 'head', 'staged']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  test('the same short-circuit applies to the working/head/staged subcommands too', async () => {
+  test('the Changes modal short-circuits with a friendly "not a git repository" message for every view', async () => {
     const dir = makeProjectTempDir('gv-diff-runtime-nogit');
     try {
-      const registry = new CommandRegistry();
-      registerDiffRuntimeCommands(registry);
-      for (const sub of ['working', 'head', 'staged']) {
-        const { ctx, printed, opened } = makeCtx(dir);
-        await registry.execute('diff', [sub], ctx);
-        expect(printed.some((line) => /not a git repository/i.test(line))).toBe(true);
-        expect(opened).toEqual([]);
+      for (const source of ['session', 'working', 'head', 'staged'] as const) {
+        const modal = new ChangesModal({ workingDirectory: dir, getSessionFiles: () => [], requestRender: () => {} });
+        await modal.reload(source);
+        expect(modal.notRepo).toBe(true);
+        // No git diff ran: nothing loaded, no error text from git.
+        expect(modal.files).toEqual([]);
+        expect(modal.error).toBeNull();
+        const text = layerTextBlock(modal.render(120, 40));
+        expect(text).toMatch(/Not a git repository here/);
+        expect(text).not.toMatch(/fatal:/);
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });

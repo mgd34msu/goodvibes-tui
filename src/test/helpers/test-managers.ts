@@ -8,7 +8,6 @@ import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
-import { PanelManager } from '../../panels/panel-manager.ts';
 import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
 import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
@@ -22,7 +21,6 @@ export interface TestManagers {
   readonly favoritesStore: FavoritesStore;
   readonly benchmarkStore: BenchmarkStore;
   readonly providerRegistry: ProviderRegistry;
-  readonly panelManager: PanelManager;
   readonly bookmarkManager: BookmarkManager;
   readonly toolLLM: ToolLLM;
 }
@@ -101,7 +99,6 @@ export function createTestManagers(): TestManagers {
     benchmarkStore,
   });
   patchTestProviderRegistry(providerRegistry);
-  const panelManager = new PanelManager();
   const bookmarkManager = new BookmarkManager(bookmarksDir);
   const toolLLM = new ToolLLM({ configManager, providerRegistry });
 
@@ -113,7 +110,6 @@ export function createTestManagers(): TestManagers {
     favoritesStore,
     benchmarkStore,
     providerRegistry,
-    panelManager,
     bookmarkManager,
     toolLLM,
   };
@@ -129,8 +125,4 @@ export function createTestProviderRegistry(): ProviderRegistry {
 
 export function createTestBookmarkManager(): BookmarkManager {
   return createTestManagers().bookmarkManager;
-}
-
-export function createTestPanelManager(): PanelManager {
-  return createTestManagers().panelManager;
 }

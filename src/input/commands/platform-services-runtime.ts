@@ -147,7 +147,7 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
           `  tasks: ${review.tasks}`,
           `  pending approvals: ${review.pendingApprovals}`,
           `  remote contracts: ${review.remoteContracts}`,
-          `  registered panels: ${review.panels}`,
+          `  registered views: ${review.panels}`,
           '  api families:',
           ...review.apiFamilies.map((family) => `    - ${family}`),
           '  routes:',

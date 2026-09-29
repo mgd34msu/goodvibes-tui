@@ -1,83 +1,37 @@
 // ---------------------------------------------------------------------------
 // local-auth-masked-entry-routing.test.ts
 //
-// Integration tests that go through the REAL CommandContext wiring built by
-// createBootstrapCommandActions (bootstrap-command-parts.ts) and assert:
-//
-//   1. openLocalAuthMaskedEntry is present on the context (not undefined),
-//      i.e., it was properly assigned by the bootstrap action builder.
-//   2. The real CommandRegistry + handleLocalAuthCommand route:
-//      /local-auth rotate-password <user>   (no password arg)
-//      opens the local-auth panel in masked mode.
-//   3. Keystrokes fed to the live LocalAuthPanel.handleInput() accumulate
-//      in the masked buffer and render as bullet chars (not plaintext).
+// Goes through the real wiring: createBootstrapCommandActions puts a
+// placeholder on the context, wireViewOpeners replaces it with the kit-modal
+// opener, and `/local-auth rotate-password <user>` / `add-user <user>` (no
+// password argument) open the masked entry modal on the surface-modal host.
+// Keystrokes from the production tokenizer reach the modal through the host,
+// render only as dots, and Enter calls the real UserAuthManager.
 // ---------------------------------------------------------------------------
 
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core';
-import { PanelManager } from '../../panels/panel-manager.ts';
-import { LocalAuthPanel } from '../../panels/local-auth-panel.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerLocalAuthRuntimeCommands } from '../../input/commands/local-auth-runtime.ts';
 import { createBootstrapCommandActions } from '../../runtime/bootstrap-command-parts.ts';
-import { handlePanelFocusToken } from '../../input/handler-feed-routes.ts';
-import type { PanelFocusRouteState } from '../../input/handler-feed-routes.ts';
-import { KeybindingsManager } from '../../input/keybindings.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { SurfaceModalHost } from '../../input/surface-modal-host.ts';
+import { MaskedEntryModal } from '../../input/masked-entry-modal.ts';
+import { wireViewOpeners } from '../../shell/view-openers.ts';
+import { layerTextBlock } from '../helpers/surface-frame.ts';
+import { makeTestShellViews } from '../helpers/shell-views.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function linesText(lines: Line[]): string {
-  return lines
-    .map((line) => line.map((cell) => cell.char ?? ' ').join(''))
-    .join('\n');
-}
-
-/** Stub LocalAuthInspectionQuery (display-only), same shape as the panel tests. */
-const EMPTY_INSPECTION: import('@/runtime/index.ts').LocalAuthInspectionQuery = {
-  inspect: () => ({
-    userStorePath: '/tmp/gv-test-users',
-    bootstrapCredentialPath: '/tmp/gv-test-bootstrap',
-    persisted: false,
-    bootstrapCredentialPresent: false,
-    userCount: 0,
-    sessionCount: 0,
-    users: [],
-    sessions: [],
-  }),
-} as unknown as import('@/runtime/index.ts').LocalAuthInspectionQuery;
-
-/** Build a PanelManager with the LocalAuthPanel type registered. */
-function makePanelManager(): PanelManager {
-  const pm = new PanelManager();
-  pm.registerType({
-    id: 'local-auth',
-    name: 'Local Auth',
-    icon: 'U',
-    category: 'runtime-ops',
-    description: 'Local user auth management panel',
-    factory: () => new LocalAuthPanel(EMPTY_INSPECTION),
-  });
-  return pm;
-}
-
-/** Build a minimal CommandContext with the actions wired via createBootstrapCommandActions. */
-function makeContext(
-  panelManager: PanelManager,
-  auth: UserAuthManager,
-): { context: CommandContext; printed: string[] } {
+function makeContext(auth: UserAuthManager, host: SurfaceModalHost, wire: boolean): { context: CommandContext; printed: string[]; logged: string[] } {
   const printed: string[] = [];
-
+  const logged: string[] = [];
   const actions = createBootstrapCommandActions({
     providerRegistry: {} as never,
     configManager: {} as never,
-    conversation: { log: () => {} } as never,
+    conversation: { log: (text: string) => { logged.push(text); } } as never,
     runtime: {
       model: 'mock',
       provider: 'mock',
@@ -87,24 +41,15 @@ function makeContext(
       sessionId: 'test-session',
     } as never,
     requestRender: () => {},
-    panelManager,
     loadSystemPrompt: () => '',
     activatePlan: () => {},
     requestPermission: async () => ({ approved: false }),
     localUserAuthManager: auth,
   });
-
   const context: CommandContext = {
     session: {
       conversationManager: {} as never,
-      runtime: {
-        model: 'mock',
-        provider: 'mock',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: 'medium',
-        sessionId: 'test-session',
-      },
+      runtime: { model: 'mock', provider: 'mock', debugMode: false, systemPrompt: '', reasoningEffort: 'medium', sessionId: 'test-session' },
     },
     provider: { providerRegistry: {} as never },
     workspace: {},
@@ -116,18 +61,29 @@ function makeContext(
     print: (text: string) => { printed.push(text); },
     exit: () => {},
   };
-
-  return { context, printed };
+  if (wire) {
+    const configManager = { get: () => undefined, set: () => {} } as unknown as ConfigManager;
+    const { views, viewPanels } = makeTestShellViews({ configManager, localUserAuthManager: auth });
+    wireViewOpeners({
+      commandContext: context,
+      input: { surfaceModals: host } as never,
+      views,
+      viewPanels,
+      render: () => {},
+    });
+  }
+  return { context, printed, logged };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+function feed(host: SurfaceModalHost, text: string): void {
+  const tokenizer = new InputTokenizer();
+  for (const token of tokenizer.feed(text)) host.handleToken(token);
+}
 
-describe('local-auth masked-entry command routing: bootstrap wiring', () => {
+describe('local-auth masked entry: command routing into the kit modal', () => {
   let dir: string;
   let auth: UserAuthManager;
-  let panelManager: PanelManager;
+  let host: SurfaceModalHost;
 
   beforeEach(() => {
     dir = makeProjectTempDir('gv-routing');
@@ -135,105 +91,99 @@ describe('local-auth masked-entry command routing: bootstrap wiring', () => {
       bootstrapFilePath: join(dir, 'users.json'),
       bootstrapCredentialPath: join(dir, 'bootstrap.txt'),
     });
-    panelManager = makePanelManager();
+    host = new SurfaceModalHost();
   });
 
-  // -------------------------------------------------------------------------
-  // 1. openLocalAuthMaskedEntry is wired (not undefined) on the context
-  // -------------------------------------------------------------------------
-  test('openLocalAuthMaskedEntry is defined on the bootstrap CommandContext', () => {
-    const { context } = makeContext(panelManager, auth);
-    expect(context.openLocalAuthMaskedEntry).toBeDefined();
+  test('the bootstrap context has an opener before the shell attaches, and it says so instead of failing', () => {
+    const { context, logged } = makeContext(auth, host, false);
     expect(typeof context.openLocalAuthMaskedEntry).toBe('function');
+    context.openLocalAuthMaskedEntry!('rotate-password', 'alice');
+    expect(host.active).toBe(false);
+    expect(logged.join('\n')).toContain('opens once the terminal UI is attached');
   });
 
-  // -------------------------------------------------------------------------
-  // 2. /local-auth rotate-password <user> (argv-less) opens masked mode
-  // -------------------------------------------------------------------------
-  test('rotate-password without password arg opens LocalAuthPanel in masked mode', async () => {
-    // Pre-create the user so rotatePassword won't throw if the panel were to commit.
+  test('rotate-password without a password argument opens the masked entry modal', async () => {
     auth.addUser('alice', 'initial-pass', ['admin']);
-
     const registry = new CommandRegistry();
     registerLocalAuthRuntimeCommands(registry);
-
-    const { context } = makeContext(panelManager, auth);
-
-    // The registry entry is 'local-auth'; subcommand args are [subcommand, ...rest].
+    const { context } = makeContext(auth, host, true);
     await registry.execute('local-auth', ['rotate-password', 'alice'], context);
-
-    // The panel must now be open in the panel manager.
-    const rawPanel = panelManager.getPanel('local-auth');
-    expect(rawPanel).not.toBeNull();
-    expect(rawPanel instanceof LocalAuthPanel).toBe(true);
-
-    // And it must be in masked-entry mode for alice.
-    const panel = rawPanel as LocalAuthPanel;
-    expect(panel.isMaskedEntryActive).toBe(true);
+    const top = host.top();
+    expect(top instanceof MaskedEntryModal).toBe(true);
+    expect((top as MaskedEntryModal).step).toBe('password');
+    expect((top as MaskedEntryModal).username).toBe('alice');
   });
 
-  // -------------------------------------------------------------------------
-  // 3. Keystrokes route through handlePanelFocusToken → getActive() → masked buffer
-  // -------------------------------------------------------------------------
-  test('keystrokes routed through the production handlePanelFocusToken accumulate in masked buffer and render as bullets', async () => {
+  test('typed keystrokes render only as dots, and Enter rotates the password through the real manager', async () => {
     auth.addUser('bob', 'old-pass', ['admin']);
-
     const registry = new CommandRegistry();
     registerLocalAuthRuntimeCommands(registry);
-
-    const { context } = makeContext(panelManager, auth);
-
+    const { context, printed } = makeContext(auth, host, true);
     await registry.execute('local-auth', ['rotate-password', 'bob'], context);
+    const modal = host.top() as MaskedEntryModal;
 
-    // After openLocalAuthMaskedEntry: the panel is open and active in the manager.
-    const panel = panelManager.getPanel('local-auth') as LocalAuthPanel;
-    expect(panel.isMaskedEntryActive).toBe(true);
-
-    // Verify panelManager.getActive() returns the same LocalAuthPanel instance,
-    // this is the exact codepath handler-feed-routes.ts:106 and :118 call.
-    expect(panelManager.getActive()).toBe(panel);
-
-    // Build the production PanelFocusRouteState used by handlePanelFocusToken.
-    // KeybindingsManager needs a configPath (file need not exist; defaults are used).
-    const kb = new KeybindingsManager({ configPath: join(dir, 'kb.json') });
-    const routeState: PanelFocusRouteState = {
-      panelManager,
-      keybindingsManager: kb,
-      panelFocused: true,
-      commandMode: false,
-      searchActive: false,
-      autocompleteActive: false,
-      requestRender: () => {},
-      handlePathCompletion: () => false,
-      cyclePanelTab: () => {},
-      isPasteToken: false,
-      now: Date.now(),
-      burstGuard: { timestamps: [], suspended: false, hintShown: false },
-      isTurnActive: () => false,
-      cancelGeneration: () => {},
-    };
-
-    // Feed text tokens through the real router (handler-feed-routes.ts:117-125).
-    // InputTokenizer is the production tokenizer; single printable chars produce
-    // type:'text' tokens whose value is iterated by the router into handleInput.
-    const tokenizer = new InputTokenizer();
-    for (const char of ['n', 'e', 'w']) {
-      const tokens = tokenizer.feed(char);
-      expect(tokens.length).toBeGreaterThan(0);
-      for (const token of tokens) {
-        const result = handlePanelFocusToken(routeState, token);
-        expect(result.handled).toBe(true);
-      }
-    }
-
-    const rendered = panel.render(80, 20);
-    const text = linesText(rendered);
-
-    // Plaintext keystrokes must not appear verbatim.
-    expect(text).not.toContain('new');
-    // Bullet chars must be present (one per character typed).
-    expect(text).toContain('•');
-    // Username is shown in the prompt label.
+    for (const ch of 'new-pass-9') feed(host, ch);
+    expect(modal.passwordLength).toBe(10);
+    const text = layerTextBlock(modal.render(100, 30));
+    expect(text).not.toContain('new-pass');
+    expect(text).toContain('●'.repeat(10));
     expect(text).toContain('bob');
+
+    feed(host, '\r');
+    expect(host.active).toBe(false);
+    expect(modal.passwordLength).toBe(0);
+    expect(printed.join('\n')).toContain('Rotated the password for bob');
+    expect(printed.join('\n')).not.toContain('new-pass');
+    expect(auth.authenticate('bob', 'new-pass-9').ok).toBe(true);
+    expect(auth.authenticate('bob', 'old-pass').ok).toBe(false);
+  });
+
+  test('add-user without a name asks for the name first, then the password', async () => {
+    const { context, printed } = makeContext(auth, host, true);
+    context.openLocalAuthMaskedEntry!('add-user');
+    const modal = host.top() as MaskedEntryModal;
+    expect(modal.step).toBe('username');
+    feed(host, 'carol');
+    feed(host, '\r');
+    expect(modal.step).toBe('password');
+    feed(host, 'secret-1');
+    const text = layerTextBlock(modal.render(100, 30));
+    expect(text).not.toContain('secret-1');
+    feed(host, '\r');
+    expect(host.active).toBe(false);
+    expect(printed.join('\n')).toContain('Added local auth user carol');
+  });
+
+  test('a too-short password is refused by the manager and the modal stays open', async () => {
+    auth.addUser('erin', 'initial-pass', ['admin']);
+    const { context } = makeContext(auth, host, true);
+    context.openLocalAuthMaskedEntry!('rotate-password', 'erin');
+    const modal = host.top() as MaskedEntryModal;
+    feed(host, 'short');
+    feed(host, '\r');
+    expect(host.active).toBe(true);
+    expect(modal.error).toContain('at least 8 characters');
+    expect(layerTextBlock(modal.render(100, 30))).toContain('at least 8 characters');
+  });
+
+  test('a failed call keeps the modal open with the error and an empty buffer', async () => {
+    const { context } = makeContext(auth, host, true);
+    context.openLocalAuthMaskedEntry!('rotate-password', 'nobody');
+    const modal = host.top() as MaskedEntryModal;
+    feed(host, 'long-enough-pw');
+    feed(host, '\r');
+    expect(host.active).toBe(true);
+    expect(modal.error).not.toBeNull();
+    expect(modal.passwordLength).toBe(0);
+  });
+
+  test('Esc closes the modal and drops the buffer', async () => {
+    const { context } = makeContext(auth, host, true);
+    context.openLocalAuthMaskedEntry!('rotate-password', 'dave');
+    const modal = host.top() as MaskedEntryModal;
+    feed(host, 'abc');
+    host.escape();
+    expect(host.active).toBe(false);
+    expect(modal.passwordLength).toBe(0);
   });
 });

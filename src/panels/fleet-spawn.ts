@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // fleet-spawn.ts
 //
-// The Fleet panel's ACP spawn affordance: 'n' on the fleet surface lists the
+// The Agents modal's ACP spawn affordance: 'n' lists the
 // third-party coding agents the daemon discovered (acp.agents.list, read-only,
 // quiet when none), you pick one, then pick a working directory from the known
 // candidates (the registered workspaces + the current dir, no free-text path
@@ -13,24 +13,16 @@
 // never a hung row: the daemon bounds the handshake and returns a 'failed'
 // record, and this controller reports its three honest fields.
 //
-// The controller owns the fleet view + input while a pick is in flight (mirrors
-// FleetActs' pick mode), so fleet-panel.ts stays a thin delegator under the
-// architecture line cap. The gateway is injectable so the flow round-trips
+// The controller owns the Agents modal's input while a pick is in flight
+// (mirrors FleetActs' pick mode); the modal draws spawnView(). The gateway is
+// injectable so the flow round-trips
 // against a mocked daemon in tests; the live builder is createAcpSpawnGateway.
 // ---------------------------------------------------------------------------
 
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { OperatorMethodOutput } from '@pellux/goodvibes-sdk';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { resolveOperatorRpc } from '../input/commands/operator-rpc.ts';
-import {
-  buildKeyboardHints,
-  buildPanelWorkspace,
-  buildPanelLine,
-  DEFAULT_PANEL_PALETTE,
-  type PanelPalette,
-} from './polish.ts';
 
 /** One discovered third-party ACP agent (acp.agents.list). */
 export type AcpDiscoveredAgent = OperatorMethodOutput<'acp.agents.list'>['agents'][number];
@@ -111,7 +103,15 @@ interface DirStep {
 }
 type SpawnMode = AgentStep | DirStep | null;
 
-const C = DEFAULT_PANEL_PALETTE;
+/** The spawn picker, as data. */
+export interface FleetSpawnView {
+  readonly step: 'agent' | 'dir';
+  readonly title: string;
+  readonly intro: string;
+  readonly options: ReadonlyArray<{ readonly label: string; readonly detail: string; readonly selected: boolean }>;
+  /** A create round-trip is in flight. */
+  readonly creating: boolean;
+}
 
 export class FleetSpawn {
   private mode: SpawnMode = null;
@@ -218,44 +218,28 @@ export class FleetSpawn {
     }
   }
 
-  /** The spawn picker view (replaces the tree while a pick is in flight). */
-  public renderSpawnMode(width: number, height: number, palette: PanelPalette = C): Line[] {
-    const P = palette;
-    if (!this.mode) return [];
-    const lines: Line[] = [];
-    if (this.creating) {
-      lines.push(buildPanelLine(width, [[' Hosting the agent…', P.dim]]));
-      return buildPanelWorkspace(width, height, { title: 'Fleet: Host an agent', sections: [{ lines }], footerLines: [], palette: P });
-    }
+  /** The spawn picker as data the Agents modal draws, or null when it is not open. */
+  public spawnView(): FleetSpawnView | null {
+    if (!this.mode) return null;
+    if (this.creating) return { step: this.mode.step, title: 'Hosting the agent…', intro: '', options: [], creating: true };
     if (this.mode.step === 'agent') {
-      lines.push(buildPanelLine(width, [[' Host a third-party coding agent; pick one, then a directory.', P.dim]]));
-      lines.push(buildPanelLine(width, [['', P.dim]]));
-      this.mode.agents.forEach((agent, i) => {
-        const selected = i === (this.mode as AgentStep).index;
-        lines.push(buildPanelLine(width, [
-          [selected ? ' ▸ ' : '   ', selected ? P.info : P.dim],
-          [agent.title, selected ? P.value : P.dim],
-          [`, ${agent.binaryPath}`, P.dim],
-        ]));
-      });
-    } else {
-      lines.push(buildPanelLine(width, [[` Directory for ${this.mode.agent.title}: a known dir, no path to type.`, P.dim]]));
-      lines.push(buildPanelLine(width, [['', P.dim]]));
-      this.mode.candidates.forEach((cand, i) => {
-        const selected = i === (this.mode as DirStep).index;
-        lines.push(buildPanelLine(width, [
-          [selected ? ' ▸ ' : '   ', selected ? P.info : P.dim],
-          [cand.label, selected ? P.value : P.dim],
-          [`, ${cand.path}`, P.dim],
-        ]));
-      });
+      const index = this.mode.index;
+      return {
+        step: 'agent',
+        title: 'Host an agent',
+        intro: 'Host a third-party coding agent here: pick one, then a directory.',
+        options: this.mode.agents.map((agent, i) => ({ label: agent.title, detail: agent.binaryPath, selected: i === index })),
+        creating: false,
+      };
     }
-    const footerLines = [buildKeyboardHints(width, [
-      { keys: '↑↓', label: 'choose' },
-      { keys: 'Enter', label: this.mode.step === 'agent' ? 'pick agent' : 'host here' },
-      { keys: 'Esc', label: 'cancel' },
-    ], P)];
-    return buildPanelWorkspace(width, height, { title: 'Fleet: Host an agent', sections: [{ lines }], footerLines, palette: P });
+    const index = this.mode.index;
+    return {
+      step: 'dir',
+      title: this.mode.agent.title,
+      intro: `Where ${this.mode.agent.title} runs: a known directory, no path to type.`,
+      options: this.mode.candidates.map((cand, i) => ({ label: cand.label, detail: cand.path, selected: i === index })),
+      creating: false,
+    };
   }
 
   private requireGateway(): AcpSpawnGateway | null {

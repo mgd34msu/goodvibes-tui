@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { SurfaceModalHost } from '../../input/surface-modal-host.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
-import { PanelManager } from '../../panels/panel-manager.ts';
+import { makeTestShellViews } from '../helpers/shell-views.ts';
+import type { ShellViews } from '../../panels/builtin-views.ts';
+import type { ViewPanelAdapter } from '../../panels/view-panel-adapter.ts';
 
 interface FakeEmbeddingStatus {
   readonly id: string;
@@ -34,8 +36,8 @@ function makeFakeEmbeddingRegistry(options: {
 describe('wireShellUiOpeners', () => {
   let commandContext: Record<string, unknown>;
   let input: Record<string, unknown>;
-  let panelManager: Record<string, unknown>;
-  let conversation: Record<string, unknown>;
+  let views: ShellViews;
+  let viewPanels: ViewPanelAdapter;
   let render: ReturnType<typeof mock>;
   let testManagers = createTestManagers();
   let fakeEmbeddingRegistry = makeFakeEmbeddingRegistry();
@@ -60,35 +62,14 @@ describe('wireShellUiOpeners', () => {
       openSelection: mock(() => {}),
       surfaceModals: new SurfaceModalHost(),
     };
-    panelManager = {
-      isVisible: mock(() => false),
-      getAllOpen: mock(() => []),
-      getFocusTarget: mock(() => 'prompt'),
-      getRegisteredTypes: mock(() => [
-        { id: 'fleet', name: 'Fleet', icon: '⊟', category: 'runtime-ops', description: 'fleet' },
-        { id: 'git', name: 'Git', icon: 'G', category: 'development', description: 'git' },
-      ]),
-      open: mock(() => ({})),
-      show: mock(() => {}),
-      hide: mock(() => {}),
-      focusPanels: mock(() => {}),
-      focusPrompt: mock(() => {}),
-      setOpenModalCallback: mock(() => {}),
-      // no config-modal surface registered on this bare mock manager, so
-      // getModalSurface always resolves to undefined (the honest no-op path).
-      getModalSurface: mock(() => undefined),
-    };
-    conversation = {
-      setSplashSuppressed: mock(() => {}),
-      rebuildHistory: mock(() => {}),
-    };
+    ({ views, viewPanels } = makeTestShellViews({ configManager: testManagers.configManager }));
     render = mock(() => {});
 
     wireShellUiOpeners({
       commandContext: commandContext as never,
       input: input as never,
-      panelManager: panelManager as never,
-      conversation: conversation as never,
+      views,
+      viewPanels,
       configManager: testManagers.configManager,
       providerRegistry: { getSelectableModels: () => [], listModels: () => [] } as never,
       runtime: { model: 'm', provider: 'p' } as never,
@@ -161,78 +142,30 @@ describe('wireShellUiOpeners', () => {
     });
   });
 
-  // (the purge): 'panel-list' (a picker PANEL) was DELETE-disposition.
-  // openPanelPicker now opens a selection MODAL built from the live
-  // registry instead of force-opening a specific panel, see
-  // shell/ui-openers.ts.
-  test('openPanelPicker opens a selection modal built from the live registry when nothing is open', () => {
-    (commandContext.openPanelPicker as () => void)();
-    expect(input.openSelection).toHaveBeenCalledTimes(1);
-    const [title, items] = (input.openSelection as ReturnType<typeof mock>).mock.calls[0] as [string, Array<{ id: string }>, unknown, unknown];
-    expect(title).toBe('Open Panel');
-    expect(items.map((i) => i.id)).toEqual(['fleet', 'git']);
-    // No panel is opened until the user actually picks one.
-    expect(panelManager.open).not.toHaveBeenCalled();
+  test('openView routes old pane names to their modals and reports unknown names', () => {
+    const opened: string[] = [];
+    commandContext.openAgents = mock(() => { opened.push('agents'); });
+    commandContext.openUsage = mock(() => { opened.push('usage'); });
+    commandContext.openChanges = mock(() => { opened.push('changes'); });
+    commandContext.openNotifications = mock(() => { opened.push('notifications'); });
+    const openView = commandContext.openView as (name: string) => boolean;
+    expect(openView('fleet')).toBe(true);
+    expect(openView('cockpit')).toBe(true);
+    expect(openView('tokens')).toBe(true);
+    expect(openView('cost')).toBe(true);
+    expect(openView('git')).toBe(true);
+    expect(openView('review')).toBe(true);
+    expect(openView('notifications')).toBe(true);
+    expect(openView('no-such-view')).toBe(false);
+    expect(opened).toEqual(['agents', 'agents', 'usage', 'usage', 'changes', 'changes', 'notifications']);
   });
 
-  test('openPanelPicker opens the selected panel once the selection modal resolves', () => {
-    (commandContext.openPanelPicker as () => void)();
-    const callback = (input.openSelection as ReturnType<typeof mock>).mock.calls[0]![3] as (result: unknown) => void;
-    callback({ item: { id: 'git' }, action: 'select' });
-    expect(panelManager.open).toHaveBeenCalledWith('git');
-    expect(panelManager.show).toHaveBeenCalled();
-    expect(panelManager.focusPanels).toHaveBeenCalled();
-    expect(panelManager.hide).not.toHaveBeenCalled();
-    expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(true);
-  });
-
-  test('openPanelPicker does nothing when the selection modal is cancelled', () => {
-    (commandContext.openPanelPicker as () => void)();
-    const callback = (input.openSelection as ReturnType<typeof mock>).mock.calls[0]![3] as (result: unknown) => void;
-    callback(null);
-    expect(panelManager.open).not.toHaveBeenCalled();
-    expect(panelManager.show).not.toHaveBeenCalled();
-  });
-
-  test('openPanelPicker focuses an already-visible-but-unfocused workspace instead of hiding it', () => {
-    (panelManager.isVisible as ReturnType<typeof mock>).mockReturnValue(true);
-    (panelManager.getAllOpen as ReturnType<typeof mock>).mockReturnValue([{ id: 'git' }]);
-    (panelManager.getFocusTarget as ReturnType<typeof mock>).mockReturnValue('prompt');
-    (commandContext.openPanelPicker as () => void)();
-    expect(panelManager.hide).not.toHaveBeenCalled();
-    expect(panelManager.show).toHaveBeenCalled();
-    expect(panelManager.focusPanels).toHaveBeenCalled();
-  });
-
-  test('openPanelPicker clears panel focus when hiding an already-focused workspace', () => {
-    (panelManager.isVisible as ReturnType<typeof mock>).mockReturnValue(true);
-    (panelManager.getAllOpen as ReturnType<typeof mock>).mockReturnValue([{ id: 'docs' }]);
-    (panelManager.getFocusTarget as ReturnType<typeof mock>).mockReturnValue('panel');
-    (commandContext.openPanelPicker as () => void)();
-    expect(panelManager.hide).toHaveBeenCalled();
-    expect(panelManager.focusPrompt).toHaveBeenCalled();
-    expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(false);
-  });
-
-  // item 1a: showPanel is exclusively called from the command path
-  // (/panel open, /tasks, /routes, ...), it now opens/shows the panel but
-  // leaves keyboard focus in the composer by default ("the user is
-  // mid-command-flow"). A caller that explicitly opts in with { focus: true }
-  // still gets focusPanels() called.
-  test('showPanel opens and shows the panel workspace WITHOUT grabbing focus by default', () => {
-    (commandContext.showPanel as (panelId: string) => void)('tasks');
-    // Reconciled signature forwards the deep-link target (undefined here).
-    expect(panelManager.open).toHaveBeenCalledWith('tasks', undefined, undefined);
-    expect(panelManager.show).toHaveBeenCalled();
-    expect(panelManager.focusPanels).not.toHaveBeenCalled();
-    expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(true);
-  });
-
-  test('showPanel(id, pane, target, { focus: true }) still grabs focus; the escape hatch', () => {
-    (commandContext.showPanel as (panelId: string, pane?: 'top' | 'bottom', target?: unknown, opts?: { focus?: boolean }) => void)(
-      'tasks', undefined, undefined, { focus: true },
-    );
-    expect(panelManager.focusPanels).toHaveBeenCalled();
+  test('the operator API panel adapter opens views through openView', () => {
+    commandContext.openAgents = mock(() => {});
+    expect(viewPanels.open('agents')).toBe(true);
+    expect(commandContext.openAgents).toHaveBeenCalledTimes(1);
+    expect(viewPanels.getRegisteredTypes().map((t) => t.id)).toEqual(['agents', 'usage', 'changes', 'notifications', 'sessions']);
+    expect(viewPanels.getTopPane().panels).toEqual([]);
   });
 
   test('openOnboardingWizard delegates through the shared opener seam', () => {
@@ -242,16 +175,25 @@ describe('wireShellUiOpeners', () => {
     expect(render).not.toHaveBeenCalled();
   });
 
-  // (the purge): openModal resolves the name to a registered config-modal
-  // surface (PanelManager.getModalSurface). With no surface registered it must
-  // stay a safe, honest no-op, an explanatory print, not a throw or a blank
-  // modal. The same callback is injected into PanelManager for redirect hits.
-  test('openModal is wired onto both CommandContext and PanelManager, and is safe with no real modal registered', () => {
-    expect(panelManager.setOpenModalCallback).toHaveBeenCalledWith(commandContext.openModal);
+  // openModal resolves the name to a registered config-modal surface on the
+  // standalone registry. With no surface registered it stays a safe, honest
+  // no-op: an explanatory print, not a throw or a blank modal.
+  test('openModal is safe with no real modal registered', () => {
     (commandContext.openModal as (name: string) => void)('providers-modal');
-    expect(panelManager.getModalSurface).toHaveBeenCalledWith('providers-modal');
     expect(commandContext.print).toHaveBeenCalledWith("'providers-modal' is not available yet in this build.");
     expect(render).toHaveBeenCalled();
+  });
+
+  test('openModal resolves an old name through the registry redirect (accounts opens providers-modal)', () => {
+    const open = mock(() => {});
+    (input as Record<string, unknown>).configModal = { open };
+    const surface = { name: 'providers-modal', title: 'Providers', buildView: () => ({ title: 'Providers', tabs: [] }) };
+    views.modalSurfaces.registerModalSurface(surface as never);
+    views.modalSurfaces.registerModalRedirect('accounts', 'providers-modal');
+    (commandContext.openModal as (name: string) => void)('accounts');
+    expect(open).toHaveBeenCalledTimes(1);
+    expect((open.mock.calls[0] as unknown[])[0]).toBe(surface);
+    expect(input.modalOpened).toHaveBeenCalledWith('config');
   });
 
   // W6 review (finding 3): the retired 'sessions' front door redirects to the
@@ -266,30 +208,16 @@ describe('wireShellUiOpeners', () => {
     (commandContext.openModal as (name: string) => void)('sessionPicker');
     expect(open).toHaveBeenCalledTimes(1);
     expect(input.modalOpened).toHaveBeenCalledWith('sessionPicker');
-    // The native dispatch is consulted BEFORE getModalSurface, which never
-    // sees 'sessionPicker', and the old "not available yet" lie is gone.
-    expect(panelManager.getModalSurface).not.toHaveBeenCalledWith('sessionPicker');
+    // The native dispatch is consulted before the surface registry, and the
+    // old "not available yet" lie is gone.
     expect(commandContext.print).not.toHaveBeenCalledWith("'sessionPicker' is not available yet in this build.");
   });
 
-  test("PanelManager.open('sessions') redirect opens the session picker end to end (no lie); the restore skip hook resolves honestly", () => {
-    const open = mock(() => {});
-    (input as Record<string, unknown>).sessionPickerModal = { open };
-    const realPm = new PanelManager();
-    realPm.registerModalRedirect('sessions', 'sessionPicker');
-    // Inject the SAME production openModal callback the shell wires onto
-    // PanelManager, then drive open('sessions') exactly as a front door or a
-    // saved-layout restore would.
-    realPm.setOpenModalCallback(commandContext.openModal as (name: string) => void);
-
-    realPm.open('sessions');
-
-    expect(open).toHaveBeenCalledTimes(1);
-    expect(commandContext.print).not.toHaveBeenCalledWith("'sessionPicker' is not available yet in this build.");
-    // reopenPanelsFromReturnContext skips redirects via getModalRedirect and
-    // notes them honestly instead of opening a phantom panel, assert that hook
-    // still resolves 'sessions' -> the picker modal name.
-    expect(realPm.getModalRedirect('sessions')).toBe('sessionPicker');
+  test("openView('sessions') opens the session picker (the Hosted group lives there too)", () => {
+    const openSessionPicker = mock(() => {});
+    commandContext.openSessionPicker = openSessionPicker;
+    expect((commandContext.openView as (name: string) => boolean)('sessions')).toBe(true);
+    expect(openSessionPicker).toHaveBeenCalledTimes(1);
   });
 
   describe('embeddings target', () => {
@@ -367,8 +295,8 @@ describe('wireShellUiOpeners', () => {
       wireShellUiOpeners({
         commandContext: commandContext as never,
         input: input as never,
-        panelManager: panelManager as never,
-        conversation: conversation as never,
+        views,
+        viewPanels,
         configManager: testManagers.configManager,
         providerRegistry: {
           getSelectableModels: () => [],
@@ -411,8 +339,8 @@ describe('wireShellUiOpeners', () => {
       wireShellUiOpeners({
         commandContext: commandContext as never,
         input: input as never,
-        panelManager: panelManager as never,
-        conversation: conversation as never,
+        views,
+        viewPanels,
         configManager: testManagers.configManager,
         providerRegistry: {
           getSelectableModels: () => [registeredModel, unregisteredModel],

@@ -1,4 +1,4 @@
-# GV_GOLDEN surface=splash-140 width=140 height=21
+# GV_GOLDEN surface=splash-140 width=140 height=16
 |                          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━                           |
 |                           ██████╗    ██████╗    ██████╗   ██████╗   ██╗   ██╗  ██╗  ██████╗   ███████╗  ███████╗                           |
 |                          ██╔════╝   ██╔═══██╗  ██╔═══██╗  ██╔══██╗  ██║   ██║  ██║  ██╔══██╗  ██╔════╝  ██╔════╝                           |
@@ -14,12 +14,7 @@
 |                                                          /workspace/goodvibes-tui                                                          |
 |                                             ↩ resume last session: /resume gv-20260612-a1b2c3                                              |
 |                                                                                                                                            |
-|                                                  Ctrl+P commands  /  ? help  /  F2 fleet                                                   |
-|                                                                                                                                            |
-|                                                                                                                                            |
-|                                                                                                                                            |
-|                                                                                                                                            |
-|                                                                                                                                            |
+|                                                  Ctrl+P commands  /  ? help  /  F2 agents                                                  |
 @STYLES
 0 13 fg=0;255;255
 0 13 bold=1
@@ -2826,3 +2821,4 @@
 15 111 fg=#4e5c6f
 15 112 fg=#4e5c6f
 15 113 fg=#4e5c6f
+15 114 fg=#4e5c6f

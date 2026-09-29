@@ -7,6 +7,7 @@ import { registerOnboardingRuntimeCommands } from '../../input/commands/onboardi
 import type { OpenOnboardingWizardOptions } from '../../input/handler-ui-state.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import { getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { makeTestShellViews } from '../helpers/shell-views.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -75,11 +76,7 @@ function makeWiredContext(out: string[]): {
   wireShellUiOpeners({
     commandContext: ctx,
     input,
-    panelManager: runtimeServices.panelManager,
-    conversation: {
-      setSplashSuppressed: () => {},
-      rebuildHistory: () => {},
-    } as never,
+    ...makeTestShellViews({ configManager: runtimeServices.configManager }),
     configManager: runtimeServices.configManager,
     providerRegistry: runtimeServices.providerRegistry,
     runtime: ctx.session.runtime as never,

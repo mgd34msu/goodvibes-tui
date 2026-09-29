@@ -17,7 +17,7 @@ describe('verification ledger', () => {
     expect(ledger.areas.map((area) => area.area)).toEqual(expect.arrayContaining([
       'Settings schema and persistence',
       'Slash commands',
-      'Built-in panels',
+      'Built-in modals and views',
       'Top-level CLI commands',
     ]));
   });

@@ -4,7 +4,7 @@
 |                                                                                                    |
 |           ✦ Help                                                                    esc            |
 |                                                                                                    |
-|           ▏Filter commands and shortcuts                                      37 entries           |
+|           ▏Filter commands and shortcuts                                      23 entries           |
 |                                                                                                    |
 |         ✦ core navigation                                                                          |
 |           Recall input history; Down at bottom focuses the process indicator   Up / Down           |
@@ -17,15 +17,15 @@
 |           Undo / redo                                              Ctrl+Z / Ctrl+Shift+Z           |
 |           Folds to [TEXT: pN, M lines]; /pastes previews it before you  (paste >8 lines)           |
 |           submit                                                                                   |
-|         ✦ overlays and panels                                                                      |
+|         ✦ overlays and views                                                                       |
 |           Open the command browser (search & run any command)               ?  or  /help           |
 |           This reference: keyboard shortcuts + full command list               /commands           |
 |           Keyboard-shortcuts-only reference (a separate, generated overlay)   /shortcuts           |
-|           Panel focus-swap, else path-complete, else collapse/expand block           Tab           |
-|           Open, focus, or hide the panel workspace                          Ctrl+Shift+P           |
-|           Close the currently active panel                                        Ctrl+X           |
+|           Command palette: every command and view                                 Ctrl+P           |
+|           Agents: running agents, chains and hosted sessions                 F2 / Ctrl+O           |
+|           Usage: context, tokens and cost                                         /usage           |
 |                                                                                                    |
-|            ↑↓  scroll    ?  close                                              23 more ↓           |
+|            ↑↓  scroll    ?  close                                               9 more ↓           |
 |                                                                                                    |
 |       ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀       |
 |                                                                                                    |
@@ -2829,9 +2829,7 @@
 18 28 fg=#a855f7
 18 28 bg=#161a22
 18 28 bold=1
-18 29 fg=#a855f7
 18 29 bg=#161a22
-18 29 bold=1
 18 30 bg=#161a22
 18 31 bg=#161a22
 18 32 bg=#161a22
@@ -3548,55 +3546,30 @@
 22 48 bg=#161a22
 22 49 fg=#e2e8f0
 22 49 bg=#161a22
-22 50 fg=#e2e8f0
 22 50 bg=#161a22
-22 51 fg=#e2e8f0
 22 51 bg=#161a22
-22 52 fg=#e2e8f0
 22 52 bg=#161a22
-22 53 fg=#e2e8f0
 22 53 bg=#161a22
-22 54 fg=#e2e8f0
 22 54 bg=#161a22
-22 55 fg=#e2e8f0
 22 55 bg=#161a22
-22 56 fg=#e2e8f0
 22 56 bg=#161a22
-22 57 fg=#e2e8f0
 22 57 bg=#161a22
-22 58 fg=#e2e8f0
 22 58 bg=#161a22
-22 59 fg=#e2e8f0
 22 59 bg=#161a22
-22 60 fg=#e2e8f0
 22 60 bg=#161a22
-22 61 fg=#e2e8f0
 22 61 bg=#161a22
-22 62 fg=#e2e8f0
 22 62 bg=#161a22
-22 63 fg=#e2e8f0
 22 63 bg=#161a22
-22 64 fg=#e2e8f0
 22 64 bg=#161a22
-22 65 fg=#e2e8f0
 22 65 bg=#161a22
-22 66 fg=#e2e8f0
 22 66 bg=#161a22
-22 67 fg=#e2e8f0
 22 67 bg=#161a22
-22 68 fg=#e2e8f0
 22 68 bg=#161a22
-22 69 fg=#e2e8f0
 22 69 bg=#161a22
-22 70 fg=#e2e8f0
 22 70 bg=#161a22
-22 71 fg=#e2e8f0
 22 71 bg=#161a22
-22 72 fg=#e2e8f0
 22 72 bg=#161a22
-22 73 fg=#e2e8f0
 22 73 bg=#161a22
-22 74 fg=#e2e8f0
 22 74 bg=#161a22
 22 75 bg=#161a22
 22 76 bg=#161a22
@@ -3606,8 +3579,11 @@
 22 80 bg=#161a22
 22 81 bg=#161a22
 22 82 bg=#161a22
+22 83 fg=#4e5c6f
 22 83 bg=#161a22
+22 84 fg=#4e5c6f
 22 84 bg=#161a22
+22 85 fg=#4e5c6f
 22 85 bg=#161a22
 22 86 fg=#4e5c6f
 22 86 bg=#161a22
@@ -3731,15 +3707,25 @@
 23 49 bg=#161a22
 23 50 fg=#e2e8f0
 23 50 bg=#161a22
+23 51 fg=#e2e8f0
 23 51 bg=#161a22
+23 52 fg=#e2e8f0
 23 52 bg=#161a22
+23 53 fg=#e2e8f0
 23 53 bg=#161a22
+23 54 fg=#e2e8f0
 23 54 bg=#161a22
+23 55 fg=#e2e8f0
 23 55 bg=#161a22
+23 56 fg=#e2e8f0
 23 56 bg=#161a22
+23 57 fg=#e2e8f0
 23 57 bg=#161a22
+23 58 fg=#e2e8f0
 23 58 bg=#161a22
+23 59 fg=#e2e8f0
 23 59 bg=#161a22
+23 60 fg=#e2e8f0
 23 60 bg=#161a22
 23 61 bg=#161a22
 23 62 bg=#161a22
@@ -3757,7 +3743,6 @@
 23 74 bg=#161a22
 23 75 bg=#161a22
 23 76 bg=#161a22
-23 77 fg=#4e5c6f
 23 77 bg=#161a22
 23 78 fg=#4e5c6f
 23 78 bg=#161a22
@@ -3879,7 +3864,6 @@
 24 40 bg=#161a22
 24 41 fg=#e2e8f0
 24 41 bg=#161a22
-24 42 fg=#e2e8f0
 24 42 bg=#161a22
 24 43 bg=#161a22
 24 44 bg=#161a22
@@ -4177,7 +4161,6 @@
 26 77 bg=#161a22
 26 78 bg=#161a22
 26 79 bg=#161a22
-26 80 fg=#4e5c6f
 26 80 bg=#161a22
 26 81 fg=#4e5c6f
 26 81 bg=#161a22

@@ -117,7 +117,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
 
       if (args[0] === 'panel') {
         openProjectPlanningPanel();
-        ctx.print('Opened project planning panel.');
+        ctx.print('Opened project planning.');
         return;
       }
 

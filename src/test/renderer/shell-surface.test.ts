@@ -1,448 +1,237 @@
 import { describe, expect, test } from 'bun:test';
-import { buildShellFooter, estimateShellFooterHeight } from '../../renderer/shell-surface.ts';
+import { buildShellFooter, estimateShellFooterHeight, type ShellFooterBuildOptions } from '../../renderer/shell-surface.ts';
 import type { VoiceCaptureIndicatorState } from '../../core/voice-capture-status.ts';
 import { lineToString } from '../setup.ts';
 import { activeTokens } from '../../renderer/theme.ts';
+import { auditFrame } from '../helpers/frame-audit.ts';
 
-describe('shell surface', () => {
-  test('estimated footer height matches rendered footer height without context bar', () => {
-    const result = buildShellFooter({
-      width: 100,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 0,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-    });
-    expect(result.height).toBe(estimateShellFooterHeight(1, 0));
+function footer(overrides: Partial<ShellFooterBuildOptions> = {}): ReturnType<typeof buildShellFooter> {
+  return buildShellFooter({
+    width: 100,
+    promptText: 'hello',
+    promptLineCount: 1,
+    promptCursorPos: 5,
+    usage: { up: 0, down: 0 },
+    showExitNotice: false,
+    lastCopyTime: 0,
+    model: 'gpt-test',
+    workingDir: '/tmp/demo',
+    branch: 'main',
+    provider: 'openai',
+    contextWindow: 0,
+    runningAgentCount: 0,
+    runningProcessCount: 0,
+    indicatorFocused: false,
+    ...overrides,
+  });
+}
+
+const text = (result: ReturnType<typeof buildShellFooter>): string => result.lines.map(lineToString).join('\n');
+
+describe('shell surface: the composer', () => {
+  test('at rest the footer is the 5-row composer plus the status line', () => {
+    const result = footer();
+    expect(result.height).toBe(6);
+    expect(result.height).toBe(estimateShellFooterHeight(1));
   });
 
-  test('estimated footer height matches rendered footer height with context bar', () => {
-    const result = buildShellFooter({
-      width: 100,
-      promptText: 'hello\nworld',
-      promptLineCount: 2,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'claude-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'anthropic',
-      contextWindow: 200000,
-      lastInputTokens: 1024,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      runningAgentProgress: 'Turn 2',
-    });
-    expect(result.height).toBe(estimateShellFooterHeight(2, 200000));
+  test('multi-line input grows the text area and nothing else', () => {
+    const one = footer();
+    const two = footer({ promptText: 'hello\nworld', promptLineCount: 2 });
+    expect(two.height).toBe(one.height + 1);
+    expect(lineToString(two.lines[1]!).slice(5, 10)).toBe('hello');
+    expect(lineToString(two.lines[2]!).slice(5, 10)).toBe('world');
   });
 
-  test('process indicator sits directly below the prompt box', () => {
-    const result = buildShellFooter({
-      width: 100,
-      promptText: 'hello\nworld',
-      promptLineCount: 2,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      runningAgentProgress: 'Turn 2',
-    });
-    expect(lineToString(result.lines[4])).toContain('1 agent');
+  test('the bar runs every composer row at column 2 against a full-width element fill', () => {
+    const result = footer({ width: 80 });
+    const composer = result.lines.slice(0, 5);
+    for (const row of composer) {
+      expect(row[2]!.char).toBe('┃');
+      expect(row[3]!.bg).toBe(activeTokens().backgroundElement);
+      expect(row[77]!.bg).toBe(activeTokens().backgroundElement);
+      expect(row[78]!.bg).toBe('');
+    }
   });
 
-  test('prompt box keeps half-height top and bottom borders', () => {
-    const result = buildShellFooter({
-      width: 80,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 0,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-    });
-    expect(lineToString(result.lines[0])).toContain('▄');
-    expect(lineToString(result.lines[2])).toContain('▀');
+  test('the composer passes the layout audit (padding rows, 2-column text inset, full-height bar)', () => {
+    const result = footer({ width: 90, promptText: 'a much longer prompt that still fits on one row', promptCursorPos: 10, dangerMode: true, powerKeepAwake: true });
+    expect(auditFrame(result.lines, 90, activeTokens())).toEqual([]);
   });
 
-  test('composer posture line surfaces mode and pending risk without bloating the footer', () => {
-    const result = buildShellFooter({
-      width: 100,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 0,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      composerMode: 'shell',
-      composerStatus: 'preflight',
-      composerFlags: ['approval'],
-      composerPendingRisk: 'shell',
-    });
-    const text = result.lines.map(lineToString).join('\n');
-    expect(text).toContain('risk:shell');
-    expect(text).toContain('state:preflight');
-    expect(text).toContain('flags:approval');
+  test('an empty focused composer shows the placeholder', () => {
+    const result = footer({ promptText: '', promptCursorPos: 0 });
+    expect(lineToString(result.lines[1]!)).toContain('sk anything, or type / for commands and @ for files');
   });
 
-  test('prompt box visibly loses focus when the indicator is focused', () => {
-    const focused = buildShellFooter({
-      width: 80,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-    });
-    const unfocused = buildShellFooter({
-      width: 80,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: true,
-    });
-    expect(lineToString(focused.lines[1])).toContain('›');
-    expect(lineToString(unfocused.lines[1])).toContain('›');
-    expect(focused.lines[1]![4]!.bg).toBe(activeTokens().backgroundInput);
-    expect(unfocused.lines[1]![4]!.bg).toBe(activeTokens().backgroundPanel);
-    expect(activeTokens().backgroundInput).not.toBe(activeTokens().backgroundPanel);
-    expect(lineToString(unfocused.lines[1])).not.toContain('█');
+  test('an unfocused empty composer says how to get back', () => {
+    const result = footer({ promptText: '', indicatorFocused: true });
+    expect(lineToString(result.lines[1]!)).toContain('Esc returns to the composer');
+    expect(lineToString(result.lines[1]!)).not.toContain('█');
   });
 
-  test('estimate keys its cache on compact mode so a compact render does not answer a non-compact query', () => {
-    // Render a compact footer first, this populates the "last rendered
-    // footer height" fast path in estimateShellFooterHeight with the
-    // compact height (no process indicator, no context-info line).
-    const compactResult = buildShellFooter({
-      width: 100,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 0,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      compact: true,
-    });
-    // A caller asking for the NON-compact estimate right after (e.g. the
-    // viewport-height calc reacting to a resize back to a tall terminal)
-    // must get the non-compact formula, not the stale compact-render cache.
-    expect(estimateShellFooterHeight(1, 0, false)).not.toBe(compactResult.height);
-    expect(estimateShellFooterHeight(1, 0, false)).toBe(estimateShellFooterHeight(2, 0, false) - 1);
-
-    // And the reverse: a non-compact render must not leak into a compact query.
-    const nonCompactResult = buildShellFooter({
-      width: 100,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 0,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      compact: false,
-    });
-    expect(estimateShellFooterHeight(1, 0, true)).not.toBe(nonCompactResult.height);
-    expect(estimateShellFooterHeight(1, 0, true)).toBe(compactResult.height);
+  test('the inner row names the mode, model and provider', () => {
+    const row = lineToString(footer({ permissionMode: 'plan' }).lines[3]!);
+    expect(row).toContain('plan · gpt-test openai');
   });
 
-  test('prompt box visibly loses focus when the panel workspace is focused, independent of indicatorFocused', () => {
-    // sub-fix C: panelFocused is a fallback-only input to buildShellFooter
-    // (main.ts computes promptFocused itself and passes it explicitly), but the
-    // fallback must still agree so any caller that omits promptFocused gets a
-    // composer that doesn't contradict the panel's own (correctly wired) focus
-    // border.
-    const panelFocused = buildShellFooter({
-      width: 80,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      panelFocused: true,
-    });
-    const neitherFocused = buildShellFooter({
-      width: 80,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      panelFocused: false,
-    });
-    expect(panelFocused.lines[1]![4]!.bg).toBe(activeTokens().backgroundPanel);
-    expect(neitherFocused.lines[1]![4]!.bg).toBe(activeTokens().backgroundInput);
-    expect(lineToString(panelFocused.lines[1])).not.toContain('█');
+  test('the mode colors the bar: normal brand, plan info, auto-approving modes warning, shell accent', () => {
+    const t = activeTokens();
+    expect(footer({ permissionMode: 'prompt' }).lines[0]![2]!.fg).toBe(t.brand);
+    expect(footer({ permissionMode: 'plan' }).lines[0]![2]!.fg).toBe(t.info);
+    expect(footer({ permissionMode: 'accept-edits' }).lines[0]![2]!.fg).toBe(t.warning);
+    expect(footer({ permissionMode: 'allow-all' }).lines[0]![2]!.fg).toBe(t.warning);
+    const shell = footer({ permissionMode: 'prompt', composerPendingRisk: 'shell', promptText: '!ls' });
+    expect(shell.lines[0]![2]!.fg).toBe(t.accent);
+    expect(lineToString(shell.lines[3]!)).toContain('shell ·');
   });
 
-  test('an explicit promptFocused wins over the panelFocused/indicatorFocused fallback', () => {
-    const result = buildShellFooter({
-      width: 80,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      panelFocused: true,
-      promptFocused: true,
-    });
-    expect(result.lines[1]![4]!.bg).toBe(activeTokens().backgroundInput);
+  test('the failover marker follows the model on the inner row', () => {
+    const row = lineToString(footer({ modelNote: 'failover from abacusai:route-llm', width: 120 }).lines[3]!);
+    expect(row).toContain('gpt-test openai · failover from abacusai:route-llm');
   });
 
-  // item 1c: an unfocused, EMPTY composer names the state and the way
-  // back, the dimmed fill alone told you nothing was wrong, but not why
-  // keystrokes weren't landing there.
-  test('an unfocused, empty composer shows the "panel focused; Esc returns" hint', () => {
-    const unfocusedEmpty = buildShellFooter({
-      width: 80,
-      promptText: '',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      panelFocused: true,
-    });
-    expect(lineToString(unfocusedEmpty.lines[1])).toContain('panel focused: Esc returns');
+  test('a command argument hint trails the cursor, clamped with an ellipsis', () => {
+    const hint = 'install <name> | uninstall <name> | enable <name> | disable <name> | refresh | search <query>';
+    const row = lineToString(footer({ width: 60, promptText: '/marketplace', promptCursorPos: 12, commandArgsHint: hint }).lines[1]!);
+    expect(row).toContain('install <name>');
+    expect(row).toContain('…');
+    expect(row.length).toBeLessThanOrEqual(60);
+  });
+});
+
+describe('shell surface: always-visible safety', () => {
+  test('auto-approve shows in the error color on the composer inner row', () => {
+    const result = footer({ dangerMode: true });
+    const row = result.lines[3]!;
+    expect(lineToString(row)).toContain('! auto-approve');
+    const bang = lineToString(row).indexOf('! auto-approve');
+    expect(row[bang]!.fg).toBe(activeTokens().error);
+    // Right-aligned inside the fill, 2 columns in from its edge (width-3).
+    expect(lineToString(row).trimEnd().length).toBe(100 - 4);
   });
 
-  test('the hint never appears when the composer is focused, or when it holds real (non-empty) text', () => {
-    const focusedEmpty = buildShellFooter({
-      width: 80,
-      promptText: '',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 0,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      panelFocused: false,
-    });
-    expect(lineToString(focusedEmpty.lines[1])).not.toContain('panel focused');
-
-    const unfocusedWithLeftoverText = buildShellFooter({
-      width: 80,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 0,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      panelFocused: true,
-    });
-    expect(lineToString(unfocusedWithLeftoverText.lines[1])).not.toContain('panel focused');
+  test('no auto-approve chip when it is off', () => {
+    expect(text(footer())).not.toContain('auto-approve');
   });
 
-  test('prompt box borders match the inactive prompt fill when the indicator is focused', () => {
-    const result = buildShellFooter({
-      width: 80,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 1,
-      runningProcessCount: 0,
-      indicatorFocused: true,
-    });
-    const topBorderCells = result.lines[0]!.filter((cell) => cell.char === '▄');
-    const bottomBorderCells = result.lines[2]!.filter((cell) => cell.char === '▀');
-
-    expect(topBorderCells.length).toBeGreaterThan(0);
-    expect(bottomBorderCells.length).toBeGreaterThan(0);
-    expect(topBorderCells.every((cell) => cell.fg === activeTokens().backgroundPanel)).toBe(true);
-    expect(bottomBorderCells.every((cell) => cell.fg === activeTokens().backgroundPanel)).toBe(true);
+  test.each([60, 80, 120])('the sleep-disabled chip survives %i columns', (width) => {
+    expect(text(footer({ width, powerKeepAwake: true, dangerMode: true }))).toContain('sleep disabled');
+    expect(text(footer({ width, powerKeepAwake: false }))).not.toContain('sleep disabled');
   });
 });
 
 /**
- * The live-microphone row. It is the only thing on screen that tells a user a
- * capture device is open, so its presence, its wording and its absence when the
- * feature is off are all asserted rather than assumed.
+ * The live microphone. It is the only thing on screen that tells a user a
+ * capture device is open, so its presence and its absence when the feature is
+ * off are asserted rather than assumed.
  */
-describe('shell surface: the live microphone row', () => {
-  function footerWith(voiceCapture: VoiceCaptureIndicatorState | null): ReturnType<typeof buildShellFooter> {
-    return buildShellFooter({
-      width: 100,
-      promptText: 'hello',
-      promptLineCount: 1,
-      usage: { up: 0, down: 0 },
-      showExitNotice: false,
-      lastCopyTime: 0,
-      model: 'gpt-test',
-      toolCount: 3,
-      workingDir: '/tmp/demo',
-      provider: 'openai',
-      contextWindow: 0,
-      runningAgentCount: 0,
-      runningProcessCount: 0,
-      indicatorFocused: false,
-      voiceCapture,
-    });
-  }
+describe('shell surface: the live microphone chip', () => {
+  const withVoice = (voiceCapture: VoiceCaptureIndicatorState | null) => footer({ voiceCapture });
 
-  test('no row at all when nothing is captured', () => {
-    const withRow = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
-    const without = footerWith(null);
-    expect(without.height).toBe(withRow.height - 1);
-    expect(without.lines.map(lineToString).join('\n')).not.toContain('Voice:');
+  test('no chip when nothing is captured', () => {
+    expect(text(withVoice(null))).not.toContain('mic');
   });
 
-  test('the wake row sits directly below the prompt box, above the process indicator', () => {
-    const result = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
-    // Rows 0..2 are the prompt box (top border, prompt, bottom border).
-    expect(lineToString(result.lines[3]!)).toContain('Voice: listening for the wake phrase');
-    expect(lineToString(result.lines[3]!)).toContain('parecord');
-    expect(lineToString(result.lines[4]!)).toContain('No background processes');
+  test('a listening wake detector shows on the inner row without changing the footer height', () => {
+    const result = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
+    expect(lineToString(result.lines[3]!)).toContain('mic listening');
+    expect(result.height).toBe(6);
   });
 
-  test('voice.wake.indicator off suppresses the wake row entirely', () => {
-    const result = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'off' });
-    expect(result.lines.map(lineToString).join('\n')).not.toContain('Voice:');
-    expect(result.height).toBe(estimateShellFooterHeight(1, 0, false, null));
+  test('voice.wake.indicator off suppresses the wake chip', () => {
+    expect(text(withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'off' }))).not.toContain('mic');
   });
 
-  test('a push-to-talk recording renders even when the wake indicator is off; the user just pressed the key', () => {
-    const result = footerWith({ kind: 'recording', deviceLabel: 'pw-record', indicator: 'off', detail: '3s' });
-    const text = result.lines.map(lineToString).join('\n');
-    expect(text).toContain('Voice: recording: press the voice-input key again to stop');
-    expect(text).toContain('3s');
+  test('a push-to-talk recording shows even when the wake indicator is off; the user just pressed the key', () => {
+    expect(text(withVoice({ kind: 'recording', deviceLabel: 'pw-record', indicator: 'off', detail: '3s' }))).toContain('mic recording');
   });
 
-  test('the banner variant fills the row width so it reads as a standing condition', () => {
-    const statusline = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
-    const banner = footerWith({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'banner' });
-    // Same one row either way; the difference is the painted background.
-    expect(banner.height).toBe(statusline.height);
-    const bannerBg = banner.lines[3]!.filter((cell) => cell.bg !== '' && cell.bg !== undefined);
-    const statuslineBg = statusline.lines[3]!.filter((cell) => cell.bg !== '' && cell.bg !== undefined);
-    expect(bannerBg.length).toBeGreaterThan(statuslineBg.length);
-    expect(lineToString(banner.lines[3]!)).toContain('listening for the wake phrase');
+  test('banner prominence fills the chip, statusline prominence does not', () => {
+    const banner = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'banner' }).lines[3]!;
+    const plain = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' }).lines[3]!;
+    const fill = activeTokens().backgroundElement;
+    const filled = (row: typeof banner) => row.filter((c) => c.bg !== '' && c.bg !== fill).length;
+    expect(filled(banner)).toBeGreaterThan(filled(plain));
   });
 
-  test('a latched detector says it stopped, and carries the reason', () => {
-    const result = footerWith({
-      kind: 'wake-latched',
-      deviceLabel: null,
-      indicator: 'statusline',
-      detail: 'crashed 2 times within 60s',
-    });
-    const text = lineToString(result.lines[3]!);
-    expect(text).toContain('Voice: wake detection stopped');
-    expect(text).toContain('crashed 2 times within 60s');
+  test('a latched detector says it stopped', () => {
+    expect(text(withVoice({ kind: 'wake-latched', deviceLabel: 'parecord', indicator: 'statusline', detail: 'crashed 2 times within 60s' }))).toContain('wake stopped');
+  });
+});
+
+describe('shell surface: the status line', () => {
+  const status = (overrides: Partial<ShellFooterBuildOptions> = {}): string => {
+    const result = footer(overrides);
+    return lineToString(result.lines[result.lines.length - 1]!);
+  };
+
+  test('at rest it shows the directory and branch, and the ctrl+p menu keycap on the right', () => {
+    const row = status({ width: 120 });
+    expect(row).toContain('/tmp/demo · main');
+    expect(row).toMatch(/ctrl\+p +menu/);
   });
 
-  test('the estimate accounts for the row on the cold-start path', () => {
-    const state: VoiceCaptureIndicatorState = { kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' };
-    expect(footerWith(state).height).toBe(estimateShellFooterHeight(1, 0, false, state));
+  test('below 100 columns the directory goes first', () => {
+    const row = status({ width: 90 });
+    expect(row).not.toContain('/tmp/demo');
+    expect(row).toContain('main');
+  });
+
+  test('a running turn shows its phrase, elapsed time and esc interrupt instead of the directory', () => {
+    const row = status({ width: 120, busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 12_000 } });
+    expect(row).toContain('Thinking... · 12s');
+    expect(row).toMatch(/esc +interrupt/);
+    expect(row).not.toContain('/tmp/demo');
+  });
+
+  test('only the spinner glyph carries color from the gradient; the phrase is muted', () => {
+    const result = footer({ width: 120, busy: { spinner: '◐', frame: 0, phrase: 'Thinking...' } });
+    const row = result.lines[result.lines.length - 1]!;
+    const phraseStart = lineToString(row).indexOf('Thinking');
+    for (let x = phraseStart; x < phraseStart + 8; x++) expect(row[x]!.fg).toBe(activeTokens().textMuted);
+  });
+
+  test('the context bar shows percent and used / total, with "—" before the first count', () => {
+    expect(status({ width: 120, contextWindow: 200_000, lastInputTokens: 50_000, compactThreshold: 0.8 })).toContain('25% 50.0k / 200.0k');
+    expect(status({ width: 120, contextWindow: 200_000, lastInputTokens: 0 })).toContain('0% — / 200.0k');
+  });
+
+  test('the fleet cost stays split from the session cost', () => {
+    const row = status({ width: 140, model: 'claude-opus-4-6', usage: { up: 10_000, down: 1_000, fleetCostUsd: 0.47 } });
+    expect(row).toMatch(/you ~\$[\d.]+ · fleet ~\$0\.470/);
+    const solo = status({ width: 140, model: 'claude-opus-4-6', usage: { up: 10_000, down: 1_000, fleetCostUsd: 0 } });
+    expect(solo).not.toContain('fleet');
+    expect(solo).toMatch(/~\$[\d.]+/);
+  });
+
+  test('the exit guard takes the left side while armed', () => {
+    expect(status({ showExitNotice: true })).toContain('Press Ctrl+C again to exit');
+  });
+
+  test('running background work is summarized, and highlighted with its keys when focused', () => {
+    expect(status({ width: 120, runningAgentCount: 2 })).toContain('2 agents running');
+    const focused = status({ width: 120, runningAgentCount: 1, indicatorFocused: true });
+    expect(focused).toContain('▸ 1 agent running');
+    expect(focused).toMatch(/esc +back/);
+    expect(status({ width: 120, indicatorFocused: true })).toContain('no background work');
+  });
+
+  test('nothing on the status line runs past width-4', () => {
+    for (const width of [60, 80, 100, 140]) {
+      const row = status({ width, contextWindow: 1_000_000, lastInputTokens: 340_000, model: 'claude-opus-4-6', usage: { up: 1, down: 1, fleetCostUsd: 1.5 } });
+      expect(row.trimEnd().length).toBeLessThanOrEqual(width - 3);
+    }
+  });
+});
+
+describe('shell surface: hint rows above the composer', () => {
+  test('the retry affordance, the context pressure hint and the scriptable line stack above the composer', () => {
+    const result = footer({ retryHint: 'r retry', contextStatusHint: 'context 82%: compaction soon', scriptableStatusLine: 'custom line' });
+    expect(result.height).toBe(9);
+    expect(lineToString(result.lines[0]!)).toContain('r retry');
+    expect(lineToString(result.lines[1]!)).toContain('compaction soon');
+    expect(lineToString(result.lines[2]!)).toContain('custom line');
+    expect(result.lines[3]![2]!.char).toBe('┃');
   });
 });

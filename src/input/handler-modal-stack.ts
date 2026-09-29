@@ -8,8 +8,7 @@ import type { SelectionResult } from './selection-modal.ts';
 
 export type ModalStackState = ActiveModalState & {
   modalStack: string[];
-  modalReturnFocus?: 'prompt' | 'panel' | 'indicator';
-  panelFocused: boolean;
+  modalReturnFocus?: 'prompt' | 'indicator';
   indicatorFocused: boolean;
 };
 
@@ -20,7 +19,7 @@ export function modalOpened(state: ModalStackState, name: string): void {
   if (state.modalStack[state.modalStack.length - 1] === name) return;
   if (state.modalStack.includes(name)) return;
   if (state.modalStack.length === 0) {
-    state.modalReturnFocus = state.indicatorFocused ? 'indicator' : state.panelFocused ? 'panel' : 'prompt';
+    state.modalReturnFocus = state.indicatorFocused ? 'indicator' : 'prompt';
   }
   state.modalStack.push(name);
 }
@@ -64,7 +63,6 @@ export function handleEscape(state: EscapeState): {
   shortcutsOverlayActive: boolean;
   shortcutsScrollOffset: number;
   selectionCallback: ((result: SelectionResult | null) => void) | null;
-  panelFocused: boolean;
   indicatorFocused: boolean;
   modalReturnFocus: NonNullable<ModalStackState['modalReturnFocus']>;
 } {
@@ -76,7 +74,6 @@ export function handleEscape(state: EscapeState): {
   let shortcutsOverlayActive = state.shortcutsOverlayActive;
   let shortcutsScrollOffset = state.shortcutsScrollOffset;
   let selectionCallback = state.selectionCallback;
-  let panelFocused = state.panelFocused;
   let indicatorFocused = state.indicatorFocused;
   let modalReturnFocus: NonNullable<ModalStackState['modalReturnFocus']> = state.modalReturnFocus ?? 'prompt';
 
@@ -87,7 +84,6 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       commandMode,
     }) !== null) return;
-    panelFocused = modalReturnFocus === 'panel';
     indicatorFocused = modalReturnFocus === 'indicator';
     modalReturnFocus = 'prompt';
     state.modalReturnFocus = 'prompt';
@@ -106,7 +102,6 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
-      panelFocused,
       indicatorFocused,
       modalReturnFocus,
     };
@@ -124,7 +119,6 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
-      panelFocused,
       indicatorFocused,
       modalReturnFocus,
     };
@@ -221,7 +215,6 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
-      panelFocused,
       indicatorFocused,
       modalReturnFocus,
     };
@@ -246,7 +239,6 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
-      panelFocused,
       indicatorFocused,
       modalReturnFocus,
     };
@@ -265,7 +257,6 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       shortcutsScrollOffset,
       selectionCallback,
-      panelFocused,
       indicatorFocused,
       modalReturnFocus,
     };
@@ -281,7 +272,6 @@ export function handleEscape(state: EscapeState): {
     shortcutsOverlayActive,
     shortcutsScrollOffset,
     selectionCallback,
-    panelFocused,
     indicatorFocused,
     modalReturnFocus,
   };

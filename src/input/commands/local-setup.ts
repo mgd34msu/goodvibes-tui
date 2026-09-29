@@ -15,7 +15,7 @@ import {
   parseSetupLink,
 } from './local-setup-transfer.ts';
 import { buildSetupReviewSnapshot, exportSetupSupportBundle, renderSetupSandboxReview } from './local-setup-review.ts';
-import { openOnboardingWizard, requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { openOnboardingWizard, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 type SetupSnapshot = Awaited<ReturnType<typeof buildSetupReviewSnapshot>>;
@@ -257,13 +257,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           orchestration: ctx.openOrchestrationPanel,
         };
         if (parsed.surface === 'tasks') {
-          if (ctx.showPanel) ctx.showPanel('tasks');
-          else {
-            const panelManager = requirePanelManager(ctx);
-            panelManager.open('tasks');
-            panelManager.show();
-            ctx.renderRequest();
-          }
+          ctx.openView?.('tasks');
           ctx.print(`Opened setup link for tasks${parsed.target ? ` (${parsed.target})` : ''}.`);
           return;
         }

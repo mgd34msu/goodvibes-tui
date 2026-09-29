@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
-// acp-runtime.ts, the scripted path for hosting third-party coding agents,
-// over the SAME verbs the Fleet panel's spawn affordance drives (acp.agents.list
-// / acp.sessions.create). `/agents list` shows what the daemon discovered
+// acp-runtime.ts, `/agents`. Bare `/agents` opens the Agents modal
+// (`--target <id>[:<kind>]` selects a process in it). The scripted path for
+// hosting third-party coding agents drives the SAME verbs the Agents modal's
+// n key does (acp.agents.list / acp.sessions.create). `/agents list` shows what the daemon discovered
 // (read-only, quiet when none); `/agents host <agentId> [dir]` spawns one as a
 // long-lived daemon session that shows up as an acp-agent fleet row. A working
 // directory defaults to the current one; a known workspace root can be named
@@ -14,17 +15,26 @@
 
 import type { CommandRegistry } from '../command-registry.ts';
 import { requireShellPaths } from './runtime-services.ts';
+import { takeTargetFlag } from '../views.ts';
 import { describeOperatorRpcError, getOperatorRpc } from './operator-rpc.ts';
 
 export function registerAcpRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'agents',
     aliases: ['acp'],
-    description: 'Host third-party coding agents (Claude Code, Codex, opencode) as fleet rows over ACP',
-    usage: 'list | host <agentId> [directory]',
-    argsHint: '[list|host]',
+    description: 'Open Agents (everything running: agents, chains, workflows, hosted sessions); list or host third-party coding agents over ACP',
+    usage: '[--target <id>[:<kind>]] | list | host <agentId> [directory]',
+    argsHint: '[list|host|--target <id>]',
     async handler(args, ctx) {
-      const sub = (args[0] ?? 'list').toLowerCase();
+      const rest = [...args];
+      const target = takeTargetFlag(rest);
+      if (rest.length === 0) {
+        // Bare /agents (or /agents --target <id>) opens the Agents modal.
+        if (ctx.openAgents) ctx.openAgents({ target });
+        else ctx.print('The Agents view is not available in this session; /agents list prints the hostable agents.');
+        return;
+      }
+      const sub = (rest[0] ?? 'list').toLowerCase();
       const rpc = getOperatorRpc(ctx);
       if (!rpc.available) { ctx.print(`[agents] ${rpc.reason}`); return; }
 
@@ -46,12 +56,12 @@ export function registerAcpRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'host') {
-        const agentId = args[1];
+        const agentId = rest[1];
         if (!agentId) {
           ctx.print('Usage: /agents host <agentId> [directory]  (agentId from /agents list; directory defaults to the current one)');
           return;
         }
-        const cwd = args[2] ?? requireShellPaths(ctx).workingDirectory;
+        const cwd = rest[2] ?? requireShellPaths(ctx).workingDirectory;
         try {
           const { hosted, started } = await rpc.sdk.operator.invoke('acp.sessions.create', { agentId, cwd });
           if (hosted.error) {

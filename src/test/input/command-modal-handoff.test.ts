@@ -89,13 +89,6 @@ function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandCon
   } as CommandContext;
 }
 
-function makePanelManager(overrides: Record<string, unknown> = {}) {
-  return {
-    isVisible: () => true,
-    getAllOpen: () => [{ id: 'git' }],
-    ...overrides,
-  } as never;
-}
 
 function key(logicalName: string) {
   return { type: 'key' as const, name: logicalName, logicalName, ctrl: false, shift: false, meta: false };
@@ -112,7 +105,6 @@ describe('command modal handoff', () => {
       commandMode: true,
       modalStack,
       modalReturnFocus: 'prompt',
-      panelFocused: false,
       indicatorFocused: false,
       prompt: '/',
       cursorPos: 1,
@@ -153,7 +145,6 @@ describe('command modal handoff', () => {
       commandMode: true,
       modalStack,
       modalReturnFocus: 'prompt',
-      panelFocused: false,
       indicatorFocused: false,
       prompt: '/pro',
       cursorPos: 4,
@@ -195,7 +186,6 @@ describe('command modal handoff', () => {
       commandMode: false,
       modalStack,
       modalReturnFocus: 'prompt',
-      panelFocused: false,
       indicatorFocused: false,
       prompt: '',
       cursorPos: 0,
@@ -243,8 +233,6 @@ describe('command modal handoff', () => {
           return true;
         },
       }),
-      panelFocused: false,
-      panelManager: makePanelManager(),
       conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
@@ -281,8 +269,6 @@ describe('command modal handoff', () => {
       modalStack: ['command'],
       commandRegistry: registry,
       commandContext: makeCommandContext({ executeCommand: async () => true }),
-      panelFocused: false,
-      panelManager: makePanelManager(),
       conversationManager: { log: () => {}, dismissSplash: () => { dismissals.push(1); } } as never,
       requestRender: () => {},
       handleEscape: () => {},
@@ -314,8 +300,6 @@ describe('command modal handoff', () => {
       commandContext: makeCommandContext({
         executeCommand: async () => true,
       }),
-      panelFocused: false,
-      panelManager: makePanelManager(),
       conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
@@ -363,8 +347,6 @@ describe('command modal handoff', () => {
           }),
         },
       }),
-      panelFocused: false,
-      panelManager: makePanelManager(),
       conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
@@ -392,37 +374,27 @@ describe('command modal handoff', () => {
     expect(state.nextImageId).toBe(2);
   });
 
-  // item 1a: the command path ("/panel open <id>" and every other
-  // command that opens a panel) leaves keyboard focus in the composer by
-  // default now, "the user is mid-command-flow". This used to force
-  // panelFocused=true unconditionally; the evaluator's ranked friction catalog
-  // treats an implicit focus grab from a typed command as the same class of
-  // bug as chords silently absorbing typed text.
-  test('slash panel commands open the panel but leave focus in the composer by default (command path never auto-focuses)', async () => {
+  test('a slash command that opens a view runs through the command route and leaves command mode', async () => {
     const modalStack = ['command'];
     const registry = new CommandRegistry();
-    let showPanelCalled = false;
+    const opened: string[] = [];
     registry.register({
       name: 'panel',
-      description: 'Open panel',
-      handler: (_args, ctx) => {
-        ctx.showPanel?.('git');
+      description: 'Open a view by its old pane name',
+      handler: (args, ctx) => {
+        ctx.openView?.(args[0] ?? 'git');
       },
     });
     const state = {
       commandMode: true,
-      prompt: '/panel',
-      cursorPos: '/panel'.length,
+      prompt: '/panel git',
+      cursorPos: '/panel git'.length,
       autocomplete: null,
       modalStack,
       commandRegistry: registry,
       commandContext: makeCommandContext({
-        showPanel: () => {
-          showPanelCalled = true;
-        },
+        openView: (name: string) => { opened.push(name); return true; },
       }),
-      panelFocused: false,
-      panelManager: makePanelManager(),
       conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
@@ -439,50 +411,8 @@ describe('command modal handoff', () => {
     await Promise.resolve();
 
     expect(handled).toBe(true);
-    expect(showPanelCalled).toBe(true);
-    expect(state.panelFocused).toBe(false);
+    expect(opened).toEqual(['git']);
     expect(state.commandMode).toBe(false);
-  });
-
-  test('a command that explicitly opts in with showPanel(id, pane, target, { focus: true }) still grabs focus (escape hatch preserved)', async () => {
-    const modalStack = ['command'];
-    const registry = new CommandRegistry();
-    registry.register({
-      name: 'panel',
-      description: 'Open panel',
-      handler: (_args, ctx) => {
-        // Reconciled signature: (panelId, pane, target, opts), the deep-link
-        // target sits at arg 3, so the focus opt-in moves to arg 4 (opts).
-        ctx.showPanel?.('git', undefined, undefined, { focus: true });
-      },
-    });
-    const state = {
-      commandMode: true,
-      prompt: '/panel',
-      cursorPos: '/panel'.length,
-      autocomplete: null,
-      modalStack,
-      commandRegistry: registry,
-      commandContext: makeCommandContext({ showPanel: () => {} }),
-      panelFocused: false,
-      panelManager: makePanelManager(),
-      conversationManager: { log: () => {}, dismissSplash: () => {} } as never,
-      requestRender: () => {},
-      handleEscape: () => {},
-      projectRoot: process.cwd(),
-      pasteRegistry: new Map<string, string>(),
-      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
-      nextPasteId: 1,
-      nextImageId: 1,
-      saveUndoState: () => {},
-      ensureInputCursorVisible: () => {},
-    };
-
-    const handled = handleCommandModeToken(state, key('enter'));
-    await Promise.resolve();
-
-    expect(handled).toBe(true);
-    expect(state.panelFocused).toBe(true);
   });
 
   test('after escape closes slash mode, subsequent typing stays in normal prompt mode until / is typed again', async () => {
@@ -495,7 +425,6 @@ describe('command modal handoff', () => {
       commandMode: true,
       modalStack,
       modalReturnFocus: 'prompt',
-      panelFocused: false,
       indicatorFocused: false,
       prompt: '/',
       cursorPos: 1,
@@ -694,7 +623,7 @@ describe('command modal handoff', () => {
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
       getBlockAnchorLine: () => 0,
-      openFleetPanel: () => {},
+      openAgentsView: () => {},
       processModal: { open: () => {} },
       modalOpened: () => {},
       saveUndoState: () => {},
@@ -752,8 +681,6 @@ describe('command modal handoff', () => {
       modalStack,
       commandRegistry: registry,
       commandContext: makeCommandContext(),
-      panelFocused: false,
-      panelManager: makePanelManager(),
       conversationManager: { log: (text: string, opts?: unknown) => { logged.push({ text, opts }); }, dismissSplash: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},

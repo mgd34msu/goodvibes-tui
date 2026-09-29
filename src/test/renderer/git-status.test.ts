@@ -305,12 +305,13 @@ describe('GitStatusProvider', () => {
 
 import { UIFactory } from '../../renderer/ui-factory.ts';
 import { lineToString } from '../setup.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 
 describe('UIFactory.createHeader with gitInfo', () => {
   const WIDTH = 120;
 
   test('shows branch name when gitInfo provided', () => {
-    const lines = UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, {
+    const lines = UIFactory.createHeader(WIDTH, 'model', undefined, {
       branch: 'main',
       dirty: false,
       ahead: 0,
@@ -320,19 +321,20 @@ describe('UIFactory.createHeader with gitInfo', () => {
     expect(text).toContain('main');
   });
 
-  test('shows dirty indicator (*) when dirty', () => {
-    const lines = UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, {
+  test('shows the dirty dot, in the warning color, when dirty', () => {
+    const lines = UIFactory.createHeader(WIDTH, 'model', undefined, {
       branch: 'feature',
       dirty: true,
       ahead: 0,
       behind: 0,
     });
     const text = lineToString(lines[0]);
-    expect(text).toContain('*');
+    expect(text).toContain('feature ●');
+    expect(lines[0]![text.indexOf('●')]!.fg).toBe(activeTokens().warning);
   });
 
   test('shows ahead/behind indicators when out of sync', () => {
-    const lines = UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, {
+    const lines = UIFactory.createHeader(WIDTH, 'model', undefined, {
       branch: 'main',
       dirty: false,
       ahead: 2,
@@ -344,22 +346,22 @@ describe('UIFactory.createHeader with gitInfo', () => {
   });
 
   test('omits git section when gitInfo is undefined', () => {
-    const withGit = UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, {
+    const withGit = UIFactory.createHeader(WIDTH, 'model', undefined, {
       branch: 'main',
       dirty: false,
       ahead: 0,
       behind: 0,
     });
-    const withoutGit = UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, undefined);
+    const withoutGit = UIFactory.createHeader(WIDTH, 'model', undefined, undefined);
     const textWith = lineToString(withGit[0]);
     const textWithout = lineToString(withoutGit[0]);
-    expect(textWith).toContain('git:main');
-    expect(textWithout).not.toContain('git:');
+    expect(textWith).toContain('main');
+    expect(textWithout).not.toContain('main');
   });
 
   test('does not throw when gitInfo has empty branch', () => {
     expect(() => {
-      UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, {
+      UIFactory.createHeader(WIDTH, 'model', undefined, {
         branch: '',
         dirty: false,
         ahead: 0,
@@ -368,8 +370,12 @@ describe('UIFactory.createHeader with gitInfo', () => {
     }).not.toThrow();
   });
 
+  test('the header is a single row: no rule row under it', () => {
+    expect(UIFactory.createHeader(WIDTH, 'model', undefined, undefined)).toHaveLength(1);
+  });
+
   test('line 0 always has correct width', () => {
-    const lines = UIFactory.createHeader(WIDTH, 'model', 'provider', undefined, {
+    const lines = UIFactory.createHeader(WIDTH, 'model', undefined, {
       branch: 'main',
       dirty: true,
       ahead: 3,

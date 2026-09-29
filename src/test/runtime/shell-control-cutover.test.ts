@@ -164,10 +164,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     // migrated to a config-modal surface and deleted, removed from this
     // list for the same reason.
     const restrictedFiles = [
-      // context-visualizer-panel.ts merged into token-budget-panel.ts;
-      // the successor inherits the legacy-turn-bus ban.
-      'src/panels/token-budget-panel.ts',
-      'src/panels/cost-tracker-panel.ts',
+      // The token-budget and cost-tracker panes were replaced by the Usage
+      // modal; its always-on data source, usage-tracker.ts, inherits the ban.
+      'src/runtime/usage-tracker.ts',
       'src/main.ts',
     ];
 
@@ -204,7 +203,8 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     // RETIRE-INTO-FLEET and no longer exists, removed from this list.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      'src/panels/cost-tracker-panel.ts',
+      // Successor of the cost-tracker pane's per-agent cost ledger.
+      'src/runtime/usage-tracker.ts',
     ];
 
     for (const relPath of restrictedFiles) {
@@ -461,7 +461,10 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const currentTuiSurfaces = [
       'src/runtime/services.ts',
       'src/input/commands/runtime-services.ts',
-      'src/panels/builtin/operations.ts',
+      // panels/builtin/operations.ts (the pane registrations) was replaced
+      // by the built-in views and the Agents modal.
+      'src/panels/builtin-views.ts',
+      'src/input/agents-modal.ts',
     ];
 
     for (const relPath of currentTuiSurfaces) {
@@ -496,10 +499,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const removedLocalController = join(projectRoot, 'src/agents/wrfc-controller.ts');
     expect(existsSync(removedLocalController)).toBe(false);
 
-    const relPath = 'src/panels/builtin/agent.ts';
-    const absPath = join(projectRoot, relPath);
-    const content = readFileSync(absPath, 'utf8');
-    const lines = content.split('\n');
+    // panels/builtin/agent.ts (the agent pane registrations) was replaced by
+    // the built-in views and the Agents modal; they inherit the ban.
+    const relPaths = ['src/panels/builtin-views.ts', 'src/input/agents-modal.ts', 'src/shell/view-openers.ts'];
     const violations: string[] = [];
     const legacyTokens = [
       "from '../core/event-bus.ts'",
@@ -507,10 +509,15 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       'requires EventBus',
     ];
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (legacyTokens.some((token) => line.includes(token))) {
-        violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
+    for (const relPath of relPaths) {
+      const absPath = join(projectRoot, relPath);
+      const content = readFileSync(absPath, 'utf8');
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (legacyTokens.some((token) => line.includes(token))) {
+          violations.push(`${relPath}:${i + 1}; ${line.trim()}`);
+        }
       }
     }
 

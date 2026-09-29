@@ -2,12 +2,10 @@
 // render-perf.test.ts, Unit tests for render performance fixes
 //
 // Render coalescing, burst of requestRender() calls produces one render
-// Panel dirty flag, panels skip re-render when needsRender is false
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, mock } from 'bun:test';
 import { TerminalBuffer } from '../../renderer/buffer.ts';
-import type { Panel } from '../../panels/types.ts';
 
 // ---------------------------------------------------------------------------
 // Render coalescing
@@ -119,93 +117,6 @@ describe('render coalescing via setImmediate', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Panel dirty-flag skipping
-// ---------------------------------------------------------------------------
-
-function makeMockPanel(id: string): Panel & { renderCallCount: number } {
-  let renderCallCount = 0;
-  const panel: Panel & { renderCallCount: number } = {
-    id,
-    name: id,
-    icon: 'X',
-    category: 'runtime-ops',
-    isTransient: false,
-    isPinned: false,
-    needsRender: true,
-    onActivate() { this.needsRender = true; },
-    onDeactivate() {},
-    onDestroy() {},
-    render(_w: number, _h: number) {
-      renderCallCount++;
-      return [];
-    },
-    invalidate() { this.needsRender = true; },
-    markRendered() { this.needsRender = false; },
-    get renderCallCount() { return renderCallCount; },
-  };
-  return panel;
-}
-
-/** Minimal renderPanel wrapper matching the logic in panel-composite.ts */
-const panelRenderCache = new WeakMap<Panel, { lines: ReturnType<Panel['render']>; width: number; height: number }>();
-function renderPanel(panel: Panel, width: number, height: number) {
-  const cached = panelRenderCache.get(panel);
-  if (cached && !panel.needsRender && cached.width === width && cached.height === height) {
-    return cached.lines;
-  }
-  const lines = panel.render(width, height);
-  panel.markRendered();
-  panelRenderCache.set(panel, { lines, width, height });
-  return lines;
-}
-
-describe('panel dirty-flag skip', () => {
-  test('panel with needsRender=false is not re-rendered on identical dimensions', () => {
-    const panel = makeMockPanel('test-panel');
-    renderPanel(panel, 80, 24); // first render
-    expect(panel.renderCallCount).toBe(1);
-    expect(panel.needsRender).toBe(false);
-
-    renderPanel(panel, 80, 24); // same dims, not dirty
-    expect(panel.renderCallCount).toBe(1); // skipped
-  });
-
-  test('panel re-renders when needsRender is true', () => {
-    const panel = makeMockPanel('dirty-panel');
-    renderPanel(panel, 80, 24);
-    expect(panel.renderCallCount).toBe(1);
-
-    panel.invalidate(); // mark dirty again
-    renderPanel(panel, 80, 24);
-    expect(panel.renderCallCount).toBe(2); // re-rendered
-  });
-
-  test('panel re-renders when dimensions change even if not dirty', () => {
-    const panel = makeMockPanel('resize-panel');
-    renderPanel(panel, 80, 24);
-    expect(panel.renderCallCount).toBe(1);
-    expect(panel.needsRender).toBe(false);
-
-    renderPanel(panel, 90, 24); // width changed
-    expect(panel.renderCallCount).toBe(2);
-  });
-
-  test('markRendered() clears needsRender', () => {
-    const panel = makeMockPanel('mark-rendered-panel');
-    expect(panel.needsRender).toBe(true);
-    panel.markRendered();
-    expect(panel.needsRender).toBe(false);
-  });
-
-  test('invalidate() sets needsRender', () => {
-    const panel = makeMockPanel('invalidate-panel');
-    panel.markRendered(); // clear it first
-    expect(panel.needsRender).toBe(false);
-    panel.invalidate();
-    expect(panel.needsRender).toBe(true);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // TerminalBuffer.reset()

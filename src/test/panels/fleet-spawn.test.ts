@@ -79,9 +79,11 @@ function mockSpawn(opts: {
   return { spawn, notes, log };
 }
 
-/** Flatten a rendered picker to text for content assertions. */
+/** The picker's text (what the Agents modal draws from spawnView) for content assertions. */
 function renderText(spawn: FleetSpawn): string {
-  return spawn.renderSpawnMode(80, 24).map((line) => line.map((c) => (c.char === '' ? ' ' : c.char)).join('')).join('\n');
+  const view = spawn.spawnView();
+  if (!view) return '';
+  return [view.title, view.intro, ...view.options.map((o) => `${o.selected ? '▸ ' : ''}${o.label}, ${o.detail}`)].join('\n');
 }
 
 /** Drain the microtask + timer queue so a fire-and-forget async advance settles. */

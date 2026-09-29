@@ -1,9 +1,10 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
-import type { ConversationManager } from '../core/conversation';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
-import type { PanelManager } from '../panels/panel-manager.ts';
+import type { ShellViews } from '../panels/builtin-views.ts';
+import type { ViewPanelAdapter } from '../panels/view-panel-adapter.ts';
+import { wireViewOpeners } from './view-openers.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { MutableRuntimeState } from '@/runtime/index.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
@@ -17,7 +18,6 @@ import { CommandPalette, buildPaletteEntries } from '../input/command-palette.ts
 import { confirmThrough } from '../input/confirm-dialog.ts';
 import { bridgeNotificationFeedToToasts, getSharedToastCenter } from '../renderer/toast-center.ts';
 import { getSharedNotificationFeed } from '../panels/notifications-feed.ts';
-import type { SelectionItem } from '../input/selection-modal.ts';
 import { categorizeBuiltinCommands } from '../input/commands.ts';
 import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
 import { setActiveThemeMode, setActiveThemeName } from '../renderer/theme.ts';
@@ -31,8 +31,10 @@ import type { WorkspaceTrustLevel } from '@pellux/goodvibes-sdk/platform/runtime
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
   input: InputHandler;
-  panelManager: PanelManager;
-  conversation: ConversationManager;
+  /** The read models and config-modal surfaces behind the built-in modals. */
+  views: ShellViews;
+  /** The operator API's panels.list / panels.open, answered by the modal views. */
+  viewPanels: ViewPanelAdapter;
   configManager: ConfigManager;
   providerRegistry: ProviderRegistry;
   runtime: MutableRuntimeState;
@@ -129,8 +131,8 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   const {
     commandContext,
     input,
-    panelManager,
-    conversation,
+    views,
+    viewPanels,
     configManager,
     providerRegistry,
     runtime,
@@ -458,11 +460,10 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
-  // (the purge): open a MIGRATE-TO-MODAL surface by name. Fed from both
-  // ctx.openModal(name) (migrated command front-doors) and PanelManager's
-  // open()-time modal-redirect callback (a legacy panel id resolving to a modal
-  // name). Surfaces are registered in builtin-modals.ts; a name with no
-  // registered surface degrades honestly to a print rather than a blank modal.
+  // Open a config-modal surface by name (or by an old name that redirects to
+  // one, e.g. 'accounts' opens 'providers-modal'). Surfaces are registered in
+  // builtin-modals.ts; a name with no registered surface degrades honestly to
+  // a print rather than a blank modal.
   // The stack name is the stable 'config' slot (one config modal at a time,
   // opening another swaps the surface), so Esc close/return and the modal-stack
   // machinery need only the single 'config' case (handler-ui-state.ts).
@@ -487,7 +488,8 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       openNative();
       return;
     }
-    const surface = panelManager.getModalSurface(name);
+    const registry = views.modalSurfaces;
+    const surface = registry.getModalSurface(name) ?? registry.getModalSurface(registry.getModalRedirect(name) ?? '');
     if (!surface) {
       commandContext.print(`'${name}' is not available yet in this build.`);
       render();
@@ -497,7 +499,6 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     input.configModal.open(surface, render);
     render();
   };
-  panelManager.setOpenModalCallback(commandContext.openModal);
 
   commandContext.openMcpWorkspace = () => {
     input.openMcpWorkspace(commandContext);
@@ -507,50 +508,6 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   commandContext.openSessionPicker = () => {
     input.modalOpened('sessionPicker');
     input.sessionPickerModal.open();
-    render();
-  };
-
-  commandContext.openPanelPicker = () => {
-    // Focus ownership lives in PanelManager (focusTarget); read it there rather
-    // than tracking a parallel input.panelFocused flag. Toggle semantics: if the
-    // workspace is visible AND already focused, hide it; otherwise reveal and
-    // focus it (opening a picker when nothing is open yet).
-    if (panelManager.isVisible() && panelManager.getFocusTarget() === 'panel') {
-      panelManager.hide();
-      panelManager.focusPrompt();
-      conversation.setSplashSuppressed(false);
-      conversation.rebuildHistory();
-      render();
-      return;
-    }
-    if (panelManager.getAllOpen().length === 0) {
-      // (the purge): 'panel-list' (a browse-all-panels picker PANEL)
-      // was DELETE-disposition, a picker over a handful of panels is dead
-      // weight now. Its replacement is this selection MODAL, built from the
-      // live registry (PanelManager.getRegisteredTypes()) rather than a
-      // hardcoded list, so it can never list a retired/deleted id.
-      const items: SelectionItem[] = panelManager.getRegisteredTypes().map((entry) => ({
-        id: entry.id,
-        label: `${entry.icon} ${entry.name}`,
-        detail: entry.description,
-        category: entry.category,
-        primaryAction: 'select',
-      }));
-      commandContext.openSelection?.('Open Panel', items, { allowSearch: true }, (result) => {
-        if (!result) return;
-        panelManager.open(result.item.id);
-        panelManager.show();
-        panelManager.focusPanels();
-        conversation.setSplashSuppressed(true);
-        conversation.rebuildHistory();
-        render();
-      });
-      return;
-    }
-    panelManager.show();
-    panelManager.focusPanels();
-    conversation.setSplashSuppressed(true);
-    conversation.rebuildHistory();
     render();
   };
 
@@ -597,29 +554,10 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
-  commandContext.focusPanels = () => {
-    panelManager.focusPanels();
-    render();
-  };
-
   commandContext.focusPrompt = () => {
-    panelManager.focusPrompt();
     input.indicatorFocused = false;
     render();
   };
 
-  commandContext.showPanel = (panelId, pane, target, opts) => {
-    // forward the deep-link target so a jumped-to panel lands on the
-    // right row (fleet --target); undefined for ordinary opens.
-    panelManager.open(panelId, pane, target);
-    panelManager.show();
-    // focus rule 1a: every registered caller of showPanel is a slash
-    // command (/panel open, /routes, /approval, /tasks, /ops-control, ...),
-    // the command path leaves focus in the composer ("the user is
-    // mid-command-flow") unless the caller explicitly asks to grab it.
-    if (opts?.focus) panelManager.focusPanels();
-    conversation.setSplashSuppressed(true);
-    conversation.rebuildHistory();
-    render();
-  };
+  wireViewOpeners({ commandContext, input, views, viewPanels, render });
 }

@@ -84,10 +84,10 @@ describe('matches()', () => {
     expect(km.matches('copy-selection', { logicalName: 'c', ctrl: true, shift: true })).toBe(true);
   });
 
-  it('resolves panel-focus-toggle to Ctrl+G', () => {
+  it('resolves open-agents to Ctrl+O', () => {
     const km = new KeybindingsManager({ configPath: '/nonexistent/path/keybindings.json' });
-    expect(km.matches('panel-focus-toggle', { logicalName: 'g', ctrl: true })).toBe(true);
-    expect(km.matches('panel-focus-toggle', { logicalName: 'g' })).toBe(false);
+    expect(km.matches('open-agents', { logicalName: 'o', ctrl: true })).toBe(true);
+    expect(km.matches('open-agents', { logicalName: 'o' })).toBe(false);
   });
 
   it('returns false when key does not match', () => {

@@ -37,6 +37,11 @@ export class SplashGateState {
     return true;
   }
 
+  /** True while the last rebuild drew the splash (the shell centers it). */
+  get showing(): boolean {
+    return this.onScreen;
+  }
+
   /** Record that this rebuild drew the splash. */
   enter(): void {
     this.onScreen = true;

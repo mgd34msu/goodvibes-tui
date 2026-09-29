@@ -35,6 +35,7 @@ import {
   disposeTestRuntimeServicesAfterAll,
 } from '../helpers/runtime-services.ts';
 import { trackDisposables } from '../helpers/disposables.ts';
+import { makeTestShellViews } from '../helpers/shell-views.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -490,7 +491,6 @@ describe('product breadth commands', () => {
       },
       workspace: {
         shellPaths: runtimeServices.shellPaths,
-        panelManager: runtimeServices.panelManager,
         profileManager: runtimeServices.profileManager,
         bookmarkManager: runtimeServices.bookmarkManager,
         worktreeRegistry: runtimeServices.worktreeRegistry,
@@ -573,11 +573,7 @@ describe('product breadth commands', () => {
     wireShellUiOpeners({
       commandContext: context,
       input,
-      panelManager: runtimeServices.panelManager,
-      conversation: {
-        setSplashSuppressed: () => {},
-        rebuildHistory: () => {},
-      } as never,
+      ...makeTestShellViews({ configManager: runtimeServices.configManager }),
       configManager: runtimeServices.configManager,
       providerRegistry: runtimeServices.providerRegistry,
       runtime: context.session.runtime as never,

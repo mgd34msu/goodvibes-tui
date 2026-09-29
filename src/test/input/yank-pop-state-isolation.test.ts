@@ -78,21 +78,13 @@ function makeKeyState(overrides: Partial<KeyRouteState> & { killRing: KillRing }
     scroll: mock(() => {}),
     exitApp: mock(() => {}),
     requestRender: mock(() => {}),
-    openFleetPanel: mock(() => {}),
+    openAgentsView: mock(() => {}),
     ...overrides,
   };
 }
 
 function makeShortcutState(ring: KillRing, overrides: Partial<GlobalShortcutRouteState> = {}): GlobalShortcutRouteState {
   return {
-    panelFocused: false,
-    panelManager: {
-      isVisible: () => false,
-      getAllOpen: () => [],
-      close: mock(() => {}),
-      hide: mock(() => {}),
-      getActivePanel: () => null,
-    } as unknown as GlobalShortcutRouteState['panelManager'],
     keybindingsManager: {
       matches: () => false,
       lookup: (token: { logicalName?: string; alt?: boolean }) =>
@@ -123,7 +115,6 @@ function makeShortcutState(ring: KillRing, overrides: Partial<GlobalShortcutRout
     handleRedo: mock(() => {}),
     handlePaste: mock(() => {}),
     handleEscape: mock(() => {}),
-    cyclePanelTab: mock(() => {}),
     killRing: ring,
     ...overrides,
   };

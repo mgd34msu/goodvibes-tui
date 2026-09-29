@@ -64,9 +64,6 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Local verification](verification/local-verification.md)
   Inventory coverage, GoodVibes home audits, compiled CLI probes, authenticated daemon probes, and release-oriented local gates.
 
-- [Panel authoring](panel-authoring.md)
-  Class hierarchy, canonical example, palette convention, rendering utilities, input handling, performance instrumentation, and contract test registration for contributors building new TUI panels.
-
 - [Changelog](../CHANGELOG.md)
   Current release history. Older per-version release-note files remain under `docs/releases/` for historical releases, but `CHANGELOG.md` is the canonical current stream.
 

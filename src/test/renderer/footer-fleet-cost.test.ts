@@ -1,11 +1,11 @@
 /**
- * WO item 3, the always-visible footer shows the TRUE total (main session +
+ * WO item 3, the always-visible status line shows the TRUE total (main session +
  * fleet), not the main session alone. A cold eval saw the footer read ~$0.046 (main
  * only) while a live WRFC chain cost ~$0.446 (~10x). We render an honest split,
  * "you ~$X · fleet ~$Y", so it is clear where the cost went.
  */
 import { describe, test, expect } from 'bun:test';
-import { UIFactory } from '../../renderer/ui-factory.ts';
+import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { linesToText } from '../setup.ts';
 import { fleetLeafCostTotal } from '../../panels/fleet-read-model.ts';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
@@ -14,9 +14,11 @@ const W = 140;
 const PRICED_MODEL = 'claude-opus-4-6'; // real catalog pricing
 
 function footerText(usage: { up: number; down: number; fleetCostUsd?: number | null }): string {
-  return linesToText(UIFactory.createFooter(
-    W, '> prompt', usage, false, 0, PRICED_MODEL, 5, undefined, '/proj', 'anthropic', 0,
-  )).join('\n');
+  return linesToText(buildShellFooter({
+    width: W, promptText: 'prompt', promptLineCount: 1, usage, showExitNotice: false, lastCopyTime: 0,
+    model: PRICED_MODEL, workingDir: '/proj', provider: 'anthropic', contextWindow: 0,
+    runningAgentCount: 0, runningProcessCount: 0, indicatorFocused: false,
+  }).lines).join('\n');
 }
 
 describe('footer cost: main + fleet split', () => {

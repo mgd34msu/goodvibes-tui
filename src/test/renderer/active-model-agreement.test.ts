@@ -1,7 +1,7 @@
 /**
  * active-model-agreement.test.ts
  *
- * The header (top-right) and the footer (context-info line) both answer "which
+ * The header (top-right) and the composer's inner row both answer "which
  * backend is serving this session?". They used to answer it from different
  * sources, the header read the provider registry live, the footer read
  * session runtime state that only bootstrap and explicit user switches wrote,
@@ -9,31 +9,33 @@
  * the footer went on naming the configured one, indefinitely.
  *
  * These tests drive BOTH surfaces exactly the way main.ts's render frame does:
- * one resolveActiveModelDisplay() call feeds createHeader and createFooter.
+ * one resolveActiveModelDisplay() call feeds createHeader and buildShellFooter.
+ * The failover marker lives on the composer's inner row, next to the provider.
  * The invariant asserted is that neither surface ever names the configured
  * backend while a different one is serving.
  */
 import { describe, test, expect } from 'bun:test';
 import { UIFactory } from '../../renderer/ui-factory.ts';
+import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { resolveActiveModelDisplay, createFailoverTurnState } from '../../core/active-model-identity.ts';
 import type { ActiveModelInputs } from '../../core/active-model-identity.ts';
 import { linesToText } from '../setup.ts';
 
 const W = 140;
 
+function renderFooter(width: number, model: string, provider: string, note: string): string {
+  return linesToText(buildShellFooter({
+    width, promptText: 'prompt', promptLineCount: 1, usage: { up: 0, down: 0 }, showExitNotice: false, lastCopyTime: 0,
+    model, provider, modelNote: note, workingDir: '/workspace/proj', contextWindow: 0,
+    runningAgentCount: 0, runningProcessCount: 0, indicatorFocused: false,
+  }).lines).join('\n');
+}
+
 /** Render the header and footer from a single resolution, as main.ts does. */
 function renderBothSurfaces(inputs: ActiveModelInputs): { header: string; footer: string; note: string } {
   const active = resolveActiveModelDisplay(inputs);
-  const header = linesToText(
-    UIFactory.createHeader(W, active.headerModel, active.headerProvider, undefined, undefined, '9.9.9', active.divergenceNote),
-  ).join('\n');
-  const footer = linesToText(UIFactory.createFooter(
-    W, '> prompt', { up: 0, down: 0 }, false, 0,
-    active.footerModel, 5, undefined, '/workspace/proj', active.footerProvider,
-    0, undefined, false, undefined, undefined, 'balanced', true,
-    undefined, undefined, undefined, undefined, false, undefined, undefined, undefined, undefined,
-    active.divergenceNote,
-  )).join('\n');
+  const header = linesToText(UIFactory.createHeader(W, active.headerModel, undefined, undefined, '9.9.9')).join('\n');
+  const footer = renderFooter(W, active.footerModel, active.footerProvider, active.divergenceNote);
   return { header, footer, note: active.divergenceNote };
 }
 
@@ -62,8 +64,8 @@ describe('resolveActiveModelDisplay: no divergence', () => {
     });
 
     expect(note).toBe('');
-    expect(header).toContain('route-llm (abacusai)');
-    expect(footer).toContain('abacusai:route-llm (abacusai)');
+    expect(header).toContain('route-llm');
+    expect(footer).toContain('abacusai:route-llm abacusai');
     expect(header).not.toContain('failover');
     expect(footer).not.toContain('failover');
   });
@@ -109,22 +111,23 @@ describe('header and footer agree during an active failover', () => {
 
   test('both surfaces name the SERVING backend', () => {
     const { header, footer } = renderBothSurfaces(inputs);
-    expect(header).toContain('gpt-5.6-sol (openai-subscriber)');
-    expect(footer).toContain('gpt-5.6-sol (openai-subscriber)');
+    expect(header).toContain('gpt-5.6-sol');
+    expect(footer).toMatch(/gpt-5\.6-sol openai-subscriber/);
   });
 
   test('neither surface claims the configured backend is serving', () => {
     const { header, footer } = renderBothSurfaces(inputs);
     // The configured key may only appear as part of the divergence marker,
     // never as the model/provider pair.
-    expect(header).not.toContain('route-llm (abacusai)');
-    expect(footer).not.toContain('abacusai:route-llm (abacusai)');
+    expect(header).not.toContain('route-llm');
+    expect(footer).not.toContain('abacusai:route-llm abacusai');
   });
 
   test('the marker names BOTH: the serving backend and the configured selection it left', () => {
     const { header, footer, note } = renderBothSurfaces(inputs);
     expect(note).toBe('failover from abacusai:route-llm');
-    expect(header).toContain('failover from abacusai:route-llm');
+    // The marker sits beside the provider on the composer, not in the header.
+    expect(header).not.toContain('failover');
     expect(footer).toContain('failover from abacusai:route-llm');
   });
 
@@ -151,39 +154,23 @@ describe('the divergence marker degrades without ever lying', () => {
     failover: { configuredRegistryKey: CONFIGURED.registryKey, servingRegistryKey: SERVING_FALLBACK.registryKey },
   });
 
-  test('a narrow header drops to a short marker rather than a half-truncated one', () => {
-    // 70 columns: the brand + serving pair + short marker fit; the full
-    // marker (which names the configured key) does not.
-    const header = linesToText(
-      UIFactory.createHeader(70, active.headerModel, active.headerProvider, undefined, undefined, '9.9.9', active.divergenceNote),
-    ).join('\n');
-    expect(header).toContain('gpt-5.6-sol (openai-subscriber)');
-    expect(header).toContain('divergent');
-    expect(header).not.toContain('failover from abacus');
+  test('the header always names the serving backend and never the configured one', () => {
+    for (const width of [58, 70, 140]) {
+      const header = linesToText(UIFactory.createHeader(width, active.headerModel, undefined, undefined, '9.9.9')).join('\n');
+      expect(header).toContain('gpt-5.6-sol');
+      expect(header).not.toContain('abacusai');
+    }
   });
 
-  test('a very narrow header keeps the serving backend and drops the marker entirely', () => {
-    const header = linesToText(
-      UIFactory.createHeader(58, active.headerModel, active.headerProvider, undefined, undefined, '9.9.9', active.divergenceNote),
-    ).join('\n');
-    expect(header).toContain('gpt-5.6-sol (openai-subscriber)');
-    expect(header).not.toContain('divergent');
-    expect(header).not.toContain('abacusai');
+  test('a narrow composer drops to a short marker rather than a half-truncated one', () => {
+    const footer = renderFooter(62, active.footerModel, active.footerProvider, active.divergenceNote);
+    expect(footer).toContain('divergent');
+    expect(footer).not.toContain('failover from abacus');
   });
 
-  test('a narrow footer drops the whole marker segment, never half of it', () => {
-    // 78 columns: wide enough for cwd + the serving pair, too narrow to also
-    // carry the marker, so joinPrioritizedSegments drops that segment whole.
-    const footer = linesToText(UIFactory.createFooter(
-      78, '> p', { up: 0, down: 0 }, false, 0,
-      active.footerModel, 5, undefined, '/proj', active.footerProvider,
-      0, undefined, false, undefined, undefined, 'balanced', true,
-      undefined, undefined, undefined, undefined, false, undefined, undefined, undefined, undefined,
-      active.divergenceNote,
-    )).join('\n');
-    // Whatever survives, the model segment is the SERVING backend and no
-    // partial word of the marker is left behind.
-    expect(footer).toContain('gpt-5.6-sol (openai-subscriber)');
+  test('a very narrow composer keeps the serving backend and drops the marker whole, never half of it', () => {
+    const footer = renderFooter(48, active.footerModel, active.footerProvider, active.divergenceNote);
+    expect(footer).toContain('gpt-5.6-sol');
     expect(footer).not.toContain('failover');
     expect(footer).not.toContain('abacus');
   });

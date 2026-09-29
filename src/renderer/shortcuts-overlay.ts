@@ -34,24 +34,26 @@ const HARDCODED_ROWS: ReadonlyArray<readonly [string, string]> = [
   ['PageUp / PageDn', 'Scroll by full page'],
   ['Home / End', 'Jump to start / end of line'],
   ['n / N (search)', 'Next / previous match'],
-  ['Mouse wheel', 'Scroll conversation or hovered panel'],
+  ['Mouse wheel', 'Scroll the conversation (or the open modal)'],
   ['Enter', 'Submit message (composer empty: open the block-actions menu)'],
   ['Shift+Enter', 'Insert newline'],
   ['@', 'Open file picker'],
   ['/', 'Slash command mode'],
   ['Esc', 'Close overlay / cancel generation / clear prompt (context-dependent)'],
   ['Shift+Tab', 'Cycle permission mode (auto-approve / prompt / manual)'],
-  ['F2', 'Open the Fleet panel'],
+  ['F2', 'Open Agents'],
   ['?  or  /help', 'Open the command browser (search & run any command)'],
-  // Precedence (highest first): panel focus-swap, else path-completion, else
-  // collapse/expand; the Panels group's Tab row states the full chain.
-  ['Tab', 'Collapse/expand block (composer empty; see Panels: Tab for full precedence)'],
+  // Precedence: a partial path under the cursor claims Tab for completion,
+  // otherwise it collapses or expands the nearest block.
+  ['Tab', 'Path-complete, else collapse/expand block'],
 ];
 
-const IN_PANEL_ROWS: ReadonlyArray<readonly [string, string]> = [
-  ['j / k', 'Move selection down / up'],
-  ['g / G', 'Jump to top / bottom'],
-  ['/', 'Filter the list'],
+/** Where the views live now (they open as modals over the conversation). */
+const VIEW_ROWS: ReadonlyArray<readonly [string, string]> = [
+  ['/usage', 'Usage: context, tokens and cost'],
+  ['/changes', 'Changes: files, diff, review'],
+  ['/notifications', 'Notification history'],
+  ['Esc', 'Close the top modal (one level)'],
 ];
 
 /** Every shortcut group, generated from the live keybindings table where it can be. */
@@ -60,15 +62,8 @@ function shortcutGroups(keybindingsManager: KeybindingsManager): ShortcutGroup[]
   const combos = (entry: (typeof all)[number]): string => entry.combos.map((c) => keybindingsManager.formatCombo(c)).join(', ');
   return [
     { title: 'Navigation & editing', items: HARDCODED_ROWS },
-    { title: 'Actions', items: all.filter((e) => !e.action.startsWith('panel-')).map((e) => [combos(e), e.description] as const) },
-    {
-      title: 'Panels',
-      items: [
-        ['Tab', 'Panel focus-swap (1st) > path-complete (2nd) > collapse/expand block (3rd)'],
-        ...all.filter((e) => e.action.startsWith('panel-')).map((e) => [combos(e), e.description] as const),
-      ],
-    },
-    { title: 'In-panel controls', items: IN_PANEL_ROWS },
+    { title: 'Actions', items: all.map((e) => [combos(e), e.description] as const) },
+    { title: 'Views', items: VIEW_ROWS },
   ];
 }
 

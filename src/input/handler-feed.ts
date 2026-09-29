@@ -29,21 +29,15 @@ import {
 import {
   handleIndicatorFocusToken,
   handleMouseToken,
-  handlePanelFocusToken,
   handlePromptKeyToken,
   handlePromptTextToken,
-  type PanelMouseLayout,
 } from './handler-feed-routes.ts';
-import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import { getViewportBottomLine } from '../renderer/conversation-layout.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
 import { handleCommandModeToken } from './handler-command-route.ts';
 import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
-import type { Panel } from '../panels/types.ts';
-import { handlePanelIntegrationAction } from './panel-integration-actions.ts';
 import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
-import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { KillRing } from './kill-ring.ts';
@@ -57,7 +51,7 @@ import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operat
  * **Mutable per-feed** (synced from handler at the top of every feed() call, and
  * updated inside action closures via syncFeedContextMutableFields):
  *   - `prompt`, `cursorPos`, current text buffer state
- *   - `commandMode`, `panelFocused`, `indicatorFocused`, focus-mode flags
+ *   - `commandMode`, `indicatorFocused`, focus-mode flags
  *   - `helpOverlayActive`, `helpScrollOffset`, help overlay visibility and scroll
  *   - `shortcutsOverlayActive`, `shortcutsScrollOffset`, shortcuts overlay state
  *   - `nextPasteId`, `nextImageId`, monotonically increasing ID counters
@@ -78,7 +72,7 @@ import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operat
  *   - `filePicker`, `modelPicker`, `onboardingWizard`,
  *     `contextInspectorModal`, `blockActionsMenu`, `searchManager`, `historySearch`,
  *     service objects constructed once
- *   - `panelManager`, `keybindingsManager`, from uiServices, stable for app lifetime
+ *   - `keybindingsManager`, from uiServices, stable for app lifetime
  *   - `modalStack`, reference to the handler's shared array (mutated in place)
  *   - `getHistory`, `getViewportHeight`, `getScrollTop`, `scroll`, `exitApp`, stable
  *     callbacks bound in the InputHandler constructor
@@ -92,7 +86,6 @@ export interface InputFeedContext {
   cursorPos: number;
   inputScrollTop: number;
   commandMode: boolean;
-  panelFocused: boolean;
   indicatorFocused: boolean;
   helpOverlayActive: boolean;
   helpScrollOffset: number;
@@ -128,8 +121,6 @@ export interface InputFeedContext {
   /** Kit modals (command palette, confirm dialog, ...): they take every key while open. */
   readonly surfaceModals?: SurfaceModalHost;
   readonly searchManager: SearchManager;
-  readonly panelManager: PanelManager;
-  panelMouseLayout: PanelMouseLayout | null;
   readonly keybindingsManager: KeybindingsManager;
   readonly modalStack: string[];
   inputHistory: InputHistory | null;
@@ -137,8 +128,6 @@ export interface InputFeedContext {
   readonly killRing: KillRing;
   /** Terminal focus tracker, updated here from 'focus' tokens, read by the unfocused-alert notifiers in core/. */
   readonly focusTracker: FocusTracker;
-  /** item 5, the paste-flood guard's persistent state, mutated in place across tokens by handlePanelFocusToken (see panel-paste-flood-guard.ts). Never reallocated. */
-  readonly panelBurstGuard: PanelBurstGuardState;
   readonly getHistory: () => InfiniteBuffer;
   readonly getViewportHeight: () => number;
   readonly getScrollTop: () => number;
@@ -165,11 +154,11 @@ export interface InputFeedContext {
   readonly ensureInputCursorVisible: (contentWidth?: number) => void;
   readonly registerPaste: (content: string) => string;
   readonly executeBlockAction: (id: string) => void;
-  readonly cyclePanelTab: (direction: 'next' | 'prev') => void;
-  readonly onPanelInputConsumed: (activePanel: Panel | null, key: string) => void;
   readonly getWrappedPromptInfo: (contentWidth: number) => WrappedPromptInfo;
   readonly moveCursorVertical: (direction: -1 | 1) => boolean;
   readonly handlePathCompletion: () => boolean;
+  readonly footerTargetAt: (row: number) => import('../renderer/footer-targets.ts').FooterTarget | undefined;
+  readonly openFooterTarget: (target: import('../renderer/footer-targets.ts').FooterTarget) => void;
   readonly handleBlockToggle: () => void;
   readonly findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   readonly cleanupMarkerRegistry: (text: string) => void;
@@ -190,31 +179,11 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   const lineCount = history.getLineCount();
   const keybindings = context.keybindingsManager;
 
-  // Shared opener for the Fleet panel: makes it visible AND transfers keyboard
-  // focus to it. panelManager.open() only makes the panel active, focus is a
-  // separate axis (see PanelManager.focusPanels()/getFocusTarget()); without the
-  // focusPanels() call, j/k/i/K land silently in the composer until Tab. Used by
-  // the footer indicator's [Enter] and by F2 (F2 and the footer
-  // indicator both subsume the retired process modal). Mirrors the Ctrl+P
-  // panel-picker launcher (ui-openers.ts openPanelPicker).
-  const openFleetPanel = (): void => {
-    context.panelManager.open('fleet');
-    context.panelManager.focusPanels();
-    context.panelFocused = true;
+  // The footer process indicator's Enter opens the Agents modal (so does F2).
+  const openAgentsView = (): void => {
+    context.commandContext?.openAgents?.();
   };
 
-  // Paste-ness is a per-TOKEN property, computed at the handlePanelFocusToken
-  // call below, never a per-feed character sum. The SDK tokenizer emits a
-  // bracketed paste (\x1b[?2004h, enabled in main.ts terminal init) as ONE
-  // 'text' token holding the whole payload, while discrete keystrokes, even
-  // several batched into one feed() by render-tick latency, arrive as
-  // separate 1-char 'text' tokens. The old per-feed sum misread two quick nav
-  // keystrokes (e.g. j then k in one drain) as a "burst" and yanked focus.
-  // item 5's flood guard reuses that same per-token model but adds
-  // real timing: one `now` per feed() call (not per token) is intentional,
-  // a genuine flood delivers many tokens in one drain, and they should all
-  // measure as arriving "at once", not spread across meaningless sub-ms noise.
-  const now = Date.now();
   for (const token of tokens) {
     // Focus-reporting tokens (CSI ?1004h) never reach the composer or any
     // modal route, consumed here, first, unconditionally. No render needed.
@@ -303,18 +272,12 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     }
 
     if (token.type === 'key') {
-      // Focus can never disagree with workspace visibility: PanelManager owns
-      // focusTarget and self-heals it, and context.panelFocused was seeded from
-      // it at feed entry, so no manual "unfocus if panels vanished" patch is
-      // needed here anymore.
-      // Snapshot these four BEFORE dispatch so the write-back below can tell
-      // a pipeline-driven change (see comment there) from a stale copy.
+      // Snapshot these BEFORE dispatch so the write-back below can tell a
+      // pipeline-driven change (see comment there) from a stale copy.
       const promptBefore = context.prompt;
       const cursorPosBefore = context.cursorPos;
       const commandModeBefore = context.commandMode;
-      const panelFocusedBefore = context.panelFocused;
       const shortcutState = {
-        panelFocused: context.panelFocused,
         prompt: context.prompt,
         cursorPos: context.cursorPos,
         commandMode: context.commandMode,
@@ -340,8 +303,6 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         handleRedo: context.handleRedo,
         handlePaste: context.handlePaste,
         handleEscape: context.handleEscape,
-        cyclePanelTab: context.cyclePanelTab,
-        panelManager: context.panelManager,
         keybindingsManager: context.keybindingsManager,
         killRing: context.killRing,
       };
@@ -361,7 +322,6 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         context.prompt = context.prompt === promptBefore ? shortcutState.prompt : context.prompt;
         context.cursorPos = context.cursorPos === cursorPosBefore ? shortcutState.cursorPos : context.cursorPos;
         context.commandMode = context.commandMode === commandModeBefore ? shortcutState.commandMode : context.commandMode;
-        context.panelFocused = context.panelFocused === panelFocusedBefore ? shortcutState.panelFocused : context.panelFocused;
         if (context.commandMode) {
           if (!context.prompt.startsWith('/')) {
             context.commandMode = false;
@@ -379,40 +339,10 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       }
     }
 
-    const panelRoute = handlePanelFocusToken({
-      panelFocused: context.panelFocused,
-      commandMode: context.commandMode,
-      searchActive: context.searchManager.active,
-      autocompleteActive: !!context.autocomplete?.isActive,
-      requestRender: context.requestRender,
-      handlePathCompletion: context.handlePathCompletion,
-      cyclePanelTab: context.cyclePanelTab,
-      panelManager: context.panelManager,
-      keybindingsManager: context.keybindingsManager,
-      onPanelInputConsumed: context.onPanelInputConsumed,
-      now,
-      burstGuard: context.panelBurstGuard,
-      // Per-token paste classification (Invariant B): a paste is a single
-      // 'text' token whose value holds more than one character.
-      isPasteToken: token.type === 'text' && token.value.length > 1,
-      // One-shot honesty hint when a paste is dropped into a non-capturing
-      // focused panel (Invariant A: focus never silently flips to the composer).
-      onPasteDropped: (panelName: string) =>
-        context.commandContext?.print(
-          `paste ignored: focus is on ${panelName}; Tab returns to composer`,
-        ),
-      isTurnActive: () => context.commandContext?.isGenerating?.() ?? false,
-      cancelGeneration: () => context.commandContext?.cancelGeneration?.(),
-    }, token);
-    context.panelFocused = panelRoute.panelFocused;
-    if (panelRoute.handled) {
-      continue;
-    }
-
     const indicatorRoute = handleIndicatorFocusToken({
       indicatorFocused: context.indicatorFocused,
       modalOpened: context.modalOpened,
-      openFleetPanel,
+      openAgentsView,
       requestRender: context.requestRender,
     }, token);
     context.indicatorFocused = indicatorRoute.indicatorFocused;
@@ -457,8 +387,6 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         modalStack: context.modalStack,
         commandRegistry: context.commandRegistry,
         commandContext: context.commandContext,
-        panelFocused: context.panelFocused,
-        panelManager: context.panelManager,
         conversationManager: context.conversationManager,
         requestRender: context.requestRender,
         handleEscape: context.handleEscape,
@@ -474,7 +402,6 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         context.commandMode = commandState.commandMode;
         context.prompt = commandState.prompt;
         context.cursorPos = commandState.cursorPos;
-        context.panelFocused = commandState.panelFocused;
         context.nextPasteId = commandState.nextPasteId;
         context.nextImageId = commandState.nextImageId;
         continue;
@@ -496,7 +423,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         autocomplete: context.autocomplete,
         blockActionsMenu: { open: (block: BlockMeta) => context.blockActionsMenu.open(block) },
         getBlockAnchorLine: () => getViewportBottomLine(scrollTop, viewportHeight, lineCount),
-        openFleetPanel,
+        openAgentsView,
         modalOpened: context.modalOpened,
         saveUndoState: context.saveUndoState,
         breakUndoCoalesce: context.breakUndoCoalesce,
@@ -525,8 +452,6 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       const mouseRoute = handleMouseToken({
         conversationManager: context.conversationManager,
         selection: context.selection,
-        panelManager: context.panelManager,
-        panelMouseLayout: context.panelMouseLayout,
         mouseDownRow: context.mouseDownRow,
         mouseDownCol: context.mouseDownCol,
         scrollTop,
@@ -536,6 +461,8 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         requestRender: context.requestRender,
         handlePaste: context.handlePaste,
         handleCopy: context.handleCopy,
+        footerTargetAt: context.footerTargetAt,
+        openFooterTarget: context.openFooterTarget,
       }, token);
       context.mouseDownRow = mouseRoute.mouseDownRow;
       context.mouseDownCol = mouseRoute.mouseDownCol;
@@ -546,13 +473,4 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   }
 
   context.requestRender();
-}
-
-export function defaultPanelInputConsumer(
-  panelManager: PanelManager,
-  activePanel: Panel | null,
-  key: string,
-  commandContext?: CommandContext,
-): void {
-  handlePanelIntegrationAction(panelManager, activePanel, key, commandContext);
 }

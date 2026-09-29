@@ -7,11 +7,11 @@
 |     ▏Type    9 command     |
 |                            |
 |   ✦ suggested              |
-|     Changes      /diff     |
 |     Switch      /model     |
 |     model                  |
 |     Compact   /compact     |
-|               6 more ↓     |
+|     context                |
+|               7 more ↓     |
 |      ↑↓  move              |
 |      ⏎  run                |
 |      tab  fill             |
@@ -397,14 +397,13 @@
 8 10 fg=#0f172a
 8 10 bg=#45aaff
 8 10 bold=1
-8 11 fg=#0f172a
 8 11 bg=#4f9eff
-8 11 bold=1
 8 12 bg=#5992ff
 8 13 bg=#6386ff
 8 14 bg=#6d79ff
 8 15 bg=#776dff
 8 16 bg=#8161ff
+8 17 fg=#0f172a
 8 17 bg=#8b55ff
 8 18 fg=#0f172a
 8 18 bg=#9549ff
@@ -426,40 +425,38 @@
 9 0 bg=#050507
 9 1 bg=#161a22
 9 2 bg=#161a22
-9 3 bg=#161a22
-9 4 bg=#161a22
-9 5 fg=#e2e8f0
-9 5 bg=#161a22
-9 6 fg=#e2e8f0
-9 6 bg=#161a22
-9 7 fg=#e2e8f0
-9 7 bg=#161a22
-9 8 fg=#e2e8f0
-9 8 bg=#161a22
-9 9 fg=#e2e8f0
-9 9 bg=#161a22
-9 10 fg=#e2e8f0
-9 10 bg=#161a22
-9 11 bg=#161a22
-9 12 bg=#161a22
-9 13 bg=#161a22
-9 14 bg=#161a22
-9 15 bg=#161a22
-9 16 bg=#161a22
-9 17 fg=#4e5c6f
-9 17 bg=#161a22
-9 18 fg=#4e5c6f
-9 18 bg=#161a22
-9 19 fg=#4e5c6f
-9 19 bg=#161a22
-9 20 fg=#4e5c6f
-9 20 bg=#161a22
-9 21 fg=#4e5c6f
-9 21 bg=#161a22
-9 22 fg=#4e5c6f
-9 22 bg=#161a22
-9 23 bg=#161a22
-9 24 bg=#161a22
+9 3 bg=#00ffff
+9 4 bg=#0af3ff
+9 5 fg=#0f172a
+9 5 bg=#14e7ff
+9 5 bold=1
+9 6 fg=#0f172a
+9 6 bg=#1edbff
+9 6 bold=1
+9 7 fg=#0f172a
+9 7 bg=#28ceff
+9 7 bold=1
+9 8 fg=#0f172a
+9 8 bg=#32c2ff
+9 8 bold=1
+9 9 fg=#0f172a
+9 9 bg=#3bb6ff
+9 9 bold=1
+9 10 bg=#45aaff
+9 11 bg=#4f9eff
+9 12 bg=#5992ff
+9 13 bg=#6386ff
+9 14 bg=#6d79ff
+9 15 bg=#776dff
+9 16 bg=#8161ff
+9 17 bg=#8b55ff
+9 18 bg=#9549ff
+9 19 bg=#9e3dff
+9 20 bg=#a831ff
+9 21 bg=#b224ff
+9 22 bg=#bc18ff
+9 23 bg=#c60cff
+9 24 bg=#d000ff
 9 25 bg=#161a22
 9 26 bg=#161a22
 9 27 fg=#56585b
@@ -480,18 +477,28 @@
 10 8 bg=#161a22
 10 9 fg=#e2e8f0
 10 9 bg=#161a22
+10 10 fg=#e2e8f0
 10 10 bg=#161a22
+10 11 fg=#e2e8f0
 10 11 bg=#161a22
 10 12 bg=#161a22
 10 13 bg=#161a22
 10 14 bg=#161a22
+10 15 fg=#4e5c6f
 10 15 bg=#161a22
+10 16 fg=#4e5c6f
 10 16 bg=#161a22
+10 17 fg=#4e5c6f
 10 17 bg=#161a22
+10 18 fg=#4e5c6f
 10 18 bg=#161a22
+10 19 fg=#4e5c6f
 10 19 bg=#161a22
+10 20 fg=#4e5c6f
 10 20 bg=#161a22
+10 21 fg=#4e5c6f
 10 21 bg=#161a22
+10 22 fg=#4e5c6f
 10 22 bg=#161a22
 10 23 bg=#161a22
 10 24 bg=#161a22
@@ -522,21 +529,13 @@
 11 12 bg=#161a22
 11 13 bg=#161a22
 11 14 bg=#161a22
-11 15 fg=#4e5c6f
 11 15 bg=#161a22
-11 16 fg=#4e5c6f
 11 16 bg=#161a22
-11 17 fg=#4e5c6f
 11 17 bg=#161a22
-11 18 fg=#4e5c6f
 11 18 bg=#161a22
-11 19 fg=#4e5c6f
 11 19 bg=#161a22
-11 20 fg=#4e5c6f
 11 20 bg=#161a22
-11 21 fg=#4e5c6f
 11 21 bg=#161a22
-11 22 fg=#4e5c6f
 11 22 bg=#161a22
 11 23 bg=#161a22
 11 24 bg=#161a22

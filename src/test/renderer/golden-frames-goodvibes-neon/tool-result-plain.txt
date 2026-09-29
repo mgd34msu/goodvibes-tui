@@ -1,8 +1,8 @@
 # GV_GOLDEN surface=tool-result-plain width=100 height=4
 |   ●  tool result  read  ▾ 3 lines                                                                  |
-|    File contents:                                                                                  |
-|      1  export const x = 1;                                                                        |
-|      2  export const y = 2;                                                                        |
+|     File contents:                                                                                 |
+|       1  export const x = 1;                                                                       |
+|       2  export const y = 2;                                                                       |
 @STYLES
 0 3 fg=#38bdf8
 0 3 bold=1

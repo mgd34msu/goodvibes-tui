@@ -1,4 +1,4 @@
-# GV_GOLDEN surface=splash-100 width=100 height=21
+# GV_GOLDEN surface=splash-100 width=100 height=16
 |      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━       |
 |       ██████╗    ██████╗    ██████╗   ██████╗   ██╗   ██╗  ██╗  ██████╗   ███████╗  ███████╗       |
 |      ██╔════╝   ██╔═══██╗  ██╔═══██╗  ██╔══██╗  ██║   ██║  ██║  ██╔══██╗  ██╔════╝  ██╔════╝       |
@@ -14,12 +14,7 @@
 |                                      /workspace/goodvibes-tui                                      |
 |                         ↩ resume last session: /resume gv-20260612-a1b2c3                          |
 |                                                                                                    |
-|                              Ctrl+P commands  /  ? help  /  F2 fleet                               |
-|                                                                                                    |
-|                                                                                                    |
-|                                                                                                    |
-|                                                                                                    |
-|                                                                                                    |
+|                              Ctrl+P commands  /  ? help  /  F2 agents                              |
 @STYLES
 0 3 fg=0;255;255
 0 3 bold=1
@@ -2286,3 +2281,4 @@
 15 81 fg=#4e5c6f
 15 82 fg=#4e5c6f
 15 83 fg=#4e5c6f
+15 84 fg=#4e5c6f

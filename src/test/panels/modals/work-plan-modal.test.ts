@@ -62,16 +62,16 @@ describe('work-plan modal surface', () => {
   });
 
   // ── item 4: restored 'i'/'w' agent/WRFC-chain jumps into Fleet ─────
-  describe('i/w fleet deep-links', () => {
-    test('i (jumpAgent) on an item linked to an agent dispatches /panel open fleet --target <agentId>:agent', () => {
+  describe('i/w Agents deep-links', () => {
+    test('i (jumpAgent) on an item linked to an agent dispatches /agents --target <agentId>:agent', () => {
       const surface = createWorkPlanModalSurface(fixedDeps());
       open(surface);
       const cap = captureCommands();
       surface.onAction?.('jumpAgent', actionCtx({ id: 'wpi-a', label: '' }, cap.extra));
-      expect(cap.calls).toEqual([['panel', ['open', 'fleet', '--target', 'agent-1:agent']]]);
+      expect(cap.calls).toEqual([['agents', ['--target', 'agent-1:agent']]]);
     });
 
-    test('w (jumpWrfc) on an item linked to a WRFC chain dispatches /panel open fleet --target <wrfcId>:wrfc-chain', () => {
+    test('w (jumpWrfc) on an item linked to a WRFC chain dispatches /agents --target <wrfcId>:wrfc-chain', () => {
       const deps: WorkPlanModalDeps = {
         workPlanStore: {
           getActivePlan: () => ({
@@ -84,7 +84,7 @@ describe('work-plan modal surface', () => {
       open(surface);
       const cap = captureCommands();
       surface.onAction?.('jumpWrfc', actionCtx({ id: 'wpi-w', label: '' }, cap.extra));
-      expect(cap.calls).toEqual([['panel', ['open', 'fleet', '--target', 'wrfc-9:wrfc-chain']]]);
+      expect(cap.calls).toEqual([['agents', ['--target', 'wrfc-9:wrfc-chain']]]);
     });
 
     test('i/w are gated to items that actually carry the matching link (enabledFor)', () => {

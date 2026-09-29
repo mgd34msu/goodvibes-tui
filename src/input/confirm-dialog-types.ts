@@ -13,6 +13,11 @@ export interface ConfirmOptions {
   readonly cancelLabel?: string;
   /** danger: a red confirm chip; warning: amber; primary: the brand color. Default primary. */
   readonly tone?: ConfirmTone;
+  /**
+   * A key chord that, pressed again while the dialog is open, confirms (the
+   * chord that opened it: ctrl+x twice stops an agent). Enter and y still work.
+   */
+  readonly confirmChord?: { readonly key: string; readonly ctrl?: boolean };
 }
 
 /** What the confirm renderer reads from the dialog. */

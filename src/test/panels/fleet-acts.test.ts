@@ -186,7 +186,7 @@ describe('fleet-gateway id extraction (no id ever typed)', () => {
 // ── STEP 3: pick ────────────────────────────────────────────────────────────
 
 describe('pick act: preview -> confirm through fleet.attempts.pick, no id typed', () => {
-  test('Enter on a flagged pick row opens the picker and shows the first held diff', async () => {
+  test('Enter on a flagged pick row opens the picker with the first held diff (drawn by the Agents modal)', async () => {
     const { gateway, log } = makeGateway({ groups: [group({ groupId: 'g-1' })] });
     const { surface, log: diff } = makeDiffSurface();
     const { acts } = makeActs(gateway, surface);
@@ -194,23 +194,29 @@ describe('pick act: preview -> confirm through fleet.attempts.pick, no id typed'
     await Promise.resolve(); await Promise.resolve();
     expect(log.listAttempts).toEqual(['ws-1']);
     expect(acts.pickModeActive()).toBe(true);
-    expect(diff.shown.at(-1)?.diff).toContain('new it-a');
+    const view = acts.pickView()!;
+    expect(view.candidates.map((c) => c.selected)).toEqual([true, false]);
+    expect(view.diff).toContain('new it-a');
+    // No Changes preview opens until a winner is chosen with Enter.
+    expect(diff.shown).toEqual([]);
   });
 
-  test('navigation chooses the winner; confirm round-trips preview(false) then confirm(true)', async () => {
+  test('navigation chooses the winner; Enter previews it in Changes, confirm round-trips preview(false) then confirm(true)', async () => {
     const { gateway, log } = makeGateway({ groups: [group({ groupId: 'g-1' })] });
     const { surface, log: diff } = makeDiffSurface();
     const { acts, notes } = makeActs(gateway, surface);
     await acts.beginPick(workstreamNode('ws-1'));
     // Move to the second held candidate (it-b) and confirm.
     expect(acts.handlePickInput('down')).toBe(true);
-    expect(diff.shown.at(-1)?.diff).toContain('new it-b');
+    expect(acts.pickView()!.diff).toContain('new it-b');
     expect(acts.handlePickInput('enter')).toBe(true);
     await Promise.resolve(); await Promise.resolve();
     // The PREVIEW call fired (confirm:false) for the chosen winner, no confirm yet.
     expect(log.pick).toEqual([{ groupId: 'g-1', winnerItemId: 'it-b', confirm: false }]);
+    // The chosen candidate's diff opens in the Changes preview with the question over it.
+    expect(diff.shown.at(-1)?.diff).toContain('new it-b');
     expect(diff.confirms).toHaveLength(1);
-    // The operator confirms in the DiffPanel overlay -> the confirm(true) call applies.
+    // The operator answers yes on the preview -> the confirm(true) call applies.
     await diff.confirms[0]!.onConfirm();
     expect(log.pick).toEqual([
       { groupId: 'g-1', winnerItemId: 'it-b', confirm: false },

@@ -22,7 +22,7 @@ Write JSON for automation:
 bun run verification:ledger -- --json --out /tmp/goodvibes-verification-ledger
 ```
 
-The ledger counts settings, feature flags, slash commands, panels, CLI commands, external surfaces, and onboarding capability bundles. It intentionally separates local proof from external proof so the project can show where verification is strong without claiming that a third-party service was exercised.
+The ledger counts settings, feature flags, slash commands, built-in modals and views, CLI commands, external surfaces, and onboarding capability bundles. It intentionally separates local proof from external proof so the project can show where verification is strong without claiming that a third-party service was exercised.
 
 ## GoodVibes home audit
 

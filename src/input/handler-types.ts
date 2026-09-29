@@ -97,8 +97,7 @@ export interface InputHandlerLike {
   // ── Modal state ───────────────────────────────────────────────────────────
   commandMode: boolean;
   modalStack: string[];
-  modalReturnFocus: 'prompt' | 'panel' | 'indicator';
-  panelFocused: boolean;
+  modalReturnFocus: 'prompt' | 'indicator';
   indicatorFocused: boolean;
   helpOverlayActive: boolean;
   helpScrollOffset: number;

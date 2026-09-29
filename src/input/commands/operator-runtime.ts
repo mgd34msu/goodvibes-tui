@@ -187,12 +187,10 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
       const sub = args[0];
 
       if (sub === 'view' || sub === undefined) {
-        // Parity with the Ctrl+O keybind (handler-shortcuts.ts): prefer the
-        // flag-wired opener, else fall back to the always-registered panel,
-        // which renders its own honest not-configured state.
+        // The flag-wired opener when the control plane is on, else the
+        // Agents view, which holds the live operations content either way.
         if (ctx.openOpsPanel) ctx.openOpsPanel();
-        else if (ctx.showPanel) ctx.showPanel('ops-control');
-        else ctx.print('Operator Control Plane panel is not available in this shell.');
+        else if (!ctx.openView?.('ops-control')) ctx.print('The Agents view is not available in this shell.');
         return;
       }
 
@@ -242,7 +240,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
 
       ctx.print(
         'Usage: /ops <subcommand>\n'
-        + '  /ops view                              — open the Ops Control panel (Ctrl+O)\n'
+        + '  /ops view                              — open Agents (F2 or Ctrl+O)\n'
         + '  /ops task cancel <id> [note]           — cancel a task\n'
         + '  /ops task pause  <id> [note]           — pause a task\n'
         + '  /ops task resume <id> [note]           — resume a blocked task\n'
@@ -311,7 +309,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
       const sub = args[0];
       if (sub === undefined || sub === 'view') {
         if (ctx.openForensicsPanel) ctx.openForensicsPanel();
-        else ctx.print('Forensics panel is not available.');
+        else ctx.print('The Agents view is not available.');
         return;
       }
       if (sub === 'latest') {
@@ -391,7 +389,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
       }
       ctx.print(
         'Usage: /forensics <subcommand>\n'
-        + '  /forensics             — open the Forensics panel\n'
+        + '  /forensics             — open Agents on forensics\n'
         + '  /forensics latest      — print the most recent failure report summary\n'
         + '  /forensics show <id>   — show full JSON for a specific report\n'
         + '  /forensics export <id> — export incident bundle JSON to the conversation'

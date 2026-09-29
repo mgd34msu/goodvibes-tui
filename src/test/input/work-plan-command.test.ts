@@ -36,7 +36,6 @@ function makeContext(out: string[], opened: string[], store: WorkPlanStore): Com
     renderRequest: () => {},
     print: (text: string) => { out.push(text); },
     exit: () => {},
-    showPanel: (panelId) => { opened.push(panelId); },
     // /work-plan open now routes to the 'work-plan' modal via ctx.openModal.
     openModal: (name: string) => { opened.push(name); },
   };
