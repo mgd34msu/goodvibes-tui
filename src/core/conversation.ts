@@ -28,7 +28,6 @@ import type { WorkTreeSources } from './work-tree-sources.ts';
 import { renderStreamingContinuation } from './work-tree-render.ts';
 import { WorkTreeController } from './work-tree-focus.ts';
 import { isWorkTreeFoldKey } from './work-tree-fold-store.ts';
-import { replaceKeepingMessagesWhole } from './compaction-message-restore.ts';
 import { resolveTreeGlyphSet, type TreeGlyphSetName } from '../renderer/lane-graph/glyphs.ts';
 import { probeUnicodeSupport } from '../renderer/term-caps.ts';
 
@@ -359,9 +358,9 @@ export class ConversationManager extends SdkConversationManager {
     this._displayFromMessageIndex = 0; // full reset, show everything on next render
   }
 
-  /** Compaction's replace (system messages kept at the front), every kept message whole: compaction-message-restore.ts. */
+  /** Compaction's replace: the SDK keeps every kept message whole (tool calls, model, reasoning); the display rebuilds. */
   public override replaceMessagesForLLM(newMessages: ProviderMessage[]): void {
-    replaceKeepingMessagesWhole(this, newMessages, (kept) => super.replaceMessagesForLLM(kept), (data) => super.fromJSON(data));
+    super.replaceMessagesForLLM(newMessages);
     this.history.clear();
     this.lineCache.clear();
     this.appendedUpTo = 0;
