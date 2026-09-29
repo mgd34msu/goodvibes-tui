@@ -6,6 +6,8 @@ import type { SearchManager } from '../input/search.ts';
 import { allowTerminalWrite } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 import { probeTermCaps, type TermColorCaps } from './term-caps.ts';
 import { activeTheme, activeTokens, activeUiTones } from './theme.ts';
+import type { SurfaceLayer } from './surface-kit.ts';
+import { composeLayers } from './surface-compose.ts';
 
 // Accent / dim colors for the panel focus border. The focused pane's left
 // border column is drawn in the accent tone; the unfocused pane stays dim.
@@ -58,6 +60,11 @@ export interface CompositeRequest {
   search?: SearchInfo;
   panel?: PanelCompositeData;
   panelWidth?: number; // width of the right panel area (0 = no panel)
+  /**
+   * Surfaces stamped over the finished screen, in order: modals (which dim
+   * everything underneath first), toasts. Screen coordinates.
+   */
+  layers?: readonly SurfaceLayer[];
 }
 
 /**
@@ -124,7 +131,7 @@ export class Compositor {
   }
 
   public composite(params: CompositeRequest): void {
-    const { width, height, header, viewport, footer, selection, search, panel, panelWidth } = params;
+    const { width, height, header, viewport, footer, selection, search, panel, panelWidth, layers } = params;
     // A size change reallocates the buffer, which drops every record of what
     // the terminal is currently showing, repaint in full rather than diff
     // against a model that no longer describes the screen.
@@ -331,7 +338,12 @@ export class Compositor {
       newBuffer.blitLine(screenY, line);
     });
 
-    // 4. Diff and Render
+    // 4. Modal passes: dim the composed screen, then stamp each surface over
+    // it (cells outside a surface keep their dimmed content). Runs after the
+    // selection and search passes so those dim along with everything else.
+    if (layers && layers.length > 0) composeLayers(newBuffer, layers);
+
+    // 5. Diff and Render
     // Diff against front-buffer (last-rendered), then swap front/back, no clone() needed.
     // On a full repaint the SGR run-state is reset (the erase below leaves the
     // terminal's attributes unknown) and the diff runs against no previous

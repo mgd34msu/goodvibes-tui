@@ -448,3 +448,49 @@ describe('no row keeps a previous frame', () => {
     expect(stream.writes.join('')).toContain('\x1b[2J');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Modal layers: dim pass + stamp-over (surface-compose.ts)
+// ---------------------------------------------------------------------------
+
+describe('Compositor modal layers', () => {
+  test('a dimming layer darkens the whole screen, then stamps its rectangle over it; cells outside keep their content', () => {
+    const { compositor } = makeCompositor();
+    const width = 20;
+    const height = 6;
+    const viewport = Array.from({ length: height - 2 }, () => makeLine(width, 'v'));
+    const panelBg = activeTokens().backgroundPanel;
+    const layerLine = Array.from({ length: 6 }, () => createStyledCell('m', { fg: activeTokens().text, bg: panelBg }));
+    compositor.composite({
+      width, height,
+      header: [makeLine(width, 'h')],
+      viewport,
+      footer: [makeLine(width, 'f')],
+      layers: [{ x: 5, y: 2, lines: [layerLine], dim: true }],
+    });
+    const buffer = compositor.lastBufferForTest!;
+    // Outside the layer: original characters, dimmed colors (no longer the empty terminal default).
+    expect(buffer.getCell(0, 0)!.char).toBe('h');
+    expect(buffer.getCell(0, 0)!.bg).not.toBe('');
+    expect(buffer.getCell(0, 2)!.char).toBe('v');
+    // Inside the layer: its own cells, undimmed.
+    expect(buffer.getCell(5, 2)!.char).toBe('m');
+    expect(buffer.getCell(5, 2)!.bg).toBe(panelBg);
+    expect(buffer.getCell(11, 2)!.char).toBe('v');
+  });
+
+  test('the selection highlight still applies, and dims along with the rest under a modal', () => {
+    const { compositor } = makeCompositor();
+    const width = 10;
+    const selection: SelectionInfo = { isCellSelected: (col) => col === 0, scrollTop: 0, lineCount: 3 };
+    compositor.composite({
+      width, height: 3, header: [], viewport: [makeLine(width, 'a'), makeLine(width, 'b'), makeLine(width, 'c')], footer: [],
+      selection,
+      layers: [{ x: 8, y: 0, lines: [[createStyledCell('m', { bg: activeTokens().backgroundPanel })]], dim: true }],
+    });
+    const selected = compositor.lastBufferForTest!.getCell(0, 1)!;
+    const plain = compositor.lastBufferForTest!.getCell(1, 1)!;
+    expect(selected.bg).not.toBe(plain.bg);
+    expect(selected.bg).not.toBe(activeTokens().backgroundSelected);
+  });
+});

@@ -93,6 +93,13 @@ export function getDisplayWidth(text: string): number {
       // corrupting the following text (the "✕t" glitch on the steer error line).
       code === 0x2715 ||
       code === 0x2716 ||
+      // ✦ (0x2726, the splash star and the modal group marker), ⏎ (0x23ce)
+      // and ⌫ (0x232b, keycap glyphs) have no emoji presentation, so
+      // terminals draw them one cell wide too; the block rules below would
+      // otherwise count them as 2 and shift everything after them.
+      code === 0x2726 ||
+      code === 0x23ce ||
+      code === 0x232b ||
       code === 0x2022 ||
       code === 0x258d ||
       (code >= 0x2500 && code <= 0x257f)

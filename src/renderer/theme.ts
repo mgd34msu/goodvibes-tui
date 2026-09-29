@@ -294,6 +294,11 @@ export function refreshForTerminalPalette(): boolean {
   return true;
 }
 
+/** The resolved background mode in effect (dark or light). */
+export function activeThemeMode(): ThemeMode {
+  return activeMode;
+}
+
 /** The normalized name of the active theme ('system' stays 'system'). */
 export function getActiveThemeName(): string {
   return activeThemeName;
