@@ -31,7 +31,35 @@ const call = (id: string, name: string, args: Record<string, unknown>): ToolCall
 const assistant = (content: string, toolCalls?: ToolCall[]): Message => ({ role: 'assistant', content, model: MODEL, provider: 'anthropic', ...(toolCalls ? { toolCalls } : {}) });
 const result = (callId: string, toolName: string, content: string): Message => ({ role: 'tool', callId, toolName, content });
 
-const readResult = (path: string, lines: number): string => JSON.stringify({ success: true, summary: { files_read: 1, total_lines: lines }, files: [{ path, lineCount: lines }] });
+/** Source text read results carry, cycled to the requested length. */
+const FILE_TEXT = [
+  'export interface RetryOptions {',
+  '  attempts: number;',
+  '  baseDelayMs: number;',
+  '}',
+  '',
+  'export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions): Promise<T> {',
+  '  let lastError: unknown;',
+  '  for (let i = 0; i < opts.attempts; i++) {',
+  '    try {',
+  '      return await fn();',
+  '    } catch (err) {',
+  '      lastError = err;',
+  '      await sleep(opts.baseDelayMs);',
+  '    }',
+  '  }',
+  '  throw lastError;',
+  '}',
+  '',
+  'const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));',
+  '',
+];
+/** A read result in the read tool's default (standard) format: the file text, line-numbered. */
+const readResult = (path: string, lines: number): string => JSON.stringify({
+  success: true,
+  summary: { files_read: 1, total_lines: lines },
+  files: [{ path, lineCount: lines, content: Array.from({ length: lines }, (_, i) => `${String(i + 1).padStart(5)} | ${FILE_TEXT[i % FILE_TEXT.length]}`).join('\n') }],
+});
 const findResult = (matches: Array<[string, number, string]>): string => JSON.stringify({ q1: { matches: matches.map(([file, line, text]) => ({ file, line, text })), count: matches.length } });
 const execResult = (cmd: string, exit: number, stdout: string, stderr = ''): string => JSON.stringify({ cmd, exit_code: exit, stdout, stderr, success: exit === 0, duration_ms: 1400 });
 const spawnResult = (agentId: string, template: string, task: string): string => JSON.stringify({ agentId, status: 'spawned', template, task });
@@ -74,7 +102,7 @@ function agentInfo(partial: Partial<AgentLaneInfo> & Pick<AgentLaneInfo, 'id' | 
 }
 
 /** The retry-helper turn's calls and results. */
-function retryTurn(open: { edit?: boolean; exec?: boolean } = {}): { messages: Message[]; collapse: Map<string, boolean> } {
+function retryTurn(open: { read?: boolean; edit?: boolean; exec?: boolean } = {}): { messages: Message[]; collapse: Map<string, boolean> } {
   const messages: Message[] = [
     user("The retry helper in src/net/retry.ts never backs off, so we hammer the API when it's down. Can you fix it and add a test?"),
     assistant("Let me look at the current implementation and where it's used.", [
@@ -90,6 +118,7 @@ function retryTurn(open: { edit?: boolean; exec?: boolean } = {}): { messages: M
     assistant('**Fixed: exponential backoff with jitter**\n\nThe loop slept a constant baseDelayMs between attempts, so a flapping API got hit at a steady rate. The delay now doubles each attempt with up to 20% jitter, and there is no sleep after the last try.'),
   ];
   const collapse = new Map<string, boolean>();
+  if (open.read) collapse.set('bead_c:1:0', false);
   if (open.edit) collapse.set('bead_c:1:2', false);
   if (open.exec) collapse.set('bead_c:1:3', false);
   return { messages, collapse };
@@ -121,9 +150,9 @@ export function singleLaneScene(): WorkTreeScene {
   };
 }
 
-/** flow-open: the edit and the exec opened, the edit focused. */
+/** flow-open: the read, the edit and the exec opened, the edit focused. */
 export function openBeadScene(): WorkTreeScene {
-  const { messages, collapse } = retryTurn({ edit: true, exec: true });
+  const { messages, collapse } = retryTurn({ read: true, edit: true, exec: true });
   return {
     name: 'open-bead',
     messages,

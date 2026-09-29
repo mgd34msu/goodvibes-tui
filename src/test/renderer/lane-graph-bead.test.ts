@@ -142,8 +142,15 @@ describe('bead bodies are never JSON', () => {
     expect(body).toEqual({ kind: 'output', lines: [{ text: 'line one', tone: 'text' }, { text: 'line two', tone: 'text' }], footer: 'exit 0' });
   });
 
-  test('reads and finds open to short lists', () => {
-    expect(beadBody(call('read'), 'ok', JSON.stringify({ summary: {}, files: [{ path: 'a.ts', lineCount: 20 }] }))).toEqual({ kind: 'list', items: [{ text: 'a.ts', detail: '20 lines' }] });
+  test('a read opens to the text it read; finds open to short lists', () => {
+    // Owner ruling (live run on 81da49b2): an opened read shows the text the
+    // model read, not a file list that repeats the row.
+    expect(beadBody(call('read'), 'ok', JSON.stringify({ summary: {}, files: [{ path: 'a.ts', lineCount: 2, content: '    1 | const a = 1;\n    2 |   return a;' }] })))
+      .toEqual({ kind: 'read', files: [{ path: 'a.ts', lineCount: 2, lines: ['const a = 1;', '  return a;'] }] });
+    // Without text: several files still list their counts; one file would only repeat its row.
+    expect(beadBody(call('read'), 'ok', JSON.stringify({ summary: {}, files: [{ path: 'a.ts', lineCount: 20 }, { path: 'b.ts', lineCount: 5 }] })))
+      .toEqual({ kind: 'list', items: [{ text: 'a.ts', detail: '20 lines' }, { text: 'b.ts', detail: '5 lines' }] });
+    expect(beadBody(call('read'), 'ok', JSON.stringify({ summary: {}, files: [{ path: 'a.ts', lineCount: 20 }] }))).toBeNull();
     expect(beadBody(call('find'), 'ok', JSON.stringify({ q1: { matches: [{ file: 'a.ts', line: 4, text: '  export x' }] } }))).toEqual({ kind: 'list', items: [{ text: 'a.ts:4', detail: 'export x' }] });
   });
 

@@ -33,6 +33,7 @@ function describeProvenance(model: ModelDefinition): string {
     case 'configured_cap': return 'custom override';
     case 'observed_limit': return 'learned from a provider rejection';
     case 'provider_api': return 'reported by the provider';
+    case 'accepted_floor': return 'unknown: the provider accepted a larger request than the stated window';
     case 'fallback': return 'family default (no catalog entry)';
     default: return 'model catalog';
   }
@@ -41,13 +42,19 @@ function describeProvenance(model: ModelDefinition): string {
 /** Status text for the current model's window + override state. */
 export function buildContextWindowStatusText(
   model: ModelDefinition,
-  resolvedWindow: number,
+  /** The window a source states, or null when unknown. */
+  resolvedWindow: number | null,
   override: number | null,
   observed: number | null = null,
 ): string {
+  const resolvedText = resolvedWindow === null
+    ? model.contextWindowProvenance === 'accepted_floor'
+      ? `unknown (the provider accepted ${model.contextWindow.toLocaleString()} tokens, more than the stated window)`
+      : 'unknown (no catalog entry or provider report states it)'
+    : `${resolvedWindow.toLocaleString()} tokens (${describeProvenance(model)})`;
   const lines = [
     `Context window for ${model.displayName} (${model.registryKey}):`,
-    `  resolved: ${resolvedWindow.toLocaleString()} tokens (${describeProvenance(model)})`,
+    `  resolved: ${resolvedText}`,
     `  override: ${override === null ? 'none (automatic)' : `${override.toLocaleString()} tokens`}`,
   ];
   if (observed !== null) {
@@ -71,23 +78,25 @@ export function handleContextWindowSubcommand(args: readonly string[], ctx: Comm
   if (arg === '') {
     output = buildContextWindowStatusText(
       model,
-      registry.getContextWindowForModel(model),
+      registry.getKnownContextWindowForModel(model),
       registry.getModelContextCap(model.registryKey),
       registry.getObservedContextWindow(model.registryKey),
     );
   } else if (arg === 'clear' || arg === 'auto' || arg === 'reset') {
     const existed = registry.clearModelContextCap(model.registryKey);
-    const resolved = registry.getContextWindowForModel(registry.getCurrentModel());
+    const known = registry.getKnownContextWindowForModel(registry.getCurrentModel());
+    const resolved = known === null ? 'unknown' : `${known.toLocaleString()} tokens`;
     output = existed
-      ? `Context window settings cleared for ${model.displayName} (custom override and any learned limit). Back to automatic: ${resolved.toLocaleString()} tokens.`
-      : `${model.displayName} has no custom context window or learned limit set (automatic: ${resolved.toLocaleString()} tokens).`;
+      ? `Context window settings cleared for ${model.displayName} (custom override and any learned limit). Back to automatic: ${resolved}.`
+      : `${model.displayName} has no custom context window or learned limit set (automatic: ${resolved}).`;
   } else {
     const size = parseContextWindowSize(arg);
     if (size === null) {
       output = `Invalid size '${args[0]}'. Use a token count between 1 and ${MAX_CONTEXT_WINDOW_OVERRIDE.toLocaleString()}, e.g. 120000, 200k, 1m, or 'clear'.`;
     } else {
+      const was = registry.getKnownContextWindowForModel(model);
       registry.setModelContextCap(model.registryKey, size);
-      output = `Context window for ${model.displayName} set to ${size.toLocaleString()} tokens (was ${registry.getContextWindowForModel(model).toLocaleString()}). Clear with /context window clear.`;
+      output = `Context window for ${model.displayName} set to ${size.toLocaleString()} tokens (was ${was === null ? 'unknown' : `${was.toLocaleString()} tokens`}). Clear with /context window clear.`;
     }
   }
 

@@ -221,8 +221,8 @@ export async function bootstrapRuntime(
     permissionManager,
     getSystemPrompt: () => {
       const currentModel = providerRegistry.getCurrentModel();
-      const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
-      const tier = getTierForContextWindow(contextWindow);
+      // An unknown window (null) picks the standard tier, never the small-model one.
+      const tier = getTierForContextWindow(providerRegistry.getKnownContextWindowForModel(currentModel));
       // The main session is a conversation: never the agent-run completion-report demand.
       const supplement = getTierPromptSupplement(tier, { audience: 'conversation' });
       return joinPromptParts(runtime.systemPrompt, TUI_ORCHESTRATION_GUARDRAILS, supplement);

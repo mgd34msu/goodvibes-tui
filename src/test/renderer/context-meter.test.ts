@@ -124,3 +124,33 @@ describe('context bar config path (percent -> fraction mapping)', () => {
     expect(cells(line).filter((c) => c.char === '█').every((c) => c.fg === activeTokens().warning)).toBe(true);
   });
 });
+
+describe('an unknown context window', () => {
+  // Live run: abacusai route-llm had no stated window; the meter drew
+  // "100% 29.9k / 8.2k" from a guessed 8192. Unknown is now said plainly.
+  const unknown = (width = 120): Line => renderStatusLine({
+    width,
+    branch: 'main',
+    context: { usedTokens: 29_871, windowTokens: null, compactFraction: 0.8 },
+  });
+
+  test('reads "context 29.9k / unknown" with no bar and no percent', () => {
+    const text = lineToString(unknown());
+    expect(text).toContain('context 29.9k / unknown');
+    expect(text).not.toMatch(/[█░│]/);
+    expect(text).not.toMatch(/\d+%/);
+    expect(text).not.toContain('8.2k');
+  });
+
+  test('keeps the right padding and narrows by dropping the word first', () => {
+    for (const width of [120, 52, 46]) {
+      const line = unknown(width);
+      expect(line.length).toBe(width);
+      expect(line.slice(width - 3).every((cell) => cell.char === ' ')).toBe(true);
+    }
+    expect(lineToString(unknown(52))).toContain('context 29.9k / unknown');
+    const narrow = lineToString(unknown(46));
+    expect(narrow).toContain('29.9k / unknown');
+    expect(narrow).not.toContain('context');
+  });
+});

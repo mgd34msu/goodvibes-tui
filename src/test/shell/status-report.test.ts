@@ -43,6 +43,12 @@ describe('/status report', () => {
     expect(text).toMatch(/compacts at +80%/);
   });
 
+  test('an unknown window shows the tokens in use against "unknown", never a guessed window', () => {
+    const text = report({ contextTokens: 29_871, contextWindow: 0 });
+    expect(text).toMatch(/used +29\.9k \/ unknown/);
+    expect(text).not.toMatch(/compacts at/);
+  });
+
   test('"—" instead of a false 0 before the first input count', () => {
     const text = report({ usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextTokens: 0 });
     expect(text).toMatch(/input +—/);

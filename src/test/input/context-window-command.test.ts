@@ -84,6 +84,7 @@ function makeHarness(opts: { override?: number | null; observed?: number | null;
       return baseModel;
     },
     getContextWindowForModel: (m: ModelDefinition) => m.contextWindow,
+    getKnownContextWindowForModel: (m: ModelDefinition) => m.contextWindow,
     getModelContextCap: () => override,
     getObservedContextWindow: () => observed,
     setModelContextCap: (key: string, cap: number) => { calls.set.push([key, cap]); override = cap; },

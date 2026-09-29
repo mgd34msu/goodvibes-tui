@@ -20,11 +20,12 @@ import { expandTabs, getDisplayWidth, truncateDisplay, wrapPreservingIndent } fr
 import { SurfaceCanvas } from '../surface-kit.ts';
 import { panel, type KitPanel } from '../surface-kit-parts.ts';
 import { buildDiffRows, drawDiffRow, semanticChips, type DiffRow } from '../changes-modal.ts';
-import { parseChanges } from '../../input/changes-model.ts';
+import { highlightCodeLines } from '../code-block.ts';
+import { languageForPath, parseChanges } from '../../input/changes-model.ts';
 import type { SemanticDiff } from '../semantic-diff.ts';
 import { glyphText, type LaneGlyphs } from './glyphs.ts';
 import type { GutterRow } from './layout.ts';
-import type { BeadBody, BeadStatus, BeadSummary, BodyTone, SummaryTone } from './bead.ts';
+import type { BeadBody, BeadStatus, BeadSummary, BodyTone, ReadBodyFile, SummaryTone } from './bead.ts';
 
 /** Column where every turn's gutter starts (one right of the ┃ bar column). */
 const GUTTER_X = 3;
@@ -347,6 +348,111 @@ function wrapAll(lines: ReadonlyArray<{ text: string; fg: string }>, width: numb
   return out;
 }
 
+/** One drawn row of a read body: colored runs from the panel's left edge. */
+type ReadRow = ReadonlyArray<{ readonly text: string; readonly fg: string; readonly bold?: boolean; readonly italic?: boolean }>;
+
+/**
+ * A file's lines as drawn rows: syntax colored for the file's language, tabs
+ * as two spaces, and each line wrapped the way a command's output wraps
+ * (indentation kept, continuation rows indented like the first).
+ */
+function readRows(file: ReadBodyFile, width: number): ReadRow[] {
+  const t = activeTokens();
+  const lines = file.lines.map(expandTabs);
+  const tokens = highlightCodeLines(lines, file.path ? languageForPath(file.path) : '');
+  const rows: ReadRow[] = [];
+  lines.forEach((line, i) => {
+    const chars = Array.from(line);
+    // Each character's style, from the line's tokens (plain when they do not spell the line).
+    const lineTokens = tokens[i] ?? [];
+    const styles: Array<{ fg: string; bold?: boolean; italic?: boolean }> = [];
+    if (lineTokens.map((tk) => tk.text).join('') === line) {
+      for (const tk of lineTokens) for (const _ of Array.from(tk.text)) styles.push({ fg: tk.fg, bold: tk.bold, italic: tk.italic });
+    } else {
+      for (let k = 0; k < chars.length; k++) styles.push({ fg: t.text });
+    }
+    let cursor = 0;
+    for (const part of wrapPreservingIndent(line, Math.max(8, width))) {
+      const pc = Array.from(part);
+      let lead = 0;
+      while (pc[lead] === ' ') lead++;
+      while (chars[cursor] === ' ') cursor++;
+      const runs: Array<{ text: string; fg: string; bold?: boolean; italic?: boolean }> = [];
+      if (lead > 0) runs.push({ text: ' '.repeat(lead), fg: t.text });
+      for (let k = lead; k < pc.length; k++) {
+        const style = styles[cursor] ?? { fg: t.text };
+        cursor++;
+        const last = runs[runs.length - 1];
+        if (last && last.fg === style.fg && last.bold === style.bold && last.italic === style.italic) last.text += pc[k];
+        else runs.push({ text: pc[k]!, ...style });
+      }
+      rows.push(runs);
+    }
+  });
+  return rows;
+}
+
+/**
+ * An opened read: the text the model read, drawn like a command's output
+ * (indented exactly, syntax colored, "… N more lines" past the same BODY_CAP).
+ * One file shows its text alone, since the row already names it; several
+ * files show one short section each, headed by the path and line count, and
+ * share BODY_CAP between them (at least 3 rows each).
+ */
+function paintReadBody(files: readonly ReadBodyFile[], p: GraphPaint, options: BodyPaintOptions, innerWidth: number): { lines: Line[]; capped: boolean } {
+  const t = activeTokens();
+  const headed = files.length > 1;
+  const perFile = headed ? Math.max(3, Math.floor(BODY_CAP / files.length)) : BODY_CAP;
+  type Drawn = { kind: 'row'; row: ReadRow } | { kind: 'header'; file: ReadBodyFile } | { kind: 'more'; hidden: number } | { kind: 'error'; text: string } | { kind: 'gap' };
+  const drawn: Drawn[] = [];
+  let capped = false;
+  files.forEach((file, index) => {
+    if (headed) {
+      if (index > 0) drawn.push({ kind: 'gap' });
+      drawn.push({ kind: 'header', file });
+    }
+    if (file.error !== undefined) {
+      for (const part of wrapPreservingIndent(file.error, Math.max(8, innerWidth))) drawn.push({ kind: 'error', text: part });
+      return;
+    }
+    const rows = readRows(file, innerWidth);
+    // Trailing blank rows say nothing.
+    while (rows.length > 0 && rows[rows.length - 1]!.length === 0) rows.pop();
+    const cap = options.expanded ? rows.length : Math.min(rows.length, perFile);
+    for (let k = 0; k < cap; k++) drawn.push({ kind: 'row', row: rows[k]! });
+    if (rows.length > cap) {
+      capped = true;
+      drawn.push({ kind: 'more', hidden: rows.length - cap });
+    }
+  });
+  const height = drawn.length + 2;
+  const canvas = new SurfaceCanvas(p.width, height);
+  const pn = bodyPanel(canvas, p, height, t.backgroundPanel);
+  const right = pn.l + innerWidth;
+  drawn.forEach((item, k) => {
+    const y = 1 + k;
+    if (item.kind === 'header') {
+      // A file that could not be read has no line count to state; its error follows.
+      const count = item.file.error !== undefined ? '' : `${item.file.lineCount} line${item.file.lineCount === 1 ? '' : 's'}`;
+      const path = truncateDisplay(item.file.path ?? 'file', Math.max(1, innerWidth - (count ? getDisplayWidth(count) + 2 : 0)), p.glyphs.ellipsis);
+      const cx = canvas.put(pn.l, y, path, { fg: t.text, bold: true });
+      if (count) canvas.put(cx + 2, y, count, { fg: t.textFaint });
+    } else if (item.kind === 'row') {
+      let cx = pn.l;
+      for (const run of item.row) {
+        const room = right - cx;
+        if (room <= 0) break;
+        cx = canvas.put(cx, y, truncateDisplay(run.text, room, p.glyphs.ellipsis), { fg: run.fg, bold: run.bold, italic: run.italic });
+      }
+    } else if (item.kind === 'more') {
+      canvas.put(pn.l, y, moreText(item.hidden, 'lines', p), { fg: t.textFaint });
+    } else if (item.kind === 'error') {
+      canvas.put(pn.l, y, truncateDisplay(item.text, innerWidth, p.glyphs.ellipsis), { fg: t.error });
+    }
+  });
+  return { lines: canvas.lines, capped };
+}
+
 /**
  * Draw an opened bead's body. Returns full-width lines (the caller draws the
  * lane gutter over their left edge) and whether rows were left out.
@@ -393,6 +499,8 @@ export function paintBody(body: BeadBody, p: GraphPaint, options: BodyPaintOptio
     wrapped.forEach((row, k) => canvas.put(pn.l, 1 + k, row.text, { fg: row.fg }));
     return { lines: canvas.lines, capped: false };
   }
+
+  if (body.kind === 'read') return paintReadBody(body.files, p, options, innerWidth);
 
   let rows: Array<{ text: string; fg: string }>;
   let footer: string | undefined;

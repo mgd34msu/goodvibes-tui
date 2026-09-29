@@ -112,6 +112,7 @@ function makeCapturingProviderRegistry(): { providerRegistry: ProviderRegistry; 
     getForModel: () => provider,
     getCurrentModel: () => FAKE_MODEL,
     getContextWindowForModel: () => 0,
+    getKnownContextWindowForModel: () => null,
     getTokenLimitsForModel: () => ({
       maxOutputTokens: 4096,
       maxToolResultTokens: 50_000,

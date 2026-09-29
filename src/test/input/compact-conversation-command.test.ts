@@ -71,6 +71,7 @@ function makeContext(opts: {
       providerRegistry: {
         getCurrentModel: () => ({ id: 'test-model' }),
         getContextWindowForModel: () => 200_000,
+        getKnownContextWindowForModel: () => 200_000,
       },
     },
     ops: {

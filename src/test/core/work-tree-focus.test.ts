@@ -92,7 +92,8 @@ describe('keyboard in the work tree', () => {
     const readLine = lines.findIndex((l) => l.includes('read src/net/retry.ts'));
     cm.toggleCollapseAtLine(readLine);
     expect(screen(cm).some((l) => l.includes('▾ read src/net/retry.ts'))).toBe(true);
-    expect(screen(cm).some((l) => l.includes('src/net/retry.ts  20 lines'))).toBe(true);
+    // Opened, a read shows the text it read (owner ruling, live run on 81da49b2).
+    expect(screen(cm).some((l) => l.includes('export interface RetryOptions {'))).toBe(true);
   });
 
   test('a restored fold state comes back with the session', () => {

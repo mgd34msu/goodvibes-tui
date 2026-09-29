@@ -35,7 +35,7 @@ export interface CompactionActivityBus {
  */
 export interface ContextAccountingSourceDeps {
   readonly orchestrator: Pick<Orchestrator, 'getTurnInjections' | 'usage' | 'lastInputTokens'>;
-  readonly providerRegistry: Pick<ProviderRegistry, 'getCurrentModel' | 'getContextWindowForModel'>;
+  readonly providerRegistry: Pick<ProviderRegistry, 'getCurrentModel' | 'getKnownContextWindowForModel'>;
   readonly sessionLineageTracker: Pick<SessionLineageTracker, 'getCompactionCount'>;
   readonly runtimeBus?: CompactionActivityBus | null | undefined;
   readonly sessionId: string;
@@ -83,11 +83,12 @@ export function createContextAccountingSource(deps: ContextAccountingSourceDeps)
     getTurnInjections: () => deps.orchestrator.getTurnInjections(),
     getTokenState: () => {
       const currentModel = deps.providerRegistry.getCurrentModel();
-      const contextWindow = deps.providerRegistry.getContextWindowForModel(currentModel);
+      // null when nothing states the window (a guess, or disproven by a larger accepted request).
+      const contextWindow = deps.providerRegistry.getKnownContextWindowForModel(currentModel);
       return {
         measured: { ...deps.orchestrator.usage },
         lastInputTokens: deps.orchestrator.lastInputTokens,
-        contextWindow: contextWindow > 0 ? contextWindow : null,
+        contextWindow: contextWindow !== null && contextWindow > 0 ? contextWindow : null,
       };
     },
     getCompactionState: () => ({

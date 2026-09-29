@@ -852,6 +852,7 @@ describe('product breadth commands', () => {
     (ctx.provider as { providerRegistry: CommandContext['provider']['providerRegistry'] }).providerRegistry = {
       getCurrentModel: () => ({ id: 'openrouter/free', provider: 'openrouter' }),
       getContextWindowForModel: () => 32_000,
+      getKnownContextWindowForModel: () => 32_000,
       listModels: () => [{ id: 'model-1' }],
     } as never;
 

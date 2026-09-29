@@ -288,9 +288,10 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       // its own behaviour by window size. Previously hardcoded to 0 here, which
       // silently suppressed buildCompactionPreview()'s capacity-% clause even
       // though the builder has always supported it.
-      const contextWindow = ctx.provider.providerRegistry.getContextWindowForModel(
+      // 0 when the window is unknown: the preview then leaves out the capacity clause.
+      const contextWindow = ctx.provider.providerRegistry.getKnownContextWindowForModel(
         ctx.provider.providerRegistry.getCurrentModel(),
-      );
+      ) ?? 0;
       const memStore = ctx.session.sessionMemoryStore;
       const pinnedMemoryCount = memStore ? memStore.list().length : 0;
       // Pre-compact preview: honest estimate, clearly labelled.

@@ -66,7 +66,7 @@ export function formatStatusReport(s: StatusReportSource): string {
     row('used', `${s.contextTokens > 0 ? n(s.contextTokens) : '—'} / ${n(s.contextWindow)} (${pct}%)`);
     row('compacts at', `${Math.round(s.compactFraction * 100)}%`);
   } else {
-    row('used', 'unknown (no context window for this model)');
+    row('used', `${s.contextTokens > 0 ? n(s.contextTokens) : '—'} / unknown (nothing states this model's context window)`);
   }
   lines.push('Surfaces');
   row('spine', s.sessionSpine ?? 'local only');

@@ -279,9 +279,11 @@ export async function compactConversation(context: CommandContext): Promise<Comp
   // Resolve the live context window for the current model so manual /compact
   // matches the auto-compaction path (which scales behaviour by window size)
   // instead of passing a meaningless 0.
-  const contextWindow = providerRegistry.getContextWindowForModel(
+  // 0 when the window is unknown (a guess, or disproven by a larger accepted
+  // request): an unknown window is never treated as a small one.
+  const contextWindow = providerRegistry.getKnownContextWindowForModel(
     providerRegistry.getCurrentModel(),
-  );
+  ) ?? 0;
 
   // Small-window models lack room for the structured (multi-LLM) extraction
   // pipeline, so mirror the SDK auto-compaction path and degrade to the

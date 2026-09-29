@@ -79,21 +79,24 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
               contextWindows = await fetchModelContextWindows(parsedUrl.hostname, parseInt(parsedUrl.port) || 80, 'unknown', discoveredModelIds);
             } catch {}
           } else {
-            ctx.print('Note: Context window detection is only supported for http:// URLs. Using defaults.');
+            ctx.print('Note: Context window detection is only supported for http:// URLs. Windows the endpoint does not report are left unknown.');
           }
         }
         const defaultModel = `${name}-model`;
+        // A window is written only when the endpoint reported one. A guessed
+        // number written here would read as the model's real window forever
+        // after (the meter, compaction and prompt tier all trust it), so an
+        // unreported window is left out and the model's window is unknown.
         const models: CustomProviderConfig['models'] = discoveredModelIds.length === 0
           ? [{
               id: defaultModel,
               displayName: defaultModel,
-              contextWindow: 8192,
               capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
             }]
           : discoveredModelIds.map((id) => ({
               id,
               displayName: id,
-              contextWindow: contextWindows[id] ?? 8192,
+              ...(contextWindows[id] !== undefined && contextWindows[id] > 0 ? { contextWindow: contextWindows[id] } : {}),
               capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
             }));
         // The key is never embedded in the provider JSON. The config references
@@ -115,7 +118,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
           ctx.print(`Error writing provider file: ${summarizeError(e)}`);
           return;
         }
-        ctx.print(`Provider '${name}' added with ${models.length} model(s):\n${discoveredModelIds.length > 0 ? discoveredModelIds.map((id) => `  • ${id} (${(contextWindows[id] ?? 8192).toLocaleString()} ctx)`).join('\n') : `  • ${defaultModel} (starter entry)`}\nThe file watcher will auto-register it shortly.`);
+        ctx.print(`Provider '${name}' added with ${models.length} model(s):\n${discoveredModelIds.length > 0 ? discoveredModelIds.map((id) => `  • ${id} (${contextWindows[id] !== undefined && contextWindows[id] > 0 ? `${contextWindows[id].toLocaleString()} ctx` : 'context window unknown'})`).join('\n') : `  • ${defaultModel} (starter entry)`}\nThe file watcher will auto-register it shortly.`);
         // Capture the key with the keystrokes masked, straight into the secrets
         // manager, never a cleartext argument, never written into the JSON.
         if (ctx.beginConcealedInput) {

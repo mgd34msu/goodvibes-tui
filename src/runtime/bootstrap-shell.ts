@@ -176,7 +176,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     uiServices,
     toolRegistry,
     orchestrator,
-    getCtxWindow: () => services.providerRegistry.getContextWindowForModel(services.providerRegistry.getCurrentModel()),
+    getCtxWindow: () => services.providerRegistry.getKnownContextWindowForModel(services.providerRegistry.getCurrentModel()) ?? 0,
     requestRender,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
     // Memory modal reads via the spine client, not the raw registry.

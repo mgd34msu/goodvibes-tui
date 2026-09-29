@@ -232,6 +232,8 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
         id: model.id,
         displayName: model.displayName,
         contextWindow: services.providerRegistry.getContextWindowForModel(model),
+        // False when nothing states the window (a guess, or disproven by a larger accepted request).
+        contextWindowKnown: services.providerRegistry.getKnownContextWindowForModel(model) !== null,
         providerConfigured: providerSnapshot?.runtime.auth?.configured ?? true,
         setup,
       };
@@ -241,7 +243,7 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
         `  provider: ${model.provider}`,
         `  setup: ${setup.setupLabel}`,
         `  provider configured: ${yesNo(value.providerConfigured)}`,
-        `  context: ${value.contextWindow.toLocaleString()}`,
+        `  context: ${value.contextWindowKnown ? value.contextWindow.toLocaleString() : 'unknown'}`,
       ].join('\n'));
     }
     if (subOrFilter === 'use' || subOrFilter === 'set') {
@@ -316,6 +318,7 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
         id: model.id,
         displayName: model.displayName,
         contextWindow: services.providerRegistry.getContextWindowForModel(model),
+        contextWindowKnown: services.providerRegistry.getKnownContextWindowForModel(model) !== null,
         current: model.registryKey === current,
         ...(synthInfo !== null ? {
           isSynthetic: true,
@@ -331,7 +334,7 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
         const synthLabel = model.isSynthetic
           ? ` [synthetic ${model.syntheticConfiguredBackends}/${model.syntheticBackends}p]`
           : '';
-        return `  ${model.current ? '*' : ' '} ${model.registryKey.padEnd(42)} setup=${model.setupClass} ctx=${model.contextWindow.toLocaleString()}${synthLabel} ${model.displayName}`;
+        return `  ${model.current ? '*' : ' '} ${model.registryKey.padEnd(42)} setup=${model.setupClass} ctx=${model.contextWindowKnown ? model.contextWindow.toLocaleString() : 'unknown'}${synthLabel} ${model.displayName}`;
       }),
     ].join('\n'));
   });

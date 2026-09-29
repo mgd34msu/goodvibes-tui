@@ -101,7 +101,13 @@ export interface StatusBackgroundState {
 export interface StatusContextState {
   /** Tokens in the last request (0 while unknown). */
   readonly usedTokens: number;
-  readonly windowTokens: number;
+  /**
+   * The model's context window, or null when nothing states it (a guessed
+   * window, or one a larger accepted request disproved). An unknown window
+   * draws "context 29.9k / unknown": no bar and no percent, since neither can
+   * be computed.
+   */
+  readonly windowTokens: number | null;
   /** Compaction threshold as a fraction [0..1]. */
   readonly compactFraction: number;
 }
@@ -151,14 +157,14 @@ function piecesWidth(pieces: readonly Piece[]): number {
   return pieces.reduce((sum, p) => sum + getDisplayWidth(p.text), 0);
 }
 
-/** "13.2k / 1.0M", or "— / 1.0M" before the first count arrives. */
-function contextUsageLabel(usedTokens: number, windowTokens: number): string {
+/** "13.2k / 1.0M", "— / 1.0M" before the first count arrives, "13.2k / unknown" with no known window. */
+function contextUsageLabel(usedTokens: number, windowTokens: number | null): string {
   const used = usedTokens > 0 ? abbreviateCount(usedTokens, { bSuffix: true }) : '—';
-  return `${used} / ${abbreviateCount(windowTokens, { bSuffix: true })}`;
+  return `${used} / ${windowTokens === null ? 'unknown' : abbreviateCount(windowTokens, { bSuffix: true })}`;
 }
 
 function contextFraction(state: StatusContextState): number {
-  if (!(state.windowTokens > 0)) return 0;
+  if (state.windowTokens === null || !(state.windowTokens > 0)) return 0;
   return Math.max(0, Math.min(1, state.usedTokens / state.windowTokens));
 }
 
@@ -171,6 +177,10 @@ interface ContextBarForm {
 
 /** Width of the context bar piece in a given form. */
 function contextBarWidth(state: StatusContextState, form: ContextBarForm): number {
+  if (state.windowTokens === null) {
+    // Unknown window: the word and the label only ("context 29.9k / unknown").
+    return (form.word ? getDisplayWidth('context') + 1 : 0) + getDisplayWidth(contextUsageLabel(state.usedTokens, null));
+  }
   const pct = `${Math.round(contextFraction(state) * 100)}%`;
   return (form.word ? getDisplayWidth('context') + 1 : 0) + form.cells + 1 + getDisplayWidth(pct)
     + (form.label ? 1 + getDisplayWidth(contextUsageLabel(state.usedTokens, state.windowTokens)) : 0);
@@ -186,6 +196,13 @@ const BARE_CONTEXT_FORM: ContextBarForm = { cells: CONTEXT_BAR_MIN_CELLS, word: 
  */
 function fitContextForm(state: StatusContextState, room: number): ContextBarForm | null {
   const full: ContextBarForm = { cells: CONTEXT_BAR_CELLS, word: true, label: true };
+  if (state.windowTokens === null) {
+    // No bar to narrow: the word goes first, then the whole piece.
+    for (const form of [full, { ...full, word: false }] satisfies ContextBarForm[]) {
+      if (contextBarWidth(state, form) <= room) return form;
+    }
+    return null;
+  }
   const fullW = contextBarWidth(state, full);
   if (fullW <= room) return full;
   const narrowed = CONTEXT_BAR_CELLS - (fullW - room);
@@ -208,6 +225,10 @@ function fitContextForm(state: StatusContextState, room: number): ContextBarForm
 function drawContextBar(line: Line, x: number, state: StatusContextState, form: ContextBarForm): number {
   const cells = form.cells;
   const t = activeTokens();
+  if (state.windowTokens === null) {
+    const cx = form.word ? putText(line, x, line.length, { text: 'context', fg: t.textMuted }) + 1 : x;
+    return putText(line, cx, line.length, { text: contextUsageLabel(state.usedTokens, null), fg: t.textMuted });
+  }
   const used = contextFraction(state);
   const threshold = Math.max(0, Math.min(1, state.compactFraction > 0 ? state.compactFraction : 1));
   const hot = used >= threshold ? t.error : used >= CONTEXT_WARN_FRACTION ? t.warning : null;
@@ -369,7 +390,7 @@ function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): {
   const menu: KitHint[] = [['ctrl+p', 'menu']];
   const menuW = keycapHintsWidth(menu);
 
-  const ctx = options.context && options.context.windowTokens > 0 ? options.context : null;
+  const ctx = options.context && (options.context.windowTokens === null || options.context.windowTokens > 0) ? options.context : null;
   // From the warning level up the bare bar is reserved before the left side
   // is laid out, so a busy phrase truncates instead of hiding a filling window.
   const reserve = ctx && contextFraction(ctx) >= CONTEXT_WARN_FRACTION

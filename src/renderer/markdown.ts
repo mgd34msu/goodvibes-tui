@@ -365,9 +365,15 @@ function compositeInlineLine(
       // Space: flush current word, then add the space
       flushWord();
       if (lineW + cw > availW && lineW > 0) {
+        // The row is full: this space is the break itself and is consumed by
+        // it, so the next row starts at the text column, not one to the right.
         flushLine(isFirstLine);
         isFirstLine = false;
+        continue;
       }
+      // A wrapped row never opens with a break space (a run of spaces that
+      // straddles a break). The first row keeps its leading spaces.
+      if (!isFirstLine && lineW === 0) continue;
       lineChars.push(sc);
       lineW += cw;
     } else {

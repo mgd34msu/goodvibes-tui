@@ -78,7 +78,7 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
       const maintenance = evaluateSessionMaintenance({
         configManager: ctx.platform.configManager,
         currentTokens: estimateConversationTokens(llmMessages),
-        contextWindow: ctx.provider.providerRegistry.getContextWindowForModel(ctx.provider.providerRegistry.getCurrentModel()),
+        contextWindow: ctx.provider.providerRegistry.getKnownContextWindowForModel(ctx.provider.providerRegistry.getCurrentModel()) ?? 0,
         messageCount: llmMessages.length,
         sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
         session: session.session,

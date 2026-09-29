@@ -239,6 +239,8 @@ For example:
 }
 ```
 
+A model's `contextWindow` is optional. Leave it out when the endpoint does not state one: the model's window is then shown as unknown (the status line reads `context 29.9k / unknown`) and no compaction or small-model prompt is driven by a guessed number. `/provider add` writes it only when the endpoint reported a window. When a provider accepts a request larger than a model's stated window, that window is treated as disproven and shown as unknown too.
+
 Provider JSON is hot-reloaded, so custom provider definitions appear in the model/runtime surfaces without restarting the process. Use the `/add-provider` skill for interactive guided setup with smart defaults for popular providers.
 
 ## Daemon OpenAI-Compatible API

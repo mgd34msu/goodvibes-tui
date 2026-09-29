@@ -61,6 +61,7 @@ function makeFakeProviderRegistry(contextWindow: number) {
   return {
     getCurrentModel: () => model,
     getContextWindowForModel: () => contextWindow,
+    getKnownContextWindowForModel: () => (contextWindow > 0 ? contextWindow : null),
   };
 }
 

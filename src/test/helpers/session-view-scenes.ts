@@ -43,7 +43,8 @@ function engineerMessages(): Message[] {
       call('e-edit', 'edit', { edits: [{ path: 'src/net/retry.ts', find: '      await sleep(backoff);', replace: '      await sleep(Math.min(backoff, opts.maxDelayMs));' }] }),
       call('e-spawn', 'agent', { mode: 'spawn', template: 'tester', task: 'cover the cap with tests' }),
     ]),
-    result('e-read', 'read', JSON.stringify({ success: true, summary: { files_read: 1, total_lines: 20 }, files: [{ path: 'src/net/retry.ts', lineCount: 20 }] })),
+    // The read tool's default (standard) format carries the file text, line-numbered.
+    result('e-read', 'read', JSON.stringify({ success: true, summary: { files_read: 1, total_lines: 20 }, files: [{ path: 'src/net/retry.ts', lineCount: 20, content: Array.from({ length: 20 }, (_, i) => `${String(i + 1).padStart(5)} | ${i === 0 ? 'export interface RetryOptions {' : '  // retry option'}`).join('\n') }] })),
     result('e-edit', 'edit', JSON.stringify({ applied: 1, failed: 0, dry_run: false })),
     result('e-spawn', 'agent', JSON.stringify({ agentId: 'tester', status: 'spawned', template: 'tester', task: 'cover the cap with tests' })),
     user('also cap the jitter, not only the base delay'),

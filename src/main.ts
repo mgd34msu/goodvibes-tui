@@ -450,9 +450,12 @@ async function main() {
 
     // Cache the current model for consistent values across the entire render frame
     const currentModel = providerRegistry.getCurrentModel();
-    // Resolve the effective context window (provider_api / configured_cap overrides) once,
-    // so the footer meter, footer-height, and context inspector agree with the Usage modal.
-    const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
+    // Resolve the context window once, so the footer meter, the status hint and
+    // the context inspector agree. Only a window some source states is shown:
+    // null means unknown (a guess, or disproven by a larger accepted request),
+    // and every consumer below reads 0 as "no window to measure against".
+    const knownContextWindow = providerRegistry.getKnownContextWindowForModel(currentModel);
+    const contextWindow = knownContextWindow ?? 0;
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
@@ -500,7 +503,7 @@ async function main() {
       model: activeModel.footerModel, // prices the cost; the header names the model
       workingDir, homeDirectory, view: viewFrame?.footer ?? null,
       branch: lastGitInfoRef.value?.branch,
-      contextWindow,
+      contextWindow: knownContextWindow,
       contextStatusHint,
       retryHint: retryAffordanceHint(retryAffordance),
       scriptableStatusLine: scriptableStatusline.current(),
@@ -615,7 +618,7 @@ async function main() {
       permissionMode: configManager.get('permissions.mode') as string, toolCount: toolRegistry.list().length, notifyMode: modeManager.getHITLMode(),
       usage: orchestrator.usage,
       cost: statusCostText({ up: orchestrator.usage.input, down: orchestrator.usage.output, cacheRead: orchestrator.usage.cacheRead, cacheWrite: orchestrator.usage.cacheWrite, fleetCostUsd: footerFleetCost(() => ctx.services.processRegistry.query().nodes, true) }, active.footerModel),
-      contextTokens: orchestrator.lastInputTokens, contextWindow: providerRegistry.getContextWindowForModel(serving),
+      contextTokens: orchestrator.lastInputTokens, contextWindow: providerRegistry.getKnownContextWindowForModel(serving) ?? 0,
       compactFraction: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),
       sessionSpine: spine?.sessionSpineActive && spine.sessionSpineStatus && spine.sessionSpineStatus !== 'unknown' ? spine.sessionSpineStatus : undefined,
       webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,

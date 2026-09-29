@@ -31,6 +31,7 @@ import {
   cellText,
   formatBeadTime,
   formatCost,
+  inferResultToolName,
   isBackgroundCall,
   needsAttention,
   toolFamily,
@@ -734,7 +735,9 @@ export function turnHasOpenDiff(model: TurnModel): boolean {
  */
 export function orphanResultBead(message: ToolMessage, index: number, collapse: ReadonlyMap<string, boolean>): BeadModel {
   const ctx: BuildContext = { sources: {}, collapse, waiting: new Set(), now: 0, lanes: 0, live: false, beadKeys: [] };
-  const call: ToolCall = { id: message.callId, name: message.toolName ?? 'tool', arguments: {} };
+  // A result stored without its call and without a tool name is named from
+  // its own shape when that is unambiguous, otherwise "result", never "tool".
+  const call: ToolCall = { id: message.callId, name: message.toolName ?? inferResultToolName(message.content), arguments: {} };
   const { bead } = makeBead(ctx, SPINE, 'o', call, index, 0, { content: message.content, index }, false);
   return bead;
 }

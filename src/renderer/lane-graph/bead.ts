@@ -223,6 +223,46 @@ function testTotals(text: string): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// A result whose call is gone
+// ---------------------------------------------------------------------------
+
+/** The name a result with no call gets when its shape does not say which tool made it. */
+const UNNAMED_RESULT = 'result';
+
+/** `    12 | text`: the read tool's line-numbered file text (formatContent's standard format). */
+const NUMBERED_LINE = /^ *\d+ \| ?/;
+
+/** True when every non-blank line is line-numbered file text. */
+function isNumberedFileText(content: string): boolean {
+  const lines = textLines(content).filter((l) => l.trim() !== '');
+  return lines.length > 0 && lines.every((l) => NUMBERED_LINE.test(l));
+}
+
+/**
+ * The tool behind a stored result whose call was lost (results kept without
+ * their call before compaction kept each call whole), named only when the
+ * result's own shape leaves no doubt: a unified diff or the edit tool's
+ * applied/failed report is an edit, command output or test totals are exec,
+ * line-numbered file text or a read summary is a read. Anything else is
+ * UNNAMED_RESULT, never the bare word "tool".
+ */
+export function inferResultToolName(content: string): string {
+  const obj = parseObject(content);
+  if (obj) {
+    if (execCommands(obj).length > 0) return 'exec';
+    const summary = obj.summary && typeof obj.summary === 'object' ? obj.summary as Json : null;
+    if (summary && num(summary.files_read) !== undefined && num(summary.total_lines) !== undefined) return 'read';
+    if (num(obj.applied) !== undefined && num(obj.failed) !== undefined) return 'edit';
+    return UNNAMED_RESULT;
+  }
+  if (/^@@ /m.test(content) && /^(\+\+\+|---) /m.test(content)) return 'edit';
+  if (/^Edits applied: \d+, failed: \d+/m.test(content)) return 'edit';
+  if (testTotals(content)) return 'exec';
+  if (isNumberedFileText(content)) return 'read';
+  return UNNAMED_RESULT;
+}
+
+// ---------------------------------------------------------------------------
 // Attention
 // ---------------------------------------------------------------------------
 
@@ -488,10 +528,34 @@ export type BeadBody =
   | { readonly kind: 'output'; readonly lines: ReadonlyArray<{ readonly text: string; readonly tone: BodyTone }>; readonly footer?: string }
   /** A short list (files read, matches found). */
   | { readonly kind: 'list'; readonly items: ReadonlyArray<{ readonly text: string; readonly detail?: string }> }
+  /**
+   * The text a read returned, one section per file: its path and line count,
+   * then the file's lines exactly as read (indentation kept, the read tool's
+   * line-number prefix removed). `path` is undefined when the call named no
+   * path (a single text result).
+   */
+  | { readonly kind: 'read'; readonly files: ReadonlyArray<ReadBodyFile> }
   /** A failure, wrapped in full. */
   | { readonly kind: 'error'; readonly text: string }
   /** Plain text lines (a result that is text, or a flattened object). */
   | { readonly kind: 'text'; readonly lines: readonly string[] };
+
+/** One file of a read body. */
+export interface ReadBodyFile {
+  readonly path: string | undefined;
+  /** Lines the file has in all (the read's own count), which may exceed `lines` for a ranged read. */
+  readonly lineCount: number;
+  readonly lines: readonly string[];
+  /** Why the file could not be read, instead of lines. */
+  readonly error?: string;
+}
+
+/** A file's text as the model read it: the `NNNNN | ` prefix removed when every line carries one. */
+function readText(content: string): string[] {
+  const lines = content.replace(/\n+$/, '').split('\n');
+  const numbered = lines.filter((l) => l.trim() !== '').every((l) => NUMBERED_LINE.test(l));
+  return numbered ? lines.map((l) => l.replace(NUMBERED_LINE, '')) : lines;
+}
 
 /** The files a write call wrote, with their content. */
 function writtenFiles(call: ToolCall): Array<{ path: string; content: string }> {
@@ -585,6 +649,15 @@ export function beadBody(call: ToolCall, status: BeadStatus, content: string | u
   if (!body) return null;
   switch (body.kind) {
     case 'list': return { kind: 'list', items: body.items.map((i) => ({ text: cellText(i.text), detail: i.detail !== undefined ? cellText(i.detail) : undefined })) };
+    case 'read': return {
+      kind: 'read',
+      files: body.files.map((f) => ({
+        ...f,
+        path: f.path !== undefined ? cellText(f.path) : undefined,
+        lines: f.lines.map(cellText),
+        ...(f.error !== undefined ? { error: cellText(f.error) } : {}),
+      })),
+    };
     case 'text': return { kind: 'text', lines: body.lines.map(cellText) };
     case 'error': return { kind: 'error', text: body.text.split('\n').map(cellText).join('\n') };
     default: return body;
@@ -641,13 +714,43 @@ function rawBody(call: ToolCall, status: BeadStatus, content: string | undefined
     }
   }
   if (family === 'read' && obj && Array.isArray(obj.files)) {
-    const items = obj.files.filter((f): f is Json => f !== null && typeof f === 'object').map((f) => {
+    const entries = obj.files.filter((f): f is Json => f !== null && typeof f === 'object');
+    // Opened, a read shows the text the model read, like a command shows its
+    // output: one section per file, headed by its path and line count.
+    const withText = entries.filter((f) => typeof f.content === 'string' || str(f.error) !== undefined);
+    if (withText.length > 0 && withText.length === entries.length && entries.some((f) => typeof f.content === 'string')) {
+      return {
+        kind: 'read',
+        files: entries.map((f): ReadBodyFile => {
+          const error = str(f.error);
+          const lines = typeof f.content === 'string' ? readText(f.content) : [];
+          return {
+            path: str(f.path) ?? str(f.resolvedPath),
+            lineCount: num(f.lineCount) ?? lines.length,
+            lines: error !== undefined ? [] : lines,
+            ...(error !== undefined ? { error } : {}),
+          };
+        }),
+      };
+    }
+    // A read that returned no text (a metadata-only format) lists its files;
+    // one file with nothing but its line count repeats the row, so it has no body.
+    const items = entries.map((f) => {
       const path = str(f.path) ?? str(f.resolvedPath) ?? '?';
       const lines = num(f.lineCount);
       const error = str(f.error);
-      return { text: path, detail: error ? error : lines !== undefined ? plural(lines, 'line') : undefined };
+      return { text: path, detail: error ? error : lines !== undefined ? plural(lines, 'line') : undefined, error };
     });
-    if (items.length > 0) return { kind: 'list', items };
+    if (items.length === 1 && items[0]!.error === undefined) return null;
+    if (items.length > 0) return { kind: 'list', items: items.map(({ text, detail }) => ({ text, detail })) };
+  }
+  if (family === 'read' && !obj) {
+    // A read whose result is the file text itself.
+    const lines = readText(content);
+    if (lines.some((l) => l.trim() !== '')) {
+      const paths = readPaths(call);
+      return { kind: 'read', files: [{ path: paths.length === 1 ? paths[0] : undefined, lineCount: lines.length, lines }] };
+    }
   }
   if (family === 'find' && obj) {
     const entries: Array<{ file: string; line?: number; text?: string }> = [];

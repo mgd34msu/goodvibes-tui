@@ -69,7 +69,8 @@ export interface ShellFooterBuildOptions {
   readonly view?: ShellFooterView | null;
   /** The current branch (and dirty marker), shown beside the directory at rest. */
   readonly branch?: string;
-  readonly contextWindow?: number;
+  /** The model's context window; null when it is unknown (the meter says "unknown"). */
+  readonly contextWindow?: number | null;
   readonly compactThreshold?: number;
   readonly dangerMode?: boolean;
   readonly lastInputTokens?: number;
@@ -285,7 +286,9 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
       progress: options.runningAgentProgress,
     },
     cost: statusCostText(options.usage, options.model),
-    context: options.contextWindow && options.contextWindow > 0
+    // null: the model's window is unknown, and the meter says so; 0 or
+    // undefined: no meter (no model yet).
+    context: options.contextWindow === null || (options.contextWindow !== undefined && options.contextWindow > 0)
       ? {
           usedTokens: options.lastInputTokens ?? 0,
           windowTokens: options.contextWindow,

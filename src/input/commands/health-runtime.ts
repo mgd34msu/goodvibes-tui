@@ -306,9 +306,9 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         const providerRegistry = ctx.provider.providerRegistry;
         // Resolve the context window the same way the Tokens panel does so the
         // maintenance usage %/remaining agree across every diagnostics surface.
-        const contextWindow = providerRegistry.getContextWindowForModel(
+        const contextWindow = providerRegistry.getKnownContextWindowForModel(
           providerRegistry.getCurrentModel(),
-        );
+        ) ?? 0; // 0: unknown window, no usage percentage
         const llmMessages = typeof ctx.session.conversationManager.getMessagesForLLM === 'function'
           ? ctx.session.conversationManager.getMessagesForLLM()
           : [];
@@ -459,9 +459,9 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         : [];
       // Resolve the context window the same way the Tokens panel does so the
       // maintenance usage %/remaining agree across every diagnostics surface.
-      const contextWindow = providerRegistry.getContextWindowForModel(
+      const contextWindow = providerRegistry.getKnownContextWindowForModel(
         providerRegistry.getCurrentModel(),
-      );
+      ) ?? 0; // 0: unknown window, no usage percentage
       const maintenance = evaluateSessionMaintenance({
         configManager: ctx.platform.configManager,
         currentTokens: estimateConversationTokens(llmMessages),

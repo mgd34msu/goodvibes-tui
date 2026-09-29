@@ -456,3 +456,35 @@ describe('transcript columns (the Measurements table)', () => {
     expect(rows[0]).toContain('Heading');
   });
 });
+
+describe('wrapped prose continuation rows', () => {
+  const PROSE = 'withRetry calls fn up to attempts times with exponential backoff and jitter between tries. The test does not cover backoff; it only checks the success path.';
+
+  // Widths 64 and 66 put a space exactly on the wrap column; before the fix
+  // the break space moved to the next row and the row began at column 6.
+  test('every wrapped row starts at the text column, whatever the width', () => {
+    for (let width = 40; width <= 130; width++) {
+      const rows = linesToText(renderMarkdown(PROSE, width)).filter((r) => r.trim().length > 0);
+      for (const row of rows) {
+        expect({ width, col: row.search(/\S/) }).toEqual({ width, col: 5 });
+      }
+    }
+  });
+
+  test('the break keeps every word and drops only the break space', () => {
+    const rows = linesToText(renderMarkdown(PROSE, 64)).filter((r) => r.trim().length > 0);
+    expect(rows.map((r) => r.trim()).join(' ')).toBe(PROSE);
+  });
+
+  test('list items and code blocks keep their deliberate indentation', () => {
+    const md = '- first item that is long enough to wrap onto a second row at this narrow width\n\n```ts\nfunction f() {\n    return 1;\n}\n```';
+    const rows = linesToText(renderMarkdown(md, 50));
+    const item = rows.findIndex((r) => r.includes('first item'));
+    const bulletCol = rows[item]!.search(/\S/);
+    const cont = rows[item + 1]!;
+    expect(cont.search(/\S/)).toBeGreaterThan(bulletCol);
+    const body = rows.find((r) => r.includes('return 1;'))!;
+    const open = rows.find((r) => r.includes('function f()'))!;
+    expect(body.indexOf('return') - open.indexOf('function')).toBe(4);
+  });
+});

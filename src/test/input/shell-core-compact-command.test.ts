@@ -34,6 +34,7 @@ function makeContext(printed: string[]): CommandContext {
         // 200,000-token context window, the handler must read this live
         // value instead of hardcoding 0.
         getContextWindowForModel: () => 200_000,
+        getKnownContextWindowForModel: () => 200_000,
       },
     },
     ops: {
