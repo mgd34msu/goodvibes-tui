@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=fleet-panel-normal width=100 height=30
-| Fleet                                                                                              |
+|  Fleet                                                                                             |
 |  ● agent    [WRFC owner] Fix the golden fixture           5m00s   15.4k   $0.870 Read src/panels/fl|
 |▸ … agent    ├─ [Reviewer] Review the fix                    50s     n/a unpriced blocked on you    |
 |  ◕ agent    └─ [Engineer] Implement the fix               3m20s   10.7k   $0.045 Writing fleet-pane|
@@ -48,7 +48,9 @@
 0 5 fg=#e4e2ee
 0 5 bg=#232438
 0 5 bold=1
+0 6 fg=#e4e2ee
 0 6 bg=#232438
+0 6 bold=1
 0 7 bg=#232438
 0 8 bg=#232438
 0 9 bg=#232438

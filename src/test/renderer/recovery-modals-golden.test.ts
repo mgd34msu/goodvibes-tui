@@ -3,6 +3,9 @@
 // questions, rendered through the real SelectionModal +
 // renderSelectionModalOverlay path at three terminal sizes.
 //
+// Frames are the modal surface kit's layer composed over a blank dimmed
+// screen (frameFromLayer), exactly as the compositor stamps it.
+//
 // These exist because of a shipped defect: at 60x24 the "Remove recovery
 // point?" question rendered ONLY its destructive row, preselected, with the
 // other answer pushed off the box behind a "(1 below)" hint while ten
@@ -34,6 +37,8 @@ import {
 import type { SelectionItem } from '../../input/selection-modal.ts';
 import type { RecoveryFileInfo } from '@/runtime/index.ts';
 import type { Cell, Line } from '@pellux/goodvibes-sdk/platform/types';
+import { frameFromLayer } from '../helpers/surface-frame.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 
 const GOLDENS_DIR = new URL('./golden-frames/', import.meta.url).pathname;
 const UPDATE = process.env['GOODVIBES_UPDATE_GOLDENS'] === '1';
@@ -121,7 +126,7 @@ const SIZES = [
 function renderRecoveryModal(entry: RecoveryModalEntry, width: number, height: number): Line[] {
   const modal = new SelectionModal();
   modal.open(entry.title, entry.items(), { allowSearch: false, primaryVerbLabel: 'Choose' });
-  return renderSelectionModalOverlay(modal, width, height);
+  return frameFromLayer(renderSelectionModalOverlay(modal, width, height), width, height);
 }
 
 function rowsOf(lines: Line[]): string[] {
@@ -129,13 +134,23 @@ function rowsOf(lines: Line[]): string[] {
 }
 
 /**
- * The row a choice's label sits on, or -1. Wrapped detail lines carry
- * sentences, never a bare label, so a row whose whole content is the label
- * (with the borders and the selection indicator taken out) is that choice's
- * own row.
+ * The row a choice's label sits on, or -1. The label starts its row, followed
+ * by nothing or by its detail after two spaces; wrapped detail lines carry
+ * sentences, never a bare label.
  */
 function findChoiceRow(rows: readonly string[], label: string): number {
-  return rows.findIndex((row) => row.replace(/[│┌┐└┘├┤─▸]/g, ' ').trim() === label);
+  return rows.findIndex((row) => {
+    const text = row.trim();
+    return text === label || text.startsWith(`${label}  `);
+  });
+}
+
+/** True when the choice's row is the selected one: the gradient row's dark bold text. */
+function isSelectedRow(lines: Line[], row: number, label: string): boolean {
+  const text = lines[row]!.map((c) => (c.char === '' ? ' ' : c.char)).join('');
+  const col = text.indexOf(label);
+  const cell = lines[row]![col]!;
+  return cell.fg === activeTokens().selectedListItemText && cell.bold;
 }
 
 for (const entry of RECOVERY_MODALS) {
@@ -166,18 +181,19 @@ for (const entry of RECOVERY_MODALS) {
         }
         // No answer may be hidden behind a scroll hint: these questions are
         // short enough to fit whole at every size a terminal realistically is.
-        expect(rows.join('\n')).not.toMatch(/\(\d+ (above|below)/);
+        expect(rows.join('\n')).not.toMatch(/\d+ more [↑↓]/);
         // And the box must stay inside the terminal it is drawn over.
         expect(rows.length).toBeLessThanOrEqual(size.height);
       });
 
       test(`${size.label} opens with the cursor on "${entry.defaultChoice}"`, () => {
-        const rows = rowsOf(renderRecoveryModal(entry, size.width, size.height));
+        const lines = renderRecoveryModal(entry, size.width, size.height);
+        const rows = rowsOf(lines);
         const defaultRow = findChoiceRow(rows, entry.defaultChoice);
         expect(defaultRow).toBeGreaterThanOrEqual(0);
-        expect(rows[defaultRow]).toContain('▸');
+        expect(isSelectedRow(lines, defaultRow, entry.defaultChoice)).toBe(true);
         for (const other of entry.choices.filter((c) => c !== entry.defaultChoice)) {
-          expect(rows[findChoiceRow(rows, other)]).not.toContain('▸');
+          expect(isSelectedRow(lines, findChoiceRow(rows, other), other)).toBe(false);
         }
       });
     }

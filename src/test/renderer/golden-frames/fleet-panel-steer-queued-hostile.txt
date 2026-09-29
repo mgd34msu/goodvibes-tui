@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=fleet-panel-steer-queued-hostile width=28 height=20
-| Fleet: agent steer-01      |
+|  Fleet: agent steer-01     |
 | SESSIONS  ‹│[agent steer-01|
 | (no messages yet)          |
 |                            |
@@ -86,7 +86,9 @@
 0 21 fg=#e4e2ee
 0 21 bg=#232438
 0 21 bold=1
+0 22 fg=#e4e2ee
 0 22 bg=#232438
+0 22 bold=1
 0 23 bg=#232438
 0 24 bg=#232438
 0 25 bg=#232438

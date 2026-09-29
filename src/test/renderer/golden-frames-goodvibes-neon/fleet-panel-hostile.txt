@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=fleet-panel-hostile width=28 height=20
-| Fleet                      |
+|  Fleet                     |
 |  ● agent    [WRFC own…   5m|
 |▸ … agent    ├─ [Revie…     |
 |  ◕ agent    └─ [Engin…   3m|
@@ -38,7 +38,9 @@
 0 5 fg=#e2e8f0
 0 5 bg=#0f172a
 0 5 bold=1
+0 6 fg=#e2e8f0
 0 6 bg=#0f172a
+0 6 bold=1
 0 7 bg=#0f172a
 0 8 bg=#0f172a
 0 9 bg=#0f172a

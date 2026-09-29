@@ -91,10 +91,21 @@ import { resolveUiTones, setActiveThemeMode, setActiveThemeName } from '../../re
 import { PermissionPromptUI } from '../../permissions/prompt.ts';
 import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import { resolveApprovalRequester } from '../../permissions/hunk-selection.ts';
-import { ModalFactory } from '../../renderer/modal-factory.ts';
+import { CommandPalette, buildPaletteEntries, resetPaletteUsageForTests } from '../../input/command-palette.ts';
+import { ConfirmDialog } from '../../input/confirm-dialog.ts';
+import { renderToasts, type ToastSpec } from '../../renderer/surface-kit-parts.ts';
+import { renderAutocompleteOverlay } from '../../renderer/autocomplete-overlay.ts';
+import { AutocompleteEngine } from '../../input/autocomplete.ts';
+import { CommandRegistry } from '../../input/command-registry.ts';
+import { renderFilePickerOverlay } from '../../renderer/file-picker-overlay.ts';
+import { FilePickerModal } from '../../input/file-picker.ts';
+import { renderModelWorkspace } from '../../renderer/model-workspace.ts';
+import { ModelPickerModal } from '../../input/model-picker.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { Cell, Line } from '@pellux/goodvibes-sdk/platform/types';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1110,10 +1121,10 @@ function describeOverlayGolden(
 const GOLDEN_KEYBINDINGS = new KeybindingsManager({ configPath: '/nonexistent/golden-keybindings.json' });
 
 function renderHelpSurface(width: number, height: number): Line[] {
-  return renderHelpOverlay(width, GOLDEN_KEYBINDINGS, undefined, 0, height);
+  return frameFromLayer(renderHelpOverlay(width, height, GOLDEN_KEYBINDINGS, undefined, 0), width, height);
 }
 function renderShortcutsSurface(width: number, height: number): Line[] {
-  return renderShortcutsOverlay(width, GOLDEN_KEYBINDINGS, 0, height);
+  return frameFromLayer(renderShortcutsOverlay(width, height, GOLDEN_KEYBINDINGS, 0), width, height);
 }
 
 describeOverlayGolden('help-overlay', renderHelpSurface);
@@ -1147,7 +1158,7 @@ function renderSettingsSurface(width: number, height: number): Line[] {
     } as unknown as McpRegistry;
     mkdirSync(join(tmpDir, '.goodvibes', 'tui'), { recursive: true });
     modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
-    return renderSettingsModal(modal, width, height);
+    return frameFromLayer(renderSettingsModal(modal, width, height), width, height);
   } finally {
     process.chdir(originalCwd);
     if (originalHome === undefined) delete process.env.HOME;
@@ -1173,7 +1184,8 @@ function renderSessionPickerSurface(width: number, height: number): Line[] {
         { name: 'beta-session', title: 'Beta', model: 'gpt-4', provider: 'openai', timestamp: 1_700_100_000_000, messageCount: 12, filePath: '/x/beta.jsonl' },
       ];
       modal.selectedIndex = 0;
-      return renderSessionPickerModal(modal, width, height);
+      // A fixed clock: the picker groups sessions by recency.
+      return frameFromLayer(renderSessionPickerModal(modal, width, height, 1_700_200_000_000), width, height);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }
@@ -1194,7 +1206,7 @@ function renderProfilePickerSurface(width: number, height: number): Line[] {
         { name: 'minimal-profile', timestamp: 1_700_100_000_000, filePath: '/x/minimal-profile.json' },
       ];
       modal.selectedIndex = 0;
-      return renderProfilePickerModal(modal, width, height);
+      return frameFromLayer(renderProfilePickerModal(modal, width, height), width, height);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }
@@ -1440,7 +1452,7 @@ function renderContextInspectorSurface(width: number, height: number): Line[] {
   const conv = new ConversationManager(() => width);
   conv.addUserMessage('Investigate why the panel-workspace golden regressed after the last hex-token pass.');
   conv.addAssistantMessage('Looking at ui-factory.ts — the CYAN token swap missed one literal at line 433.');
-  return renderContextInspector(conv, width, height, 128_000);
+  return frameFromLayer(renderContextInspector(conv, width, height, 128_000), width, height);
 }
 
 describeOverlayGolden('context-inspector', renderContextInspectorSurface);
@@ -1487,7 +1499,7 @@ function renderSelectionModalSurface(width: number, height: number): Line[] {
     { id: 'c', label: 'Gamma', detail: 'third workspace', category: 'Other' },
   ]);
   modal.selectedIndex = 1;
-  return renderSelectionModalOverlay(modal, width, height);
+  return frameFromLayer(renderSelectionModalOverlay(modal, width, height), width, height);
 }
 
 describeOverlayGolden('selection-modal-overlay', renderSelectionModalSurface);
@@ -1519,7 +1531,7 @@ describe('golden-frames : consequence-time trust modal (full detail text never c
         modal.open(title, items, { allowSearch: false, primaryVerbLabel: 'Choose' });
         modal.selectedIndex = index;
 
-        const text = renderSelectionModalOverlay(modal, width, 24)
+        const text = frameFromLayer(renderSelectionModalOverlay(modal, width, 24), width, 24)
           .map((line) => line.map((cell) => cell.char).join(''))
           .join(' ')
           .replace(/[│┌┐└┘├┤┬┴┼─]/g, ' ')
@@ -1629,7 +1641,7 @@ for (const indicator of ['statusline', 'banner'] as const) {
 function renderConfigSurfaceGolden(view: ConfigModalView, width: number, height: number): Line[] {
   const modal = new ConfigModal();
   modal.open({ name: 'golden', title: view.title, buildView: () => view });
-  return renderConfigModal(modal, width, height);
+  return frameFromLayer(renderConfigModal(modal, width, height), width, height);
 }
 
 // services-modal, new modal surface, migrated from panel `services`.
@@ -1800,14 +1812,8 @@ describeOverlayGolden('sandbox-modal', (w, h) => renderConfigSurfaceGolden(SANDB
 // already proven deterministic in dark; underLight() flips the active mode for
 // the render and ALWAYS restores dark so the surrounding dark goldens and sibling
 // test files are untouched.
-function renderModalFactoryLightSurface(): Line[] {
-  return ModalFactory.createModal({
-    title: 'Appearance',
-    width: 60,
-    sections: [{ type: 'text', content: 'Light theme rendered via ModalFactory.' }],
-    helpers: [{ content: 'accent row (uses accentFg = state.info)', accent: true }],
-    hints: ['Esc close'],
-  }, NORMAL_W);
+function renderPaletteLightSurface(): Line[] {
+  return frameFromLayer(goldenPalette().render(NORMAL_W, NORMAL_H), NORMAL_W, NORMAL_H);
 }
 function underLight<T>(fn: () => T): T {
   setActiveThemeMode('light');
@@ -1833,17 +1839,17 @@ describe('golden-frames : light theme', () => {
     expect(a).not.toBe(dark); // light tokens actually changed the styles
   });
 
-  test('modal-factory modal (light) matches committed golden snapshot', () => {
-    const lines = underLight(() => renderModalFactoryLightSurface());
+  test('command palette (light) matches committed golden snapshot', () => {
+    const lines = underLight(() => renderPaletteLightSurface());
     expect(lines.length).toBeGreaterThan(0);
-    assertGolden('modal-factory-light', lines);
+    assertGolden('command-palette-light', lines);
   });
 
-  test('modal-factory modal (light) is deterministic and differs from dark (accent flip)', () => {
-    const a = snapshotEncode('modal-factory-light', underLight(() => renderModalFactoryLightSurface()));
-    const b = snapshotEncode('modal-factory-light', underLight(() => renderModalFactoryLightSurface()));
+  test('command palette (light) is deterministic and differs from dark (a lighter scrim, white surface)', () => {
+    const a = snapshotEncode('command-palette-light', underLight(() => renderPaletteLightSurface()));
+    const b = snapshotEncode('command-palette-light', underLight(() => renderPaletteLightSurface()));
     expect(a).toBe(b);
-    const dark = snapshotEncode('modal-factory-light', renderModalFactoryLightSurface());
+    const dark = snapshotEncode('command-palette-light', renderPaletteLightSurface());
     expect(a).not.toBe(dark);
   });
 });
@@ -1990,7 +1996,7 @@ function renderSandboxEscalationPromptSurface(): Line[] {
     sandboxEscalations: ['wants network (not on egress allowlist — denied inside the boundary unless approved)'],
     resolve: () => {},
   } as unknown as PermissionRequest;
-  return PermissionPromptUI.createPromptLines(NORMAL_W, request, undefined, true);
+  return frameFromLayer(PermissionPromptUI.renderPromptModal(NORMAL_W, NORMAL_H, request, { callId: request.callId, detailsExpanded: true }), NORMAL_W, NORMAL_H);
 }
 
 describe('golden-frames : permission prompt: exec sandbox escalation', () => {
@@ -2033,7 +2039,7 @@ function renderAttributedPromptSurface(attribution: Parameters<typeof resolveApp
     resolve: () => {},
   } as unknown as PermissionRequest;
   const requestedBy = resolveApprovalRequester(undefined, request.callId, attribution) ?? undefined;
-  return PermissionPromptUI.createPromptLines(NORMAL_W, request, undefined, false, requestedBy);
+  return frameFromLayer(PermissionPromptUI.renderPromptModal(NORMAL_W, NORMAL_H, request, { callId: request.callId, detailsExpanded: true, requestedBy }), NORMAL_W, NORMAL_H);
 }
 
 describe('golden-frames : permission prompt: mcp-server elicitation attribution', () => {
@@ -2068,4 +2074,127 @@ describe('golden-frames : permission prompt: sandbox-escalation attribution (bro
     const b = snapshotEncode('permission-prompt-sandbox-escalation-attribution', render());
     expect(a).toBe(b);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Surface-kit modals introduced with the modal redesign: the command palette,
+// the model picker, the confirm dialog, toasts, the composer popups and the
+// hunk-selection permission card. Fixed inputs; the command palette uses a
+// small fixed command set so the golden does not move with the registry.
+// ---------------------------------------------------------------------------
+
+const GOLDEN_COMMANDS = [
+  { name: 'diff', description: 'Show the working-tree diff.', aliases: ['d'], handler: () => {} },
+  { name: 'model', description: 'Select or display the current LLM model.', aliases: ['m'], handler: () => {} },
+  { name: 'compact', description: 'Summarize the conversation to free context.', handler: () => {} },
+  { name: 'resume', description: 'Resume a saved session.', usage: '<id|name>', handler: () => {} },
+  { name: 'session', description: 'List, save and manage sessions.', handler: () => {} },
+  { name: 'agents', description: 'Host third-party coding agents over ACP.', handler: () => {} },
+  { name: 'settings', description: 'Open the settings.', handler: () => {} },
+  { name: 'shortcuts', description: 'Show the keyboard shortcuts.', handler: () => {} },
+  { name: 'refresh-models', description: 'Refresh model catalog, benchmarks, and token limits.', handler: () => {} },
+];
+
+function goldenPalette(query = ''): CommandPalette {
+  resetPaletteUsageForTests();
+  const categories = new Map(GOLDEN_COMMANDS.map((c) => [c.name, 'Shell & Session']));
+  const palette = new CommandPalette({ entries: buildPaletteEntries(GOLDEN_COMMANDS, categories), onRun: () => {} });
+  if (query) palette.setQuery(query);
+  return palette;
+}
+
+describeOverlayGolden('command-palette', (width, height) => frameFromLayer(goldenPalette().render(width, height), width, height));
+describeOverlayGolden('command-palette-query', (width, height) => frameFromLayer(goldenPalette('mod').render(width, height), width, height));
+
+describeOverlayGolden('confirm-dialog', (width, height) => {
+  const dialog = new ConfirmDialog({
+    title: 'Delete session?',
+    body: 'This removes "test" and its 3 messages from this project.\nIt cannot be undone.',
+    confirmLabel: 'Delete',
+    tone: 'danger',
+  }, () => {});
+  return frameFromLayer(dialog.render(width, height), width, height);
+});
+
+const GOLDEN_TOASTS: ToastSpec[] = [
+  { title: 'Daemon restarted', body: 'after a crash at 15:48 · see /status', tone: 'warning' },
+  { title: 'Control plane is network-reachable with TLS off', tone: 'error' },
+];
+
+describeOverlayGolden('toasts', (width, height) => {
+  const layer = renderToasts(width, height, GOLDEN_TOASTS);
+  return frameFromLayer(layer ? { ...layer, dim: false } : null, width, height);
+});
+
+function goldenModel(id: string, provider: string, displayName: string, contextWindow: number): ModelDefinition {
+  return {
+    id,
+    provider,
+    registryKey: `${provider}:${id}`,
+    displayName,
+    description: '',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+    contextWindow,
+    selectable: true,
+    tier: 'premium',
+  };
+}
+
+describeOverlayGolden('model-picker', (width, height) => {
+  const picker = new ModelPickerModal(
+    { getRecentModels: async () => [] },
+    { getBenchmarks: () => undefined },
+    { getSyntheticModelInfoFromCatalog: () => null, getSyntheticCanonicalModels: () => [] },
+  );
+  picker.active = true;
+  picker.models = [
+    goldenModel('claude-opus-5-5', 'anthropic', 'Claude Opus 5.5', 1_000_000),
+    goldenModel('gpt-test', 'openai', 'GPT Test', 128_000),
+    goldenModel('qwen3-coder', 'lmstudio', 'qwen3-coder', 128_000),
+  ];
+  picker.providers = ['anthropic', 'openai', 'lmstudio'];
+  picker.configuredProviders = new Set(['anthropic', 'openai', 'lmstudio']);
+  picker.pinnedIds = new Set(['anthropic:claude-opus-5-5']);
+  picker.setTargetInfos([
+    { target: 'main', label: 'Main Chat', description: 'Default model for chat turns.', provider: 'anthropic', model: 'anthropic:claude-opus-5-5', enabled: true, inherited: false },
+    { target: 'helper', label: 'Helper', description: 'Helper route.', provider: 'openai', model: 'openai:gpt-test', enabled: true, inherited: false },
+  ]);
+  picker.openAllModels(picker.models, 'anthropic:claude-opus-5-5');
+  return frameFromLayer(renderModelWorkspace(picker, width, height), width, height);
+});
+
+function goldenAutocomplete(): AutocompleteEngine {
+  const registry = new CommandRegistry();
+  for (const command of GOLDEN_COMMANDS) registry.register({ ...command });
+  const engine = new AutocompleteEngine(registry);
+  engine.update('mod');
+  return engine;
+}
+
+describeOverlayGolden('slash-popup', (width, height) => renderAutocompleteOverlay(goldenAutocomplete(), width, height));
+
+describeOverlayGolden('file-popup', (width, height) => {
+  const picker = new FilePickerModal({ workingDirectory: '/nonexistent/golden' });
+  picker.active = true;
+  picker.query = 'rtr';
+  picker.results = ['src/net/retry.ts', 'test/retry.test.ts', 'src/api/router.ts'];
+  picker.selectedIndex = 0;
+  return renderFilePickerOverlay(picker, width, height);
+});
+
+describeOverlayGolden('permission-edit-hunks', (width, height) => {
+  const edits = [
+    { path: 'src/net/retry.ts', find: 'await sleep(opts.baseDelayMs);', replace: 'if (i === opts.attempts - 1) break;\nconst backoff = opts.baseDelayMs * 2 ** i;\nawait sleep(backoff);' },
+    { path: 'src/net/retry.ts', find: '  attempts: number;', replace: '  attempts: number;\n  maxDelayMs?: number;' },
+  ];
+  const request = {
+    callId: 'call-golden-hunks-01',
+    tool: 'edit',
+    args: { path: 'src/net/retry.ts', edits },
+    category: 'write',
+    analysis: { classification: 'file-mutation', riskLevel: 'medium', summary: 'Edit src/net/retry.ts', reasons: ['Two hunks change the retry loop.'] },
+    resolve: () => {},
+  } as unknown as PermissionRequest;
+  const hunkState = { hunks: edits, cursor: 0, selected: new Set([0]) };
+  return frameFromLayer(PermissionPromptUI.renderPromptModal(width, height, request, { callId: request.callId, hunkState, requestedBy: 'engineer' }), width, height);
 });

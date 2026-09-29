@@ -8,7 +8,7 @@
 |   Token Usage [ Input: 1.0k │ Output: 512 │ Cache Read: 0 │ Cache Write: 0 │ Total: 1.5k │ ~n/a ]  |
 |   Context Usage: ██████████████████░░░░░░▸░░░░░  60% [ 60.0k / 100.0k ]                            |
 |   /workspace/my-project  │  claude-opus-4 (anthropic)  │  7 tools                                  |
-|   Ctrl+P toggle panels · F2 fleet · ? help · Ctrl+C x2 quit ! DANGER MODE - ALL CHANGES AUTO-APPROV|
+|   Ctrl+P commands · F2 fleet · ? help · Ctrl+C x2 quit   ! DANGER MODE - ALL CHANGES AUTO-APPROVED |
 @STYLES
 0 0 fg=#0077aa
 0 0 bold=1
@@ -1025,9 +1025,12 @@
 9 55 fg=#9794a4
 9 56 fg=#9794a4
 9 57 fg=#9794a4
-9 58 fg=#9794a4
-9 59 fg=#9794a4
-9 60 fg=#9794a4
+9 58 fg=#c8323c
+9 58 bold=1
+9 59 fg=#c8323c
+9 59 bold=1
+9 60 fg=#c8323c
+9 60 bold=1
 9 61 fg=#c8323c
 9 61 bold=1
 9 62 fg=#c8323c

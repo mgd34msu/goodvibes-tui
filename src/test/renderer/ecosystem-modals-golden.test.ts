@@ -4,11 +4,10 @@
 // config-modal host (group-B port).
 //
 // Each surface is opened in a real ConfigModal and rendered via
-// renderConfigModal → ModalFactory (the exact production render path), rather
-// than the retired BoundModalSurface.buildConfig() bridge. Each surface gets a
-// normal (100 wide) and hostile (28 wide) pair. The 24 committed goldens are
-// the same file names as before, re-baselined in place, per-file justification
-// "re-baselined through canonical config-modal host (group-B port)".
+// renderConfigModal on the modal surface kit (the exact production render
+// path); the layer is composed over a blank dimmed screen with frameFromLayer,
+// as the compositor stamps it. Each surface gets a normal (100 wide) and
+// hostile (28 wide) pair.
 //
 // Update path: GOODVIBES_UPDATE_GOLDENS=1 bun test <this file>.
 // ---------------------------------------------------------------------------
@@ -32,6 +31,7 @@ import { keybindingsModalGoldenSurface } from '../../panels/modals/keybindings-m
 import { pairingModalGoldenSurface } from '../../panels/modals/pairing-modal.ts';
 import { planningModalGoldenSurface } from '../../panels/modals/planning-modal.ts';
 import type { Cell, Line } from '@pellux/goodvibes-sdk/platform/types';
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 
 const GOLDENS_DIR = new URL('./golden-frames/', import.meta.url).pathname;
 const UPDATE = process.env['GOODVIBES_UPDATE_GOLDENS'] === '1';
@@ -89,7 +89,7 @@ async function renderSurface(surface: ConfigModalSurface, width: number): Promis
   modal.open(surface, () => {});
   await Promise.resolve();
   modal.syncStructure();
-  const lines = renderConfigModal(modal, width, HEIGHT);
+  const lines = frameFromLayer(renderConfigModal(modal, width, HEIGHT), width, HEIGHT);
   modal.close();
   return lines;
 }

@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=fleet-panel-steer-compose-hostile width=28 height=20
-| Fleet: agent steer-01      |
+|  Fleet: agent steer-01     |
 | SESSIONS  ‹│[agent steer-01|
 | (no messages yet)          |
 |                            |
@@ -17,7 +17,7 @@
 |                            |
 |                            |
 |                            |
-| Steer: please add a regress|
+|  Steer:  regression test█  |
 | Enter send   Esc cancel    |
 @STYLES
 0 0 fg=#e2e8f0
@@ -86,7 +86,9 @@
 0 21 fg=#e2e8f0
 0 21 bg=#0f172a
 0 21 bold=1
+0 22 fg=#e2e8f0
 0 22 bg=#0f172a
+0 22 bold=1
 0 23 bg=#0f172a
 0 24 bg=#0f172a
 0 25 bg=#0f172a
@@ -184,9 +186,8 @@
 18 6 bg=#1e293b
 18 7 fg=#94a3b8
 18 7 bg=#1e293b
-18 8 fg=#38bdf8
+18 8 fg=#94a3b8
 18 8 bg=#1e293b
-18 8 bold=1
 18 9 fg=#38bdf8
 18 9 bg=#1e293b
 18 9 bold=1
@@ -238,12 +239,8 @@
 18 25 fg=#38bdf8
 18 25 bg=#1e293b
 18 25 bold=1
-18 26 fg=#38bdf8
 18 26 bg=#1e293b
-18 26 bold=1
-18 27 fg=#38bdf8
 18 27 bg=#1e293b
-18 27 bold=1
 19 0 fg=#4e5c6f
 19 1 fg=#38bdf8
 19 2 fg=#38bdf8
