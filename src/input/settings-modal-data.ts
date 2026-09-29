@@ -14,7 +14,7 @@ import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '@/runtime/index.ts';
-import { CODE_INDEX_ENABLED_CONFIG_KEY } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import { CODE_INDEX_ENABLED_CONFIG_KEY, NOTIFICATIONS_METADATA_ONLY_KEY } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import {
   WORKTREE_SETUP_CARRY_OVER_GLOBS_CONFIG_KEY,
   WORKTREE_SETUP_COMMANDS_CONFIG_KEY,
@@ -190,6 +190,11 @@ export function buildSettingGroups(
         behaviorEntries.push(entry);
       }
     }
+    // behavior.notificationsMetadataOnly is a real SDK schema key (the loop
+    // above already added it); it governs the text of every notification row
+    // above (desktop, in-terminal, webhook), so it is listed right after them.
+    const privacyIndex = behaviorEntries.findIndex((e) => e.setting.key === (NOTIFICATIONS_METADATA_ONLY_KEY as ConfigKey));
+    if (privacyIndex >= 0) behaviorEntries.push(...behaviorEntries.splice(privacyIndex, 1));
   }
 
   // Inject the storage.codeIndexEnabled toggle into the

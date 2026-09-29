@@ -11,9 +11,19 @@ import type { SessionSurface } from '@/runtime/index.ts';
 import { journalPathFor, openTranscriptJournal, type TranscriptJournal } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
-import { maybeNotifyLongTask, readNotifyAfterSeconds, type LongTaskStatus } from './long-task-notifier.ts';
+import { maybeNotifyLongTask, readNotifyAfterSeconds } from './long-task-notifier.ts';
 import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import { shouldFireAlert, FORCE_NOTIFY_DURATION_MS } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import {
+  shouldFireAlert,
+  FORCE_NOTIFY_DURATION_MS,
+  NOTIFICATION_TEXT_LIMITS,
+  TurnActivityTally,
+  buildTurnNotificationLine,
+  readNotificationsMetadataOnly,
+  resolveTurnName,
+  trimAtWordBoundary,
+  type TurnOutcome,
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { createBudgetBreachNotifier, type BudgetBreachNotifier } from './budget-breach-notifier.ts';
 import { readBudgetAlertUsd } from '@pellux/goodvibes-sdk/platform/providers';
 
@@ -100,6 +110,11 @@ export interface WireTurnEventHandlersOptions {
    */
   readonly terminalNotifier?: import('./terminal-notifier.ts').TerminalNotifier | null;
   /**
+   * Desktop delivery for the turn, budget, agent and workstream notices wired
+   * here; defaults to the SDK notifyCompletion. Tests pass a spy to read the text.
+   */
+  readonly notifyDesktop?: typeof notifyCompletion;
+  /**
    * Minimal test seam: injectable clock for controlling Date.now() in tests.
    * Defaults to the real Date.now when absent.
    * @internal, tests only
@@ -131,6 +146,23 @@ function wrapJournalWithSessionRebind(
     rotate: () => { ensureBoundToCurrentSession(); journal.rotate(); },
     rebind: (path, sessionId) => { boundSessionId = sessionId; journal.rebind(path, sessionId); },
   };
+}
+
+/** Most agent/workstream names kept at once; a lost terminal event cannot grow the maps unbounded. */
+const MAX_REMEMBERED_NAMES = 256;
+
+function rememberBounded<V>(map: Map<string, V>, id: string, value: V): void {
+  map.delete(id);
+  map.set(id, value);
+  while (map.size > MAX_REMEMBERED_NAMES) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
+
+function normalizeTitleSource(source: unknown): 'user' | 'system' | null {
+  return source === 'user' || source === 'system' ? source : null;
 }
 
 export interface WireTurnEventHandlersResult {
@@ -166,6 +198,7 @@ export function wireTurnEventHandlers(
     surface, gitStatusProvider,
     lastGitInfoRef, buildSessionContinuityHints, render, webhookNotifier, focusTracker,
     terminalNotifier, runtimeBus, systemMessageRouter,
+    notifyDesktop = notifyCompletion,
     _clock = Date.now,
   } = options;
 
@@ -192,12 +225,68 @@ export function wireTurnEventHandlers(
   // Track turn start time for long-task notification threshold.
   let turnStartTime: number | null = null;
 
+  // What names the turn and what it did, for the end-of-turn notices
+  // (SDK runtime/turn-notification.ts): the submitted text, and a tally of
+  // tool calls, changed files, agents started and the latest review score.
+  let turnText: string | null = null;
+  let lastTurnName: string | null = null;
+  let lastEndedTurnId: string | null = null;
+  const tally = new TurnActivityTally();
+  const nameCurrentTurn = (): string | null => resolveTurnName({
+    title: conversation.title,
+    titleSource: normalizeTitleSource(conversation.getTitleSource()),
+    turnText,
+  });
+
+  // Task text for agents and workstreams, from their opening events; the
+  // terminal events carry only the id. Bounded, dropped at the terminal event.
+  const agentTasks = new Map<string, string>();
+  const workstreams = new Map<string, { task: string; reviewScore: number | null }>();
+
   // Budget-breach edge-trigger checker, one instance per session,
   // piggybacking on the same TURN_COMPLETED handler as the long-task
   // notification below rather than adding a second TURN_COMPLETED subscription.
   const budgetBreachNotifier: BudgetBreachNotifier | null = focusTracker
-    ? createBudgetBreachNotifier({ focusTracker, configGet, webhookNotifier: webhookNotifier ?? null, sessionId: runtime.sessionId })
+    ? createBudgetBreachNotifier({
+      focusTracker, configGet, webhookNotifier: webhookNotifier ?? null, sessionId: runtime.sessionId,
+      getTurnName: () => lastTurnName, notifyDesktop,
+    })
     : null;
+
+  /**
+   * The end of a turn, however it ended: the in-terminal (OSC 9) notice on
+   * its own per-signal config + focus gate, then the long-task desktop and
+   * webhook notice past behavior.notifyAfterSeconds. Once per turnId.
+   */
+  const notifyTurnEnd = (turnId: string, outcome: TurnOutcome, reason: string | null): void => {
+    if (turnId === lastEndedTurnId) return;
+    lastEndedTurnId = turnId;
+    const turnElapsedMs = turnStartTime !== null ? _clock() - turnStartTime : 0;
+    turnStartTime = null;
+    const name = nameCurrentTurn();
+    lastTurnName = name;
+    const activity = tally.snapshot();
+    const metadataOnly = readNotificationsMetadataOnly(configGet);
+    terminalNotifier?.notify('turn-end', buildTurnNotificationLine({
+      outcome, elapsedMs: turnElapsedMs, name, reason, sessionId: runtime.sessionId, ...activity,
+    }, { metadataOnly }, NOTIFICATION_TEXT_LIMITS.terminal));
+    maybeNotifyLongTask({
+      elapsedMs: turnElapsedMs,
+      status: outcome === 'completed' ? 'ok' : 'fail',
+      outcome,
+      name,
+      reason,
+      activity,
+      metadataOnly,
+      kind: 'turn',
+      sessionId: runtime.sessionId,
+      thresholdSeconds: readNotifyAfterSeconds(configGet),
+      webhookNotifier: webhookNotifier ?? null,
+      focusTracker,
+      configGet,
+      notifyDesktop,
+    });
+  };
 
   const refreshGit = (): void => {
     gitStatusProvider.refresh().then((info) => { lastGitInfoRef.value = info; render(); }).catch(() => { /* non-fatal */ });
@@ -205,34 +294,35 @@ export function wireTurnEventHandlers(
 
   // Journal user message immediately on TURN_SUBMITTED so a SIGKILL during
   // the subsequent stream loses at most the in-flight token chunk.
-  unsubs.push(events.turns.on('TURN_SUBMITTED', () => {
+  unsubs.push(events.turns.on('TURN_SUBMITTED', (evt) => {
     turnStartTime = _clock();
+    turnText = typeof evt?.prompt === 'string' ? evt.prompt : null;
+    tally.reset();
     try {
       const snap = conversation.toJSON() as { messages: Array<import('./conversation.ts').ConversationMessageSnapshot> };
       transcriptJournal.appendRecord('user_message', snap.messages);
     } catch { /* best-effort */ }
   }));
 
+  // A turn that failed or was cancelled ends without TURN_COMPLETED; it is
+  // named and told the same way.
+  unsubs.push(events.turns.on('TURN_ERROR', (evt) => {
+    notifyTurnEnd(evt.turnId, 'failed', evt.error);
+  }));
+  unsubs.push(events.turns.on('PREFLIGHT_FAIL', (evt) => {
+    notifyTurnEnd(evt.turnId, 'failed', evt.reason);
+  }));
+  unsubs.push(events.turns.on('TURN_CANCEL', (evt) => {
+    notifyTurnEnd(evt.turnId, 'cancelled', evt.reason ?? null);
+  }));
+
   unsubs.push(events.turns.on('TURN_COMPLETED', (evt) => {
-    // Long-task push notification: fires when the turn exceeded the threshold.
-    const turnElapsedMs = turnStartTime !== null ? _clock() - turnStartTime : 0;
-    turnStartTime = null;
-    const notifyThreshold = readNotifyAfterSeconds((k) => configManager.get(k as Parameters<typeof configManager.get>[0]));
     // stopReason 'empty_response' signals a non-successful completion.
-    const taskStatus: LongTaskStatus = evt.stopReason === 'completed' ? 'ok' : 'fail';
-    // In-terminal (OSC 9) turn-end notification, fires on its own per-signal
-    // config + focus gate, independent of the long-task duration threshold below.
-    terminalNotifier?.notify('turn-end', taskStatus === 'ok' ? 'Turn finished' : 'Turn finished with errors');
-    maybeNotifyLongTask({
-      elapsedMs: turnElapsedMs,
-      status: taskStatus,
-      kind: 'turn',
-      sessionId: runtime.sessionId,
-      thresholdSeconds: notifyThreshold,
-      webhookNotifier: webhookNotifier ?? null,
-      focusTracker,
-      configGet,
-    });
+    notifyTurnEnd(
+      evt.turnId,
+      evt.stopReason === 'completed' ? 'completed' : 'failed',
+      evt.stopReason === 'completed' ? null : 'The model returned an empty response',
+    );
     // Budget-breach alert: edge-triggered, piggybacks on this same
     // TURN_COMPLETED handler rather than a second subscription.
     if (budgetBreachNotifier) {
@@ -291,20 +381,48 @@ export function wireTurnEventHandlers(
     refreshGit();
   }));
 
+  // Activity for the end-of-turn notice, counted only while a turn runs.
+  unsubs.push(events.tools.on('TOOL_RECEIVED', (payload) => {
+    if (turnStartTime !== null) tally.noteToolReceived(payload.callId, payload.tool, payload.args);
+  }));
+  unsubs.push(events.tools.on('TOOL_CANCELLED', (payload) => {
+    if (turnStartTime !== null) tally.noteToolFailed(payload.callId);
+  }));
+  unsubs.push(events.agents.on('AGENT_SPAWNING', (payload) => {
+    if (turnStartTime !== null) tally.noteAgentStarted();
+    rememberBounded(agentTasks, payload.agentId, payload.task);
+  }));
+  unsubs.push(events.agents.on('AGENT_COMPLETED', (payload) => { agentTasks.delete(payload.agentId); }));
+  unsubs.push(events.agents.on('AGENT_CANCELLED', (payload) => { agentTasks.delete(payload.agentId); }));
+  unsubs.push(events.workflows.on('WORKFLOW_CHAIN_CREATED', (payload) => {
+    rememberBounded(workstreams, payload.chainId, { task: payload.task, reviewScore: null });
+  }));
+  unsubs.push(events.workflows.on('WORKFLOW_REVIEW_COMPLETED', (payload) => {
+    if (turnStartTime !== null) tally.noteReviewScore(payload.score);
+    const entry = workstreams.get(payload.chainId);
+    if (entry) entry.reviewScore = payload.score;
+  }));
+  unsubs.push(events.workflows.on('WORKFLOW_CHAIN_PASSED', (payload) => { workstreams.delete(payload.chainId); }));
+
   // In-terminal (OSC 9) agent-blocked notification: a delegated agent parked
   // waiting for a human message (AGENT_AWAITING_MESSAGE) is "blocked on you".
-  // Gated by the notifier's own per-signal config + focus rule. PRIVACY: the
-  // short agent id only, never task text.
+  // Gated by the notifier's own per-signal config + focus rule. Names the
+  // agent's task unless behavior.notificationsMetadataOnly is on.
   if (terminalNotifier) {
     unsubs.push(events.agents.on('AGENT_AWAITING_MESSAGE', (payload) => {
-      terminalNotifier.notify('agent-blocked', `agent ${payload.agentId.slice(0, 8)} is waiting for your input`);
+      const task = readNotificationsMetadataOnly(configGet) ? null : agentTasks.get(payload.agentId);
+      terminalNotifier.notify('agent-blocked', task
+        ? trimAtWordBoundary(`Agent waiting for your input: ${task}`, NOTIFICATION_TEXT_LIMITS.terminal)
+        : `agent ${payload.agentId.slice(0, 8)} is waiting for your input`);
     }));
   }
 
-  unsubs.push(events.tools.on('TOOL_SUCCEEDED', () => {
+  unsubs.push(events.tools.on('TOOL_SUCCEEDED', (payload) => {
+    if (turnStartTime !== null) tally.noteToolSucceeded(payload.callId);
     refreshGit();
   }));
-  unsubs.push(events.tools.on('TOOL_FAILED', () => {
+  unsubs.push(events.tools.on('TOOL_FAILED', (payload) => {
+    if (turnStartTime !== null) tally.noteToolFailed(payload.callId);
     refreshGit();
   }));
 
@@ -318,22 +436,38 @@ export function wireTurnEventHandlers(
   // a webhook that's already covered.
   if (focusTracker) {
     unsubs.push(events.agents.on('AGENT_FAILED', (payload) => {
+      const task = agentTasks.get(payload.agentId);
+      agentTasks.delete(payload.agentId);
       if (!shouldFireAlert(focusTracker, configGet, 'behavior.notifyOnAgentFailure')) return;
       try {
-        notifyCompletion('GoodVibes: agent failed', `agent ${payload.agentId.slice(0, 8)} failed: ${payload.error}`, FORCE_NOTIFY_DURATION_MS);
+        const metadataOnly = readNotificationsMetadataOnly(configGet);
+        const name = metadataOnly ? '' : trimAtWordBoundary(task ?? '', NOTIFICATION_TEXT_LIMITS.desktopTitle - 'Agent failed: '.length);
+        notifyDesktop(
+          name ? `Agent failed: ${name}` : 'GoodVibes: agent failed',
+          metadataOnly
+            ? `agent ${payload.agentId.slice(0, 8)} failed`
+            : trimAtWordBoundary(`agent ${payload.agentId.slice(0, 8)} failed: ${payload.error}`, NOTIFICATION_TEXT_LIMITS.desktopBody),
+          FORCE_NOTIFY_DURATION_MS,
+        );
       } catch (err) {
         logger.debug('turn-event-wiring: agent-failure notify error', { error: String(err) });
       }
     }));
     unsubs.push(events.workflows.on('WORKFLOW_CHAIN_FAILED', (payload) => {
+      const workstream = workstreams.get(payload.chainId);
+      workstreams.delete(payload.chainId);
       if (!shouldFireAlert(focusTracker, configGet, 'behavior.notifyOnChainFailure')) return;
       try {
         // Title and body come from workstream-notification.ts, which is where
         // the three branches (cancelled / turn budget / failed) are narrated and
         // tested. A notification is a message to a person, so it carries neither
         // the internal name for the machinery nor the chain id.
-        const notice = workstreamFailureNotification(payload);
-        notifyCompletion(notice.title, notice.body, FORCE_NOTIFY_DURATION_MS);
+        const notice = workstreamFailureNotification(payload, {
+          task: workstream?.task,
+          reviewScore: workstream?.reviewScore,
+          metadataOnly: readNotificationsMetadataOnly(configGet),
+        });
+        notifyDesktop(notice.title, notice.body, FORCE_NOTIFY_DURATION_MS);
       } catch (err) {
         logger.debug('turn-event-wiring: chain-failure notify error', { error: String(err) });
       }

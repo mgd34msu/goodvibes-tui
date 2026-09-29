@@ -361,7 +361,7 @@ async function main() {
         ...buildPendingPermissionExtras(request, resolve, approvalBroker),
       };
       render();
-    }), { focusTracker: ctx.services.focusTracker, configGet: (k: string) => configManager.get(k as Parameters<typeof configManager.get>[0]), webhookNotifier: ctx.services.webhookNotifier, terminalNotifier });
+    }), { focusTracker: ctx.services.focusTracker, configGet: (k: string) => configManager.get(k as Parameters<typeof configManager.get>[0]), webhookNotifier: ctx.services.webhookNotifier, terminalNotifier, conversation });
 
   const input: InputHandler = new InputHandler(
     () => render(),

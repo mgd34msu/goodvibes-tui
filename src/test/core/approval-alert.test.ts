@@ -116,13 +116,13 @@ describe('wrapRequestPermissionWithAlert', () => {
     expect(notifier.send).not.toHaveBeenCalled();
   });
 
-  test('message contains tool name and category only, never raw args content', async () => {
+  test('with behavior.notificationsMetadataOnly on, message is tool name and category only, never raw args content', async () => {
     const tracker = new FocusTracker();
     tracker.setFocused(false);
     const notifier = makeSpyNotifier();
     const wrapped = wrapRequestPermissionWithAlert(async () => ({ approved: false, remember: false }), {
       focusTracker: tracker,
-      configGet: makeConfigGet({}),
+      configGet: makeConfigGet({ 'behavior.notificationsMetadataOnly': true }),
       webhookNotifier: notifier,
     });
     await wrapped(makeRequest({ tool: 'edit', category: 'file-write' as PermissionPromptRequest['category'] }));
@@ -143,13 +143,13 @@ describe('wrapRequestPermissionWithAlert', () => {
     await expect(wrapped(makeRequest())).resolves.toEqual({ approved: false, remember: false });
   });
 
-  test('emits an in-terminal (OSC 9) approval-wait notification with tool + category only', async () => {
+  test('with behavior.notificationsMetadataOnly on, the in-terminal (OSC 9) approval-wait notification carries tool + category only', async () => {
     const tracker = new FocusTracker();
     tracker.setFocused(false);
     const calls: Array<{ signal: string; message: string }> = [];
     const wrapped = wrapRequestPermissionWithAlert(async () => ({ approved: true, remember: false }), {
       focusTracker: tracker,
-      configGet: makeConfigGet({}),
+      configGet: makeConfigGet({ 'behavior.notificationsMetadataOnly': true }),
       webhookNotifier: null,
       terminalNotifier: { notify: (signal, message) => { calls.push({ signal, message }); } },
     });

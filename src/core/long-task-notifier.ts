@@ -1,12 +1,20 @@
 /**
  * long-task-notifier, fires push notifications when a turn or agent task
- * completes after running longer than the configured threshold.
+ * ends after running longer than the configured threshold.
  *
- * PRIVACY GUARANTEE: Notification text must never include conversation content
- * (user messages, assistant replies, tool outputs). Only metadata is included:
- * task kind, elapsed time, ok/fail status, and session id. This module enforces
- * that constraint by construction, it receives no conversation object and
- * builds all message text from structural metadata only.
+ * NAMING RULE (owner ruling 2026-09-29): a notification names the work it is
+ * about. The title is the turn's name (the user-set conversation title, else
+ * the first line of the message that started the turn, trimmed at a word
+ * boundary), the body is the outcome: done, failed or cancelled, elapsed time,
+ * files changed, tool calls, agents started, review score, and for a failure
+ * the reason. Text comes from the SDK's runtime/turn-notification.ts so every
+ * channel and host words it the same way.
+ *
+ * PRIVACY RULE: behavior.notificationsMetadataOnly (default off). When on,
+ * every channel this module sends on (desktop and webhook) carries metadata
+ * only: the outcome, elapsed time, counts and the session id prefix, never the
+ * turn's name or a failure reason. When off, both channels, the webhook
+ * included, carry the name and the outcome.
  *
  * Delivery targets (in preference order):
  *   1. Desktop notification (linux notify-send / mac osascript) via SDK
@@ -32,7 +40,15 @@ import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import { readNotifyOnlyWhenUnfocused, type ConfigGet } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import {
+  FORCE_NOTIFY_DURATION_MS,
+  buildTurnNotification,
+  formatWebhookText,
+  readNotificationsMetadataOnly,
+  readNotifyOnlyWhenUnfocused,
+  type ConfigGet,
+  type TurnOutcome,
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 /** Default threshold in seconds. Turns shorter than this do not notify. */
 export const NOTIFY_AFTER_SECONDS_DEFAULT = 60;
@@ -67,6 +83,35 @@ export interface MaybeNotifyLongTaskOptions {
   readonly sessionId: string;
 
   /**
+   * How the task ended. Overrides `status` when given, so a cancelled turn is
+   * told as cancelled rather than failed.
+   */
+  readonly outcome?: TurnOutcome | undefined;
+
+  /** The turn's name (SDK resolveTurnName). Left out of the text when metadata-only is on. */
+  readonly name?: string | null | undefined;
+
+  /** Why a failed or cancelled task stopped. Left out of the text when metadata-only is on. */
+  readonly reason?: string | null | undefined;
+
+  /** What the task did (SDK TurnActivityTally.snapshot()). */
+  readonly activity?: {
+    readonly toolCalls?: number | undefined;
+    readonly filesChanged?: number | undefined;
+    readonly agentsStarted?: number | undefined;
+    readonly reviewScore?: number | null | undefined;
+  } | undefined;
+
+  /**
+   * behavior.notificationsMetadataOnly. When omitted it is read through
+   * `configGet`; with neither, it is the default (off).
+   */
+  readonly metadataOnly?: boolean | undefined;
+
+  /** Desktop delivery; defaults to the SDK notifyCompletion. Tests pass a spy to read the text. */
+  readonly notifyDesktop?: typeof notifyCompletion | undefined;
+
+  /**
    * Threshold in seconds from config (behavior.notifyAfterSeconds).
    * 0 means off; notifications are suppressed entirely.
    * Should be the raw config value; this function normalises it.
@@ -95,18 +140,18 @@ export interface MaybeNotifyLongTaskOptions {
 }
 
 /**
- * Fires push notifications for a completed long task if the elapsed time
+ * Fires push notifications for a finished long task if the elapsed time
  * exceeds the configured threshold.
  *
  * Returns true when at least one delivery was attempted, false when the
  * call was a no-op (threshold not reached, off-state, or focus-gated off,
  * see `focusTracker`/`configGet` above).
  *
- * PRIVACY: builds message text from structural metadata only (kind, elapsed,
- * status, sessionId). Never includes conversation content.
+ * Text: see the NAMING and PRIVACY rules at the top of this file.
  */
 export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
   const { elapsedMs, status, kind, sessionId, thresholdSeconds, webhookNotifier, focusTracker, configGet } = opts;
+  const notifyDesktop = opts.notifyDesktop ?? notifyCompletion;
 
   // Off-state: 0 disables notifications entirely.
   if (thresholdSeconds === NOTIFY_AFTER_SECONDS_OFF) {
@@ -129,16 +174,24 @@ export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
     return false;
   }
 
-  // Build concise, metadata-only message. No conversation text.
-  const statusLabel = status === 'ok' ? 'completed' : 'failed';
-  const title = `GoodVibes: ${kind} ${statusLabel}`;
-  // PRIVACY: message contains only structural metadata, never conversation content.
-  const message = `${kind} ${statusLabel} in ${elapsedSeconds}s  ·  session ${sessionId.slice(0, 8)}`;
+  const metadataOnly = opts.metadataOnly ?? (configGet ? readNotificationsMetadataOnly(configGet) : false);
+  const notice = buildTurnNotification({
+    outcome: opts.outcome ?? (status === 'ok' ? 'completed' : 'failed'),
+    elapsedMs,
+    name: opts.name,
+    reason: opts.reason,
+    sessionId,
+    subject: kind,
+    ...opts.activity,
+  }, { metadataOnly });
 
   // Delivery 1: desktop notification (notify-send on linux, osascript on mac).
   // notifyCompletion is non-throwing; SDK handles platform absence silently.
+  // Its own duration heuristic only pops a desktop notification above 30s;
+  // the threshold above is the user's (behavior.notifyAfterSeconds), so a
+  // threshold under 30s must still reach the desktop.
   try {
-    notifyCompletion(title, message, elapsedMs);
+    notifyDesktop(notice.title, notice.body, Math.max(elapsedMs, FORCE_NOTIFY_DURATION_MS));
   } catch (err) {
     logger.debug('long-task-notifier: desktop notify error', { error: String(err) });
   }
@@ -147,7 +200,7 @@ export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
   if (webhookNotifier) {
     const urls = webhookNotifier.getUrls();
     if (urls.length > 0) {
-      webhookNotifier.send(message).catch((err: unknown) => {
+      webhookNotifier.send(formatWebhookText(notice)).catch((err: unknown) => {
         logger.debug('long-task-notifier: webhook send error', { error: String(err) });
       });
     } else {

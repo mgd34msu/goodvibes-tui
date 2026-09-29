@@ -173,10 +173,9 @@ describe('wireTurnEventHandlers: TURN_COMPLETED notification integration', () =>
 
     // Notification fires exactly once (fire-and-forget send call)
     expect(notifier.send).toHaveBeenCalledTimes(1);
-    // Sent message must contain 61s elapsed and 'turn' kind
+    // Sent message names the turn (its prompt) and says it finished in 61s
     const sentText = sentMessages[0] ?? '';
-    expect(sentText).toContain('61s');
-    expect(sentText).toContain('turn');
+    expect(sentText).toBe('hello\nDone in 1m 1s');
   });
 
   test('stopReason non-completed maps to fail status', () => {
@@ -198,8 +197,7 @@ describe('wireTurnEventHandlers: TURN_COMPLETED notification integration', () =>
 
     expect(notifier.send).toHaveBeenCalledTimes(1);
     const sentText = sentMessages[0] ?? '';
-    expect(sentText).toContain('fail');
-    expect(sentText).toContain('90s');
+    expect(sentText).toBe('test\nFailed after 1m 30s: The model returned an empty response');
   });
 
   test('no notification when elapsed is below threshold', () => {
@@ -600,10 +598,14 @@ describe('a desktop notification carries no chain identifier', () => {
    */
   const SOURCE = readFileSync(new URL('../../core/turn-event-wiring.ts', import.meta.url), 'utf-8');
 
-  /** Every `notifyCompletion(...)` call in the module, argument text included. */
+  /**
+   * Every desktop-notification call in the module, argument text included.
+   * The wiring calls the injected `notifyDesktop` (default notifyCompletion),
+   * so both spellings are scraped.
+   */
   function notifyCalls(): string[] {
     const calls: string[] = [];
-    const pattern = /notifyCompletion\(/g;
+    const pattern = /(?:notifyCompletion|notifyDesktop)\(/g;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(SOURCE)) !== null) {
       const open = SOURCE.indexOf('(', match.index);

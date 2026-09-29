@@ -18,11 +18,17 @@
  * their reasons, which is the same principle the channel renderer follows: in
  * plain words, never by an opaque identifier.
  *
+ * The title names the work (owner ruling 2026-09-29): the workstream's task,
+ * trimmed at a word boundary, and the body adds the last review score when
+ * one was reached. behavior.notificationsMetadataOnly (default off) drops the
+ * task, the reason and the score, leaving what kind of stop it was.
+ *
  * Split out of turn-event-wiring.ts as a pure function so the text is testable
  * on its own, the wiring itself cannot be asserted against without mocking a
  * process-global notifier.
  */
 import { formatTurnBudgetOutcome } from './turn-budget-outcome.ts';
+import { NOTIFICATION_TEXT_LIMITS, trimAtWordBoundary } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 /** The fields of WORKFLOW_CHAIN_FAILED this narration reads. */
 export interface WorkstreamFailureNarrationInput {
@@ -32,9 +38,30 @@ export interface WorkstreamFailureNarrationInput {
   readonly turnLimitSource?: 'default' | 'spawn-override' | 'policy-bound' | undefined;
 }
 
+/** What the host remembers about the workstream, and the privacy setting. */
+export interface WorkstreamNotificationContext {
+  /** The workstream's task, from WORKFLOW_CHAIN_CREATED. */
+  readonly task?: string | null | undefined;
+  /** The last review score (out of 10), from WORKFLOW_REVIEW_COMPLETED. */
+  readonly reviewScore?: number | null | undefined;
+  /** behavior.notificationsMetadataOnly */
+  readonly metadataOnly?: boolean | undefined;
+}
+
 export interface WorkstreamNotification {
   readonly title: string;
   readonly body: string;
+}
+
+function titled(outcome: string, context: WorkstreamNotificationContext): string {
+  const prefix = `Workstream ${outcome}: `;
+  const task = context.metadataOnly ? '' : trimAtWordBoundary(context.task ?? '', NOTIFICATION_TEXT_LIMITS.desktopTitle - prefix.length);
+  return task ? `${prefix}${task}` : `GoodVibes: workstream ${outcome}`;
+}
+
+function withScore(body: string, context: WorkstreamNotificationContext): string {
+  if (context.metadataOnly || typeof context.reviewScore !== 'number' || !Number.isFinite(context.reviewScore)) return body;
+  return `${body} (last review ${Math.round(context.reviewScore * 10) / 10}/10)`;
 }
 
 /**
@@ -49,21 +76,24 @@ export interface WorkstreamNotification {
  */
 export function workstreamFailureNotification(
   payload: WorkstreamFailureNarrationInput,
+  context: WorkstreamNotificationContext = {},
 ): WorkstreamNotification {
+  const metadataOnly = context.metadataOnly === true;
   if (payload.failureKind === 'cancelled') {
     return {
-      title: 'GoodVibes: workstream cancelled',
-      body: `Cancelled: ${payload.reason}`,
+      title: titled('cancelled', context),
+      body: metadataOnly ? 'Cancelled' : withScore(`Cancelled: ${payload.reason}`, context),
     };
   }
   if (payload.failureKind === 'max_turns') {
     return {
-      title: 'GoodVibes: workstream hit its turn budget',
-      body: `The workstream ${formatTurnBudgetOutcome({ limit: payload.turnLimit, source: payload.turnLimitSource })}`,
+      title: titled('hit its turn budget', context),
+      body: withScore(`The workstream ${formatTurnBudgetOutcome({ limit: payload.turnLimit, source: payload.turnLimitSource })}`, context),
     };
   }
+  const reason = payload.failureKind === 'transport' ? 'transient transport error' : payload.reason;
   return {
-    title: 'GoodVibes: workstream failed',
-    body: `Failed: ${payload.failureKind === 'transport' ? 'transient transport error' : payload.reason}`,
+    title: titled('failed', context),
+    body: metadataOnly ? (payload.failureKind === 'transport' ? `Failed: ${reason}` : 'Failed') : withScore(`Failed: ${reason}`, context),
   };
 }

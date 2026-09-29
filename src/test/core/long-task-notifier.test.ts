@@ -130,15 +130,10 @@ describe('maybeNotifyLongTask: off-state', () => {
 // ---------------------------------------------------------------------------
 
 describe('maybeNotifyLongTask: content privacy pin', () => {
-  test('message built by maybeNotifyLongTask contains no conversation content', () => {
-    // This test pins the contract: the notifier receives only structural
-    // metadata. We verify this by confirming the sent text is derived
-    // solely from kind, status, elapsed, and sessionId, nothing else
-    // is passed into maybeNotifyLongTask, making it structurally impossible
-    // to leak conversation content.
-    //
-    // Negative assertion: seed a distinctive conversation-text token into
-    // the local scope and verify it never appears in the sent notification.
+  test('with behavior.notificationsMetadataOnly on, the text carries metadata only', () => {
+    // Privacy rule (owner ruling 2026-09-29): notifications name the work by
+    // default; the metadata-only setting reduces them to structural metadata.
+    // The turn name and failure reason are passed in and must not appear.
     const CONVERSATION_SENTINEL = 'PRIVATE_USER_CONTENT_xyzzy_7a3f9b';
     const notifier = makeFakeNotifier(['https://ntfy.sh/topic']);
     maybeNotifyLongTask({
@@ -147,21 +142,21 @@ describe('maybeNotifyLongTask: content privacy pin', () => {
       kind: 'turn',
       sessionId: 'sess-cafebabe-1234',
       thresholdSeconds: 60,
+      name: CONVERSATION_SENTINEL,
+      reason: CONVERSATION_SENTINEL,
+      configGet: makeConfigGet({ 'behavior.notificationsMetadataOnly': true }),
       webhookNotifier: notifier as unknown as import('@pellux/goodvibes-sdk/platform/integrations').WebhookNotifier,
     });
 
     // The sent message must contain structural metadata only.
-    // There is no conversation text in scope in this module.
     const sentText = notifier._sentMessages[0] ?? '';
     expect(sentText).toContain('turn');
-    expect(sentText).toContain('120s');
+    expect(sentText).toContain('2m');
     // sessionId is truncated to first 8 chars for brevity
     expect(sentText).toContain('sess-caf');
     // Must NOT be empty (it carried a real message)
     expect(sentText.length).toBeGreaterThan(10);
-    // Negative assertion: the sentinel conversation text must never appear
-    // in the notification. The function receives no message/conversation
-    // parameter, so this is structurally guaranteed, but we pin it literally.
+    // Negative assertion: the sentinel text must never appear.
     expect(sentText).not.toContain(CONVERSATION_SENTINEL);
   });
 

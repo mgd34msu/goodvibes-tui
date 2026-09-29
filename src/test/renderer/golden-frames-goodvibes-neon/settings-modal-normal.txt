@@ -9,7 +9,7 @@
 |         ✦ interface                                                                                |
 |           Display         10      stream                                          true             |
 |           UI               4                                                                       |
-|           Behavior        23      display.stream · default true · boolean · source                 |
+|           Behavior        24      display.stream · default true · boolean · source                 |
 |           Notifications   14      default                                                          |
 |           Permissions     23                                                                       |
 |           Policy-as-Code   4      Stream LLM tokens as they arrive                                 |

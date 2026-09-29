@@ -14,16 +14,30 @@
  * wrapped promise settles) so it reflects "a prompt just appeared", not
  * "a prompt was just resolved".
  *
- * PRIVACY: message content is tool name + permission category only, no
- * args, no file contents, no command strings (mirrors long-task-notifier's
- * privacy guarantee).
+ * Text (owner ruling 2026-09-29, SDK runtime/turn-notification.ts): the
+ * notice names what is waiting, the command for exec, the file for write and
+ * edit, the URL for fetch, and the turn that asked for it. When
+ * behavior.notificationsMetadataOnly is on (default off) every channel here
+ * (OSC 9, desktop, webhook) sends the tool name and permission category only,
+ * never a command, a path or the turn's name.
  */
 import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import type { PermissionRequestHandler, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import { shouldFireAlert, FORCE_NOTIFY_DURATION_MS, type ConfigGet } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import {
+  shouldFireAlert,
+  FORCE_NOTIFY_DURATION_MS,
+  NOTIFICATION_TEXT_LIMITS,
+  buildApprovalNotification,
+  describeToolTarget,
+  formatWebhookText,
+  joinNotificationLine,
+  readNotificationsMetadataOnly,
+  resolveTurnName,
+  type ConfigGet,
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { TerminalNotifier } from './terminal-notifier.ts';
 
 export interface ApprovalAlertDeps {
@@ -37,6 +51,21 @@ export interface ApprovalAlertDeps {
    * desktop-alert gate below). Absent in tests/headless.
    */
   readonly terminalNotifier?: TerminalNotifier | null;
+  /**
+   * The live conversation, read for the name of the turn that is asking: a
+   * title the user set, else the message that started this turn (the last
+   * user message while a turn runs). Absent means the notice names no turn.
+   */
+  readonly conversation?: ApprovalTurnSource | null;
+  /** Desktop delivery; defaults to the SDK notifyCompletion. Tests pass a spy to read the text. */
+  readonly notifyDesktop?: typeof notifyCompletion;
+}
+
+/** The conversation surface the approval notice names the turn from. */
+export interface ApprovalTurnSource {
+  readonly title: string;
+  getTitleSource(): string;
+  getLastUserMessage(): string | null;
 }
 
 /**
@@ -56,19 +85,28 @@ export function wrapRequestPermissionWithAlert(
 }
 
 function fireApprovalAlert(request: PermissionPromptRequest, deps: ApprovalAlertDeps): void {
-  // PRIVACY: tool name + category only. Never request.args.
-  const message = `${request.tool} (${request.category}) is waiting for approval`;
+  const metadataOnly = readNotificationsMetadataOnly(deps.configGet);
+  const conversation = deps.conversation;
+  const titleSource = conversation?.getTitleSource();
+  const notice = buildApprovalNotification({
+    tool: request.tool,
+    category: request.category,
+    target: metadataOnly ? null : describeToolTarget(request.args, request.analysis?.target),
+    turnName: metadataOnly || !conversation ? null : resolveTurnName({
+      title: conversation.title,
+      titleSource: titleSource === 'user' || titleSource === 'system' ? titleSource : null,
+      turnText: conversation.getLastUserMessage(),
+    }),
+  }, { metadataOnly });
 
   // In-terminal (OSC 9) notification fires on its OWN gating (independent of the
   // desktop-alert gate below), so it is emitted before the early return.
-  deps.terminalNotifier?.notify('approval-wait', message);
+  deps.terminalNotifier?.notify('approval-wait', joinNotificationLine(notice, NOTIFICATION_TEXT_LIMITS.terminal));
 
   if (!shouldFireAlert(deps.focusTracker, deps.configGet, 'behavior.notifyOnApprovalPending')) return;
 
-  const title = 'GoodVibes: approval needed';
-
   try {
-    notifyCompletion(title, message, FORCE_NOTIFY_DURATION_MS);
+    (deps.notifyDesktop ?? notifyCompletion)(notice.title, notice.body, FORCE_NOTIFY_DURATION_MS);
   } catch (err) {
     logger.debug('approval-alert: desktop notify error', { error: String(err) });
   }
@@ -77,7 +115,7 @@ function fireApprovalAlert(request: PermissionPromptRequest, deps: ApprovalAlert
   if (webhookNotifier) {
     const urls = webhookNotifier.getUrls();
     if (urls.length > 0) {
-      webhookNotifier.send(message).catch((err: unknown) => {
+      webhookNotifier.send(formatWebhookText(notice)).catch((err: unknown) => {
         logger.debug('approval-alert: webhook send error', { error: String(err) });
       });
     }

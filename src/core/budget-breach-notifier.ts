@@ -16,15 +16,25 @@
  * never be reported as a real breach (mirrors CostTrackerPanel's "unpriced"
  * display convention).
  *
- * PRIVACY: message text is built from cost/threshold numbers and the
- * session id prefix only, no conversation content.
+ * Text (owner ruling 2026-09-29, SDK runtime/turn-notification.ts): the
+ * notice names the budget that tripped (cost against the configured
+ * threshold) and the turn during which it tripped. When
+ * behavior.notificationsMetadataOnly is on (default off) the desktop and
+ * webhook text carries the numbers and the session id prefix only.
  */
 import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { calcSessionCost, computeBudgetBreach, isModelPriced } from '@pellux/goodvibes-sdk/platform/providers';
 import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import { shouldFireAlert, FORCE_NOTIFY_DURATION_MS, type ConfigGet } from '@pellux/goodvibes-sdk/platform/runtime/operations';
+import {
+  shouldFireAlert,
+  FORCE_NOTIFY_DURATION_MS,
+  buildBudgetNotification,
+  formatWebhookText,
+  readNotificationsMetadataOnly,
+  type ConfigGet,
+} from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 export interface BudgetBreachUsageSnapshot {
   readonly input: number;
@@ -38,6 +48,10 @@ export interface BudgetBreachNotifierDeps {
   readonly configGet: ConfigGet;
   readonly webhookNotifier?: WebhookNotifier | null;
   readonly sessionId: string;
+  /** The name of the turn that just ended (the one during which the budget tripped). */
+  readonly getTurnName?: (() => string | null) | undefined;
+  /** Desktop delivery; defaults to the SDK notifyCompletion. Tests pass a spy to read the text. */
+  readonly notifyDesktop?: typeof notifyCompletion | undefined;
 }
 
 /** Stateful edge-trigger checker, construct once per session, call on every TURN_COMPLETED. */
@@ -85,11 +99,16 @@ export function createBudgetBreachNotifier(deps: BudgetBreachNotifierDeps): Budg
 function fireBudgetBreachAlert(deps: BudgetBreachNotifierDeps, sessionCost: number, budgetThresholdUsd: number): void {
   if (!shouldFireAlert(deps.focusTracker, deps.configGet, 'behavior.notifyOnBudgetBreach')) return;
 
-  const title = 'GoodVibes: budget breach';
-  const message = `session cost $${sessionCost.toFixed(2)} exceeded budget $${budgetThresholdUsd.toFixed(2)}  ·  session ${deps.sessionId.slice(0, 8)}`;
+  const metadataOnly = readNotificationsMetadataOnly(deps.configGet);
+  const notice = buildBudgetNotification({
+    sessionCostUsd: sessionCost,
+    budgetUsd: budgetThresholdUsd,
+    sessionId: deps.sessionId,
+    turnName: metadataOnly ? null : deps.getTurnName?.() ?? null,
+  }, { metadataOnly });
 
   try {
-    notifyCompletion(title, message, FORCE_NOTIFY_DURATION_MS);
+    (deps.notifyDesktop ?? notifyCompletion)(notice.title, notice.body, FORCE_NOTIFY_DURATION_MS);
   } catch (err) {
     logger.debug('budget-breach-notifier: desktop notify error', { error: String(err) });
   }
@@ -98,7 +117,7 @@ function fireBudgetBreachAlert(deps: BudgetBreachNotifierDeps, sessionCost: numb
   if (webhookNotifier) {
     const urls = webhookNotifier.getUrls();
     if (urls.length > 0) {
-      webhookNotifier.send(message).catch((err: unknown) => {
+      webhookNotifier.send(formatWebhookText(notice)).catch((err: unknown) => {
         logger.debug('budget-breach-notifier: webhook send error', { error: String(err) });
       });
     }
