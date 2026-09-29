@@ -23,11 +23,14 @@ import { activeTokens, setActiveThemeMode, setActiveThemeName } from '../../rend
 import { auditFrame } from '../helpers/frame-audit.ts';
 import { assertGoldenIn, encodeGolden } from '../helpers/golden-snapshot.ts';
 import { makeViewScene, renderViewScreen } from '../helpers/session-view-scenes.ts';
+import type { ThrobberState } from '../../renderer/throbber.ts';
 
 const THEME = process.env['GOODVIBES_GOLDEN_THEME'] ?? 'goodvibes';
 setActiveThemeName(THEME);
 setActiveThemeMode('dark');
 const DIR = new URL(THEME === 'goodvibes' ? './golden-frames/' : `./golden-frames-${THEME}/`, import.meta.url).pathname;
+
+const MAIN_WORKING: ThrobberState = { spinner: '⠋', frame: 0, activity: { kind: 'tool', tool: 'exec', argument: 'bun test src/net/retry.test.ts', elapsedMs: 3_000 } };
 
 const FRAMES: ReadonlyArray<{ readonly name: string; readonly width: number; readonly height: number; readonly render: () => Line[] }> = [
   { name: 'agent-view-120x30', width: 120, height: 30, render: () => { const s = makeViewScene(); s.views.open({ kind: 'agent', id: 'eng' }); return renderViewScreen(s, 120, 30); } },
@@ -40,6 +43,9 @@ const FRAMES: ReadonlyArray<{ readonly name: string; readonly width: number; rea
   { name: 'process-view-search', width: 120, height: 30, render: () => {
     const s = makeViewScene(); s.views.open({ kind: 'process', id: 'bg-1' }); s.views.startSearch(); s.views.searchType('client'); return renderViewScreen(s, 120, 30);
   } },
+  // Main keeps working under a view: its throbber, led by "main", sits over the view's input area.
+  { name: 'agent-view-main-working-120x30', width: 120, height: 30, render: () => { const s = makeViewScene(); s.views.open({ kind: 'agent', id: 'eng' }); return renderViewScreen(s, 120, 30, MAIN_WORKING); } },
+  { name: 'process-view-main-working-80x24', width: 80, height: 24, render: () => { const s = makeViewScene(); s.views.open({ kind: 'process', id: 'bg-1' }); return renderViewScreen(s, 80, 24, MAIN_WORKING); } },
   { name: 'session-chips-main-120', width: 120, height: 8, render: () => renderViewScreen(makeViewScene(), 120, 8) },
   { name: 'session-chips-main-80', width: 80, height: 8, render: () => renderViewScreen(makeViewScene(), 80, 8) },
 ];

@@ -3,6 +3,7 @@ import { resolveGoodVibesDaemonHome, resolveGoodVibesHome } from '@pellux/goodvi
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './renderer/ui-factory.ts';
+import { resolveThrobberActivity } from './renderer/throbber.ts';
 import { Orchestrator } from '@pellux/goodvibes-sdk/platform/core';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
@@ -190,6 +191,8 @@ async function main() {
   let lastMaxScroll: number | null = null;
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
   const streamMetrics: StreamMetrics = createStreamMetrics();
+  // When the running compaction was first seen (the throbber's elapsed time); undefined while none runs.
+  let compactingSinceMs: number | undefined;
   // Live failover record, written by the failover path, read every frame so the header and footer agree.
   const failoverState = createFailoverTurnState();
 
@@ -483,15 +486,29 @@ async function main() {
       evaluate: (args) => evaluateSessionMaintenance({ configManager, ...args, sessionMemoryCount: ctx.services.sessionMemoryStore.list().length }),
       currentTokens: orchestrator.lastInputTokens, contextWindow,
     });
-    // A running turn takes the status line's left side: spinner, honest waiting phrase, elapsed, esc.
-    const busy = orchestrator.isThinking ? {
-      spinner: orchestrator.getSpinner(),
-      frame: orchestrator.thinkingFrame,
-      phrase: UIFactory.busyPhrase(orchestrator.thinkingFrame, orchestrator.streamingOutputTokens, UIFactory.computeRenderStallInfo(streamMetrics, Date.now()), pendingPermission !== null),
-      elapsedMs: streamMetrics.startTime > 0 ? Date.now() - streamMetrics.startTime : undefined,
-      tokenSpeed: (configManager.get('display.showTokenSpeed') as boolean) ? streamMetrics.tokenSpeed : undefined, ttftMs: streamMetrics.ttftMs,
-      approvalPending: pendingPermission !== null,
-    } : null;
+    // What main is doing while it works (a turn, a compaction): the throbber row above the input area.
+    const compacting = ctx.services.contextAccountingHolder.getSource()?.getCompactionState().isCompacting === true;
+    if (compacting && compactingSinceMs === undefined) compactingSinceMs = Date.now();
+    else if (!compacting) compactingSinceMs = undefined;
+    const throbberNow = Date.now();
+    const activeToolCallId = streamMetrics.activeToolCallId;
+    // An ask brokered for a background agent carries an attribution; only main's own ask is main's activity.
+    const mainApproval = pendingPermission && pendingPermission.attribution === undefined ? pendingPermission : null;
+    const throbberActivity = resolveThrobberActivity({
+      turnActive: orchestrator.isThinking,
+      compacting,
+      compactingSinceMs,
+      pendingApproval: mainApproval ? { name: mainApproval.tool, args: mainApproval.args } : null,
+      activeTool: streamMetrics.activeToolName !== undefined
+        ? { name: streamMetrics.activeToolName, args: activeToolCallId !== undefined ? streamMetrics.toolArgsByCallId.get(activeToolCallId) : undefined, startedAtMs: streamMetrics.activeToolStartedAtMs }
+        : null,
+      modelPhrase: UIFactory.busyPhrase(orchestrator.thinkingFrame, orchestrator.streamingOutputTokens, UIFactory.computeRenderStallInfo(streamMetrics, throbberNow), mainApproval !== null),
+      turnStartMs: streamMetrics.startTime,
+      ttftMs: streamMetrics.ttftMs,
+      tokenSpeed: (configManager.get('display.showTokenSpeed') as boolean) ? streamMetrics.tokenSpeed : undefined,
+      now: throbberNow,
+    });
+    const throbber = throbberActivity ? { spinner: orchestrator.getSpinner(), frame: orchestrator.thinkingFrame, activity: throbberActivity } : null;
     const footerLines = buildShellFooter({
       width,
       promptText: promptInfo.visibleLines.join('\n'),
@@ -522,7 +539,7 @@ async function main() {
       runningAgentProgress: runningAgentSummary.progress,
       composerFlags: composerState.flags,
       composerPendingRisk: composerState.pendingRisk, permissionMode: configManager.get('permissions.mode') as string, voiceCapture: voiceCaptureStatus(),
-      busy,
+      throbber, turnRunning: orchestrator.isThinking,
     }).lines;
 
     const onboardingOwnsScreen = input.onboardingWizard.active;
@@ -569,8 +586,8 @@ async function main() {
       : conversationViewport.viewport;
 
     if (orchestrator.isThinking && !viewFrame) {
-      // The spinner and phrase live on the status line now; the opt-in partial
-      // tool preview keeps its own faint row under the transcript.
+      // The spinner and phrase are the throbber's (above the input area); the
+      // opt-in partial tool preview keeps its own faint row under the transcript.
       const partialToolPreview = (configManager.get('display.showToolPreview') as boolean) ? sessionSnapshot.streamToolPreview : undefined;
       if (partialToolPreview) viewport.push(UIFactory.createToolPreviewRow(conversationWidth, partialToolPreview));
     }

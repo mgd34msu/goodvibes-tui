@@ -10,12 +10,12 @@
  * Then, one of (first match wins):
  *   - a notice the user must see now (the "press Ctrl+C again" exit guard, a
  *     copy receipt);
- *   - a running turn: the spinner (brand gradient on the glyph only), the
- *     honest waiting phrase in muted text, the elapsed time, and an `esc`
- *     keycap with "interrupt";
- *   - at rest: the working directory and branch, plus a background-work
- *     summary while agents or processes run (highlighted with its keys while
- *     it owns keyboard focus).
+ *   - the working directory and branch, plus a background-work summary
+ *     while agents or processes run (highlighted with its keys while it owns
+ *     keyboard focus). While a main turn runs, an `esc` keycap with
+ *     "interrupt" (or "clear input") leads them. What the turn is doing (the
+ *     spinner, the phrase, the elapsed time) is the throbber's, the row above
+ *     the input area (throbber.ts); the status line keeps session state.
  *
  * Right side, built right to left from width-4 and stopping where the left
  * side really ends (3 columns between pieces, 1 between a key and its
@@ -37,16 +37,15 @@
  * yields room for that bare bar, so a filling window is never hidden. The
  * kept chips at the left end are never dropped.
  *
- * A running turn's phrase and the background summary share the row with the
- * cost and the context bar at every width: the right side's room is reserved
- * before they are drawn (reserveRight), giving way in the same order, and
- * they are truncated into what remains. They never push the bar off the row.
+ * The background summary shares the row with the cost and the context bar at
+ * every width: the right side's room is reserved before it is drawn
+ * (reserveRight), giving way in the same order, and it is truncated into
+ * what remains. It never pushes the bar off the row.
  */
 
 import { type Line, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { getDisplayWidth, interpolateColor, truncateDisplay } from '../utils/terminal-width.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
-import { formatElapsed } from '../utils/format-elapsed.ts';
 import { activeTokens } from './theme.ts';
 import { keycapHintsWidth, paintKeycapHints } from './surface-kit-parts.ts';
 import type { KitHint } from './surface-kit.ts';
@@ -65,9 +64,9 @@ const LEFT_X = 3;
 /** Columns between the chips at the left end. */
 const CHIP_GAP = 2;
 /**
- * Room the busy phrase or background summary keeps before the right side
- * gives anything up for it: the spinner and a readable start of the phrase.
- * Past that the phrase is truncated; the context bar never is.
+ * Room the background summary keeps before the right side gives anything up
+ * for it: a readable start of the summary. Past that the summary is
+ * truncated; the context bar never is.
  */
 const LEFT_TEXT_MIN = 26;
 
@@ -82,20 +81,8 @@ export interface StatusChip {
   readonly keep?: boolean;
 }
 
+/** A main turn is running: the status line leads with what Esc does now. */
 export interface StatusBusyState {
-  /** The spinner glyph for this frame. */
-  readonly spinner: string;
-  /** Animation frame, used for the spinner's gradient position. */
-  readonly frame: number;
-  /** The honest waiting phrase (thinking, stalled, waiting for approval...). */
-  readonly phrase: string;
-  readonly elapsedMs?: number;
-  /** Streaming rate; omitted while waiting on the user. */
-  readonly tokenSpeed?: number;
-  /** Time to the first token of this turn, once known. */
-  readonly ttftMs?: number;
-  /** True while the turn is blocked on an approval (Esc still interrupts). */
-  readonly approvalPending?: boolean;
   /** What the next Esc does, when not "interrupt" (the composer has text: "clear input"). */
   readonly escAction?: string;
 }
@@ -136,7 +123,7 @@ export interface StatusLineOptions {
   readonly cost?: string | null;
   readonly context?: StatusContextState | null;
   /**
-   * Keys of the view the keyboard is in, shown in place of the busy phrase
+   * Keys of the view the keyboard is in, shown in place of the esc hint
    * or directory (the conversation work tree: move, fold, open, copy, back).
    */
   readonly keys?: readonly KitHint[] | null;
@@ -271,8 +258,8 @@ function backgroundSummary(bg: StatusBackgroundState): string {
 
 /**
  * Draw the left side from `startX`; returns the column where it really ends.
- * `textMax` bounds the busy phrase and the background summary: the room the
- * right side's reservation left them (reserveRight).
+ * `textMax` bounds the background summary: the room the right side's
+ * reservation left it (reserveRight).
  */
 function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: number, textMax: number, withDirectory: boolean, cut: { summary: boolean }): number {
   const t = activeTokens();
@@ -294,40 +281,27 @@ function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: 
     }
     return x;
   }
-  if (options.busy) {
-    const b = options.busy;
-    maxX = Math.max(startX, Math.min(maxX, textMax));
-    const glyphFg = interpolateColor(t.brand, t.brandEnd, ((Math.sin(b.frame / 6) + 1) / 2));
-    let x = putText(line, startX, maxX, { text: b.spinner, fg: glyphFg, bold: true });
-    x += 1;
-    const tail: string[] = [];
-    if (b.elapsedMs !== undefined) tail.push(formatElapsed(b.elapsedMs));
-    if (!b.approvalPending && b.ttftMs !== undefined && b.ttftMs > 0) tail.push(`first token ${formatElapsed(b.ttftMs)}`);
-    if (!b.approvalPending && b.tokenSpeed !== undefined && b.tokenSpeed > 0) tail.push(`${Math.round(b.tokenSpeed)} tok/s`);
-    const hints: KitHint[] = [['esc', b.escAction ?? 'interrupt']];
-    const hintsW = keycapHintsWidth(hints) + GAP;
-    const tailText = tail.length > 0 ? ` · ${tail.join(' · ')}` : '';
-    const room = Math.max(0, maxX - x - hintsW);
-    // The phrase stays whole as long as it can: the timers go before it is
-    // cut, and its trailing dots go before a letter does.
-    const bare = b.phrase.replace(/(\.\.\.|…)$/, '');
-    const phrase = getDisplayWidth(b.phrase) > room && getDisplayWidth(bare) <= room ? bare : truncateDisplay(b.phrase, room);
-    x = putText(line, x, maxX, { text: phrase, fg: t.textMuted });
-    if (getDisplayWidth(tailText) <= maxX - x - hintsW) x = putText(line, x, maxX, { text: tailText, fg: t.textFaint });
-    if (x + hintsW <= maxX) x = paintKeycapHints(line, x + GAP, maxX, hints, { fg: t.textFaint });
-    return x;
-  }
   let x = startX;
+  let lead = false; // the esc hint was drawn: what follows keeps a GAP from it
+  if (options.busy) {
+    // A running turn: Esc's action first, then the at-rest pieces after it.
+    const hints: KitHint[] = [['esc', options.busy.escAction ?? 'interrupt']];
+    if (x + keycapHintsWidth(hints) > maxX) return x;
+    x = paintKeycapHints(line, x, maxX, hints, { fg: t.textFaint });
+    lead = true;
+  }
   const place: Piece[] = [];
   if (withDirectory && options.directory && width >= DIRECTORY_MIN_WIDTH) place.push({ text: options.directory, fg: t.textFaint });
   if (options.branch) place.push({ text: options.branch, fg: t.textFaint });
   if (place.length > 0) {
     const joined = place.map((p) => p.text).join(' · ');
-    x = putText(line, x, maxX, { text: truncateDisplay(joined, Math.max(0, maxX - x)), fg: t.textFaint });
+    const from = lead ? x + GAP : x;
+    const shown = truncateDisplay(joined, Math.max(0, maxX - from));
+    if (shown.length > 0) x = putText(line, from, maxX, { text: shown, fg: t.textFaint });
   }
   const bg = options.background;
   if (bg && (bg.focused || bg.agents + bg.processes > 0)) {
-    const start = place.length > 0 ? x + GAP : x;
+    const start = place.length > 0 || lead ? x + GAP : x;
     const summary = backgroundSummary(bg) + (bg.progress ? ` · ${bg.progress}` : '');
     const hints: KitHint[] = bg.focused
       ? (bg.agents + bg.processes > 0 ? [['⏎', 'open'], ['esc', 'back']] : [['esc', 'back']])
@@ -349,13 +323,13 @@ function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: 
 }
 
 /**
- * Columns the right side (left of the menu) keeps from the busy phrase or the
- * background summary, `avail` being the room both share. Pieces give way in
+ * Columns the right side (left of the menu) keeps from the background
+ * summary, `avail` being the room both share. Pieces give way in
  * the Measurements table's order until LEFT_TEXT_MIN is left for the text:
  * the cost first, then the bar narrows from 16 cells to 6, then its label
  * goes, then the word "context". The bare bar and its percent are always
- * kept (when they fit on the row at all): busy text never hides the context
- * bar. Each kept piece counts its GAP.
+ * kept (when they fit on the row at all): the summary never hides the
+ * context bar. Each kept piece counts its GAP.
  */
 function reserveRight(ctx: StatusContextState | null, cost: string | null, avail: number): number {
   const costW = cost ? GAP + getDisplayWidth(cost) : 0;
@@ -408,7 +382,11 @@ export function renderStatusLine(options: StatusLineOptions): Line {
     const attempt = layoutStatusLine({ ...options, directory: shorter }, true);
     if (attempt.fullFit) return attempt.line;
   }
-  return layoutStatusLine(options, false).line;
+  const withoutDirectory = layoutStatusLine(options, false);
+  // While a turn runs the esc hint leads the row: when even without the
+  // directory the background summary is cut, the branch gives way too.
+  if (!withoutDirectory.summaryCut || !options.busy || !options.branch) return withoutDirectory.line;
+  return layoutStatusLine({ ...options, branch: undefined }, false).line;
 }
 
 /**
@@ -429,7 +407,7 @@ function abbreviatedDirectories(directory: string): string[] {
   return out;
 }
 
-function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): { line: Line; fullFit: boolean } {
+function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): { line: Line; fullFit: boolean; summaryCut: boolean } {
   const t = activeTokens();
   const width = options.width;
   const line = createEmptyLine(width);
@@ -440,7 +418,7 @@ function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): {
 
   const ctx = options.context && (options.context.windowTokens === null || options.context.windowTokens > 0) ? options.context : null;
   // From the warning level up the bare bar is reserved before the left side
-  // is laid out, so a busy phrase truncates instead of hiding a filling window.
+  // is laid out, so the left side truncates instead of hiding a filling window.
   const reserve = ctx && contextFraction(ctx) >= CONTEXT_WARN_FRACTION
     ? contextBarWidth(ctx, BARE_CONTEXT_FORM) + GAP
     : 0;
@@ -450,10 +428,14 @@ function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): {
   const leftMax = Math.max(LEFT_X, rightEdge - menuW - GAP - reserve);
   const chipsEnd = drawChips(line, options.chips ?? [], leftMax, rightEdge);
   const leftStart = chipsEnd > LEFT_X ? chipsEnd + GAP : LEFT_X;
-  // The busy phrase and background summary share the row: the right side's
-  // room is reserved first and they are truncated into what is left.
-  const avail = rightEdge - menuW - GAP - leftStart;
-  const textMax = leftStart + Math.max(0, avail - reserveRight(ctx, options.cost ?? null, avail));
+  // The background summary shares the row: the right side's
+  // room is reserved first and the summary is truncated into what is left.
+  // A running turn's esc hint leads the left side; the summary's room is what follows it.
+  const leadW = options.busy && !options.notice && !(options.keys && options.keys.length > 0)
+    ? keycapHintsWidth([['esc', options.busy.escAction ?? 'interrupt']]) + GAP
+    : 0;
+  const avail = Math.max(0, rightEdge - menuW - GAP - leftStart - leadW);
+  const textMax = leftStart + leadW + Math.max(0, avail - reserveRight(ctx, options.cost ?? null, avail));
   const cut = { summary: false };
   const drawn = drawLeft(line, options, leftStart, Math.max(leftStart, leftMax), Math.max(leftStart, Math.min(leftMax, textMax)), withDirectory, cut);
   const leftEnd = drawn > leftStart ? drawn : chipsEnd;
@@ -471,7 +453,7 @@ function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): {
     paintKeycapHints(line, rx - menuW, rx, menu, { fg: t.textFaint });
     rx -= menuW + GAP;
   } else {
-    return { line, fullFit };
+    return { line, fullFit, summaryCut: cut.summary };
   }
 
   const room = rx - leftEnd - GAP;
@@ -489,5 +471,5 @@ function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): {
     rx -= w + GAP;
   }
   if (showCost && cost) putText(line, rx - costW, rx, { text: cost, fg: t.textMuted });
-  return { line, fullFit };
+  return { line, fullFit, summaryCut: cut.summary };
 }

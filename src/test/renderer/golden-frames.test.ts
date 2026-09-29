@@ -511,7 +511,7 @@ describe('golden-frames', () => {
 //      session picker, profile picker, agent detail, process, context
 //      inspector, history search, selection modal, each at a normal size
 //      and a hostile size (<24 rows or ~28 cols).
-//   8. shell-footer (busy), the status line while a turn runs, at 80 columns.
+//   8. shell-footer (busy), the throbber and the status line while a turn runs, at 80 columns.
 //
 // Determinism notes for the additions below:
 //   - Every fixture uses fixed epoch timestamps, never a bare Date.now()
@@ -1391,9 +1391,10 @@ describe('golden-frames : consequence-time trust modal (full detail text never c
 
 // ─── 8. Shell footer (busy) ────────────────────────────────────────────────
 //
-// A running turn: the spinner, phrase, elapsed and the esc keycap take the
-// status line's left side; at 80 columns the directory is already gone and the
-// context bar narrows to make room.
+// A running turn: the throbber (spinner, phrase, elapsed) takes its own row
+// over the input area, under one empty row; the status line keeps the session
+// state and leads with the esc keycap. At 80 columns the directory is already
+// gone and the context bar narrows to make room.
 
 function renderShellFooterBusySurface(): Line[] {
   return buildShellFooter({
@@ -1414,7 +1415,8 @@ function renderShellFooterBusySurface(): Line[] {
     runningProcessCount: 0,
     indicatorFocused: false,
     permissionMode: 'accept-edits',
-    busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 12_000 },
+    throbber: { spinner: '◐', frame: 0, activity: { kind: 'model', phrase: 'Thinking...', elapsedMs: 12_000 } },
+    turnRunning: true,
   }).lines;
 }
 
@@ -1752,12 +1754,13 @@ function renderChromeHeaderFooterSurface(): Line[] {
 }
 
 function renderChromeThinkingSurface(): Line[] {
-  // The status line while a turn waits on an approval: frame 0, no timers.
+  // The throbber while a turn waits on an approval: frame 0, no timers.
   return buildShellFooter({
     width: W, promptText: '', promptLineCount: 1, usage: { up: 0, down: 0 }, showExitNotice: false, lastCopyTime: 0,
     runningAgentCount: 0, runningProcessCount: 0, indicatorFocused: false,
-    busy: { spinner: '⠋', frame: 0, phrase: 'Waiting for your approval', approvalPending: true },
-  }).lines.slice(-1);
+    throbber: { spinner: '⠋', frame: 0, activity: { kind: 'approval', tool: 'exec', argument: 'ls' } },
+    turnRunning: true,
+  }).lines.slice(1, 2);
 }
 
 describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
@@ -1788,7 +1791,7 @@ describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
   test('each chrome surface (header/footer/thinking) flips its roles under light', () => {
     // Header: version = textFaint; dirty dot = warning.
     // Footer: auto-approve chip = error; plan bar = info.
-    // Status line: the phrase = textMuted.
+    // Throbber: the phrase = textMuted.
     const headerDark = snapshotEncode('c-h', renderChromeHeaderFooterSurface());
     const thinkDark = snapshotEncode('c-t', renderChromeThinkingSurface());
     const headerLight = snapshotEncode('c-h', underLight(() => renderChromeHeaderFooterSurface()));
@@ -2052,8 +2055,9 @@ describeOverlayGolden('permission-edit-hunks', (width, height) => {
 
 // ─── The main screen, whole ────────────────────────────────────────────────
 //
-// Header (1 row), the conversation area, the composer (5 rows) and the status
-// line (1 row): about 7 rows of chrome at rest. The home screen centers the
+// Header (1 row), the conversation area, the input area (5 rows: a ▄ cap,
+// padding, text, padding, a ▀ cap) and the status line (1 row): 7 rows of
+// chrome at rest. The home screen centers the
 // protected splash in the conversation area and must not clip it at 100x30.
 
 function screenFrame(width: number, height: number, body: Line[], footer: Line[], header: Line[]): Line[] {
@@ -2133,7 +2137,7 @@ describe('golden-frames : the main screen', () => {
       if (want.trim()) expect(text).toContain(want);
     }
     // Centered: the blank rows above and below the splash differ by at most one.
-    const body = text.slice(1, 30 - 4);
+    const body = text.slice(1, 30 - baseFooter(100).length);
     const first = body.findIndex((r) => r.trim() !== '');
     let last = body.length - 1;
     while (last > first && body[last]!.trim() === '') last--;
@@ -2146,8 +2150,8 @@ describe('golden-frames : the main screen', () => {
     assertGolden('base-screen-80x24', renderBaseScreenSurface(80, 24));
   });
 
-  test('chrome at rest is 5 rows: header 1, composer 3, status line 1', () => {
+  test('chrome at rest is 7 rows: header 1, input area 5 (caps and padding around the text), status line 1', () => {
     expect(UIFactory.createHeader(120, 'claude-opus-4')).toHaveLength(1);
-    expect(baseFooter(120)).toHaveLength(4);
+    expect(baseFooter(120)).toHaveLength(6);
   });
 });

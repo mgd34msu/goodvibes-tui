@@ -23,7 +23,7 @@ import { wireStreamEventMetrics } from '../../core/stream-event-wiring.ts';
 // ---------------------------------------------------------------------------
 
 type TurnEvent = 'STREAM_START' | 'STREAM_DELTA' | 'STREAM_END' | 'TURN_COMPLETED' | 'TURN_ERROR' | 'TURN_CANCEL';
-type ToolEvent = 'TOOL_EXECUTING' | 'TOOL_SUCCEEDED' | 'TOOL_FAILED' | 'TOOL_CANCELLED';
+type ToolEvent = 'TOOL_RECEIVED' | 'TOOL_EXECUTING' | 'TOOL_SUCCEEDED' | 'TOOL_FAILED' | 'TOOL_CANCELLED';
 
 function makeTurnBus() {
   const listeners: Record<string, Array<(...args: unknown[]) => void>> = {
@@ -55,7 +55,7 @@ function makeTurnBus() {
 
 function makeToolBus() {
   const listeners: Record<string, Array<(...args: unknown[]) => void>> = {
-    TOOL_EXECUTING: [], TOOL_SUCCEEDED: [], TOOL_FAILED: [], TOOL_CANCELLED: [],
+    TOOL_RECEIVED: [], TOOL_EXECUTING: [], TOOL_SUCCEEDED: [], TOOL_FAILED: [], TOOL_CANCELLED: [],
   };
   return {
     on(event: ToolEvent, handler: (...args: unknown[]) => void) {
@@ -70,6 +70,7 @@ function makeMetrics(): StreamMetrics {
     startTime: 0, deltaCount: 0, tokenSpeed: 0,
     ttftMs: undefined, ttftRecorded: false,
     activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
+    toolArgsByCallId: new Map(),
     lastDeltaAtMs: undefined, stallEpisode: 0,
     reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };

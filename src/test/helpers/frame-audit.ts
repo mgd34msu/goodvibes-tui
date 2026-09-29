@@ -9,6 +9,15 @@
  *   - VPAD-TOP / VPAD-BOT  a filled block of 3+ rows with text on its first
  *               or last row
  *   - BAR       a ┃ beside a block that does not run the block's full height
+ *   - GAP       the bottom of a full screen stacked without its gaps: output
+ *               text, the throbber, the input area and the status line must
+ *               never touch. The input area (the barred fill block right
+ *               above the status line) keeps at least half a row free above
+ *               and below it: the row next to its fill holds nothing drawn
+ *               but its own cap (a ▄ or ▀ cap row, or an empty row); a
+ *               table's └──┘ border counts as output here. The throbber (a spinner glyph in
+ *               column 3, text from column 5) sits over a fully empty row,
+ *               since a half row cannot be drawn between two rows of text.
  *
  * (Its fifth check, overlapping text between drawing calls, needs the draw
  * history and does not apply to a finished frame.)
@@ -25,9 +34,10 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { PaletteTokens } from '../../renderer/theme.ts';
 import { getDisplayWidth } from '../../utils/terminal-width.ts';
+import { SPINNER_FRAMES } from '../../renderer/ui-primitives.ts';
 
 export interface FrameIssue {
-  readonly kind: 'OVERFLOW' | 'PADDING' | 'VPAD-TOP' | 'VPAD-BOT' | 'BAR';
+  readonly kind: 'OVERFLOW' | 'PADDING' | 'VPAD-TOP' | 'VPAD-BOT' | 'BAR' | 'GAP';
   readonly row: number;
   readonly detail: string;
 }
@@ -168,6 +178,65 @@ export function auditFrame(lines: readonly Line[], width: number, tokens: Readon
         if (bars.some(Boolean) && !bars.every(Boolean)) issues.push({ kind: 'BAR', row: block.y, detail: `bar on ${bars.filter(Boolean).length}/${block.h} rows at x${block.x - 1}` });
       }
     }
+  }
+  issues.push(...auditStack(lines, fills));
+  return issues;
+}
+
+/** The input area's own half-row glyphs: a row of only these (and blanks) is a gap row. */
+const CAP_GLYPHS: ReadonlySet<string> = new Set(['▄', '▀', '╻', '╹']);
+
+/** Anything drawn that is not a cap: text, and box drawing too (a table's └──┘ border is output). */
+function hasContent(row: Line | undefined): boolean {
+  return (row ?? []).some((c) => c.char !== ' ' && c.char !== '' && !CAP_GLYPHS.has(c.char));
+}
+
+/** A row with nothing drawn on it at all: no text, no glyph, no fill. */
+function isEmptyRow(row: Line | undefined): boolean {
+  return (row ?? []).every((c) => (c.char === ' ' || c.char === '') && c.bg === '');
+}
+
+const SPINNER_GLYPHS: ReadonlySet<string> = new Set([...SPINNER_FRAMES].flatMap((f) => [...f]));
+
+/** The throbber row: a spinner glyph in column 3, a blank column 4, text from column 5. */
+function isThrobberRow(row: Line | undefined): boolean {
+  if (!row || row.length < 6) return false;
+  return SPINNER_GLYPHS.has(row[3]!.char) && (row[4]!.char === ' ' || row[4]!.char === '') && isText(row[5]!.char)
+    && row.slice(0, 3).every((c) => c.char === ' ' || c.char === '');
+}
+
+/**
+ * The GAP check (see the file header). Applies to a frame whose last row is
+ * a status line with the input area's fill ending one or two rows above it.
+ */
+function auditStack(lines: readonly Line[], fills: ReadonlySet<string>): FrameIssue[] {
+  const issues: FrameIssue[] = [];
+  const last = lines.length - 1;
+  if (last < 2 || !hasContent(lines[last])) return issues;
+  // The input area: the lowest fill block with a ┃ against its left edge on every row.
+  let input: Block | null = null;
+  for (const bg of fills) {
+    for (const block of blocksOf(lines, bg)) {
+      if (block.x < 1 || block.w < 10) continue;
+      const bottom = block.y + block.h - 1;
+      if (bottom >= last || bottom < last - 2) continue;
+      const barred = Array.from({ length: block.h }, (_, k) => lines[block.y + k]![block.x - 1]?.char === '┃').every(Boolean);
+      if (barred && (!input || bottom > input.y + input.h - 1)) input = block;
+    }
+  }
+  if (!input) return issues;
+  const below = input.y + input.h;
+  if (hasContent(lines[below])) {
+    issues.push({ kind: 'GAP', row: below, detail: `text directly under the input area :: ${rowText(lines[below]!, 0, lines[below]!.length)}` });
+  }
+  const above = input.y - 1;
+  if (above >= 0 && hasContent(lines[above])) {
+    issues.push({ kind: 'GAP', row: above, detail: `text directly over the input area :: ${rowText(lines[above]!, 0, lines[above]!.length)}` });
+  }
+  // The throbber: the first text row above the input area's gap row.
+  const throbberRow = above - 1;
+  if (throbberRow >= 1 && isThrobberRow(lines[throbberRow]) && !isEmptyRow(lines[throbberRow - 1])) {
+    issues.push({ kind: 'GAP', row: throbberRow - 1, detail: `no empty row between the throbber and the text above it :: ${rowText(lines[throbberRow - 1]!, 0, lines[throbberRow - 1]!.length)}` });
   }
   return issues;
 }

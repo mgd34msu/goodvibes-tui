@@ -6,23 +6,36 @@ import { activeTokens, activeUiTones } from './theme.ts';
 import { permissionModeLabel } from '../core/permission-mode.ts';
 import { SLEEP_DISABLED_CHIP } from '../core/power-status.ts';
 import { renderComposer, COMPOSER_FIXED_ROWS } from './composer.ts';
-import { renderStatusLine, type StatusBusyState, type StatusChip } from './status-line.ts';
+import { renderStatusLine, type StatusChip } from './status-line.ts';
+import { renderThrobberLine, type ThrobberState } from './throbber.ts';
 import { voiceCaptureChip } from './voice-capture-chip.ts';
 import { tagFooterLine } from './footer-targets.ts';
 
 /**
- * shell-surface.ts, everything under the transcript: the passive hint rows
- * (retry affordance, context pressure, the scriptable status line) when they
- * have something to say, then the composer, then the one-row status line.
+ * shell-surface.ts, everything under the transcript, top to bottom:
  *
- * At rest that is 4 rows (composer 3 + status 1); with the header, the
- * resting chrome is 5 rows. The composer holds only input. Token totals, the
- * per-turn history, tool count, notification mode, the session spine and the
- * web surface address live in the Usage modal and /status, not on the main
+ *   blank row     one full empty row under the transcript, drawn only when a
+ *                 text row follows (a half row cannot be drawn between two
+ *                 rows of plain text). An agent or process view's body
+ *                 already ends with one, so views skip it.
+ *   hint rows     the retry affordance, context pressure, the scriptable
+ *                 status line, when they have something to say
+ *   throbber      what main is doing right now, only while it works
+ *                 (throbber.ts)
+ *   input area    ▄ cap, padding, text, padding, ▀ cap (composer.ts): the
+ *                 caps are the half rows between the input area and the rows
+ *                 above and below it
+ *   status line   one row of session state
+ *
+ * At rest that is 6 rows (input area 5 + status 1), and with the header the
+ * resting chrome is 7. While main works, 2 more: the blank row and the
+ * throbber. The input area holds only input. Token totals, the per-turn
+ * history, tool count, notification mode, the session spine and the web
+ * surface address live in the Usage modal and /status, not on the main
  * screen. What stays always visible is safety: the approval mode and the
  * auto-approve warning, the live microphone and the sleep-disabled chip (the
  * left end of the status line), the failover marker (the header, after the
- * model) and the compaction-pressure hint (a hint row above the composer).
+ * model) and the compaction-pressure hint (a hint row above the input area).
  */
 
 /** The work tree's keys, shown on the status line while the keyboard is in it. */
@@ -97,8 +110,10 @@ export interface ShellFooterBuildOptions {
   readonly powerKeepAwake?: boolean;
   /** Live microphone state; a non-null visible state renders the microphone chip. */
   readonly voiceCapture?: VoiceCaptureIndicatorState | null;
-  /** A running turn: its spinner, phrase and timer take the status line's left side. */
-  readonly busy?: StatusBusyState | null;
+  /** What main is doing while it works (a turn, a compaction): the throbber row. Null at rest. */
+  readonly throbber?: ThrobberState | null;
+  /** A main turn is running: the status line leads with what Esc does now (interrupt, or clear input). */
+  readonly turnRunning?: boolean;
 }
 
 export interface ShellFooterBuildResult {
@@ -108,6 +123,12 @@ export interface ShellFooterBuildResult {
 
 /** The status line under the composer. */
 const STATUS_ROWS = 1;
+
+function blankRow(width: number): Line {
+  const line = UIFactory.stringToLine('', width);
+  for (const cell of line) cell.bg = '';
+  return line;
+}
 
 /**
  * Real height of the most recently rendered footer. estimateShellFooterHeight
@@ -219,14 +240,20 @@ function displayDirectory(workingDir: string | undefined, homeDirectory: string 
 export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterBuildResult {
   const t = activeTokens();
   const lines: Line[] = [];
+  const view = options.view ?? null;
   // Passive hint rows, topmost first: the retry affordance (actionable, time
   // bounded), the context pressure hint, then the user's scriptable line.
-  if (options.retryHint) lines.push(UIFactory.stringToLine(`   ${options.retryHint}`, options.width, { fg: t.textMuted, bold: true }));
-  if (options.contextStatusHint) lines.push(UIFactory.stringToLine(`   ${options.contextStatusHint}`, options.width, { fg: t.textMuted }));
-  if (options.scriptableStatusLine) lines.push(UIFactory.stringToLine(`   ${options.scriptableStatusLine}`, options.width, { fg: t.textMuted }));
+  const above: Line[] = [];
+  if (options.retryHint) above.push(UIFactory.stringToLine(`   ${options.retryHint}`, options.width, { fg: t.textMuted, bold: true }));
+  if (options.contextStatusHint) above.push(UIFactory.stringToLine(`   ${options.contextStatusHint}`, options.width, { fg: t.textMuted }));
+  if (options.scriptableStatusLine) above.push(UIFactory.stringToLine(`   ${options.scriptableStatusLine}`, options.width, { fg: t.textMuted }));
+  // The throbber: main's activity, led by "main" inside a view.
+  if (options.throbber) above.push(renderThrobberLine(options.width, view ? { ...options.throbber, owner: 'main' } : options.throbber));
+  // A full empty row keeps these text rows off the transcript (a view's body ends with one already).
+  if (above.length > 0 && !view) lines.push(blankRow(options.width));
+  lines.push(...above);
 
   const focused = options.promptFocused ?? !options.indicatorFocused;
-  const view = options.view ?? null;
   lines.push(...renderComposer({
     width: options.width,
     promptText: options.promptText,
@@ -260,7 +287,8 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
       chips: safetyChips(options),
       notice: options.showExitNotice ? { text: 'Press Ctrl+C again to exit', tone: 'error' } : view.notice ?? (copied ? { text: 'Copied', tone: 'info' } : null),
       keys: view.keys,
-      trail: view.trail ?? null,
+      // While main works its throbber names what it does; the trail would only repeat "working".
+      trail: options.throbber ? null : view.trail ?? null,
       cost: view.noContext ? null : view.cost ?? null,
       context: null,
     }), 'usage'));
@@ -275,7 +303,7 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
       ? { text: 'Press Ctrl+C again to exit', tone: 'error' }
       : copied ? { text: 'Copied', tone: 'info' } : null,
     // With text in the composer the next Esc clears it; only an empty composer's Esc interrupts.
-    busy: options.busy ? { ...options.busy, escAction: options.promptText.trim().length > 0 ? 'clear input' : undefined } : null,
+    busy: options.turnRunning ? { escAction: options.promptText.trim().length > 0 ? 'clear input' : undefined } : null,
     keys: options.workTreeFocused ? WORK_TREE_KEYS : null,
     directory: displayDirectory(options.workingDir, options.homeDirectory),
     branch: options.branch,

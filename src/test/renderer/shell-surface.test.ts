@@ -28,9 +28,9 @@ function footer(overrides: Partial<ShellFooterBuildOptions> = {}): ReturnType<ty
 const text = (result: ReturnType<typeof buildShellFooter>): string => result.lines.map(lineToString).join('\n');
 
 describe('shell surface: the composer', () => {
-  test('at rest the footer is the 3-row composer plus the status line', () => {
+  test('at rest the footer is the 5-row input area (caps, padding, text) plus the status line', () => {
     const result = footer();
-    expect(result.height).toBe(4);
+    expect(result.height).toBe(6);
     expect(result.height).toBe(estimateShellFooterHeight(1));
   });
 
@@ -38,19 +38,31 @@ describe('shell surface: the composer', () => {
     const one = footer();
     const two = footer({ promptText: 'hello\nworld', promptLineCount: 2 });
     expect(two.height).toBe(one.height + 1);
-    expect(lineToString(two.lines[1]!).slice(5, 10)).toBe('hello');
-    expect(lineToString(two.lines[2]!).slice(5, 10)).toBe('world');
+    expect(lineToString(two.lines[2]!).slice(5, 10)).toBe('hello');
+    expect(lineToString(two.lines[3]!).slice(5, 10)).toBe('world');
   });
 
   test('the bar runs every composer row at column 2 against a full-width element fill', () => {
     const result = footer({ width: 80 });
-    const composer = result.lines.slice(0, 3);
+    const composer = result.lines.slice(1, 4);
     for (const row of composer) {
       expect(row[2]!.char).toBe('┃');
       expect(row[3]!.bg).toBe(activeTokens().backgroundElement);
       expect(row[77]!.bg).toBe(activeTokens().backgroundElement);
       expect(row[78]!.bg).toBe('');
     }
+  });
+
+  test('half-row caps above and below the fill, with the bar\'s matching halves', () => {
+    const t = activeTokens();
+    const [top, , , , bottom] = footer({ width: 80 }).lines;
+    expect(top![2]!.char).toBe('╻');
+    expect(bottom![2]!.char).toBe('╹');
+    for (let x = 3; x <= 77; x++) {
+      expect(top![x]).toMatchObject({ char: '▄', fg: t.backgroundElement, bg: '' });
+      expect(bottom![x]).toMatchObject({ char: '▀', fg: t.backgroundElement, bg: '' });
+    }
+    expect(top![78]!.char).toBe(' ');
   });
 
   test('the composer passes the layout audit (padding rows, 2-column text inset, full-height bar)', () => {
@@ -60,22 +72,22 @@ describe('shell surface: the composer', () => {
 
   test('an empty focused composer shows the placeholder', () => {
     const result = footer({ promptText: '', promptCursorPos: 0 });
-    expect(lineToString(result.lines[1]!)).toContain('sk anything, or type / for commands and @ for files');
+    expect(lineToString(result.lines[2]!)).toContain('sk anything, or type / for commands and @ for files');
   });
 
   test('an unfocused empty composer says how to get back', () => {
     const result = footer({ promptText: '', indicatorFocused: true });
-    expect(lineToString(result.lines[1]!)).toContain('Esc returns to the composer');
-    expect(lineToString(result.lines[1]!)).not.toContain('█');
+    expect(lineToString(result.lines[2]!)).toContain('Esc returns to the composer');
+    expect(lineToString(result.lines[2]!)).not.toContain('█');
   });
 
   test('the composer holds only input: no mode, model, provider or warning inside it', () => {
     const result = footer({ permissionMode: 'plan', dangerMode: true, powerKeepAwake: true, width: 120 });
-    const composer = result.lines.slice(0, 3).map(lineToString).join('\n');
+    const composer = result.lines.slice(0, 5).map(lineToString).join('\n');
     expect(composer).toContain('hello');
     for (const word of ['plan', 'gpt-test', 'openai', 'auto-approve', 'sleep disabled']) expect(composer).not.toContain(word);
-    expect(lineToString(result.lines[0]!).trim()).toBe('┃');
-    expect(lineToString(result.lines[2]!).trim()).toBe('┃');
+    expect(lineToString(result.lines[1]!).trim()).toBe('┃');
+    expect(lineToString(result.lines[3]!).trim()).toBe('┃');
   });
 
   test('the mode colors the bar: normal brand, plan info, auto-approving modes warning, shell accent', () => {
@@ -90,7 +102,7 @@ describe('shell surface: the composer', () => {
 
   test('a command argument hint trails the cursor, clamped with an ellipsis', () => {
     const hint = 'install <name> | uninstall <name> | enable <name> | disable <name> | refresh | search <query>';
-    const row = lineToString(footer({ width: 60, promptText: '/marketplace', promptCursorPos: 12, commandArgsHint: hint }).lines[1]!);
+    const row = lineToString(footer({ width: 60, promptText: '/marketplace', promptCursorPos: 12, commandArgsHint: hint }).lines[2]!);
     expect(row).toContain('install <name>');
     expect(row).toContain('…');
     expect(row.length).toBeLessThanOrEqual(60);
@@ -128,9 +140,9 @@ describe('shell surface: always-visible safety', () => {
     expect(text(footer())).not.toContain('auto-approve');
   });
 
-  test('a running turn follows the mode chip', () => {
-    const row = lineToString(statusRow(footer({ width: 120, dangerMode: true, permissionMode: 'allow-all', busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 3_000 } })));
-    expect(row).toMatch(/! auto-approve {3}◐ Thinking\.\.\. · 3s/);
+  test('a running turn\'s esc hint follows the mode chip', () => {
+    const row = lineToString(statusRow(footer({ width: 120, dangerMode: true, permissionMode: 'allow-all', promptText: '', turnRunning: true })));
+    expect(row).toMatch(/! auto-approve {3} ?esc +interrupt/);
   });
 
   test.each([60, 80, 120])('the mode chip, auto-approve and sleep-disabled survive %i columns', (width) => {
@@ -163,8 +175,8 @@ describe('shell surface: the live microphone chip', () => {
 
   test('a listening wake detector shows on the status line without changing the footer height', () => {
     const result = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
-    expect(lineToString(result.lines[3]!)).toContain('mic listening');
-    expect(result.height).toBe(4);
+    expect(lineToString(result.lines[5]!)).toContain('mic listening');
+    expect(result.height).toBe(6);
   });
 
   test('voice.wake.indicator off suppresses the wake chip', () => {
@@ -176,8 +188,8 @@ describe('shell surface: the live microphone chip', () => {
   });
 
   test('banner prominence fills the chip, statusline prominence does not', () => {
-    const banner = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'banner' }).lines[3]!;
-    const plain = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' }).lines[3]!;
+    const banner = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'banner' }).lines[5]!;
+    const plain = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' }).lines[5]!;
     const filled = (row: typeof banner) => row.filter((c) => c.bg !== '').length;
     expect(filled(banner)).toBeGreaterThan(filled(plain));
   });
@@ -205,23 +217,26 @@ describe('shell surface: the status line', () => {
     expect(row).toContain('main');
   });
 
-  test('a running turn shows its phrase, elapsed time and esc interrupt instead of the directory', () => {
-    const row = status({ width: 120, promptText: '', busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 12_000 } });
-    expect(row).toContain('Thinking... · 12s');
+  test('a running turn leads with esc interrupt and keeps the session state; its activity is the throbber\'s', () => {
+    const row = status({ width: 120, promptText: '', turnRunning: true, throbber: { spinner: '◐', frame: 0, activity: { kind: 'model', phrase: 'Thinking...', elapsedMs: 12_000 } } });
+    expect(row).not.toContain('Thinking');
+    expect(row).not.toContain('◐');
     expect(row).toMatch(/esc +interrupt/);
+    expect(row).toContain('/tmp/demo · main');
   });
 
-  test('while the composer has text, the busy line says the next Esc clears it (it does not interrupt yet)', () => {
-    const row = status({ width: 120, promptText: 'draft', busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 12_000 } });
+  test('while the composer has text, the status line says the next Esc clears it (it does not interrupt yet)', () => {
+    const row = status({ width: 120, promptText: 'draft', turnRunning: true });
     expect(row).toMatch(/esc +clear input/);
     expect(row).not.toMatch(/esc +interrupt/);
-    expect(row).not.toContain('/tmp/demo');
   });
 
-  test('only the spinner glyph carries color from the gradient; the phrase is muted', () => {
-    const result = footer({ width: 120, busy: { spinner: '◐', frame: 0, phrase: 'Thinking...' } });
-    const row = result.lines[result.lines.length - 1]!;
+  test('on the throbber only the spinner glyph carries color from the gradient; the phrase is muted', () => {
+    const result = footer({ width: 120, turnRunning: true, throbber: { spinner: '◐', frame: 0, activity: { kind: 'model', phrase: 'Thinking...' } } });
+    const row = result.lines[1]!;
+    expect(row[3]!.char).toBe('◐');
     const phraseStart = lineToString(row).indexOf('Thinking');
+    expect(phraseStart).toBe(5);
     for (let x = phraseStart; x < phraseStart + 8; x++) expect(row[x]!.fg).toBe(activeTokens().textMuted);
   });
 
@@ -259,12 +274,22 @@ describe('shell surface: the status line', () => {
 });
 
 describe('shell surface: hint rows above the composer', () => {
-  test('the retry affordance, the context pressure hint and the scriptable line stack above the composer', () => {
+  test('the retry affordance, the context pressure hint and the scriptable line stack above the composer, under an empty row', () => {
     const result = footer({ retryHint: 'r retry', contextStatusHint: 'context 82%: compaction soon', scriptableStatusLine: 'custom line' });
-    expect(result.height).toBe(7);
-    expect(lineToString(result.lines[0]!)).toContain('r retry');
+    expect(result.height).toBe(10);
+    expect(lineToString(result.lines[0]!).trim()).toBe('');
+    expect(lineToString(result.lines[1]!)).toContain('r retry');
+    expect(lineToString(result.lines[2]!)).toContain('compaction soon');
+    expect(lineToString(result.lines[3]!)).toContain('custom line');
+    expect(result.lines[4]![2]!.char).toBe('╻');
+    expect(result.lines[5]![2]!.char).toBe('┃');
+  });
+
+  test('the throbber sits under the hint rows, directly over the input area\'s cap', () => {
+    const result = footer({ contextStatusHint: 'context 82%: compaction soon', turnRunning: true, throbber: { spinner: '◐', frame: 0, activity: { kind: 'compacting', elapsedMs: 4_000 } } });
+    expect(lineToString(result.lines[0]!).trim()).toBe('');
     expect(lineToString(result.lines[1]!)).toContain('compaction soon');
-    expect(lineToString(result.lines[2]!)).toContain('custom line');
-    expect(result.lines[3]![2]!.char).toBe('┃');
+    expect(lineToString(result.lines[2]!)).toContain('◐ Compacting the conversation · 4s');
+    expect(result.lines[3]![2]!.char).toBe('╻');
   });
 });

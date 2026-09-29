@@ -21,7 +21,7 @@ import { createFailoverTurnState } from '../../core/active-model-identity.ts';
 // ---------------------------------------------------------------------------
 
 type TurnEvent = 'STREAM_START' | 'STREAM_DELTA' | 'STREAM_END' | 'TURN_COMPLETED' | 'TURN_ERROR' | 'TURN_CANCEL';
-type ToolEvent = 'TOOL_EXECUTING' | 'TOOL_SUCCEEDED' | 'TOOL_FAILED' | 'TOOL_CANCELLED';
+type ToolEvent = 'TOOL_RECEIVED' | 'TOOL_EXECUTING' | 'TOOL_SUCCEEDED' | 'TOOL_FAILED' | 'TOOL_CANCELLED';
 
 type TurnBusHandler = ((ev: { error: string }) => void) | ((...args: unknown[]) => void);
 
@@ -75,6 +75,7 @@ function makeTurnBus() {
 
 function makeToolBus() {
   const listeners: Record<string, Array<(...args: unknown[]) => void>> = {
+    TOOL_RECEIVED: [],
     TOOL_EXECUTING: [],
     TOOL_SUCCEEDED: [],
     TOOL_FAILED: [],
@@ -97,6 +98,7 @@ function makeMetrics(): StreamMetrics {
     startTime: 0, deltaCount: 0, tokenSpeed: 0,
     ttftMs: undefined, ttftRecorded: false,
     activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
+    toolArgsByCallId: new Map(),
     lastDeltaAtMs: undefined, stallEpisode: 0,
     reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };

@@ -180,8 +180,7 @@ describe('live run 5: busy text shares the status line with the cost and the con
   }
 
   test('a running turn keeps its esc key and the bar at 80 columns', () => {
-    const busy = { spinner: '◐', frame: 0, phrase: 'Recalibrating the vibe matrix while the reviewer finishes its pass', elapsedMs: 12_000 };
-    const line = lineToString(renderStatusLine({ width: 80, chips, busy, cost: '$0.12', context }));
+    const line = lineToString(renderStatusLine({ width: 80, chips, busy: {}, cost: '$0.12', context, background: { agents: 2, processes: 0, focused: false, progress: 'the reviewer finishes its pass' } }));
     expect(line).toMatch(/[█░│]{6,} 16%/);
     expect(line).toContain('esc');
   });

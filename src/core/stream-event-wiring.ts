@@ -39,6 +39,13 @@ export interface StreamMetrics {
    */
   activeToolCallId: string | undefined;
   /**
+   * Arguments of the tool calls received this turn, by callId (from
+   * TOOL_RECEIVED), so the throbber can name the running call's key argument.
+   * An entry is dropped when its call finishes (succeeded, failed or
+   * cancelled), and the map keeps at most 64 entries, oldest dropped first.
+   */
+  toolArgsByCallId: Map<string, Record<string, unknown>>;
+  /**
    * Epoch ms of the most recent STREAM_START or STREAM_DELTA; undefined when
    * idle (no turn in flight). Read every render frame, not just on the
    * watchdog's one-shot hint, so "ms since last byte" can be computed even
@@ -68,6 +75,7 @@ export function createStreamMetrics(): StreamMetrics {
   return {
     startTime: 0, deltaCount: 0, tokenSpeed: 0, ttftMs: undefined, ttftRecorded: false,
     activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
+    toolArgsByCallId: new Map(),
     lastDeltaAtMs: undefined, stallEpisode: 0,
     reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
@@ -714,6 +722,11 @@ export function wireStreamEventMetrics(
     render();
   }));
 
+  unsubs.push(events.tools.on('TOOL_RECEIVED', (ev) => {
+    // Bounded: a turn that never finishes its calls cannot grow this without limit.
+    if (metrics.toolArgsByCallId.size >= 64) metrics.toolArgsByCallId.delete(metrics.toolArgsByCallId.keys().next().value!);
+    metrics.toolArgsByCallId.set(ev.callId, ev.args ?? {});
+  }));
   unsubs.push(events.tools.on('TOOL_EXECUTING', (ev) => {
     metrics.activeToolStartedAtMs = ev.startedAt;
     metrics.activeToolName = ev.tool;
@@ -728,19 +741,22 @@ export function wireStreamEventMetrics(
   // delta), the very next frame would read msSinceLastDelta as the full
   // tool-execution duration and immediately report a stall, even though the
   // model hasn't had a chance to resume producing tokens yet.
-  unsubs.push(events.tools.on('TOOL_SUCCEEDED', () => {
+  unsubs.push(events.tools.on('TOOL_SUCCEEDED', (ev) => {
+    metrics.toolArgsByCallId.delete(ev.callId);
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
     metrics.activeToolCallId = undefined;
     metrics.lastDeltaAtMs = Date.now();
   }));
-  unsubs.push(events.tools.on('TOOL_FAILED', () => {
+  unsubs.push(events.tools.on('TOOL_FAILED', (ev) => {
+    metrics.toolArgsByCallId.delete(ev.callId);
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
     metrics.activeToolCallId = undefined;
     metrics.lastDeltaAtMs = Date.now();
   }));
-  unsubs.push(events.tools.on('TOOL_CANCELLED', () => {
+  unsubs.push(events.tools.on('TOOL_CANCELLED', (ev) => {
+    metrics.toolArgsByCallId.delete(ev.callId);
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
     metrics.activeToolCallId = undefined;

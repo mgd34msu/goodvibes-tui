@@ -78,18 +78,19 @@ describe('context bar geometry', () => {
     expect(forms.some((t) => !t.includes('context') && /[█░│]{6} 25%/.test(t))).toBe(true);
   });
 
-  test('from the warning level a busy phrase truncates so the bare bar stays visible', () => {
-    const busy = { spinner: '◐', frame: 0, phrase: 'Recalibrating the vibe matrix while the long phrase keeps going', elapsedMs: 12_000 };
+  test('from the warning level a long background summary truncates so the bare bar stays visible, while a turn runs', () => {
     const render = (fraction: number): string => lineToString(renderStatusLine({
       width: 80,
-      busy,
+      busy: {},
+      background: { agents: 3, processes: 2, focused: false, progress: 'engineer is recalibrating the retry matrix while the long summary keeps going' },
       context: { usedTokens: Math.round(WINDOW * fraction), windowTokens: WINDOW, compactFraction: 0.8 },
     }));
     expect(render(0.85)).toMatch(/[█░│]{6} 85%/);
     expect(render(0.7)).toMatch(/[█░│]{6} 70%/);
-    // Healthy: the bar still shares the row; the phrase is what gets cut.
+    // Healthy: the bar still shares the row; the summary is what gets cut.
     expect(render(0.3)).toMatch(/[█░│]{6,} 30%/);
-    expect(render(0.3)).toContain('◐ Recalibrating');
+    expect(render(0.3)).toContain('◐ 3 agents running');
+    expect(render(0.3)).toMatch(/esc +interrupt/);
   });
 });
 

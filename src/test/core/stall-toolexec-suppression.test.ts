@@ -78,6 +78,7 @@ function makeMetrics(): StreamMetrics {
     startTime: 0, deltaCount: 0, tokenSpeed: 0,
     ttftMs: undefined, ttftRecorded: false,
     activeToolStartedAtMs: undefined, activeToolName: undefined, activeToolCallId: undefined,
+    toolArgsByCallId: new Map(),
     lastDeltaAtMs: undefined, stallEpisode: 0,
     reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
@@ -130,7 +131,7 @@ describe('stall indicator vs. tool execution (integration path)', () => {
       turns.emit('STREAM_DELTA');
 
       mockNow += 10;
-      tools.emit('TOOL_EXECUTING', { tool: 'Bash', startedAt: mockNow });
+      tools.emit('TOOL_EXECUTING', { callId: 'c1', tool: 'Bash', startedAt: mockNow });
       expect(metrics.activeToolName).toBe('Bash');
 
       // Advance well past the stall-freeze threshold while the tool is STILL
@@ -145,7 +146,7 @@ describe('stall indicator vs. tool execution (integration path)', () => {
       // Tool completes, lastDeltaAtMs must reset to "now" so the post-tool
       // silence window starts fresh instead of instantly reading as a
       // multi-second stall the moment the tool finishes.
-      tools.emit('TOOL_SUCCEEDED');
+      tools.emit('TOOL_SUCCEEDED', { callId: 'c1' });
       expect(metrics.activeToolName).toBeUndefined();
       const stallInfoRightAfterTool = computeRenderStallInfo(metrics, mockNow);
       expect(stallInfoRightAfterTool).toBeDefined();
@@ -168,12 +169,12 @@ describe('stall indicator vs. tool execution (integration path)', () => {
       try {
         turns.emit('STREAM_START');
         mockNow += THINKING_STALL_FREEZE_MS + 3_000;
-        tools.emit('TOOL_EXECUTING', { tool: 'Grep', startedAt: mockNow });
+        tools.emit('TOOL_EXECUTING', { callId: 'c2', tool: 'Grep', startedAt: mockNow });
 
         mockNow += THINKING_STALL_FREEZE_MS + 3_000;
         expect(computeRenderStallInfo(metrics, mockNow)).toBeUndefined();
 
-        tools.emit(completionEvent);
+        tools.emit(completionEvent, { callId: 'c2' });
         const stallInfoAfter = computeRenderStallInfo(metrics, mockNow);
         expect(stallInfoAfter).toBeDefined();
         expect(stallInfoAfter!.msSinceLastDelta).toBeLessThan(THINKING_STALL_FREEZE_MS);
@@ -229,5 +230,32 @@ describe('stall indicator vs. tool execution (integration path)', () => {
     } finally {
       Date.now = origDateNow;
     }
+  });
+});
+
+describe('the running call\'s arguments, for the throbber', () => {
+  test('TOOL_RECEIVED keeps a call\'s arguments while it runs; completion drops them', () => {
+    const turns = makeBus();
+    const tools = makeBus();
+    const metrics = makeMetrics();
+    wireStreamEventMetrics(makeOptions(turns, tools, metrics));
+    tools.emit('TOOL_RECEIVED', { callId: 'c1', tool: 'exec', args: { command: 'bun test' } });
+    tools.emit('TOOL_RECEIVED', { callId: 'c2', tool: 'read', args: { path: 'src/a.ts' } });
+    tools.emit('TOOL_EXECUTING', { callId: 'c1', tool: 'exec', startedAt: 1 });
+    expect(metrics.toolArgsByCallId.get(metrics.activeToolCallId!)).toEqual({ command: 'bun test' });
+    tools.emit('TOOL_SUCCEEDED', { callId: 'c1' });
+    tools.emit('TOOL_FAILED', { callId: 'c2' });
+    expect(metrics.toolArgsByCallId.size).toBe(0);
+  });
+
+  test('the map stays bounded when calls never finish', () => {
+    const turns = makeBus();
+    const tools = makeBus();
+    const metrics = makeMetrics();
+    wireStreamEventMetrics(makeOptions(turns, tools, metrics));
+    for (let i = 0; i < 200; i++) tools.emit('TOOL_RECEIVED', { callId: `c${i}`, tool: 'read', args: { path: `f${i}` } });
+    expect(metrics.toolArgsByCallId.size).toBe(64);
+    expect(metrics.toolArgsByCallId.has('c199')).toBe(true);
+    expect(metrics.toolArgsByCallId.has('c0')).toBe(false);
   });
 });

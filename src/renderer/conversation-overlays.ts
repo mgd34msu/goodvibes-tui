@@ -99,7 +99,7 @@ export interface ConversationLayerContext {
   readonly permission?: SurfaceLayer | null;
   /** Rows at the top of the screen held by the header (and the session chips row); toasts start below them. */
   readonly headerRows?: number;
-  /** Rows at the bottom of the screen held by the composer and status line; toasts stay above them. */
+  /** Rows at the bottom of the screen held by the footer (the throbber and its empty row while main works, the composer, the status line); toasts stay above them. */
   readonly footerRows?: number;
 }
 

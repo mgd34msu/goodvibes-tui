@@ -3,7 +3,8 @@ import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { renderStatusLine, type StatusBusyState } from '../../renderer/status-line.ts';
+import { renderStatusLine } from '../../renderer/status-line.ts';
+import { renderThrobberLine, resolveThrobberActivity } from '../../renderer/throbber.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
 import { getDisplayWidth } from '../../utils/terminal-width.ts';
 
@@ -18,10 +19,17 @@ function makeTmpDir(): string {
 // ---------------------------------------------------------------------------
 
 
-/** The status line's text for a running turn. */
-function statusText(busy: Partial<StatusBusyState>): string {
-  const line = renderStatusLine({ width: 120, busy: { spinner: '-', frame: 0, phrase: 'Thinking...', ...busy } });
-  return line.map((c) => c.char).join('');
+/** The throbber's text for a running turn (the row above the input area). */
+function throbberRowText(turn: { phrase?: string; elapsedMs?: number; ttftMs?: number; tokenSpeed?: number; approvalPending?: boolean }): string {
+  const now = 1_800_000_000_000;
+  const activity = resolveThrobberActivity({
+    turnActive: true, compacting: false, now,
+    modelPhrase: turn.phrase ?? 'Thinking...',
+    turnStartMs: turn.elapsedMs !== undefined ? now - turn.elapsedMs : undefined,
+    ttftMs: turn.ttftMs, tokenSpeed: turn.tokenSpeed,
+    pendingApproval: turn.approvalPending ? { name: 'exec', args: { command: 'ls' } } : null,
+  })!;
+  return renderThrobberLine(120, { spinner: '-', frame: 0, activity }).map((c) => c.char).join('');
 }
 
 describe('config diff logic', () => {
@@ -162,26 +170,26 @@ describe('tool preview truncation', () => {
     expect(getDisplayWidth(line.map((c) => c.char).join('').trimEnd())).toBeLessThanOrEqual(width);
   });
 
-  it('the status line shows the elapsed time of a running turn', () => {
-    expect(statusText({ elapsedMs: 12_000 })).toContain('12s');
+  it('the throbber shows the elapsed time of a running turn', () => {
+    expect(throbberRowText({ elapsedMs: 12_000 })).toContain('12s');
   });
 
-  it('the status line shows time to first token once known', () => {
-    expect(statusText({ ttftMs: 350 })).toContain('first token 0.3s');
+  it('the throbber shows time to first token once known', () => {
+    expect(throbberRowText({ ttftMs: 350 })).toContain('first token 0.3s');
   });
 
-  it('the status line shows both elapsed and first-token time', () => {
-    const text = statusText({ elapsedMs: 5000, ttftMs: 280 });
+  it('the throbber shows both elapsed and first-token time', () => {
+    const text = throbberRowText({ elapsedMs: 5000, ttftMs: 280 });
     expect(text).toContain('5s');
     expect(text).toContain('first token 0.2s');
   });
 
   it('no elapsed time is shown when none is known', () => {
-    expect(statusText({})).not.toMatch(/ \d+(\.\d)?s\b/);
+    expect(throbberRowText({})).not.toMatch(/ \d+(\.\d)?s\b/);
   });
 
   it('the status line offers esc to interrupt a running turn', () => {
-    expect(statusText({})).toMatch(/esc +interrupt/);
+    expect(renderStatusLine({ width: 120, busy: {} }).map((c) => c.char).join('')).toMatch(/esc +interrupt/);
   });
 
   // -------------------------------------------------------------------------
@@ -234,7 +242,7 @@ describe('tool preview truncation', () => {
     const phrase = UIFactory.busyPhrase(1000, undefined, { msSinceLastDelta: 45_000 }, true);
     expect(phrase).toContain('Waiting for your approval');
     expect(phrase).not.toContain('Stalled');
-    const text = statusText({ phrase, approvalPending: true, ttftMs: 280, tokenSpeed: 40 });
+    const text = throbberRowText({ phrase, approvalPending: true, ttftMs: 280, tokenSpeed: 40 });
     expect(text).not.toContain('tok/s');
     expect(text).not.toContain('first token');
   });

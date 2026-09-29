@@ -2,10 +2,17 @@
  * composer.ts, the prompt box, built exactly like a user message. It holds
  * input and nothing else.
  *
- *   col 2        ┃ in the mode color, on every row of the block
+ *   col 2        ┃ in the mode color, on every row of the block; ╻ and ╹ on
+ *                the cap rows, so the bar spans exactly the visible fill
  *   cols 3..w-3  the element fill
- *   rows         padding, text (one or more), padding
+ *   rows         ▄ cap, padding, text (one or more), padding, ▀ cap
  *   text         from column 5, wrapped to width-9 (see prompt-content-width.ts)
+ *
+ * The cap rows are half rows: a ▄ row is empty on top and fill below, a ▀ row
+ * fill on top and empty below (the modal caps' technique, surface-kit.ts).
+ * They keep half a row of empty space between the input area and whatever
+ * sits above it (the throbber, or the transcript at rest) and below it (the
+ * status line), so text never sits directly on the input area.
  *
  * Multi-line input grows the text area; nothing else moves. The approval mode,
  * the auto-approve warning and the safety chips are on the status line; the
@@ -23,8 +30,8 @@ const COMPOSER_BAR_X = 2;
 const COMPOSER_FILL_X = 3;
 /** First text column. */
 const COMPOSER_TEXT_X = 5;
-/** Rows the composer adds around its text rows (the padding row above and below). */
-export const COMPOSER_FIXED_ROWS = 2;
+/** Rows the composer adds around its text rows (a cap row and a padding row above and below). */
+export const COMPOSER_FIXED_ROWS = 4;
 
 const COMPOSER_PLACEHOLDER = 'Ask anything, or type / for commands and @ for files';
 
@@ -73,7 +80,21 @@ function blockRow(width: number, bar: string, bg: string): Line {
   return line;
 }
 
-/** Render the composer block (at least 3 rows). */
+/**
+ * A half row: ▄ (the fill's lower half, above the block) or ▀ (its upper
+ * half, below the block) across the fill columns, in the fill color on the
+ * terminal background, with the bar's matching half (╻ or ╹) in column 2.
+ */
+function capRow(width: number, bar: string, bg: string, edge: 'top' | 'bottom'): Line {
+  const line = createEmptyLine(width);
+  for (const cell of line) cell.bg = '';
+  const base = { bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+  if (width > COMPOSER_BAR_X) line[COMPOSER_BAR_X] = { ...base, char: edge === 'top' ? '╻' : '╹', fg: bar };
+  for (let x = COMPOSER_FILL_X; x <= width - 3; x++) line[x] = { ...base, char: edge === 'top' ? '▄' : '▀', fg: bg };
+  return line;
+}
+
+/** Render the composer block (at least 5 rows: cap, padding, text, padding, cap). */
 export function renderComposer(options: ComposerOptions): Line[] {
   const t = activeTokens();
   const { width } = options;
@@ -83,10 +104,10 @@ export function renderComposer(options: ComposerOptions): Line[] {
   if (options.disabledReason !== undefined) {
     const line = blockRow(width, bar, bg);
     put(line, COMPOSER_TEXT_X, textEnd, truncateDisplay(options.disabledReason, Math.max(0, textEnd - COMPOSER_TEXT_X)), { fg: t.textFaint, bg });
-    return [blockRow(width, bar, bg), line, blockRow(width, bar, bg)];
+    return [capRow(width, bar, bg, 'top'), blockRow(width, bar, bg), line, blockRow(width, bar, bg), capRow(width, bar, bg, 'bottom')];
   }
   const rows = options.promptText.split('\n');
-  const lines: Line[] = [blockRow(width, bar, bg)];
+  const lines: Line[] = [capRow(width, bar, bg, 'top'), blockRow(width, bar, bg)];
   const textFg = options.focused ? t.text : t.textFaint;
   const placeholder = options.placeholder ?? COMPOSER_PLACEHOLDER;
 
@@ -122,6 +143,6 @@ export function renderComposer(options: ComposerOptions): Line[] {
     lines.push(line);
   });
 
-  lines.push(blockRow(width, bar, bg));
+  lines.push(blockRow(width, bar, bg), capRow(width, bar, bg, 'bottom'));
   return lines;
 }
