@@ -96,8 +96,8 @@
     "@anthropic-ai/bedrock-sdk": "^0.29.1",
     "@anthropic-ai/sdk": "^0.92.0",
     "@ast-grep/napi": "^0.42.0",
-    "@pellux/goodvibes-sdk": "2.0.23",
-    "@pellux/goodvibes-terminal-shell": "2.0.23",
+    "@pellux/goodvibes-sdk": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/sdk/pellux-goodvibes-sdk-2.0.23.tgz",
+    "@pellux/goodvibes-terminal-shell": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/terminal-shell/pellux-goodvibes-terminal-shell-2.0.23.tgz",
     "bash-language-server": "^5.6.0",
     "fuse.js": "^7.1.0",
     "@pellux/goodvibes-daemon": "1.28.25",
@@ -133,6 +133,17 @@
   },
   "trustedDependencies": [],
   "overrides": {
-    "minimatch": "^10.2.5"
+    "minimatch": "^10.2.5",
+    "@pellux/goodvibes-contracts": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/contracts/pellux-goodvibes-contracts-2.0.23.tgz",
+    "@pellux/goodvibes-daemon-sdk": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/daemon-sdk/pellux-goodvibes-daemon-sdk-2.0.23.tgz",
+    "@pellux/goodvibes-errors": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/errors/pellux-goodvibes-errors-2.0.23.tgz",
+    "@pellux/goodvibes-operator-sdk": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/operator-sdk/pellux-goodvibes-operator-sdk-2.0.23.tgz",
+    "@pellux/goodvibes-peer-sdk": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/peer-sdk/pellux-goodvibes-peer-sdk-2.0.23.tgz",
+    "@pellux/goodvibes-sdk": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/sdk/pellux-goodvibes-sdk-2.0.23.tgz",
+    "@pellux/goodvibes-terminal-shell": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/terminal-shell/pellux-goodvibes-terminal-shell-2.0.23.tgz",
+    "@pellux/goodvibes-toolchain": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/toolchain/pellux-goodvibes-toolchain-2.0.23.tgz",
+    "@pellux/goodvibes-transport-core": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/transport-core/pellux-goodvibes-transport-core-2.0.23.tgz",
+    "@pellux/goodvibes-transport-http": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/transport-http/pellux-goodvibes-transport-http-2.0.23.tgz",
+    "@pellux/goodvibes-transport-realtime": "file:/home/buzzkill/Projects/goodvibes-sdk-wt-theme/packages/transport-realtime/pellux-goodvibes-transport-realtime-2.0.23.tgz"
   }
 }
