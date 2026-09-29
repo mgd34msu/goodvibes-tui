@@ -3,8 +3,15 @@
 //
 // Strategy:
 //   Each test renders a fixed surface with frozen inputs (no timestamps,
-//   no dynamic counters, fixed terminal dimensions, frozen DARK theme),
-//   then compares the result against a committed snapshot text file.
+//   no dynamic counters, fixed terminal dimensions, dark mode, the default
+//   `goodvibes` theme), then compares the result against a committed
+//   snapshot text file.
+//
+// Theme sets:
+//   golden-frames/                  the default theme (this file run directly)
+//   golden-frames-goodvibes-neon/   the same surfaces under goodvibes-neon, run
+//                                   by golden-frames-neon.test.ts, which sets
+//                                   GOODVIBES_GOLDEN_THEME and imports this file
 //
 // Snapshot format (see snapshotEncode / snapshotDiff below):
 //   A human-readable text block:
@@ -16,6 +23,7 @@
 //
 // Update path:
 //   GOODVIBES_UPDATE_GOLDENS=1 bun test src/test/renderer/golden-frames.test.ts
+//   GOODVIBES_UPDATE_GOLDENS=1 bun test src/test/renderer/golden-frames-neon.test.ts
 //   CI: env var is absent → mismatch = fail.
 //
 // Surfaces covered:
@@ -79,7 +87,7 @@ import { ConfigModal } from '../../input/config-modal.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
 import type { ConfigModalView } from '../../input/config-modal-types.ts';
 import { statusGlyph, toneStyle, pad, postureLine, kv } from '../../panels/modals/modal-surface-helpers.ts';
-import { setActiveThemeMode } from '../../renderer/theme.ts';
+import { resolveUiTones, setActiveThemeMode, setActiveThemeName } from '../../renderer/theme.ts';
 import { PermissionPromptUI } from '../../permissions/prompt.ts';
 import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import { resolveApprovalRequester } from '../../permissions/hunk-selection.ts';
@@ -92,7 +100,14 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
 // Constants
 // ---------------------------------------------------------------------------
 
-const GOLDENS_DIR = new URL('./golden-frames/', import.meta.url).pathname;
+// The theme every surface renders under; golden-frames-neon.test.ts sets this
+// before importing the file to produce the goodvibes-neon set.
+const GOLDEN_THEME = process.env['GOODVIBES_GOLDEN_THEME'] ?? 'goodvibes';
+setActiveThemeName(GOLDEN_THEME);
+const GOLDENS_DIR = new URL(
+  GOLDEN_THEME === 'goodvibes' ? './golden-frames/' : `./golden-frames-${GOLDEN_THEME}/`,
+  import.meta.url,
+).pathname;
 const UPDATE = process.env['GOODVIBES_UPDATE_GOLDENS'] === '1';
 
 // Fixed terminal dimensions for all golden surfaces.
@@ -1906,9 +1921,9 @@ describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
   });
 
   test('dark chrome is byte-identical across renders and unmoved by the wiring', () => {
-    // The default active mode in the shared test process is dark; activeUiTones()
-    // resolves to the UI_TONES constant the old static reads used, so the dark
-    // output must be render-stable AND equal to the committed dark chrome golden.
+    // The default active mode in the shared test process is dark (default
+    // theme), so the dark output must be render-stable AND equal to the
+    // committed dark chrome golden.
     const a = snapshotEncode('chrome-dark', renderChromeHeaderFooterSurface());
     const b = snapshotEncode('chrome-dark', renderChromeHeaderFooterSurface());
     expect(a).toBe(b);
@@ -1916,11 +1931,9 @@ describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
   });
 
   test('each chrome surface (header/footer/thinking) flips its roles under light', () => {
-    // Header: separator + version = chrome.faint (#475569 dark → #94a3b8 light);
-    //         dirty git = chrome.warn (#f59e0b dark → #b45309 light).
-    // Footer: DANGER banner = chrome.bad (#ef4444 dark → #dc2626 light);
-    //         approval-wait risk = chrome.warn.
-    // Thinking: 'out' token = accent.brand (#00ffff dark → #0077aa light).
+    // Header: separator + version = chrome.faint; dirty git = chrome.warn.
+    // Footer: DANGER banner = chrome.bad; approval-wait risk = chrome.warn.
+    // Thinking: 'out' token = accent.brand.
     const headerDark = snapshotEncode('c-h', renderChromeHeaderFooterSurface());
     const thinkDark = snapshotEncode('c-t', renderChromeThinkingSurface());
     const headerLight = snapshotEncode('c-h', underLight(() => renderChromeHeaderFooterSurface()));
@@ -1930,15 +1943,18 @@ describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
     expect(headerLight).not.toBe(headerDark);
     expect(thinkLight).not.toBe(thinkDark);
 
-    // Concrete role assertions, the exact hex must appear/disappear per mode.
-    expect(headerDark).toContain('fg=#475569'); // chrome.faint (dark)
-    expect(headerLight).toContain('fg=#94a3b8'); // chrome.faint (light)
-    expect(headerDark).toContain('fg=#f59e0b'); // chrome.warn (dark, dirty git)
-    expect(headerLight).toContain('fg=#b45309'); // chrome.warn (light)
-    expect(headerDark).toContain('fg=#ef4444'); // chrome.bad (dark, DANGER)
-    expect(headerLight).toContain('fg=#dc2626'); // chrome.bad (light)
-    expect(thinkDark).toContain('fg=#00ffff'); // accent.brand (dark)
-    expect(thinkLight).toContain('fg=#0077aa'); // accent.brand (light)
+    // Concrete role assertions: each role's resolved colour for the mode must
+    // appear in that mode's render (read from the active theme, not pinned).
+    const darkTones = resolveUiTones('dark');
+    const lightTones = resolveUiTones('light');
+    expect(headerDark).toContain(`fg=${darkTones.chrome.faint}`); // chrome.faint (dark)
+    expect(headerLight).toContain(`fg=${lightTones.chrome.faint}`); // chrome.faint (light)
+    expect(headerDark).toContain(`fg=${darkTones.chrome.warn}`); // chrome.warn (dark, dirty git)
+    expect(headerLight).toContain(`fg=${lightTones.chrome.warn}`); // chrome.warn (light)
+    expect(headerDark).toContain(`fg=${darkTones.chrome.bad}`); // chrome.bad (dark, DANGER)
+    expect(headerLight).toContain(`fg=${lightTones.chrome.bad}`); // chrome.bad (light)
+    expect(thinkDark).toContain(`fg=${darkTones.accent.brand}`); // accent.brand (dark)
+    expect(thinkLight).toContain(`fg=${lightTones.accent.brand}`); // accent.brand (light)
 
     // Restore is handled by underLight(); confirm the shared default is dark.
     const headerDarkAgain = snapshotEncode('c-h', renderChromeHeaderFooterSurface());
