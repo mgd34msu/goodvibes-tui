@@ -5,6 +5,7 @@ import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
 import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents';
 import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
+import { createFixWorkstreamRunner } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels';
 import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
@@ -376,6 +377,7 @@ export function initTestWrfcController(
     agentManager: getTestAgentManager(),
     configManager: getTestConfigManager(),
     projectRoot: services.shellPaths.workingDirectory,
+    fixWorkstreamRunner: createFixWorkstreamRunner({ engine: services.orchestrationEngine }),
   });
   return wrfcController;
 }

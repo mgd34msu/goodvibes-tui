@@ -369,3 +369,34 @@ describe('trace task field truncation', () => {
     expect(traces[0]!.task).toBe(longTask);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Live run 7: a read-only review ask became a WRFC chain whose engineer was
+// handed "Spawn one reviewer agent …" as its task and could only fail; the
+// review then scored 0/10 and the chain failed at its fix phase.
+// ---------------------------------------------------------------------------
+
+describe('read-only and delegation-phrased asks (live run 7)', () => {
+  const ask = 'Spawn one reviewer agent to review and verify the backoff logic in src/net/retry.ts against test/retry.test.ts. Do not wait for it; just tell me it started. Do not modify files.';
+  const delegated = 'Review and verify the backoff logic in src/net/retry.ts against test/retry.test.ts. Do not modify files; report findings only.';
+
+  test('a read-only ask stays a plain agent even with reviewMode wrfc and an engineer template', () => {
+    const { result, traces } = captureTrace({ mode: 'spawn', template: 'engineer', reviewMode: 'wrfc', task: delegated }, ask);
+    expect(result.reviewMode).toBe('none');
+    expect(result.dangerously_disable_wrfc).toBe(true);
+    expect(result.task).toBe(delegated);
+    expect(traces).toEqual([{ kind: 'spawn-suppressed-wrfc', reason: 'the request forbids writing files', task: delegated }]);
+  });
+
+  test('a delegation-phrased implementation ask gives the chain the delegated task', () => {
+    const task = 'Fix the retry backoff in src/net/retry.ts so the delay doubles per attempt.';
+    const { result } = captureTrace({ mode: 'spawn', template: 'engineer', task }, 'Spawn one agent to fix the retry backoff in src/net/retry.ts.');
+    expect(result.reviewMode).toBe('wrfc');
+    expect(result.task).toBe(task);
+  });
+
+  test('a plain implementation ask still makes the user words the chain task', () => {
+    const { result } = captureTrace({ mode: 'spawn', template: 'engineer', task: 'fix retry' }, 'Fix the retry backoff in src/net/retry.ts.');
+    expect(result.task).toBe('Fix the retry backoff in src/net/retry.ts.');
+  });
+});

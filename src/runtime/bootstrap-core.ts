@@ -1,4 +1,6 @@
 import { ConversationManager } from '../core/conversation';
+import { publishNotice } from '../core/notices.ts';
+import { getSharedNotificationFeed } from '../panels/notifications-feed.ts';
 import { registerSessionConversation } from './conversation-rewind-port.ts';
 import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -338,6 +340,9 @@ export async function initializeBootstrapCore(
 
   const conversation = new ConversationManager(() => stdout.columns || 80);
   conversation.setConfigManager(configManager);
+  // Every system notice is a toast and a notification-history entry, full
+  // text (core/notices.ts); the transcript draws none of them.
+  conversation.setNoticeSink((content, { restored }) => publishNotice(getSharedNotificationFeed(), content, { restored }));
   getConversationTitle = () => conversation.title;
 
   const compositor = new Compositor(stdout);

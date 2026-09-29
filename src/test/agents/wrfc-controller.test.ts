@@ -168,6 +168,7 @@ describe('WrfcController', () => {
       },
       configManager: mockConfigManager as never,
       projectRoot,
+      fixWorkstreamRunner: { run: async () => ({ status: 'failed', reason: 'no fix runner scripted for this test', structured: 'tasks-failed' }) },
       createWorktree: () => ({
         merge: mockMerge,
         cleanup: mockCleanup,

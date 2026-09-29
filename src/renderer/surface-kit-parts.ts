@@ -221,13 +221,26 @@ function toastWidth(screenW: number): number {
   return Math.max(20, Math.min(50, screenW - 4));
 }
 
+/** Rows toasts may use: from `top` down to (not including) `bottom`. */
+export interface ToastArea {
+  readonly top: number;
+  /** First row toasts must not cover: the composer's top (the status line and composer sit below it). */
+  readonly bottom: number;
+}
+
 /**
  * Toasts stacked in the top right corner (below the header row), newest first.
  * Each toast: ┃ in its tone on both sides, a padding row above and below, the
- * title bold, the body muted and wrapped in full.
+ * title bold, the body muted and wrapped in full. They stay inside `area`, so
+ * they never cover the composer or the status line: a toast that does not fit
+ * below the ones above it waits in the notification history, and a single
+ * toast taller than the area shows what fits and ends with where the full
+ * text is.
  */
-export function renderToasts(screenW: number, screenH: number, toasts: readonly ToastSpec[]): SurfaceLayer | null {
-  if (toasts.length === 0 || screenW < 24 || screenH < 6) return null;
+export function renderToasts(screenW: number, screenH: number, toasts: readonly ToastSpec[], area: ToastArea = { top: 1, bottom: screenH - 2 }): SurfaceLayer | null {
+  const top = Math.max(0, area.top);
+  const maxH = Math.min(screenH, area.bottom) - top;
+  if (toasts.length === 0 || screenW < 24 || maxH < 3) return null;
   const t = activeTokens();
   const w = toastWidth(screenW);
   const textW = w - 6;
@@ -238,7 +251,6 @@ export function renderToasts(screenW: number, screenH: number, toasts: readonly 
     ];
     return { toast, lines, h: lines.length + 2 };
   });
-  const maxH = screenH - 3;
   let total = 0;
   const shown: typeof blocks = [];
   for (const block of blocks) {
@@ -247,7 +259,16 @@ export function renderToasts(screenW: number, screenH: number, toasts: readonly 
     shown.push(block);
     total = need;
   }
-  if (shown.length === 0) return null;
+  if (shown.length === 0) {
+    // The newest toast alone is taller than the area: show what fits, and say
+    // where the rest is instead of cutting it off silently.
+    const first = blocks[0]!;
+    const room = maxH - 2;
+    const pointer = { text: 'full text in /notifications', bold: false, fg: t.textFaint };
+    const lines = room <= 1 ? [pointer] : [...first.lines.slice(0, room - 1), pointer];
+    shown.push({ toast: first.toast, lines, h: lines.length + 2 });
+    total = lines.length + 2;
+  }
   const canvas = new SurfaceCanvas(w, total);
   let y = 0;
   shown.forEach((block, k) => {
@@ -265,7 +286,7 @@ export function renderToasts(screenW: number, screenH: number, toasts: readonly 
   for (const line of canvas.lines) {
     for (let q = 0; q < line.length; q++) if (line[q]!.bg === '' && line[q]!.char === ' ') line[q] = transparentCell();
   }
-  return { x: screenW - w - 2, y: 1, lines: canvas.lines, dim: false };
+  return { x: screenW - w - 2, y: top, lines: canvas.lines, dim: false };
 }
 
 // ---------------------------------------------------------------------------

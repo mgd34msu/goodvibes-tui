@@ -227,10 +227,9 @@ export class SystemMessageRouter {
 
   /**
    * Route a message that must reach the conversation unconditionally. Skips
-   * the noise gate and the configured routing target, and marks the message
-   * `isUserReceipt` so the splash check in
-   * ConversationManager.rebuildHistory() treats it as real visible content,
-   * otherwise it would be invisible while the splash still owns the screen.
+   * the noise gate and the configured routing target. Like every system
+   * message it shows as a toast and stays in the notification history
+   * (core/notices.ts), so it is seen even while the splash owns the screen.
    *
    * Two callers qualify today:
    *   - a receipt for an explicit user action at this shell (answering the
@@ -244,7 +243,7 @@ export class SystemMessageRouter {
    *     guarantee rather than a second string match.
    */
   userReceipt(message: string): void {
-    this.conversation.addTypedSystemMessage(message, classifySystemMessageKind(message), { isUserReceipt: true });
+    this.conversation.addTypedSystemMessage(message, classifySystemMessageKind(message));
   }
 }
 

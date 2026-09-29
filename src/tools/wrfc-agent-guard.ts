@@ -1,5 +1,5 @@
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types';
-import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import { askDelegatesToAgent, askForbidsWrites, type ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 
 type AgentToolArgs = {
   readonly mode?: unknown;
@@ -92,6 +92,18 @@ export function normalizeWrfcAgentToolInvocation(args: AgentToolArgs, options: W
   const lastUserMessage = cleanText(options.getLastUserMessage?.() ?? null);
   const trace = options.onTrace;
   if (args.mode === 'spawn') {
+    // The user's own "do not modify files" outranks every promotion below: a
+    // write-review-fix chain's fix phase writes files, so a read-only ask
+    // (a review, an audit) runs as a plain agent with the task the model
+    // delegated. The SDK applies the same rule (rootSpawnIsReadOnlyAsk).
+    if (askForbidsWrites(lastUserMessage || cleanText(args.task))) {
+      trace?.({
+        kind: 'spawn-suppressed-wrfc',
+        reason: 'the request forbids writing files',
+        task: cleanText(args.task) || '(no task)',
+      });
+      return { ...args, reviewMode: 'none', dangerously_disable_wrfc: true };
+    }
     if (shouldRouteSpawnToWrfc(args)) {
       const reason = resolveSpawnWrfcReason(args);
       trace?.({
@@ -264,8 +276,16 @@ function isReadOnlyTask(text: string): boolean {
   return /^\s*(?:inspect|research|read|find|list|summarize|analy[sz]e|explain|report|investigate|document|describe|audit|evaluate|assess|check|compare|tell|show)\b/i.test(text);
 }
 
+/**
+ * The chain's task: the user's own words, unless those words are an
+ * instruction to delegate ("Spawn one agent to …"). The agent being spawned
+ * IS that delegation, so its task is the work the model extracted; handed the
+ * delegation instruction itself, an agent without the agent tool can only fail.
+ */
 function selectAuthoritativeTask(candidate: unknown, lastUserMessage: string): string {
-  return lastUserMessage || cleanText(candidate);
+  const delegated = cleanText(candidate);
+  if (lastUserMessage && askDelegatesToAgent(lastUserMessage) && delegated) return delegated;
+  return lastUserMessage || delegated;
 }
 
 function uniqueStrings(groups: readonly unknown[]): string[] | undefined {

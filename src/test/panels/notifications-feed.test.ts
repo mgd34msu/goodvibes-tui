@@ -39,9 +39,11 @@ describe('PanelNotificationFeed', () => {
     const entries = feed.list();
     expect(entries).toHaveLength(1);
     expect(entries[0]?.collapsedCount).toBe(5);
-    // The count is the true accumulated count, not an estimate, the last
-    // title folded in is retained so the entry still says something concrete.
-    expect(entries[0]?.title).toBe('Progress update 4');
+    // The count is the true accumulated count, not an estimate. The group
+    // folded five different kinds, so it is titled by its group and the body
+    // counts each kind (the latest member's title would claim all five).
+    expect(entries[0]?.title).toBe('tools events');
+    expect(entries[0]?.body).toBe('Progress update 0 \u00d71, Progress update 1 \u00d71, Progress update 2 \u00d71, Progress update 3 \u00d71, Progress update 4 \u00d71');
   });
 
   test('notifies subscribers on every record()', () => {

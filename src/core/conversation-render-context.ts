@@ -77,6 +77,13 @@ export interface ConversationRenderContext {
   readonly configManager: ConfigManager | null;
   readonly splashOptions: SplashOptions;
   /**
+   * 'elsewhere' for the main transcript: its system notices ([WRFC] …,
+   * [Agents] …, compaction receipts) are toasts and notification-history
+   * entries (core/notices.ts), so no row is drawn for them. Absent (an agent
+   * view drawing a sub-agent's own conversation): drawn after the turn.
+   */
+  readonly systemNotices?: 'elsewhere' | undefined;
+  /**
    * Tool-call ids that have a corresponding tool-result message (i.e. the tool
    * actually ran). An assistant tool call whose id is NOT in this set is still
    * awaiting a decision (e.g. an approval prompt) and renders with a pending

@@ -301,7 +301,7 @@ describe('userReceipt', () => {
   // the conversation unconditionally (no noise gate, no routing-target
   // detour) and mark the message so ConversationManager treats it as real
   // visible content instead of quiet boot chatter.
-  test('reaches the conversation directly, marked isUserReceipt, bypassing the noise gate and routing target', () => {
+  test('reaches the conversation directly, bypassing the noise gate and routing target', () => {
     const conv = makeConversation();
     const router = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver({ system: 'panel' }));
     router.userReceipt('Recovery point removed (session sess-abc123); it will not be offered again, even if the file reappears.');
@@ -309,7 +309,6 @@ describe('userReceipt', () => {
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith(
       'Recovery point removed (session sess-abc123); it will not be offered again, even if the file reappears.',
       'system',
-      { isUserReceipt: true },
     );
   });
 

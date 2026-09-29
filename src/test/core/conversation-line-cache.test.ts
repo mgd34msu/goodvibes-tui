@@ -364,20 +364,20 @@ describe('cache-vs-cold equivalence', () => {
     expect(text).not.toContain('original assistant content');
   });
 
-  test('system messages preserve error-navigation registry through the cache', () => {
+  test('system notices draw no rows, cached or cold (they are toasts and history entries)', () => {
     const cm = new ConversationManager(() => 100);
     cm.addUserMessage('trigger a failure');
     cm.addSystemMessage('request failed: provider returned 500');
     cm.addAssistantMessage('recovering now');
     cm.getDisplayBlocks(); // warm
     assertCacheMatchesCold(cm);
-
-    // getErrorLines must resolve to the system message line via the replayed registry.
-    expect(cm.getErrorLines().length).toBeGreaterThan(0);
+    expect(cm.getErrorLines()).toHaveLength(0);
 
     cm.addSystemMessage('a second failure occurred');
     assertCacheMatchesCold(cm);
-    expect(cm.getErrorLines().length).toBe(2);
+    const text = cm.getDisplayBlocks().map((l) => l.map((c) => c.char).join('')).join('\n');
+    expect(text).toContain('recovering now');
+    expect(text).not.toContain('failure occurred');
   });
 
   test('clearDisplay then re-render stays cache-correct', () => {

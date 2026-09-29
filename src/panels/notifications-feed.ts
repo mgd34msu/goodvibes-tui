@@ -33,7 +33,8 @@ export interface PanelFeedEntry {
   readonly body: string | undefined;
   /** Unix ms of the most recent notification folded into this entry. */
   readonly timestamp: number;
-  readonly reasonCode: RoutingDecision['reasonCode'];
+  /** The router's reason, or 'system_notice' for a conversation system notice (recordNotice). */
+  readonly reasonCode: RoutingDecision['reasonCode'] | 'system_notice';
   /** How many notifications this entry represents. 1 for a standalone item; >1 for a collapsed group. Always the true count, never estimated. */
   readonly collapsedCount: number;
   /**
@@ -42,10 +43,27 @@ export interface PanelFeedEntry {
    * input/views.ts. Undefined when it is not about anything that can be opened.
    */
   readonly subject?: string;
+  /**
+   * Whether this entry toasts: 'always' for a system notice (every one shows
+   * as a toast), 'never' for one restored from a saved session (it already
+   * happened), absent for a routed notification (warning and critical toast).
+   */
+  readonly toast?: 'always' | 'never';
+}
+
+/** A conversation system notice to keep in the history (see recordNotice). */
+export interface NoticeInput {
+  readonly domain: string;
+  readonly level: Notification['level'];
+  readonly title: string;
+  readonly body?: string | undefined;
+  readonly timestamp: number;
+  /** A notice restored from a saved session: kept in history, never toasted, already seen. */
+  readonly restored?: boolean;
 }
 
 /** Domains whose notifications are about something the Agents modal shows. */
-const AGENT_DOMAINS: ReadonlySet<string> = new Set(['agents', 'tasks', 'workflows', 'automation', 'wrfc', 'orchestration']);
+const AGENT_DOMAINS: ReadonlySet<string> = new Set(['agents', 'tasks', 'workflows', 'automation', 'wrfc', 'orchestration', 'plan']);
 
 /** The view a notification is about, or undefined. */
 function subjectOf(notification: Notification): string | undefined {
@@ -57,7 +75,11 @@ function subjectOf(notification: Notification): string | undefined {
   return undefined;
 }
 
-const MAX_ENTRIES = 200;
+/**
+ * Entries kept before the oldest leave. System notices share this bound, so a
+ * long session's full notice history stays reachable in the modal.
+ */
+const MAX_ENTRIES = 2000;
 
 /** Reason codes whose notifications fold into one running-count entry per batch key, rather than one entry per occurrence. */
 const COLLAPSING_REASON_CODES: ReadonlySet<RoutingDecision['reasonCode']> = new Set([
@@ -72,6 +94,9 @@ export class PanelNotificationFeed {
   private readonly listeners = new Set<() => void>();
   /** Unix ms of the newest entry the user has seen in the Notifications modal. */
   private seenThrough = 0;
+  private nextNoticeId = 1;
+  /** Per collapsed group: how many of each notification title it folded. */
+  private readonly groupTitles = new Map<string, Map<string, number>>();
 
   /**
    * Record a routed notification. Only notifications actually targeted at
@@ -86,23 +111,65 @@ export class PanelNotificationFeed {
     const key = collapsing ? `group:${decision.batchKey}` : `single:${notification.id}`;
     const previousCount = collapsing ? (this.entries.get(key)?.collapsedCount ?? 0) : 0;
 
+    // A collapsed group folds every notification of one domain and level, of
+    // any kind. Its title names the group, never just its latest member, and
+    // the body counts each kind, so the number shown is what it says it is.
+    let title = notification.title;
+    let body = notification.body;
+    if (collapsing) {
+      const counts = this.groupTitles.get(key) ?? new Map<string, number>();
+      counts.set(notification.title, (counts.get(notification.title) ?? 0) + 1);
+      this.groupTitles.set(key, counts);
+      if (counts.size > 1) {
+        title = `${notification.domain} events`;
+        body = [...counts].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} \u00d7${n}`).join(', ');
+      }
+    }
     const entry: PanelFeedEntry = {
       key,
       domain: notification.domain,
       level: notification.level,
-      title: notification.title,
-      body: notification.body,
+      title,
+      body,
       timestamp: notification.timestamp,
       reasonCode: decision.reasonCode,
       collapsedCount: previousCount + 1,
       subject: subjectOf(notification),
     };
 
+    this.store(key, entry);
+  }
+
+  /**
+   * Record a conversation system notice ([WRFC] …, [Agents] …, a compaction
+   * receipt): its full text, one entry per notice. It toasts unless it was
+   * restored from a saved session, which also counts as already seen.
+   */
+  recordNotice(input: NoticeInput): PanelFeedEntry {
+    const key = `notice:${this.nextNoticeId++}`;
+    const entry: PanelFeedEntry = {
+      key,
+      domain: input.domain,
+      level: input.level,
+      title: input.title,
+      body: input.body,
+      timestamp: input.timestamp,
+      reasonCode: 'system_notice',
+      collapsedCount: 1,
+      subject: AGENT_DOMAINS.has(input.domain) ? 'agents' : undefined,
+      toast: input.restored ? 'never' : 'always',
+    };
+    if (input.restored) this.seenThrough = Math.max(this.seenThrough, input.timestamp);
+    this.store(key, entry);
+    return entry;
+  }
+
+  private store(key: string, entry: PanelFeedEntry): void {
     if (!this.entries.has(key)) {
       this.order.push(key);
       if (this.order.length > MAX_ENTRIES) {
         const evicted = this.order.shift();
-        if (evicted !== undefined) this.entries.delete(evicted);
+        if (evicted !== undefined) { this.entries.delete(evicted); this.groupTitles.delete(evicted); }
       }
     }
     this.entries.set(key, entry);
@@ -121,6 +188,7 @@ export class PanelNotificationFeed {
 
   clear(): void {
     this.entries.clear();
+    this.groupTitles.clear();
     this.order = [];
     this.emitChange();
   }
@@ -128,6 +196,7 @@ export class PanelNotificationFeed {
   /** Remove one entry (a collapsed group goes as a whole). Returns whether it existed. */
   dismiss(key: string): boolean {
     if (!this.entries.delete(key)) return false;
+    this.groupTitles.delete(key);
     this.order = this.order.filter((k) => k !== key);
     this.emitChange();
     return true;

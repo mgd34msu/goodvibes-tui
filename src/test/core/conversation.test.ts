@@ -172,16 +172,16 @@ describe('ConversationManager', () => {
       expect(frame).not.toContain('Provider anthropic registered');
     });
 
-    test('a user-action receipt (isUserReceipt: true) displaces the splash and is visible', () => {
+    test('a user-action receipt is a notice: it reaches the notice sink in full and leaves the splash up', () => {
       const c = new ConversationManager(() => 120);
-      c.addTypedSystemMessage(
-        'Recovery point removed (session sess-abc123); it will not be offered again, even if the file reappears.',
-        'system',
-        { isUserReceipt: true },
-      );
+      const seen: Array<{ content: string; restored: boolean }> = [];
+      c.setNoticeSink((content, { restored }) => seen.push({ content, restored }));
+      const receipt = 'Recovery point removed (session sess-abc123); it will not be offered again, even if the file reappears.';
+      c.addTypedSystemMessage(receipt, 'system');
+      expect(seen).toEqual([{ content: receipt, restored: false }]);
       const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
-      expect(frame).not.toContain('██████╗');
-      expect(frame).toContain('Recovery point removed (session sess-abc123)');
+      expect(frame).toContain('██████╗');
+      expect(frame).not.toContain('Recovery point removed');
     });
 
     test('undo removes a receipt outright; a later message recycling its freed index is ordinary ambient content', () => {
@@ -189,7 +189,7 @@ describe('ConversationManager', () => {
       c.addUserMessage('first');
       c.addAssistantMessage('reply');
       c.addUserMessage('second');
-      c.addTypedSystemMessage('Recovery point kept (session sess-xyz); it will be offered again next launch.', 'system', { isUserReceipt: true });
+      c.addTypedSystemMessage('Recovery point kept (session sess-xyz); it will be offered again next launch.', 'system');
       c.undo(); // removes the last turn ('second' + the receipt) as one unit
       c.addTypedSystemMessage('Provider anthropic registered', 'system'); // recycles the freed index, ambient (no isUserReceipt)
       const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
@@ -226,18 +226,18 @@ describe('ConversationManager', () => {
       expect(frame).not.toContain('██████╗');
     });
 
-    test('a slash command\'s transcript output flows normally once the splash has yielded', () => {
+    test('a turn flows normally once the splash has yielded, and a notice draws no row', () => {
       const c = new ConversationManager(() => 120);
       c.getDisplayBlocks();
       c.dismissSplash();
-      c.addTypedSystemMessage('[Health] providers: 3 reachable', 'system', { isUserReceipt: true });
+      c.addTypedSystemMessage('[Health] providers: 3 reachable', 'system');
       c.addUserMessage('hello');
       c.addAssistantMessage('hi there');
       const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
       expect(frame).not.toContain('██████╗');
-      // Command output and the later turn are both present, in order.
-      expect(frame.indexOf('[Health] providers: 3 reachable')).toBeGreaterThanOrEqual(0);
-      expect(frame.indexOf('hi there')).toBeGreaterThan(frame.indexOf('[Health] providers: 3 reachable'));
+      // The turn flows; the notice is a toast and a history entry, not a row.
+      expect(frame).toContain('hi there');
+      expect(frame).not.toContain('[Health] providers: 3 reachable');
     });
 
     test('consumeSplashTransition() reports the splash→transcript edge exactly once', () => {

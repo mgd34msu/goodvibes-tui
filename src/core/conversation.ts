@@ -12,8 +12,8 @@ import {
   type BlockMeta as SdkBlockMeta,
 } from '@pellux/goodvibes-sdk/platform/core';
 import type { BlockMeta } from './conversation-types.ts';
+import type { NoticeSink } from './notices.ts';
 import { MessageLineCache } from './conversation-line-cache.ts';
-import { UserReceiptIndices } from './conversation-user-receipts.ts';
 import { SplashGateState } from './conversation-splash-state.ts';
 import { resolveTranscriptEventLine } from './conversation-event-navigation.ts';
 import { SearchExpansionTracker } from './conversation-search-expansion.ts';
@@ -116,8 +116,6 @@ export class ConversationManager extends SdkConversationManager {
   private errorLineRegistry: number[] = [];
   /** Maps message index → SystemMessageKind for system-role messages. */
   private messageKindRegistry: Map<number, SystemMessageKind> = new Map();
-  /** See conversation-user-receipts.ts. */
-  private userReceiptIndices = new UserReceiptIndices();
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
   /**
@@ -142,6 +140,7 @@ export class ConversationManager extends SdkConversationManager {
   private _displayFromMessageIndex = 0;
 
   public suppressSplash: boolean = false;
+  private noticeSink: NoticeSink | null = null;
   public splashOptions: SplashOptions = {};
   /** Run-sticky dismissal + the splash→transcript edge (conversation-splash-state.ts). */
   private readonly splashGate = new SplashGateState();
@@ -216,23 +215,27 @@ export class ConversationManager extends SdkConversationManager {
     // stale kind (e.g. 'operational') and silently mis-classify the new message.
     const nextIndex = this.getMessageSnapshot().length;
     this.messageKindRegistry.delete(nextIndex);
-    this.userReceiptIndices.delete(nextIndex);
     super.addSystemMessage(content);
     this.markDirty();
+    this.noticeSink?.(content, { restored: false });
+  }
+
+  /** Where system notices go (core/notices.ts); the transcript draws none. Absent in bare test conversations. */
+  public setNoticeSink(sink: NoticeSink | null): void {
+    this.noticeSink = sink;
   }
 
   /**
    * addTypedSystemMessage - System message with an explicit kind tag, stored
-   * in messageKindRegistry. `isUserReceipt` (conversation-user-receipts.ts)
-   * additionally marks it for rebuildHistory()'s splash check, only for a
-   * direct receipt to an explicit user action, never ambient boot chatter.
+   * in messageKindRegistry. Like every system message it is a notice: the
+   * notice sink shows it, the transcript does not.
    */
-  public addTypedSystemMessage(content: string, kind: SystemMessageKind, opts?: { isUserReceipt?: boolean }): void {
+  public addTypedSystemMessage(content: string, kind: SystemMessageKind): void {
     const nextIndex = this.getMessageSnapshot().length;
     this.messageKindRegistry.set(nextIndex, kind);
-    if (opts?.isUserReceipt) this.userReceiptIndices.add(nextIndex); else this.userReceiptIndices.delete(nextIndex);
     super.addSystemMessage(content);
     this.markDirty();
+    this.noticeSink?.(content, { restored: false });
   }
 
   public override undo(): boolean {
@@ -247,7 +250,6 @@ export class ConversationManager extends SdkConversationManager {
       for (const key of this.messageKindRegistry.keys()) {
         if (key >= postUndoCount) this.messageKindRegistry.delete(key);
       }
-      this.userReceiptIndices.purgeFrom(postUndoCount);
       this.markDirty();
     }
     return result;
@@ -352,7 +354,6 @@ export class ConversationManager extends SdkConversationManager {
     this.messageLineRegistry = [];
     this.errorLineRegistry = [];
     this.messageKindRegistry = new Map();
-    this.userReceiptIndices.clear();
     this.streamingStartLine = -1;
     this.workTree.reset();
     this._displayFromMessageIndex = 0; // full reset, show everything on next render
@@ -400,6 +401,8 @@ export class ConversationManager extends SdkConversationManager {
     titleSource?: import('@pellux/goodvibes-sdk/platform/core').ConversationTitleSource;
   }): void {
     super.fromJSON(data);
+    // A restored session's notices go back into the history (not toasted).
+    for (const message of data.messages) if (message.role === 'system') this.noticeSink?.(message.content, { restored: true });
     this.history.clear();
     this.lineCache.clear();
     this.appendedUpTo = 0;
@@ -470,14 +473,9 @@ export class ConversationManager extends SdkConversationManager {
     const displayStart = this._displayFromMessageIndex;
     const visibleSnapshot = displayStart > 0 ? renderSnapshot.slice(displayStart) : renderSnapshot;
 
-    // Tool/system messages aren't visible splash-purposes content, except a
-    // system message in userReceiptIndices. visibleSnapshot mirrors the
-    // snapshot 1:1 (only front-sliced), so index i is absolute displayStart+i.
-    const displayMessages = visibleSnapshot.filter((m, i) => {
-      if (m.role === 'tool') return false;
-      if (m.role === 'system') return this.userReceiptIndices.has(displayStart + i);
-      return true;
-    });
+    // Tool and system messages are not transcript content: a system message is
+    // a notice (a toast and the notification history, see core/notices.ts).
+    const displayMessages = visibleSnapshot.filter((m) => m.role !== 'tool' && m.role !== 'system');
 
     if (displayMessages.length === 0 && displayStart === 0 && !this.suppressSplash && !this.splashGate.dismissed) {
       this.addSplashScreen(width);
@@ -530,6 +528,7 @@ export class ConversationManager extends SdkConversationManager {
       messageKindRegistry: this.messageKindRegistry as ReadonlyMap<number, SystemMessageKind>,
       configManager: this._configManager,
       splashOptions: this.splashOptions,
+      systemNotices: 'elsewhere' as const,
       workTreeSources: this.workTreeSources,
       treeGlyphSet: this.treeGlyphSet(),
       focusId: this.workTree.focus,

@@ -40,6 +40,7 @@ function makeAgentHarness() {
     agentManager: manager,
     configManager,
     projectRoot: configDir,
+    fixWorkstreamRunner: { run: async () => ({ status: 'failed', reason: 'agent tool tests run no fix cycles', structured: 'tasks-failed' }) },
   });
   manager.setWrfcController(wrfcController);
   const agentTool = createAgentTool({

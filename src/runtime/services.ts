@@ -79,7 +79,7 @@ import { deriveFeatureStates, bindFeatureSettingsBridge } from '@pellux/goodvibe
 import { createChannelComposition } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { applyProviderOptimizerConfigMode, bindProviderOptimizerFeatureFlag } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { createFleetServices } from '@pellux/goodvibes-terminal-shell';
-import { createWorkstreamServices } from '@pellux/goodvibes-sdk/platform/orchestration';
+import { createFixWorkstreamRunner, createWorkstreamServices } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { codeIndexDbPath, createCodeIndexServices, createStoreRerooter, isCodeInjectionSettingEnabled } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { WorkspaceTrustManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { ensureConfiguredModelIsRoutable } from '@pellux/goodvibes-sdk/platform/providers';
@@ -266,6 +266,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     agentManager,
     configManager,
     projectRoot: workingDirectory,
+    // A chain's fix phase: review findings become a dependency-graph
+    // workstream on the one orchestration engine, composed further down
+    // (createWorkstreamServices); the runner reads it when a fix cycle starts.
+    fixWorkstreamRunner: createFixWorkstreamRunner({ engine: () => orchestrationEngine }),
   });
   agentManager.setWrfcController(wrfcController);
   const sessionBroker = new SharedSessionBroker({

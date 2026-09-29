@@ -595,7 +595,7 @@ async function main() {
         scrollTop,
         viewportStartY: shellHeaderLines.length,
       } : undefined,
-      layers: buildConversationLayers({ ...overlayContext, screenWidth: width, screenHeight: height, permission: pendingPermission ? PermissionPromptUI.renderPromptModal(width, height, pendingPermission, pendingPermission, approvalBroker) : null }),
+      layers: buildConversationLayers({ ...overlayContext, screenWidth: width, screenHeight: height, headerRows: shellHeaderLines.length, footerRows: shellFooterLines.length, permission: pendingPermission ? PermissionPromptUI.renderPromptModal(width, height, pendingPermission, pendingPermission, approvalBroker) : null }),
     });
   };
   const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // coalescer; no frames after terminal restore

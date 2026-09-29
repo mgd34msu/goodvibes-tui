@@ -7,9 +7,11 @@
  * three are kept, older ones leave early rather than stacking down the screen.
  *
  * Producers: commandContext.showToast (any command), and the shared
- * notification feed, whose warning and critical entries also toast
- * (bridgeNotificationFeedToToasts). Informational notifications stay in the
- * feed only, so toasts keep meaning "this needs your eyes".
+ * notification feed (bridgeNotificationFeedToToasts): every conversation
+ * system notice toasts ([WRFC] …, [Agents] …, compaction receipts; see
+ * core/notices.ts), and of the routed notifications only warning and critical
+ * ones do. Everything that toasts stays in the feed, which /notifications
+ * shows in full.
  */
 
 import type { PanelFeedEntry, PanelNotificationFeed } from '../panels/notifications-feed.ts';
@@ -86,6 +88,11 @@ function toneForLevel(level: PanelFeedEntry['level']): ToastTone | null {
   return null;
 }
 
+/** A system notice always toasts; its level picks the bar color. */
+function toneForNotice(level: PanelFeedEntry['level']): ToastTone {
+  return toneForLevel(level) ?? 'info';
+}
+
 /**
  * Toast every new warning or critical entry of the notification feed. A
  * collapsed burst toasts once per growth of its running count, with the count
@@ -98,7 +105,8 @@ export function bridgeNotificationFeedToToasts(feed: PanelNotificationFeed, toas
     for (const entry of feed.list()) {
       if (seen.get(entry.key) === entry.collapsedCount) continue;
       seen.set(entry.key, entry.collapsedCount);
-      const tone = toneForLevel(entry.level);
+      if (entry.toast === 'never') continue;
+      const tone = entry.toast === 'always' ? toneForNotice(entry.level) : toneForLevel(entry.level);
       if (!tone) continue;
       const title = entry.collapsedCount > 1 ? `${entry.title} (${entry.collapsedCount} times)` : entry.title;
       toasts.show({ title, body: entry.body, tone });

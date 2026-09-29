@@ -119,14 +119,15 @@ export function buildConversationTurnModel(
 
 /**
  * Draw a turn model (lines, blocks and error lines relative to the turn), then
- * the notices that arrived during it. A notice is not a step of the turn, so it
+ * the notices that arrived during it (never in the main transcript, whose
+ * notices are toasts and notification-history entries: systemNotices). A notice is not a step of the turn, so it
  * is drawn after the turn and outside its lanes, exactly as a notice between
  * turns is (the concept's turns hold only the turn's own text, beads, lanes and
  * answer; agent and WRFC state is the lanes' own spawn and merge rows).
  */
 export function drawConversationTurn(context: ConversationRenderContext, model: TurnModel, width: number): TurnRender {
   const render = drawTurnRows(context, model, width);
-  if (model.notices.length === 0) return render;
+  if (model.notices.length === 0 || context.systemNotices === 'elsewhere') return render;
   const lines = [...render.lines];
   const errorLines = [...render.errorLines];
   const messageLines = new Map(render.messageLines);
@@ -215,7 +216,10 @@ export function renderConversationMessageUnit(
   msgIdx: number,
 ): void {
   if (message.role === 'user') renderConversationUserMessage(context, message, width, msgIdx);
-  else if (message.role === 'system') renderConversationSystemMessage(context, message, width, msgIdx);
+  else if (message.role === 'system') {
+    // The main transcript's notices are toasts and history entries, not rows.
+    if (context.systemNotices !== 'elsewhere') renderConversationSystemMessage(context, message, width, msgIdx);
+  }
   else if (message.role === 'tool') {
     // A result whose call is outside the rendered slice (the display was
     // cleared mid-turn): one bead of its own, with its block and body.
