@@ -45,13 +45,13 @@ describe('renderDiffView', () => {
 
   test('added lines contain + gutter character', () => {
     const result = renderDiffView(SAMPLE_DIFF, WIDTH);
-    const addedLines = result.filter((line) => line[0]?.char === '+');
+    const addedLines = result.filter((line) => line[2]?.char === '+');
     expect(addedLines.length).toBeGreaterThan(0);
   });
 
   test('removed lines contain - gutter character', () => {
     const result = renderDiffView(SAMPLE_DIFF, WIDTH);
-    const removedLines = result.filter((line) => line[0]?.char === '-');
+    const removedLines = result.filter((line) => line[2]?.char === '-');
     expect(removedLines.length).toBeGreaterThan(0);
   });
 
@@ -59,7 +59,7 @@ describe('renderDiffView', () => {
     const result = renderDiffView(SAMPLE_DIFF, WIDTH);
     // Context lines have space in gutter (first cell)
     const contextLines = result.filter((line) => {
-      const firstChar = line[0]?.char;
+      const firstChar = line[2]?.char;
       return firstChar === ' ' && lineText(line).trim().length > 0;
     });
     expect(contextLines.length).toBeGreaterThan(0);
@@ -67,7 +67,7 @@ describe('renderDiffView', () => {
 
   test('hunk header line contains @@ marker text', () => {
     const result = renderDiffView(SAMPLE_DIFF, WIDTH);
-    const hunkLine = result.find((line) => lineText(line).startsWith('@@'));
+    const hunkLine = result.find((line) => lineText(line).trimStart().startsWith('@@'));
     expect(hunkLine).toBeDefined();
   });
 
@@ -76,11 +76,11 @@ describe('renderDiffView', () => {
     // Actual added code lines have gutter '+' AND the diffAddedBg fill
     // (file headers with +++ have the context fill and muted fg)
     const addedLine = result.find((line) =>
-      line[0]?.char === '+' && line[0]?.bg === activeTokens().diffAddedBg
+      line[2]?.char === '+' && line[2]?.bg === activeTokens().diffAddedBg
     );
     expect(addedLine).toBeDefined();
     // The shared diff-surface token (the diff panel's shipped green).
-    expect(addedLine![0].fg).toContain(activeDiffTones().add.slice(1));
+    expect(addedLine![2].fg).toContain(activeDiffTones().add.slice(1));
   });
 
   test('removed lines have red foreground color', () => {
@@ -88,11 +88,11 @@ describe('renderDiffView', () => {
     // Actual removed code lines have gutter '-' AND the diffRemovedBg fill
     // (file headers with --- have the context fill and muted fg)
     const removedLine = result.find((line) =>
-      line[0]?.char === '-' && line[0]?.bg === activeTokens().diffRemovedBg
+      line[2]?.char === '-' && line[2]?.bg === activeTokens().diffRemovedBg
     );
     expect(removedLine).toBeDefined();
     // The shared diff-surface token (the diff panel's shipped red).
-    expect(removedLine![0].fg).toContain(activeDiffTones().del.slice(1));
+    expect(removedLine![2].fg).toContain(activeDiffTones().del.slice(1));
   });
 
   test('handles empty diff string', () => {
@@ -104,7 +104,7 @@ describe('renderDiffView', () => {
     const result = renderDiffView(SAMPLE_DIFF, WIDTH);
     // Actual added code lines have the diffAddedBg fill (not the +++ header with the context fill)
     const addedLine = result.find((line) =>
-      line[0]?.char === '+' && line[0]?.bg === activeTokens().diffAddedBg
+      line[2]?.char === '+' && line[2]?.bg === activeTokens().diffAddedBg
     );
     expect(addedLine).toBeDefined();
     const text = lineText(addedLine!);
@@ -115,7 +115,7 @@ describe('renderDiffView', () => {
     const result = renderDiffView(SAMPLE_DIFF, WIDTH);
     // Actual removed code lines have the diffRemovedBg fill (not the --- header with the context fill)
     const removedLine = result.find((line) =>
-      line[0]?.char === '-' && line[0]?.bg === activeTokens().diffRemovedBg
+      line[2]?.char === '-' && line[2]?.bg === activeTokens().diffRemovedBg
     );
     expect(removedLine).toBeDefined();
     const text = lineText(removedLine!);

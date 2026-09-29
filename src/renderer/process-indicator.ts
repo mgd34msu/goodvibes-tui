@@ -1,9 +1,10 @@
 import { type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { UIFactory } from './ui-factory.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { activeTokens, activeUiTones } from './theme.ts';
-import { formatHints } from './hint-grammar.ts';
+import { keycapHintsWidth, paintKeycapHints } from './surface-kit-parts.ts';
+import type { KitHint } from './surface-kit.ts';
 import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
 
 /**
@@ -11,8 +12,8 @@ import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core
  * processes below the input area.
  *
  * Dimmed when no processes are active, highlighted (cyan) when agents or
- * background exec processes are running. Includes an `[Enter] View` hint
- * (hint-grammar bracket form) when active.
+ * background exec processes are running. Includes an `enter view` keycap
+ * hint when active.
  */
 /**
  * Agent-count label. The footer counts only ACTIVE agents, while the fleet
@@ -32,17 +33,22 @@ export function renderProcessIndicator(
   agentProgress?: string,
 ): Line[] {
   const total = agentCount + toolCount;
-  const renderPlainStatus = (text: string, style: { fg: string; bold?: boolean; dim?: boolean }): Line[] => (
-    [UIFactory.stringToLine(`   ${text}`, width, style)]
-  );
-  const renderFocusedStatus = (text: string): Line[] => {
+  const renderPlainStatus = (text: string, style: { fg: string; bold?: boolean; dim?: boolean }, hints: readonly KitHint[] = []): Line[] => {
+    const hintsW = hints.length > 0 ? keycapHintsWidth(hints) + 2 : 0;
+    const shown = truncateDisplay(text, Math.max(0, width - 3 - hintsW), '');
+    const line = UIFactory.stringToLine(`   ${shown}`, width, style);
+    if (hints.length > 0) paintKeycapHints(line, 3 + getDisplayWidth(shown) + 2, width, hints, { fg: activeTokens().textMuted });
+    return [line];
+  };
+  const renderFocusedStatus = (text: string, hints: readonly KitHint[] = []): Line[] => {
     const p = activeTokens();
     const bg = p.backgroundSelected;
     const fg = p.text;
     const markerFg = activeUiTones().accent.browser;
     const line = UIFactory.stringToLine(' '.repeat(width), width, { fg: p.textFaint });
     const prefix = `${GLYPHS.navigation.selected} `;
-    const body = truncateDisplay(text, Math.max(0, width - 8), '');
+    const hintsW = hints.length > 0 ? keycapHintsWidth(hints) + 2 : 0;
+    const body = truncateDisplay(text, Math.max(0, width - 8 - hintsW), '');
     const highlighted = ` ${prefix}${body} `;
     const startX = 2;
     for (let i = 0; i < highlighted.length && startX + i < width - 2; i++) {
@@ -54,6 +60,7 @@ export function renderProcessIndicator(
       line[startX + i].bold = true;
       line[startX + i].dim = false;
     }
+    if (hints.length > 0) paintKeycapHints(line, startX + getDisplayWidth(highlighted) + 2, width - 2, hints, { fg: p.textMuted });
     return [line];
   };
 
@@ -62,10 +69,9 @@ export function renderProcessIndicator(
     const parts: string[] = [];
     if (agentCount > 0) parts.push(agentCountLabel(agentCount));
     if (toolCount > 0) parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} running`);
-    const label = total === 0
-      ? `No background processes  ${formatHints([{ key: 'Esc', verb: 'Back to input' }])}`
-      : `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}  ${formatHints([{ key: 'Enter', verb: 'Open' }, { key: 'Esc', verb: 'Back to input' }])}`;
-    return renderFocusedStatus(label);
+    return total === 0
+      ? renderFocusedStatus('No background processes', [['esc', 'back to input']])
+      : renderFocusedStatus(parts.join(` ${GLYPHS.navigation.pipeSeparator} `), [['⏎', 'open'], ['esc', 'back to input']]);
   }
 
   if (total === 0) {
@@ -94,8 +100,7 @@ export function renderProcessIndicator(
     ? ` | ${truncateDisplay(agentProgress, progressMaxLen, '...')}`
     : '';
   const label = `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}${progressSuffix}`;
-  const hint = `  ${formatHints([{ key: 'Enter', verb: 'View' }])}`;
-  return renderPlainStatus(`${label}${hint}`, { fg: activeUiTones().accent.brand, bold: true });
+  return renderPlainStatus(label, { fg: activeUiTones().accent.brand, bold: true }, [['⏎', 'view']]);
 }
 
 /**
@@ -149,7 +154,8 @@ export function renderVoiceCaptureIndicator(
     // The prominent variant: the row is filled to the terminal width on the
     // footer background so it reads as a standing condition, not a passing note.
     const line = UIFactory.stringToLine(' '.repeat(width), width, { fg: tones.chrome.faint });
-    const text = ` ${truncateDisplay(body, Math.max(0, width - 4), '…')} `;
+    // Two columns of the fill on both sides of the text (the padding rule).
+    const text = `  ${truncateDisplay(body, Math.max(0, width - 6), '…')}  `;
     for (let i = 0; i < text.length && 1 + i < width - 1; i++) {
       const cell = line[1 + i]!;
       cell.char = text[i]!;

@@ -78,16 +78,18 @@ describe('renderProcessIndicator', () => {
     expect(text).not.toContain('1 tools running');
   });
 
-  test('open hint present when active', () => {
+  test('open hint present when active, as a keycap', () => {
     const lines = renderProcessIndicator(W, 1, 0);
     const text = lineToString(lines[0]);
-    expect(text).toContain('[Enter] View');
+    expect(text).toContain(' ⏎  view');
+    const at = text.indexOf(' ⏎ ');
+    expect(lines[0][at]!.bg).toBe(activeTokens().border);
   });
 
   test('open hint not present when idle', () => {
     const lines = renderProcessIndicator(W, 0, 0);
     const text = lineToString(lines[0]);
-    expect(text).not.toContain('[Enter] View');
+    expect(text).not.toContain('view');
   });
 
   test('width handling: narrow terminal (40 cols)', () => {
@@ -116,9 +118,8 @@ describe('renderProcessIndicator', () => {
     const lines = renderProcessIndicator(80, 2, 0, true);
     expect(lines.length).toBe(1);
     const text = lines[0].map(c => c.char).join('');
-    expect(text).toContain('[Enter] Open');
-    expect(text).toContain('[Esc] Back to input');
-    expect(text).toContain('·');
+    expect(text).toContain(' ⏎  open');
+    expect(text).toContain(' esc  back to input');
   });
 
   test('focused line uses the browser accent in bold for its marker', () => {

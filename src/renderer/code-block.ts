@@ -323,7 +323,10 @@ export function renderCodeBlock(
   const leftMargin = LAYOUT.LEFT_MARGIN;
   const showLineNumbers = opts.showLineNumbers ?? true;
   const lineNumW = showLineNumbers ? String(codeLines.length).length + 1 : 0; // e.g. "10 "
-  const contentStartX = showLineNumbers ? leftMargin + lineNumW + 1 : leftMargin;
+  // Text keeps 2 columns from both edges of the code fill (the Measurements
+  // table's padding rule), and the fill has a blank row above and below it.
+  const PAD = 2;
+  const contentStartX = showLineNumbers ? leftMargin + PAD + lineNumW + 1 : leftMargin + PAD;
   const palette = activeTokens();
   const BG = palette.backgroundCode;
   const LINE_NUM_FG = palette.textFaint;
@@ -358,6 +361,11 @@ export function renderCodeBlock(
   }
   lines.push(headerLine);
 
+  // Padding row: the code fill opens with an empty row.
+  const padLine = createEmptyLine(width);
+  for (let px = leftMargin; px < effectiveWidth; px++) padLine[px] = createStyledCell(' ', { bg: BG });
+  lines.push(padLine);
+
   // Code lines
   for (let i = 0; i < codeLines.length; i++) {
     const rawLine = codeLines[i];
@@ -375,7 +383,8 @@ export function renderCodeBlock(
       line[x] = createStyledCell(' ', { bg: BG });
     }
 
-    let cx = leftMargin;
+    const textEnd = effectiveWidth - PAD;
+    let cx = leftMargin + PAD;
     if (showLineNumbers) {
       for (const ch of lineNum) {
         if (cx >= contentStartX) break;
@@ -387,19 +396,22 @@ export function renderCodeBlock(
     // Syntax tokens
     for (const token of tokens) {
       for (const ch of token.text) {
-        if (cx >= effectiveWidth) break;
+        if (cx >= textEnd) break;
         const cw = getDisplayWidth(ch);
         const code = ch.charCodeAt(0);
         if (code < 32 || code === 127) {
           cx++;
           continue;
         }
+        // A wide glyph that does not fit before the text edge ends the row
+        // rather than drawing half of itself into the padding.
+        if (cx + cw > textEnd) break;
         line[cx] = createStyledCell(ch, { fg: token.fg, bg: BG, bold: token.bold, italic: token.italic });
         // Bound the wide-glyph placeholder against the body's own right edge
         // (effectiveWidth), not the full line width, otherwise a 2-column
         // glyph landing on the last body column spills its placeholder cell
         // into the reserved right-margin band the header/footer stop at.
-        if (cw === 2 && cx + 1 < effectiveWidth) line[cx + 1] = { ...line[cx], char: '' };
+        if (cw === 2 && cx + 1 < textEnd) line[cx + 1] = { ...line[cx], char: '' };
         cx += cw;
       }
     }

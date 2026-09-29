@@ -2,7 +2,8 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { fitDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import type { HistorySearch } from '../input/input-history.ts';
 import { createBottomBarLine, writeBottomBarText } from '@pellux/goodvibes-terminal-shell';
-import { formatHints } from './hint-grammar.ts';
+import { keycapHintsWidth, paintKeycapHints } from './surface-kit-parts.ts';
+import type { KitHint } from './surface-kit.ts';
 import { activeTokens } from './theme.ts';
 
 /**
@@ -38,17 +39,17 @@ export function renderHistorySearchOverlay(
 
   // Build the display string
   const label = prefix + queryPart;
-  const hints = formatHints([
-    { key: 'Ctrl+R/↑', verb: 'Older' },
-    { key: 'Ctrl+S/↓', verb: 'Newer' },
-    { key: 'Enter', verb: 'Accept' },
-    { key: 'Esc', verb: 'Cancel' },
-  ]);
-  const full = truncateToWidth(`${label}${matchText}  ${hints}`, width);
+  const hints: KitHint[] = [['ctrl+r ↑', 'older'], ['ctrl+s ↓', 'newer'], ['⏎', 'accept'], ['esc', 'cancel']];
+  // Keycap hints sit at the right end of the bar when they fit beside the search.
+  const hintsW = keycapHintsWidth(hints);
+  const showHints = width - hintsW - 2 >= getDisplayWidth(label) + 8;
+  const textW = showHints ? width - hintsW - 4 : width;
+  const full = truncateToWidth(`${label}${matchText}`, textW);
 
   const p = activeTokens();
   const line = createBottomBarLine(width, { fg: p.selectedListItemText, bg: p.accent });
-  writeBottomBarText(line, 0, width, full, { fg: p.selectedListItemText, bg: p.accent });
+  writeBottomBarText(line, 0, textW, full, { fg: p.selectedListItemText, bg: p.accent });
+  if (showHints) paintKeycapHints(line, width - hintsW - 2, width - 2, hints, { fg: p.selectedListItemText, bg: p.accent });
 
   // Highlight the matched region in the match text with dim styling
   if (hasMatch && match) {

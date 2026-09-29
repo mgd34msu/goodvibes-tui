@@ -44,7 +44,8 @@ describe('renderCodeBlock', () => {
 
   test('includes line numbers in body lines', () => {
     const result = renderCodeBlock(['first', 'second', 'third'], 'ts', WIDTH);
-    const bodyLines = result.slice(1, -1);
+    // Header, then the fill's empty padding row, then the code rows.
+    const bodyLines = result.slice(2, -1);
     // Line numbers should appear as digits
     const firstBody = lineText(bodyLines[0]);
     expect(firstBody).toMatch(/\d/);
@@ -112,21 +113,22 @@ describe('renderCodeBlock', () => {
     }
   });
 
-  test('a wide glyph landing on the last body column does not spill its placeholder into the right margin', () => {
+  test('a wide glyph that would cross the text edge ends the row instead of spilling into the padding or margin', () => {
     const width = 20;
     const effectiveWidth = width - LAYOUT.RIGHT_MARGIN; // 18
-    // 13 single-width filler chars push cx from leftMargin(4) to 17,
-    // effectiveWidth - 1, the last column inside the body. The wide glyph
-    // ('日', display width 2) then lands exactly on that last column, so its
-    // placeholder cell would fall at column effectiveWidth (18) if bounded
-    // against the full line width instead of the body's own edge.
-    const codeLine = 'x'.repeat(13) + '日' + 'zz';
+    const textEnd = effectiveWidth - 2; // 2 columns of padding inside the fill
+    // 9 single-width fillers take cx from leftMargin(4) + 2 to 15, the last
+    // text column; the 2-wide glyph cannot fit there.
+    const codeLine = 'x'.repeat(9) + '日' + 'zz';
     const result = renderCodeBlock([codeLine], '', width, { showLineNumbers: false });
-    const bodyLine = result[1];
+    const bodyLine = result[2];
 
-    expect(bodyLine[effectiveWidth - 1].char).toBe('日');
-    // The margin column must stay the untouched default cell, not a
-    // wide-glyph placeholder bleeding out of the body.
+    expect(bodyLine.some((cell) => cell.char === '日')).toBe(false);
+    // The padding columns stay empty fill; the margin column stays the untouched default cell.
+    for (let x = textEnd; x < effectiveWidth; x++) {
+      expect(bodyLine[x].char).toBe(' ');
+      expect(bodyLine[x].bg).toBe(activeTokens().backgroundCode);
+    }
     expect(bodyLine[effectiveWidth].char).toBe(' ');
     expect(bodyLine[effectiveWidth].bg).toBe('');
   });

@@ -47,7 +47,8 @@ export function buildPanelTitle(
   title: string,
   palette: PanelPalette,
 ): Line {
-  const titleText = fitDisplayText(` ${title}`, width);
+  // Two columns between the fill edge and the title (the Measurements padding rule).
+  const titleText = fitDisplayText(`  ${title}`, width);
   return buildStyledPanelLine(width, [
     { text: titleText, fg: palette.header ?? palette.accent ?? palette.value, bg: palette.headerBg, bold: true },
   ], { fillBg: palette.headerBg });
@@ -152,10 +153,15 @@ export function buildSearchInputLine(
     : hasValue
       ? options.valueColor ?? palette.value
       : palette.dim;
+  // Two columns of padding on both sides of the fill; a long draft keeps its
+  // end (where the cursor is) in view.
+  const room = Math.max(1, width - 4 - getDisplayWidth(label));
+  let shown = content;
+  while (shown.length > 0 && getDisplayWidth(shown) > room) shown = shown.slice(1);
   return buildStyledPanelLine(width, [
-    { text: ' ', fg: palette.label, bg },
+    { text: '  ', fg: palette.label, bg },
     { text: `${label}`, fg: palette.label, bg },
-    { text: content, fg, bg, bold: active },
+    { text: shown, fg, bg, bold: active },
   ], { fillBg: bg });
 }
 
