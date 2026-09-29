@@ -1,46 +1,61 @@
 /**
- * renderHelpOverlay, renders the help overlay with keyboard shortcuts and slash commands.
+ * renderHelpOverlay, the /commands reference: keyboard shortcuts plus the
+ * full slash-command list, drawn with the modal surface kit as one grouped,
+ * filterable kit list (✦ group headers, each entry's description on the left
+ * and its key or command right-aligned, muted). The search row is always
+ * live; ↑↓ scroll.
  *
- * Opened via `/commands`. `?` and `/help` open the searchable command
- * browser (a selection modal that runs the picked command) instead, they
- * are a different, complementary surface, not this one.
+ * `?` and `/help` open the searchable command browser (a selection modal that
+ * runs the picked command) instead; that is a different, complementary
+ * surface, not this one.
  */
 
-import { type Line } from '@pellux/goodvibes-sdk/platform/types';
-import { ModalFactory } from './modal-factory.ts';
 import type { SlashCommand } from '../input/command-registry.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';
-import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
-import { getVisibleWindow } from './surface-layout.ts';
-import { formatHints } from './hint-grammar.ts';
+import type { OverlayFilter } from '../input/overlay-filter.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { activeTokens } from './theme.ts';
+import {
+  beginModal,
+  finishModal,
+  searchRow,
+  scrollCountText,
+  type KitHint,
+  type SurfaceLayer,
+} from './surface-kit.ts';
+import { drawList, measureRow, type KitRow } from './surface-kit-list.ts';
+import { drawTextBlock } from './surface-kit-extra.ts';
 
-function toModalSections(rows: readonly string[]): import('./modal-factory.ts').ModalSection[] {
-  return rows.map((row) => {
-    if (row === '') return { type: 'spacer' as const };
-    if (row.startsWith('  ') && !row.slice(2).includes('  ')) {
-      return { type: 'title' as const, content: row.trim() };
-    }
-    if (row.startsWith('  \u2500')) return { type: 'separator' as const };
-    return { type: 'text' as const, content: row };
-  });
+export { renderShortcutsOverlay } from './shortcuts-overlay.ts';
+
+interface HelpGroup {
+  readonly title: string;
+  readonly entries: Array<{ readonly label: string; readonly right: string }>;
 }
 
 /**
- * Render the help overlay as Line[].
- * Shows keyboard shortcuts summary and slash commands.
- *
- * @param width      Terminal width.
- * @param commands   List of registered slash commands.
- * @param scrollOffset  Number of lines scrolled (for navigation).
+ * The row strings ("  Title", "  ────", "  key\tdescription", "") become
+ * groups: a title row opens a group, rule rows are dropped, entry rows split
+ * at the tab into key (right-aligned) and description (the row's label).
  */
-export function renderHelpOverlay(
-  width: number,
-  keybindingsManager: KeybindingsManager,
-  commands?: SlashCommand[],
-  scrollOffset = 0,
-  viewportHeight = process.stdout.rows || 24,
-): Line[] {
+function groupsFromRows(rows: readonly string[]): HelpGroup[] {
+  const groups: HelpGroup[] = [];
+  for (const row of rows) {
+    const text = row.trim();
+    if (!text || text.startsWith('\u2500')) continue;
+    const tab = text.indexOf('\t');
+    if (tab < 0) {
+      groups.push({ title: text, entries: [] });
+      continue;
+    }
+    if (groups.length === 0) groups.push({ title: 'Commands', entries: [] });
+    groups[groups.length - 1]!.entries.push({ right: text.slice(0, tab).trim(), label: text.slice(tab + 1).trim() });
+  }
+  return groups.filter((g) => g.entries.length > 0);
+}
+
+/** Every help group for the live keybindings and registry. */
+function helpGroups(keybindingsManager: KeybindingsManager, commands?: SlashCommand[]): HelpGroup[] {
   const kb = (action: Parameters<typeof keybindingsManager.getComboLabel>[0]) => keybindingsManager.getComboLabel(action);
 
   const hasCommand = (name: string): boolean => {
@@ -55,7 +70,7 @@ export function renderHelpOverlay(
     return false;
   };
 
-  const shortcutLine = (label: string, desc: string): string => `  ${label.padEnd(20)}  ${desc}`;
+  const shortcutLine = (label: string, desc: string): string => `  ${label}\t${desc}`;
 
   // Enumerate EVERY workspace/panel binding straight from the live keybindings
   // table so each rebindable action (including user overrides) is discoverable
@@ -70,16 +85,16 @@ export function renderHelpOverlay(
   const shortcutRows: string[] = [
     '  Core Navigation',
     '  ' + '\u2500'.repeat(40),
-    `  ${'Up / Down'.padEnd(20)}  Recall input history; Down at bottom focuses the process indicator`,
-    `  ${'PageUp / PageDn'.padEnd(20)}  Scroll by full page`,
-    `  ${kb('search').padEnd(20)}  Search conversation (Ctrl+F)`,
+    `  ${'Up / Down'}\tRecall input history; Down at bottom focuses the process indicator`,
+    `  ${'PageUp / PageDn'}\tScroll by full page`,
+    `  ${kb('search')}\tSearch conversation (Ctrl+F)`,
     '',
     '  Prompt And Editing',
     '  ' + '\u2500'.repeat(40),
-    `  ${'Enter'.padEnd(20)}  Submit message (composer empty: open the block-actions menu)`,
-    `  ${'Shift+Enter'.padEnd(20)}  Insert newline`,
-    `  ${kb('paste').padEnd(20)}  Paste (image priority)`,
-    `  ${(kb('undo') + ' / ' + kb('redo')).padEnd(20)}  Undo / redo`,
+    `  ${'Enter'}\tSubmit message (composer empty: open the block-actions menu)`,
+    `  ${'Shift+Enter'}\tInsert newline`,
+    `  ${kb('paste')}\tPaste (image priority)`,
+    `  ${(kb('undo') + ' / ' + kb('redo'))}\tUndo / redo`,
     shortcutLine('(paste >8 lines)', 'Folds to [TEXT: pN, M lines]; /pastes previews it before you submit'),
     '',
     '  Overlays And Panels',
@@ -130,7 +145,7 @@ export function renderHelpOverlay(
   // Build command rows from featured list, filtering out unregistered commands.
   function featuredRow(name: string, argHint: string, desc: string): string {
     const invocation = argHint ? `/${name} ${argHint}` : `/${name}`;
-    return `  ${invocation.padEnd(23)}  ${desc}`;
+    return `  ${invocation}\t${desc}`;
   }
 
   const quickStartRows: string[] = [];
@@ -170,7 +185,7 @@ export function renderHelpOverlay(
   for (const [name, desc] of ESSENTIAL_COMMANDS) {
     if (!hasCommand(name)) continue;
     seen.add(name);
-    essentialRows.push(`  ${`/${name}`.padEnd(18)}  ${desc}`);
+    essentialRows.push(`  ${`/${name}`}\t${desc}`);
   }
   if (essentialRows.length > 0) {
     commandRows.push('  Essentials', '  ' + '\u2500'.repeat(40), ...essentialRows, '');
@@ -187,10 +202,10 @@ export function renderHelpOverlay(
       const cmd = commands.find((entry) => entry.name === name);
       if (!cmd || seen.has(cmd.name)) continue;
       seen.add(cmd.name);
-      const nameCol = `/${cmd.name}`.padEnd(18);
-      commandRows.push(`  ${nameCol}  ${cmd.description}`);
+      const nameCol = `/${cmd.name}`;
+      commandRows.push(`  ${nameCol}\t${cmd.description}`);
     }
-    // No command cap: the overlay windows and scrolls (getVisibleWindow below),
+    // No command cap: the overlay list scrolls,
     // so the full remaining registry is listed rather than truncated at 24.
     const remainder = [...commands]
       .filter((cmd) => !seen.has(cmd.name))
@@ -198,164 +213,82 @@ export function renderHelpOverlay(
     if (remainder.length > 0) {
       commandRows.push('', '  More Commands', '  ' + '\u2500'.repeat(40));
       for (const cmd of remainder) {
-        const nameCol = `/${cmd.name}`.padEnd(18);
-        commandRows.push(`  ${nameCol}  ${cmd.description}`);
+        const nameCol = `/${cmd.name}`;
+        commandRows.push(`  ${nameCol}\t${cmd.description}`);
       }
     }
   } else if (!hasCommand('help')) {
     commandRows.push('', '  Essentials', '  ' + '\u2500'.repeat(40));
-    commandRows.push('  /commands           Show this help overlay');
-    commandRows.push('  /help               Browse & run any command');
-    commandRows.push('  /shortcuts          Keyboard shortcut reference');
-    commandRows.push('  /model              Select LLM model');
-    commandRows.push('  /clear              Clear the conversation display (keeps LLM context)');
+    commandRows.push('  /commands\tShow this help overlay');
+    commandRows.push('  /help\tBrowse & run any command');
+    commandRows.push('  /shortcuts\tKeyboard shortcut reference');
+    commandRows.push('  /model\tSelect LLM model');
+    commandRows.push('  /clear\tClear the conversation display (keeps LLM context)');
   }
 
-  const allRows = [...shortcutRows, ...commandRows];
-
-  // Apply scroll offset, show a window of rows
-  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
-    chromeRows: 4,
-    minContentRows: 8,
-    maxContentRows: 12,
-  });
-  const maxVisible = metrics.contentRows;
-  const clampedOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, allRows.length - maxVisible)));
-  const visibleRows = allRows.slice(clampedOffset, clampedOffset + maxVisible);
-  const window = getVisibleWindow(allRows.length, clampedOffset, maxVisible);
-
-  return ModalFactory.createModal(
-    {
-      title: 'Help',
-      width: metrics.boxWidth,
-      margin: metrics.margin,
-      targetContentRows: metrics.contentRows,
-      // Single tab: the old second 'Commands' tab had no switch handler (Left/
-      // Right did nothing), so it was a dead affordance. The overlay is one
-      // scrolling surface, so it advertises exactly one tab.
-      tabs: [{ label: 'Overview', active: true }],
-      sections: toModalSections(visibleRows),
-      helpers: allRows.length > maxVisible
-        ? [{ content: `[${window.start + 1}-${Math.min(allRows.length, clampedOffset + visibleRows.length)} of ${allRows.length}]` }]
-        : undefined,
-      hints: [formatHints([
-        { key: 'Up/Down', verb: 'Scroll' },
-        { key: '?', verb: 'Help' },
-        { key: 'Esc', verb: 'Close' },
-      ])],
-    },
-    width,
-  );
+  return groupsFromRows([...shortcutRows, ...commandRows]);
 }
 
+function filterGroups(groups: readonly HelpGroup[], query: string): HelpGroup[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...groups];
+  return groups
+    .map((g) => ({
+      title: g.title,
+      entries: g.title.toLowerCase().includes(q)
+        ? g.entries
+        : g.entries.filter((e) => e.label.toLowerCase().includes(q) || e.right.toLowerCase().includes(q)),
+    }))
+    .filter((g) => g.entries.length > 0);
+}
+
+const HINTS: readonly KitHint[] = [['↑↓', 'scroll'], ['?', 'close']];
+
 /**
- * renderShortcutsOverlay, renders keyboard shortcuts as Line[].
- * Accessed via /shortcuts command. Reflects live keybindings (user overrides included).
+ * Render the help overlay as a SurfaceLayer in screen coordinates.
+ *
+ * @param scrollOffset  Rows scrolled past the top of the list.
+ * @param filter        The search row's query; the renderer records how far the list can scroll in it.
  */
-export function renderShortcutsOverlay(
-  width: number,
+export function renderHelpOverlay(
+  screenWidth: number,
+  screenHeight: number,
   keybindingsManager: KeybindingsManager,
+  commands?: SlashCommand[],
   scrollOffset = 0,
-  viewportHeight = process.stdout.rows || 24,
-): Line[] {
-  function row(key: string, desc: string): string {
-    const keyCol = key.length > 20 ? key.slice(0, 19) + '\u2026' : key.padEnd(20);
-    return `  ${keyCol}  ${desc}`;
+  filter?: OverlayFilter,
+): SurfaceLayer {
+  const t = activeTokens();
+  const query = filter?.query ?? '';
+  const all = helpGroups(keybindingsManager, commands);
+  const groups = filterGroups(all, query);
+  const f = beginModal(screenWidth, screenHeight, { title: 'Help', hints: HINTS });
+  const total = all.reduce((n, g) => n + g.entries.length, 0);
+  const shown = groups.reduce((n, g) => n + g.entries.length, 0);
+  searchRow(f, f.top, query, 'Filter commands and shortcuts', query ? `${shown} of ${total}` : `${total} entries`);
+
+  const top = f.top + 2;
+  if (groups.length === 0) {
+    if (filter) filter.maxScroll = 0;
+    drawTextBlock(f.canvas, f.l, top, f.r - f.l + 1, [{ text: `Nothing matches "${query}".`, style: { fg: t.textMuted } }], f.bottom);
+    return finishModal(f);
   }
 
-  // Keys that are real, but not KeyAction entries in keybindingsManager
-  // (context-dependent chords, or literal characters rather than bindable
-  // actions) \u2014 a maintained table rather than hand-picked getAll() calls, so
-  // adding a new KeyAction automatically shows up below without anyone
-  // remembering to also add a row for it here.
-  const HARDCODED_ROWS: ReadonlyArray<[key: string, desc: string]> = [
-    ['Up / Down', 'Recall input history; Down at bottom focuses the process indicator'],
-    ['PageUp / PageDn', 'Scroll by full page'],
-    ['Home / End', 'Jump to start / end of line'],
-    ['n / N (search)', 'Next / previous match'],
-    ['Mouse wheel', 'Scroll conversation or hovered panel'],
-    ['Enter', 'Submit message (composer empty: open the block-actions menu)'],
-    ['Shift+Enter', 'Insert newline'],
-    ['@', 'Open file picker'],
-    ['/', 'Slash command mode'],
-    ['Esc', 'Close overlay / cancel generation / clear prompt (context-dependent)'],
-    ['Shift+Tab', 'Cycle permission mode (auto-approve / prompt / manual)'],
-    ['F2', 'Open the Fleet panel'],
-    ['?  or  /help', 'Open the command browser (search & run any command)'],
-    // Precedence (highest first): panel focus-swap, else path-completion,
-    // else collapse/expand \u2014 see the Panels section's Tab row below for the
-    // full chain; this row is the "what does it do here" short form.
-    ['Tab', 'Collapse/expand block (composer empty \u2014 see Panels: Tab for full precedence)'],
-  ];
-
-  const IN_PANEL_ROWS: ReadonlyArray<[key: string, desc: string]> = [
-    ['j / k', 'Move selection down / up'],
-    ['g / G', 'Jump to top / bottom'],
-    ['/', 'Filter the list'],
-  ];
-
-  // Generated from the live keybindings table (default bindings AND any user
-  // overrides) so this listing can never drift from what a key actually
-  // does \u2014 no action is hand-picked, none can be silently missed.
-  const allBindings = keybindingsManager.getAll();
-  const panelActionRows = allBindings
-    .filter((entry) => entry.action.startsWith('panel-'))
-    .map((entry) => row(entry.combos.map((c) => keybindingsManager.formatCombo(c)).join(', '), entry.description));
-  const otherActionRows = allBindings
-    .filter((entry) => !entry.action.startsWith('panel-'))
-    .map((entry) => row(entry.combos.map((c) => keybindingsManager.formatCombo(c)).join(', '), entry.description));
-
-  const allRows: string[] = [
-    '  Navigation & Editing',
-    '  ' + '\u2500'.repeat(40),
-    ...HARDCODED_ROWS.map(([key, desc]) => row(key, desc)),
-    '',
-    '  Actions & Shortcuts (customize via /keybindings)',
-    '  ' + '\u2500'.repeat(40),
-    ...otherActionRows,
-    '',
-    '  Panels',
-    '  ' + '\u2500'.repeat(40),
-    // Full Tab precedence, stated once here as the authoritative chain: a
-    // visible panel workspace claims Tab for focus-swap first; failing that,
-    // a partial path under the cursor claims it for completion; only then
-    // does it fall through to collapse/expand (the Actions section's row).
-    row('Tab', 'Panel focus-swap (1st) > path-complete (2nd) > collapse/expand block (3rd)'),
-    ...panelActionRows,
-    '',
-    '  In-Panel Controls',
-    '  ' + '\u2500'.repeat(40),
-    ...IN_PANEL_ROWS.map(([key, desc]) => row(key, desc)),
-    '',
-    `  Config: /keybindings to list and customize`,
-  ];
-
-  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
-    chromeRows: 4,
-    minContentRows: 8,
-    maxContentRows: 12,
-  });
-  const maxVisible = metrics.contentRows;
-  const clampedOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, allRows.length - maxVisible)));
-  const visibleRows = allRows.slice(clampedOffset, clampedOffset + maxVisible);
-  const window = getVisibleWindow(allRows.length, clampedOffset, maxVisible);
-
-  return ModalFactory.createModal(
-    {
-      title: 'Keyboard Shortcuts',
-      width: metrics.boxWidth,
-      margin: metrics.margin,
-      targetContentRows: metrics.contentRows,
-      tabs: [{ label: 'Shortcuts', active: true }],
-      sections: toModalSections(visibleRows),
-      helpers: allRows.length > maxVisible
-        ? [{ content: `[${window.start + 1}-${Math.min(allRows.length, clampedOffset + visibleRows.length)} of ${allRows.length}]` }]
-        : undefined,
-      hints: [formatHints([
-        { key: 'Up/Down', verb: 'Scroll' },
-        { key: 'Esc', verb: 'Close' },
-      ])],
-    },
-    width,
-  );
+  const rows: KitRow[] = [];
+  for (const g of groups) {
+    rows.push({ header: g.title });
+    for (const e of g.entries) rows.push({ label: e.label, right: e.right });
+  }
+  // The furthest start that still fills the list (group spacing collapses when scrolling).
+  const capacity = Math.max(1, f.bottom - top + 1);
+  let maxStart = rows.length;
+  let used = 0;
+  while (maxStart > 0 && used + measureRow(rows[maxStart - 1]!, f.l, f.r) <= capacity) {
+    maxStart--;
+    used += measureRow(rows[maxStart]!, f.l, f.r);
+  }
+  if (filter) filter.maxScroll = maxStart;
+  const res = drawList(f.canvas, { rows, top, bottom: f.bottom, x0: f.l, x1: f.r, scrollStart: Math.min(scrollOffset, maxStart) });
+  f.hintRight = scrollCountText(res.above, res.below);
+  return finishModal(f);
 }

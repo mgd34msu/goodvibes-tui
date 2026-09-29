@@ -3,7 +3,7 @@ import type { ConversationManager } from '../../core/conversation';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
-import { applyConversationOverlays } from '../../renderer/conversation-overlays.ts';
+import { applyConversationOverlays, buildConversationLayers } from '../../renderer/conversation-overlays.ts';
 import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
 import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
@@ -57,28 +57,29 @@ function wireModelPicker(input: InputHandler): unknown[] {
 }
 
 describe('applyConversationOverlays onboarding shell', () => {
-  test('lets the fullscreen model workspace own the viewport while nested from onboarding', () => {
+  test('onboarding owns the viewport, and the model picker it launched draws over it as a modal layer', () => {
     const width = 100;
     const height = 20;
     const viewport = Array.from({ length: height }, () => createEmptyLine(width));
     const input = makeInput();
     input.openOnboardingWizard();
     input.modelPicker.openProviders(['openai', 'anthropic'], 'openai');
-
-    const lines = applyConversationOverlays(viewport, {
+    const context = {
       input,
       conversation: {} as ConversationManager,
       commandRegistry: { getAll: () => [] } as never,
       keybindingsManager: createDefaultUiRuntimeServices().shell.keybindingsManager,
-      conversationWidth: width,
-      viewportHeight: height,
-    });
+    };
 
+    const lines = applyConversationOverlays(viewport, { ...context, conversationWidth: width, viewportHeight: height });
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.length).toBeLessThanOrEqual(height);
-    const text = linesToText(lines).join('\n');
-    expect(text).toContain('Model Workspace');
-    expect(text).toContain('Provider list');
+
+    const layers = buildConversationLayers({ ...context, screenWidth: width, screenHeight: height });
+    expect(layers).toHaveLength(1);
+    const text = linesToText(layers[0]!.lines).join('\n');
+    expect(text).toContain('✦ Models › Providers');
+    expect(text).toContain('openai');
   });
 
   test('guards duplicate onboarding modal pushes in the shared stack', () => {

@@ -15,6 +15,7 @@
  * src/test/runtime/session-union-cache.test.ts, so this is real facade
  * behavior, not a hand-rolled stand-in.
  */
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
@@ -75,7 +76,7 @@ describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
       modal.open();
       expect(modal.crossSurfaceView.mode).toBe('local');
       expect(modal.crossSurfaceSessions).toEqual([]);
-      const lines = renderSessionPickerModal(modal, 100);
+      const lines = frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24);
       expect(linesToText(lines).join('\n')).not.toContain('Cross-surface sessions');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -99,8 +100,8 @@ describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
       const ids = modal.crossSurfaceSessions.map((r) => r.id).sort();
       expect(ids).toEqual(['local-1', 'webui-1']);
 
-      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
-      expect(text).toContain('Cross-surface sessions');
+      const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).join('\n');
+      expect(text).toContain('✦ other surfaces');
       expect(text).toContain('From webui');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -124,7 +125,7 @@ describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
       // Never an empty list on offline, local rows are still honestly served.
       expect(modal.crossSurfaceSessions.map((r) => r.id)).toEqual(['local-1']);
 
-      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
+      const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).join('\n');
       expect(text).toContain('cross-surface view offline');
       expect(text).toContain('showing local sessions only');
       expect(text).toContain('local-1');
@@ -162,7 +163,7 @@ describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
       expect(modal.crossSurfaceView.online).toBe(true);
       expect(modal.crossSurfaceView.stale).toBe(true);
 
-      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
+      const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).join('\n');
       expect(text).toMatch(/Union view may be stale, last synced \d+s ago/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -182,7 +183,7 @@ describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
       const modal = new SessionPickerModal(sessionManager, cache);
       modal.open();
 
-      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
+      const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).join('\n');
       expect(text).toContain('Closed session');
       expect(text).toContain('closed');
       expect(text).toContain('Mystery kind');
@@ -207,16 +208,16 @@ describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
       const modal = new SessionPickerModal(sessionManager, cache);
       modal.open();
 
-      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
+      const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).join('\n');
       expect(text).toContain('Reaped session');
       expect(text).toContain('reaped');
       expect(text).toContain('User-closed session');
       expect(text).toContain('Legacy closed session');
       // Deliberately-closed and pre-feature (no metadata) records still read
       // "closed", only the idle-reaped one gets the distinct badge.
-      const reapedLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('Reaped session'));
-      const userClosedLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('User-closed session'));
-      const legacyLine = linesToText(renderSessionPickerModal(modal, 100)).find((line) => line.includes('Legacy closed session'));
+      const reapedLine = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).find((line) => line.includes('Reaped session'));
+      const userClosedLine = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).find((line) => line.includes('User-closed session'));
+      const legacyLine = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).find((line) => line.includes('Legacy closed session'));
       expect(reapedLine).toContain('reaped');
       expect(reapedLine).not.toContain('· closed ·');
       expect(userClosedLine).toContain('· closed ·');
@@ -243,7 +244,7 @@ describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
       const modal = new SessionPickerModal(sessionManager, cache);
       modal.open();
 
-      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
+      const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).join('\n');
       expect(text).toContain('Closed session');
       expect(text).not.toContain('reaped = closed by the idle sweep');
     } finally {
@@ -259,7 +260,7 @@ describe('SessionPickerModal: cross-surface union (W3-T2)', () => {
       const modal = new SessionPickerModal(sessionManager, cache);
       modal.open();
 
-      const text = linesToText(renderSessionPickerModal(modal, 100)).join('\n');
+      const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100), 100, 24)).join('\n');
       expect(text).toContain('No sessions yet.');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -301,43 +302,44 @@ describe('SessionPickerModal: cross-surface budget reservation (W3 Finding 1)', 
 
   test('local=10, vh=40: all 4 union rows visible under the header (reviewer repro)', () => {
     const modal = makeUnionModal(10, fakeUnionRecords(4));
-    const text = linesToText(renderSessionPickerModal(modal, 100, 40)).join('\n');
-    expect(text).toContain('Cross-surface sessions');
+    const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100, 40), 100, 40)).join('\n');
+    expect(text).toContain('✦ other surfaces');
     for (let i = 1; i <= 4; i++) expect(text).toContain(`webui-session-${i}`);
   });
 
   test('local=14, vh=40: header AND union rows survive (reviewer repro: header previously vanished too)', () => {
     const modal = makeUnionModal(14, fakeUnionRecords(4));
-    const text = linesToText(renderSessionPickerModal(modal, 100, 40)).join('\n');
-    expect(text).toContain('Cross-surface sessions');
+    const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100, 40), 100, 40)).join('\n');
+    expect(text).toContain('✦ other surfaces');
     for (let i = 1; i <= 4; i++) expect(text).toContain(`webui-session-${i}`);
   });
 
   test('local=10, vh=50: all 4 union rows visible', () => {
     const modal = makeUnionModal(10, fakeUnionRecords(4));
-    const text = linesToText(renderSessionPickerModal(modal, 100, 50)).join('\n');
-    expect(text).toContain('Cross-surface sessions');
+    const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100, 50), 100, 50)).join('\n');
+    expect(text).toContain('✦ other surfaces');
     for (let i = 1; i <= 4; i++) expect(text).toContain(`webui-session-${i}`);
   });
 
-  test('>5 cross-surface records: the "[showing N of M]" overflow line is visible, not tail-clipped', () => {
+  test('>5 cross-surface records: the "showing N of M" overflow line is visible, not tail-clipped', () => {
     const modal = makeUnionModal(20, fakeUnionRecords(7));
-    const text = linesToText(renderSessionPickerModal(modal, 100, 40)).join('\n');
-    expect(text).toContain('Cross-surface sessions');
-    expect(text).toContain('[showing 5 of 7]');
+    const text = linesToText(frameFromLayer(renderSessionPickerModal(modal, 100, 40), 100, 40)).join('\n');
+    expect(text).toContain('✦ other surfaces');
+    expect(text).toContain('showing 5 of 7');
     for (let i = 1; i <= 5; i++) expect(text).toContain(`webui-session-${i}`);
   });
 
-  test('local-only mode (no sessionBroker wired) is unaffected: visibleRows still equals metrics.contentRows', () => {
+  test('local-only mode (no sessionBroker wired) gives the saved list the whole body: no reservation, every session visible', () => {
     const { sessionManager } = makeSessionManager();
     const modal = new SessionPickerModal(sessionManager);
     modal.active = true;
     modal.sessions = fakeLocalSessions(10);
     modal.selectedIndex = 0;
     // mode stays 'local' (the DORMANT_CROSS_SURFACE_VIEW default), no broker wired.
-    const lines = renderSessionPickerModal(modal, 100, 40);
+    const lines = frameFromLayer(renderSessionPickerModal(modal, 100, 40), 100, 40);
     const text = linesToText(lines).join('\n');
-    expect(text).not.toContain('Cross-surface sessions');
-    expect(modal.visibleRows).toBe(9);
+    expect(text).not.toContain('✦ other surfaces');
+    for (let i = 1; i <= 10; i++) expect(text).toContain(`local-session-${i}`);
+    expect(modal.visibleRows).toBeGreaterThanOrEqual(10);
   });
 });

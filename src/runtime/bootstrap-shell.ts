@@ -143,6 +143,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     confirmLiveResume: (sessionId) => confirmLiveResume(sessionId, {
       surface: services.surface,
       openSelection: () => commandContext.openSelection,
+      confirm: () => commandContext.confirm,
     }),
     configManager,
     providerRegistry: services.providerRegistry,

@@ -7,6 +7,7 @@ import type {
   ConfigModalView,
 } from '../../input/config-modal-types.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
+import type { SurfaceLayer } from '../../renderer/surface-kit.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { handleConfigModalToken } from '../../input/handler-modal-routes.ts';
 import { memoryModalGoldenSurface } from '../../panels/modals/memory-modal.ts';
@@ -31,22 +32,16 @@ function makeSurface(opts: {
   };
 }
 
-/** Structural skeleton of a rendered frame: line count + border/indicator glyph
- *  columns per line. Two frames with identical skeletons have identical layout
- *  (rows did not reflow) even if value cells differ. */
-function skeleton(lines: { char: string }[][]): string {
-  return lines
-    .map((line) =>
-      line
-        .map((cell, x) => ('│┤├┌┐└┘┼─▸'.includes(cell.char) ? `${x}:${cell.char}` : ''))
-        .filter(Boolean)
-        .join(','),
-    )
-    .join('\n');
+/** Structural skeleton of a rendered frame: every cell's background (the
+ *  fills, the selected row's gradient, keycaps). Two frames with identical
+ *  skeletons have identical layout (rows did not reflow) even if value cells
+ *  differ. */
+function skeleton(layer: SurfaceLayer): string {
+  return layer.lines.map((line) => line.map((cell) => cell.bg).join(',')).join('\n');
 }
 
-function text(lines: { char: string }[][]): string {
-  return lines.map((l) => l.map((c) => c.char).join('')).join('\n');
+function text(layer: SurfaceLayer): string {
+  return layer.lines.map((l) => l.map((c) => c.char).join('')).join('\n');
 }
 
 describe('ConfigModal host', () => {
@@ -129,7 +124,7 @@ describe('ConfigModal host', () => {
     tick = 999;
     const frameB = renderConfigModal(modal, 90, 24);
 
-    expect(frameB.length).toBe(frameA.length); // identical line count
+    expect(frameB.lines.length).toBe(frameA.lines.length); // identical line count
     expect(skeleton(frameB)).toBe(skeleton(frameA)); // no structural reflow
     expect(text(frameB)).not.toBe(text(frameA)); // but values did change
     expect(text(frameB)).toContain('999ms');
@@ -360,77 +355,109 @@ function ctxNoop() {
   return { print: () => {}, executeCommand: undefined };
 }
 
-// ── item 1: config-modal host '/' type-to-filter ─────────────────────
+// ── The always-live search row ───────────────────────────────────────────
 
-describe('ConfigModal host: type-to-filter (item 1)', () => {
-  test('/ arms the filter; typed text narrows rows on a real surface (memory-modal)', async () => {
+const ESC = { type: 'key', name: '\x1b', logicalName: 'escape', ctrl: false, shift: false, meta: false } as never;
+const BACKSPACE = { type: 'key', name: '\x7f', logicalName: 'backspace', ctrl: false, shift: false, meta: false } as never;
+
+describe('ConfigModal host: always-live search row', () => {
+  test('typed text narrows rows on a real surface (memory-modal) with no arming key', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface()); // fixture pre-awaits its onOpen refresh, so records are already loaded here
     modal.moveDown(); // interaction boundary: freeze structure against the loaded records
     expect(modal.getRenderModel().scroll.total).toBe(2);
     expect(modal.isFilterActive()).toBe(false);
 
-    modal.activateFilter();
-    expect(modal.isFilterActive()).toBe(true);
     modal.appendFilterText('b');
     modal.appendFilterText('a');
-    modal.appendFilterText('tches');
-    expect(modal.getFilterQuery()).toBe('batches');
+    modal.appendFilterText('tched');
+    expect(modal.isFilterActive()).toBe(true);
+    expect(modal.getFilterQuery()).toBe('batched');
     const model = modal.getRenderModel();
     expect(model.rows.length).toBe(1);
-    expect(model.rows[0]!.label).toContain('batches');
+    expect(model.rows[0]!.label).toContain('batched');
+    expect(model.rows[0]!.selectable).toBe(true);
+    expect(model.search).toEqual({ query: 'batched', matched: 1, total: 2 });
   });
 
-  test('a multi-char paste token lands in the filter atomically (handleConfigModalToken); not split into per-char nav/close', async () => {
+  function confirmSurface(fired: string[]): ConfigModalSurface {
+    return makeSurface({
+      view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: [{ id: 'u1', label: 'user one' }, { id: 'u2', label: 'user two' }] }] }),
+      actions: [
+        { key: 'r', id: 'refresh', label: 'refresh' },
+        { key: 'd', id: 'delete', label: 'delete user', confirm: true },
+      ],
+      onAction: (id) => fired.push(id),
+    });
+  }
+
+  test('printable keys go to the query; a claimed action key fires only while the query is empty', () => {
+    const fired: string[] = [];
     const modal = new ConfigModal();
-    modal.open(await memoryModalGoldenSurface());
+    modal.open(confirmSurface(fired));
     const state = { configModal: modal, requestRender: () => {}, handleEscape: () => modal.close() };
-    handleConfigModalToken(state, { type: 'text', value: '/' } as never);
-    expect(modal.isFilterActive()).toBe(true);
+    // 'u' is not an action: it is typed.
+    handleConfigModalToken(state, { type: 'text', value: 'u' } as never);
+    expect(modal.getFilterQuery()).toBe('u');
+    // 'r' and 'd' are actions, but with a query they are just characters.
+    handleConfigModalToken(state, { type: 'text', value: 'r' } as never);
+    handleConfigModalToken(state, { type: 'text', value: 'd' } as never);
+    expect(modal.getFilterQuery()).toBe('urd');
+    expect(fired).toEqual([]);
+    expect(modal.hasPendingConfirm()).toBe(false);
+    for (let k = 0; k < 3; k++) handleConfigModalToken(state, BACKSPACE);
+    expect(modal.getFilterQuery()).toBe('');
+    handleConfigModalToken(state, { type: 'text', value: 'r' } as never);
+    expect(fired).toEqual(['refresh']);
+    handleConfigModalToken(state, { type: 'text', value: 'd' } as never);
+    expect(modal.getFilterQuery()).toBe('');
+    expect(modal.hasPendingConfirm()).toBe(true);
+    handleConfigModalToken(state, { type: 'text', value: 'd' } as never);
+    expect(fired).toEqual(['refresh', 'delete']);
+  });
+
+  test('a multi-char paste token lands in the query atomically (handleConfigModalToken); not split into per-char nav/close', () => {
+    const modal = new ConfigModal();
+    modal.open(confirmSurface([]));
+    const state = { configModal: modal, requestRender: () => {}, handleEscape: () => modal.close() };
     // A real bracketed paste is ONE token holding the whole string, including
-    // characters ('j', 'k') that would otherwise be nav aliases.
-    handleConfigModalToken(state, { type: 'text', value: 'j and k are text now' } as never);
-    expect(modal.getFilterQuery()).toBe('j and k are text now');
-    expect(modal.active).toBe(true); // never closed, 'k' didn't leak through as a hotkey
+    // characters that are action keys on their own.
+    handleConfigModalToken(state, { type: 'text', value: 'd and r are text now' } as never);
+    expect(modal.getFilterQuery()).toBe('d and r are text now');
+    expect(modal.active).toBe(true);
+    expect(modal.hasPendingConfirm()).toBe(false);
   });
 
   test('backspace edits the query one character at a time', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface());
-    modal.activateFilter();
     modal.appendFilterText('charter');
     modal.backspaceFilter();
     expect(modal.getFilterQuery()).toBe('charte');
   });
 
-  test('Esc two-stage: a non-empty query is cleared first; a second Esc (now empty) closes; single-Esc-close preserved for the no-filter case', async () => {
+  test('Esc closes in one press whatever the query holds (no clear-the-query step)', async () => {
     const modal = new ConfigModal();
     let closed = false;
     modal.open(await memoryModalGoldenSurface());
     const state = { configModal: modal, requestRender: () => {}, handleEscape: () => { closed = true; modal.close(); } };
-    const escToken = { type: 'key', name: '\x1b', logicalName: 'escape', ctrl: false, shift: false, meta: false } as never;
-
-    handleConfigModalToken(state, { type: 'text', value: '/' } as never);
     handleConfigModalToken(state, { type: 'text', value: 'charter' } as never);
     expect(modal.getFilterQuery()).toBe('charter');
-
-    handleConfigModalToken(state, escToken);
-    expect(modal.getFilterQuery()).toBe('');
-    expect(modal.active).toBe(true); // NOT closed yet, the one documented exception
-    expect(closed).toBe(false);
-
-    handleConfigModalToken(state, escToken);
-    expect(closed).toBe(true); // second Esc, now with an empty filter, closes normally
+    handleConfigModalToken(state, ESC);
+    expect(closed).toBe(true);
   });
 
-  test('Esc with the filter armed but never typed into closes in a single press (no query to clear)', async () => {
+  test('Esc pops one level: an armed destructive confirm is cancelled first, the next Esc closes', () => {
     const modal = new ConfigModal();
     let closed = false;
-    modal.open(await memoryModalGoldenSurface());
+    modal.open(confirmSurface([]));
     const state = { configModal: modal, requestRender: () => {}, handleEscape: () => { closed = true; modal.close(); } };
-    handleConfigModalToken(state, { type: 'text', value: '/' } as never);
-    expect(modal.isFilterActive()).toBe(true);
-    handleConfigModalToken(state, { type: 'key', name: '\x1b', logicalName: 'escape', ctrl: false, shift: false, meta: false } as never);
+    handleConfigModalToken(state, { type: 'text', value: 'd' } as never);
+    expect(modal.hasPendingConfirm()).toBe(true);
+    handleConfigModalToken(state, ESC);
+    expect(modal.hasPendingConfirm()).toBe(false);
+    expect(closed).toBe(false);
+    handleConfigModalToken(state, ESC);
     expect(closed).toBe(true);
   });
 
@@ -444,7 +471,6 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
         { id: 'r3', label: 'beta unrelated' },
       ] }] }),
     }));
-    modal.activateFilter();
     modal.appendFilterText('alpha'); // interaction boundary: freezes r1+r2 only
     expect(modal.getRenderModel().scroll.total).toBe(2);
     const frameA = renderConfigModal(modal, 90, 24);
@@ -452,7 +478,7 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
     val = 999; // values-only tick, no keystroke
     const frameB = renderConfigModal(modal, 90, 24);
 
-    expect(frameB.length).toBe(frameA.length);
+    expect(frameB.lines.length).toBe(frameA.lines.length);
     expect(skeleton(frameB)).toBe(skeleton(frameA));
     expect(text(frameB)).toContain('999');
     expect(modal.getRenderModel().scroll.total).toBe(2); // still filtered to 2, not reflowed to 3
@@ -463,7 +489,6 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
     const modal = new ConfigModal();
     modal.open(makeSurface({ view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows }] }) }));
     modal.noteInteraction(); // deferral is a post-first-interaction contract (refutation finding 3)
-    modal.activateFilter();
     modal.appendFilterText('alpha');
     expect(modal.getRenderModel().scroll.total).toBe(1);
     rows = [...rows, { id: 'r3', label: 'alpha three' }]; // a new matching row appears live
@@ -475,28 +500,27 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
   test('empty-result honest line: a query matching nothing shows "No rows match" instead of the surface\'s generic empty text', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface());
-    modal.activateFilter();
     modal.appendFilterText('zzz-no-such-record-zzz');
     const model = modal.getRenderModel();
     expect(model.rows.some((r) => r.label === 'No rows match "zzz-no-such-record-zzz".')).toBe(true);
-    expect(model.hints[0]).toContain('0 of 2 match');
+    expect(model.search).toEqual({ query: 'zzz-no-such-record-zzz', matched: 0, total: 2 });
   });
 
-  test('footer shows the query and a truthful match count; suppresses the surface\'s own (now-inert) action hints while filtering', async () => {
+  test('the search row shows the query and a truthful match count; the action hints stay (the query does not make them inert)', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface());
-    modal.activateFilter();
     modal.appendFilterText('charter');
     const model = modal.getRenderModel();
-    expect(model.hints).toContain('/charter: 1 of 2 match');
-    expect(model.hints).toContain('Esc clear · Esc close');
-    expect(model.hints.some((h) => h.includes('refresh'))).toBe(false);
+    expect(model.search).toEqual({ query: 'charter', matched: 1, total: 2 });
+    expect(model.hints.some((h) => h.includes('refresh'))).toBe(true);
+    const frame = text(renderConfigModal(modal, 100, 30));
+    expect(frame).toContain('charter');
+    expect(frame).toContain('1 of 2');
   });
 
   test('filtering resets on tab switch; a query is scoped to the tab it was typed against', async () => {
     const modal = new ConfigModal();
     modal.open(await memoryModalGoldenSurface()); // two tabs: All Records / Review Queue
-    modal.activateFilter();
     modal.appendFilterText('charter');
     expect(modal.isFilterActive()).toBe(true);
     modal.nextTab();
@@ -507,10 +531,25 @@ describe('ConfigModal host: type-to-filter (item 1)', () => {
   test('marketplace-modal: filtering an already-empty catalog does not inject a spurious "no match" line (nothing to filter in the first place)', () => {
     const modal = new ConfigModal();
     modal.open(marketplaceModalGoldenSurface());
-    modal.activateFilter();
     modal.appendFilterText('anything');
     const model = modal.getRenderModel();
     expect(model.rows.some((r) => r.label.startsWith('No rows match'))).toBe(false);
+  });
+
+  test('a tab of informational rows only scrolls with the arrows so nothing below the fold is out of reach', () => {
+    const modal = new ConfigModal();
+    modal.setViewportRows(3);
+    modal.open(makeSurface({
+      view: () => ({ title: 'T', tabs: [{ id: 'a', label: 'A', rows: Array.from({ length: 8 }, (_, i) => ({ id: `i${i}`, label: `info ${i}`, selectable: false })) }] }),
+    }));
+    expect(modal.getRenderModel(80).rows[0]!.id).toBe('i0');
+    modal.moveDown();
+    modal.moveDown();
+    expect(modal.getRenderModel(80).rows[0]!.id).toBe('i2');
+    for (let k = 0; k < 20; k++) modal.moveDown();
+    expect(modal.getRenderModel(80).rows.map((r) => r.id)).toEqual(['i5', 'i6', 'i7']);
+    modal.moveUp();
+    expect(modal.getRenderModel(80).rows[0]!.id).toBe('i4');
   });
 });
 
@@ -564,7 +603,7 @@ describe('ConfigModal host: wrap-clamp overlay (item 2)', () => {
     const frameA = renderConfigModal(modal, 90, 24);
     label = 'x'.repeat(300); // guaranteed to wrap into many lines at any real terminal width
     const frameB = renderConfigModal(modal, 90, 24);
-    expect(frameB.length).toBe(frameA.length);
+    expect(frameB.lines.length).toBe(frameA.lines.length);
     expect(text(frameB)).toContain('…');
   });
 });

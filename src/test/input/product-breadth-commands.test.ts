@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { SurfaceModalHost } from '../../input/surface-modal-host.ts';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
@@ -559,6 +560,7 @@ describe('product breadth commands', () => {
       modalStack: [] as string[],
     };
     const input = {
+      surfaceModals: new SurfaceModalHost(),
       openOnboardingWizard: (modeOrOptions?: 'new' | 'edit' | 'reopen' | { mode?: 'new' | 'edit' | 'reopen' }) => {
         state.active = true;
         state.mode = typeof modeOrOptions === 'string'

@@ -8,6 +8,7 @@ import {
 import { describeOriginPosture, LAN_PLAIN_HTTP_NOTICE } from '@pellux/goodvibes-sdk/platform/pairing';
 import { ConfigModal } from '../../../input/config-modal.ts';
 import { renderConfigModal } from '../../../renderer/config-modal.ts';
+import { frameFromLayer } from '../../helpers/surface-frame.ts';
 import type { ConfigModalSurface } from '../../../input/config-modal-types.ts';
 import { actionCtx, open, tabRows, tabText } from './modal-surface-test-helpers.ts';
 
@@ -26,7 +27,7 @@ function renderRows(surface: ConfigModalSurface, width: number, height: number):
   const modal = new ConfigModal();
   modal.open(surface, () => {});
   modal.syncStructure();
-  const lines = renderConfigModal(modal, width, height);
+  const lines = frameFromLayer(renderConfigModal(modal, width, height), width, height);
   modal.close();
   return lines.map((line) => line.map((c) => (c.char === '' ? ' ' : c.char)).join('').replace(/\s+$/, ''));
 }

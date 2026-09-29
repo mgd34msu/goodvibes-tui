@@ -1,129 +1,51 @@
 /**
- * Fullscreen provider/model workspace.
+ * renderModelWorkspace, the model picker drawn with the surface kit.
  *
- * This keeps the model-picker data and commit behavior, but presents it as a
- * stable workspace with explicit target slots instead of a compact overlay.
+ *   ✦ Models                                                      esc
+ *
+ *    Main Chat     Helper     Tool LLM     TTS     Embeddings
+ *
+ *   ▏opus                                                  6 of 5,582
+ *
+ *   ✦ pinned                               ┌ element panel ──────────┐
+ *   ● Claude Opus 5.5  anthropic    1.0M     Claude Opus 5.5
+ *   ✦ recent                                 anthropic:claude-opus-5-5
+ *     route-llm        abacusai     8.2K     Context  ▰▰▰▰▰▰▰▰▰▰ 1.0M
+ *   ✦ lm studio                              Quality  ▰▰▰▰▰▰▱▱▱▱ 0.61
+ *     qwen3-coder       lmstudio    128K     Cost     $15 / $75 per 1M
+ *
+ *   ⏎ use for Main Chat   tab next target   ctrl+f pin   ctrl+r refresh
+ *
+ * The five model targets are tabs. The list is grouped Pinned, Recent, then by
+ * the group-by mode (provider by default, which includes LAN servers). The
+ * detail panel shows the selected model with meters for context, benchmark
+ * quality and price where that data exists, its capabilities, which targets it
+ * serves, and the picker's active filters. Provider, effort, context-cap and
+ * embedding-provider steps use the same frame.
  */
 
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
-import type { ModelPickerModal } from '../input/model-picker.ts';
-import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
-import { createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types';
-import { fitDisplay, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
+import type { ModelPickerModal, ModelPickerTargetInfo } from '../input/model-picker.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
-import { GLYPHS } from './ui-primitives.ts';
-import { activeTokens, activeUiTones, registerThemeRefresh } from './theme.ts';
+import { activeTokens } from './theme.ts';
+import {
+  beginModal,
+  finishModal,
+  modalInnerWidth,
+  scrollCountText,
+  standardModalWidth,
+  searchRow,
+  wrapLines,
+  type KitHint,
+  type ModalFrame,
+  type SurfaceLayer,
+} from './surface-kit.ts';
+import { drawList, type KitListResult, type KitRow } from './surface-kit-list.ts';
+import { meter, panel, panelPut, panelWrap, tabs, type KitPanel } from './surface-kit-parts.ts';
 
-// Built from the active theme and rebuilt in place on every theme change.
-function buildPalette() {
-  const t = activeUiTones();
-  const p = activeTokens();
-  return {
-    border: t.border,
-    title: p.primary,
-    subtitle: t.accent.conversation,
-    text: t.fg.primary,
-    muted: t.fg.muted,
-    dim: t.border,
-    faint: p.textFaint,
-    selectedBg: t.bg.selected,
-    targetBg: p.backgroundSection,
-    detailBg: p.backgroundPanel,
-    bodyBg: p.backgroundBase,
-    footerBg: t.bg.footer,
-    good: t.state.good,
-    warn: t.state.warn,
-    info: t.state.info,
-  };
-}
-
-const PALETTE = buildPalette();
-registerThemeRefresh(() => Object.assign(PALETTE, buildPalette()));
-
-// The cache also records the token table it was painted with, so a theme
-// change never serves lines in the previous theme's colours.
-const renderCache = new WeakMap<ModelPickerModal, { key: string; tokens: object; lines: Line[] }>();
-const objectIds = new WeakMap<object, number>();
-let nextObjectId = 1;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function fillRange(line: Line, startX: number, endX: number, bg: string): void {
-  for (let x = Math.max(0, startX); x <= Math.min(line.length - 1, endX); x += 1) {
-    const cell = line[x] ?? createStyledCell(' ');
-    line[x] = createStyledCell(cell.char, {
-      fg: cell.fg,
-      bg,
-      bold: cell.bold,
-      dim: cell.dim,
-      underline: cell.underline,
-      italic: cell.italic,
-      strikethrough: cell.strikethrough,
-      link: cell.link,
-    });
-  }
-}
-
-function makeLine(width: number, bg = ''): Line {
-  const line = createEmptyLine(width);
-  if (bg) fillRange(line, 0, width - 1, bg);
-  return line;
-}
-
-function writeText(line: Line, startX: number, maxWidth: number, text: string, style: Partial<Omit<Line[number], 'char'>> = {}): void {
-  let x = startX;
-  let used = 0;
-  for (const ch of text) {
-    const width = getDisplayWidth(ch);
-    if (width <= 0) continue;
-    if (used + width > maxWidth || x >= line.length) break;
-    line[x] = createStyledCell(ch, style);
-    if (width > 1 && x + 1 < line.length) {
-      line[x + 1] = createStyledCell(' ', style);
-    }
-    x += width;
-    used += width;
-  }
-}
-
-function borderLine(width: number, left: string, fill: string, right: string): Line {
-  const line = makeLine(width);
-  if (width <= 0) return line;
-  line[0] = createStyledCell(left, { fg: PALETTE.border });
-  for (let x = 1; x < width - 1; x += 1) {
-    line[x] = createStyledCell(fill, { fg: PALETTE.border });
-  }
-  if (width > 1) line[width - 1] = createStyledCell(right, { fg: PALETTE.border });
-  return line;
-}
-
-function contentLine(width: number, bg: string): Line {
-  const line = makeLine(width, bg);
-  if (width > 0) line[0] = createStyledCell(GLYPHS.frame.vertical, { fg: PALETTE.border });
-  if (width > 1) line[width - 1] = createStyledCell(GLYPHS.frame.vertical, { fg: PALETTE.border });
-  return line;
-}
-
-function drawVertical(line: Line, x: number, bg = ''): void {
-  if (x <= 0 || x >= line.length - 1) return;
-  line[x] = createStyledCell(GLYPHS.frame.vertical, { fg: PALETTE.border, bg });
-}
-
-function padDisplay(text: string, width: number): string {
-  return fitDisplay(text, width, '');
-}
-
-function stableWindow(total: number, selected: number, visible: number): { start: number; end: number } {
-  if (total <= 0 || visible <= 0) return { start: 0, end: 0 };
-  const clamped = clamp(selected, 0, total - 1);
-  const half = Math.floor(visible / 2);
-  const maxStart = Math.max(0, total - visible);
-  const start = clamp(clamped - half, 0, maxStart);
-  return { start, end: Math.min(total, start + visible) };
-}
+// ---------------------------------------------------------------------------
+// Formatting
+// ---------------------------------------------------------------------------
 
 function formatContext(value: number | undefined): string {
   if (!value) return '-';
@@ -134,22 +56,6 @@ function modelKey(model: ModelDefinition): string {
   return model.registryKey ?? `${model.provider}:${model.id}`;
 }
 
-function targetSummary(info: ModelPickerTargetInfo): string {
-  if (!info.enabled) return 'disabled';
-  // 'embeddings' has no model concept, configuredNote carries the honest
-  // provider id + dimensions + configured-state summary instead of a
-  // computed provider:model route (which would print a phantom "model:").
-  if (info.configuredNote) return info.configuredNote;
-  const route = formatRoute(info.provider, info.model);
-  if (info.inherited) return `inherits ${route}`;
-  return route;
-}
-
-function selectedModel(picker: ModelPickerModal): ModelDefinition | null {
-  if (picker.mode !== 'model') return null;
-  return picker.getSelected();
-}
-
 function formatRoute(provider: string, model: string): string {
   if (!provider && !model) return '(not set)';
   if (!provider) return model;
@@ -157,377 +63,400 @@ function formatRoute(provider: string, model: string): string {
   return model.startsWith(`${provider}:`) ? model : `${provider}:${model}`;
 }
 
+function targetSummary(info: ModelPickerTargetInfo): string {
+  if (!info.enabled) return 'disabled';
+  // 'embeddings' has no model concept; configuredNote carries the honest
+  // provider id + dimensions + configured-state summary instead.
+  if (info.configuredNote) return info.configuredNote;
+  const route = formatRoute(info.provider, info.model);
+  return info.inherited ? `inherits ${route}` : route;
+}
+
 function targetLabelFor(target: string): string {
-  if (target === 'helper') return 'Helper Model';
+  if (target === 'helper') return 'Helper';
   if (target === 'tool') return 'Tool LLM';
-  if (target === 'tts') return 'TTS LLM';
+  if (target === 'tts') return 'TTS';
   if (target === 'embeddings') return 'Embeddings';
   return 'Main Chat';
 }
 
-function detailLines(picker: ModelPickerModal, width: number): string[] {
-  const target = picker.getSelectedTargetInfo();
-  const targetLabel = target?.label ?? targetLabelFor(picker.target);
-  const targetState = target ? (target.enabled ? 'enabled' : 'disabled') : 'active';
-  const selected = selectedModel(picker);
-  const lines: string[] = [];
-  lines.push(`Target: ${targetLabel} (${targetState})`);
-  if (target) lines.push(`Current: ${targetSummary(target)}`);
-  if (picker.mode === 'provider') {
-    const provider = picker.getFilteredProviders()[picker.selectedIndex] ?? '';
-    lines.push(`Provider selection: choose a provider, then choose a model for ${targetLabel}.`);
-    if (provider) lines.push(`Selected provider: ${provider}`);
-  } else if (picker.mode === 'model') {
-    lines.push(`Model selection: choose the model to store for ${targetLabel}. Use filters to narrow large catalogs.`);
-    if (selected) {
-      const caps = selected.capabilities ?? {};
-      const capText = [
-        caps.reasoning ? 'reasoning' : '',
-        caps.multimodal ? 'vision' : '',
-        caps.toolCalling ? 'tools' : '',
-        caps.codeEditing ? 'code' : '',
-      ].filter(Boolean).join(', ') || 'standard';
-      lines.push(`Selected: ${modelKey(selected)} | ${selected.displayName} | context ${formatContext(selected.contextWindow)} | ${capText}`);
-    }
-  } else if (picker.mode === 'effort') {
-    lines.push(`Reasoning effort applies to the main chat model. Select the default effort for this model.`);
-  } else if (picker.mode === 'embeddingProvider') {
-    lines.push('Embedding provider selection: choose the provider memory search and the code index use to embed content.');
-    const selectedEmbedding = picker.embeddingProviders[picker.selectedIndex];
-    if (selectedEmbedding) {
-      const status = selectedEmbedding.configured ? 'configured' : 'unconfigured';
-      lines.push(`Selected: ${selectedEmbedding.id} | ${selectedEmbedding.dimensions} dimensions | ${status}${selectedEmbedding.detail ? ` | ${selectedEmbedding.detail}` : ''}`);
-    }
-  } else {
-    lines.push(`Context cap overrides the detected local-model context window for this selection.`);
-  }
-  // A visible cursor glyph on the query itself when search is focused,
-  // the only prior affordance was a footer-hint text swap ('/ search' vs.
-  // 'Typing filters search...'), buried at the end of a long hint line and
-  // easy to miss (confirmed via live tmux repro). This puts the "you are
-  // typing here" signal where the eye already is, on the Search: value.
-  const searchDisplay = picker.query.length > 0
-    ? `${picker.query}${picker.searchFocused ? GLYPHS.surface.cursor : ''}`
-    : (picker.searchFocused ? GLYPHS.surface.cursor : '(none)');
-  const filterText = `Search: ${searchDisplay} | Price: ${picker.categoryFilter} | Capability: ${picker.capabilityFilter} | Group: ${picker.groupBy} | Available only: ${picker.availableOnly ? 'yes' : 'no'}`;
-  lines.push(filterText);
-  return lines.flatMap((line) => wrapText(line, Math.max(1, width)));
+function isTargetModel(info: ModelPickerTargetInfo | null, model: ModelDefinition): boolean {
+  if (!info || !info.enabled) return false;
+  return info.model === model.registryKey || (info.model === model.id && (!info.provider || info.provider === model.provider));
 }
 
-function renderTargets(picker: ModelPickerModal, line: Line, startX: number, width: number, rowIndex: number): void {
-  const info = picker.targetInfos[rowIndex];
-  if (!info) return;
-  const selected = rowIndex === picker.targetIndex;
-  const bg = selected ? PALETTE.selectedBg : PALETTE.targetBg;
-  fillRange(line, startX, startX + width - 1, bg);
-  const marker = selected ? (picker.focusPane === 'targets' ? GLYPHS.navigation.selected : '•') : ' ';
-  const state = info.enabled ? (info.inherited ? 'inherit' : 'set') : 'off';
-  writeText(line, startX + 1, width - 2, `${marker} ${info.label} (${state})`, {
-    fg: selected ? PALETTE.text : PALETTE.muted,
-    bg,
-    bold: selected,
-  });
+function capabilityNames(model: ModelDefinition): string[] {
+  const caps = model.capabilities ?? {};
+  return [
+    caps.toolCalling ? 'tools' : '',
+    caps.multimodal ? 'vision' : '',
+    caps.reasoning ? 'reasoning' : '',
+    caps.codeEditing ? 'code' : '',
+  ].filter(Boolean);
 }
 
-function renderProviderRows(picker: ModelPickerModal, lines: Line[], rows: number, startX: number, width: number): void {
-  const providers = picker.getFilteredProviders();
-  const { start, end } = stableWindow(providers.length, picker.selectedIndex, rows);
-  const modelCounts = new Map<string, number>();
-  for (const model of picker.models) modelCounts.set(model.provider, (modelCounts.get(model.provider) ?? 0) + 1);
-  for (let visibleRow = 0; visibleRow < rows; visibleRow += 1) {
-    const absolute = start + visibleRow;
-    const provider = providers[absolute];
-    const line = lines[visibleRow]!;
-    if (!provider) continue;
-    const selected = absolute === picker.selectedIndex;
-    const bg = selected ? PALETTE.selectedBg : PALETTE.bodyBg;
-    fillRange(line, startX, startX + width - 1, bg);
-    const marker = selected ? (picker.focusPane === 'items' ? GLYPHS.navigation.selected : '•') : ' ';
-    const via = picker.configuredViaMap.get(provider) ?? (picker.configuredProviders.has(provider) ? 'configured' : 'not configured');
-    const count = String(modelCounts.get(provider) ?? 0);
-    writeText(line, startX + 1, width, padDisplay(marker, 2), { fg: PALETTE.text, bg, bold: selected });
-    writeText(line, startX + 3, Math.max(0, width - 36), padDisplay(provider, Math.max(0, width - 36)), { fg: selected ? PALETTE.text : PALETTE.muted, bg, bold: selected });
-    writeText(line, startX + Math.max(4, width - 31), 18, padDisplay(via, 18), { fg: picker.configuredProviders.has(provider) ? PALETTE.good : PALETTE.warn, bg });
-    writeText(line, startX + Math.max(4, width - 12), 10, padDisplay(`${count} models`, 10), { fg: PALETTE.dim, bg });
-  }
-  if (start > 0 && lines[0]) writeText(lines[0], startX + 1, width - 2, `${GLYPHS.navigation.moreAbove} ${start} more provider(s) above`, { fg: PALETTE.faint, bg: PALETTE.bodyBg });
-  if (end < providers.length && lines[rows - 1]) writeText(lines[rows - 1]!, startX + 1, width - 2, `${GLYPHS.navigation.moreBelow} ${providers.length - end} more provider(s) below`, { fg: PALETTE.faint, bg: PALETTE.bodyBg });
-}
+// ---------------------------------------------------------------------------
+// List rows per mode
+// ---------------------------------------------------------------------------
 
-function renderModelRows(picker: ModelPickerModal, lines: Line[], rows: number, startX: number, width: number): void {
+/** Model rows; without a detail panel the selected row names its full key instead of the provider. */
+function modelRows(picker: ModelPickerModal, compact = false): KitRow[] {
+  const t = activeTokens();
   const models = picker.getFilteredModels();
-  const { start, end } = stableWindow(models.length, picker.selectedIndex, rows);
-  const providerW = clamp(Math.floor(width * 0.14), 10, 18);
-  const ctxW = 8;
-  const tierW = 8;
-  const capsW = 14;
-  const nameW = clamp(Math.floor(width * 0.28), 16, 36);
-  const keyW = Math.max(10, width - providerW - ctxW - tierW - capsW - nameW - 10);
-  for (let visibleRow = 0; visibleRow < rows; visibleRow += 1) {
-    const absolute = start + visibleRow;
-    const model = models[absolute];
-    const line = lines[visibleRow]!;
-    if (!model) continue;
-    const selected = absolute === picker.selectedIndex;
-    const bg = selected ? PALETTE.selectedBg : PALETTE.bodyBg;
-    fillRange(line, startX, startX + width - 1, bg);
-    const marker = selected ? (picker.focusPane === 'items' ? GLYPHS.navigation.selected : '•') : ' ';
-    const caps = model.capabilities ?? {};
-    const capText = [
-      caps.reasoning ? 'R' : '-',
-      caps.multimodal ? 'V' : '-',
-      caps.toolCalling ? 'T' : '-',
-      caps.codeEditing ? 'C' : '-',
-    ].join('');
-    let x = startX + 1;
-    writeText(line, x, 2, padDisplay(marker, 2), { fg: PALETTE.text, bg, bold: selected }); x += 2;
-    writeText(line, x, keyW, padDisplay(modelKey(model), keyW), { fg: selected ? PALETTE.text : PALETTE.muted, bg, bold: selected }); x += keyW + 1;
-    writeText(line, x, nameW, padDisplay(model.displayName, nameW), { fg: selected ? PALETTE.subtitle : PALETTE.text, bg }); x += nameW + 1;
-    writeText(line, x, providerW, padDisplay(model.provider, providerW), { fg: PALETTE.muted, bg }); x += providerW + 1;
-    writeText(line, x, ctxW, padDisplay(formatContext(model.contextWindow), ctxW), { fg: PALETTE.dim, bg }); x += ctxW + 1;
-    writeText(line, x, tierW, padDisplay(model.tier ?? 'paid', tierW), { fg: model.tier === 'free' ? PALETTE.good : PALETTE.dim, bg }); x += tierW + 1;
-    writeText(line, x, capsW, padDisplay(capText, capsW), { fg: PALETTE.info, bg });
+  const target = picker.getSelectedTargetInfo();
+  const recent = new Set(picker.recentIds);
+  const rows: KitRow[] = [];
+  let section = '';
+  models.forEach((model, index) => {
+    const group = picker.isPinned(model) ? 'Pinned' : recent.has(model.id) ? 'Recent' : picker.getModelGroupKey(model);
+    if (group !== section) {
+      rows.push({ header: group });
+      section = group;
+    }
+    const current = isTargetModel(target, model);
+    const selected = index === picker.selectedIndex;
+    rows.push({
+      label: model.displayName || model.id,
+      desc: compact && selected ? modelKey(model) : model.provider,
+      right: formatContext(model.contextWindow),
+      mark: current ? '●' : undefined,
+      markFg: t.brand,
+      current,
+      selected,
+    });
+  });
+  if (rows.length === 0) rows.push({ label: picker.query ? `No models match "${picker.query}".` : 'No models are available for this target.', muted: true });
+  return rows;
+}
+
+function providerRows(picker: ModelPickerModal): KitRow[] {
+  const t = activeTokens();
+  const counts = new Map<string, number>();
+  for (const model of picker.models) counts.set(model.provider, (counts.get(model.provider) ?? 0) + 1);
+  const providers = picker.getFilteredProviders();
+  const rows: KitRow[] = [];
+  let index = 0;
+  for (const item of picker.getItems()) {
+    if (item.isGroupHeader) {
+      rows.push({ header: item.label });
+      continue;
+    }
+    const provider = item.id;
+    const configured = picker.configuredProviders.has(provider);
+    const via = picker.configuredViaMap.get(provider) ?? (configured ? 'configured' : 'not configured');
+    const i = providers.indexOf(provider);
+    rows.push({
+      label: provider,
+      desc: via,
+      right: `${counts.get(provider) ?? 0} models`,
+      mark: configured ? '●' : '○',
+      markFg: configured ? t.success : t.warning,
+      selected: (i >= 0 ? i : index) === picker.selectedIndex,
+    });
+    index++;
   }
-  if (start > 0 && lines[0]) writeText(lines[0], startX + 1, width - 2, `${GLYPHS.navigation.moreAbove} ${start} more model(s) above`, { fg: PALETTE.faint, bg: PALETTE.bodyBg });
-  if (end < models.length && lines[rows - 1]) writeText(lines[rows - 1]!, startX + 1, width - 2, `${GLYPHS.navigation.moreBelow} ${models.length - end} more model(s) below`, { fg: PALETTE.faint, bg: PALETTE.bodyBg });
+  if (rows.length === 0) rows.push({ label: picker.query ? `No providers match "${picker.query}".` : 'No providers are registered.', muted: true });
+  return rows;
+}
+
+function embeddingRows(picker: ModelPickerModal): KitRow[] {
+  const t = activeTokens();
+  if (picker.embeddingProviders.length === 0) return [{ label: 'No embedding providers are registered.', muted: true }];
+  return picker.embeddingProviders.map((provider, index) => ({
+    label: provider.label,
+    desc: provider.detail,
+    right: `${provider.dimensions}d · ${provider.configured ? 'configured' : 'unconfigured'}`,
+    rightFg: provider.configured ? undefined : t.warning,
+    mark: provider.configured ? '●' : '○',
+    markFg: provider.configured ? t.success : t.warning,
+    selected: index === picker.selectedIndex,
+  }));
 }
 
 /**
- * The effort step of the model picker.
- *
- * The list is exactly the levels the chosen model resolved to, not a fixed
- * four, and it is introduced by a headline naming what this model does with
- * the setting (named levels, a thinking-token budget, an on/off toggle, or
- * nothing at all). A best-guess spec prints its caveat under the list rather
- * than presenting unverified levels as if the provider had confirmed them.
+ * The effort step: exactly the levels the chosen model resolved to, introduced
+ * by a headline naming what the model does with the setting. A best-guess spec
+ * prints its caveat under the list rather than presenting unverified levels as
+ * confirmed; a model with nothing to configure gets a statement, not a list.
  */
-function renderEffortRows(picker: ModelPickerModal, lines: Line[], rows: number, startX: number, width: number): void {
+function effortRows(picker: ModelPickerModal): KitRow[] {
+  const t = activeTokens();
   const presentation = picker.effortPresentation;
-  let row = 0;
-
-  if (presentation && rows > 0) {
-    fillRange(lines[row]!, startX, startX + width - 1, PALETTE.bodyBg);
-    writeText(lines[row]!, startX + 1, width - 2, presentation.headline, { fg: PALETTE.subtitle, bg: PALETTE.bodyBg });
-    row += 1;
-  }
-
-  // A model with nothing to configure gets a statement, not an empty list.
+  const rows: KitRow[] = [];
+  if (presentation) rows.push({ label: presentation.headline, labelFg: t.accent });
   if (presentation && !presentation.configurable) {
-    if (row < rows) {
-      fillRange(lines[row]!, startX, startX + width - 1, PALETTE.bodyBg);
-      writeText(lines[row]!, startX + 1, width - 2, 'Esc returns to the model list.', { fg: PALETTE.faint, bg: PALETTE.bodyBg });
-    }
-    return;
+    rows.push({ label: 'Esc returns to the model list.', labelFg: t.textFaint });
+    return rows;
   }
-
-  const firstLevelRow = row;
-  for (let i = 0; i < picker.effortLevels.length && row < rows; i += 1, row += 1) {
-    const effort = picker.effortLevels[i]!;
-    const selected = i === picker.selectedIndex;
-    const bg = selected ? PALETTE.selectedBg : PALETTE.bodyBg;
-    fillRange(lines[row]!, startX, startX + width - 1, bg);
-    const marker = selected ? GLYPHS.navigation.selected : ' ';
-    const detail = presentation?.choices[i]?.description ?? '';
-    const text = detail ? `${marker} ${effort.padEnd(8)}${detail}` : `${marker} ${effort}`;
-    writeText(lines[row]!, startX + 1, width - 2, text, { fg: selected ? PALETTE.text : PALETTE.muted, bg, bold: selected });
-  }
-
-  if (presentation?.caveat && row < rows && row > firstLevelRow) {
-    fillRange(lines[row]!, startX, startX + width - 1, PALETTE.bodyBg);
-    writeText(lines[row]!, startX + 1, width - 2, presentation.caveat, { fg: PALETTE.faint, bg: PALETTE.bodyBg });
-  }
+  picker.effortLevels.forEach((effort, index) => {
+    rows.push({ label: effort, desc: presentation?.choices[index]?.description || undefined, selected: index === picker.selectedIndex });
+  });
+  if (presentation?.caveat && picker.effortLevels.length > 0) rows.push({ label: presentation.caveat, labelFg: t.textFaint });
+  return rows;
 }
 
-function renderContextCapRows(picker: ModelPickerModal, lines: Line[], rows: number, startX: number, width: number): void {
-  if (rows <= 0) return;
-  const model = picker.contextCapPendingModel;
-  const input = picker.contextCapQuery.length > 0 ? picker.contextCapQuery : '(use detected context)';
-  const copy = [
-    `Model: ${model ? modelKey(model) : '(none)'}`,
-    `Detected context: ${formatContext(model?.contextWindow)}`,
-    `Override: ${input}`,
-    'Type digits to set a cap. Enter confirms; Esc returns to the model list.',
-  ];
-  for (let row = 0; row < Math.min(rows, copy.length); row += 1) {
-    const line = lines[row]!;
-    fillRange(line, startX, startX + width - 1, PALETTE.bodyBg);
-    writeText(line, startX + 1, width - 2, copy[row]!, { fg: row === 2 ? PALETTE.title : PALETTE.text, bg: PALETTE.bodyBg, bold: row === 2 });
-  }
+// ---------------------------------------------------------------------------
+// Detail panel
+// ---------------------------------------------------------------------------
+
+/** Active filters in a few words, '' when none are set. */
+function filterSummary(picker: ModelPickerModal): string {
+  const parts: string[] = [];
+  if (picker.categoryFilter !== 'all') parts.push(`${picker.categoryFilter} only`);
+  if (picker.capabilityFilter !== 'none') parts.push(`needs ${picker.capabilityFilter}`);
+  if (picker.availableOnly) parts.push('available only');
+  if (picker.benchmarkSort !== 'none') parts.push(`sorted by ${picker.benchmarkSort}`);
+  if (picker.groupBy !== 'provider') parts.push(`grouped by ${picker.groupBy}`);
+  return parts.join(' · ');
 }
 
-function renderEmbeddingProviderRows(picker: ModelPickerModal, lines: Line[], rows: number, startX: number, width: number): void {
-  const providers = picker.embeddingProviders;
-  const { start, end } = stableWindow(providers.length, picker.selectedIndex, rows);
-  for (let visibleRow = 0; visibleRow < rows; visibleRow += 1) {
-    const absolute = start + visibleRow;
-    const provider = providers[absolute];
-    const line = lines[visibleRow]!;
-    if (!provider) continue;
-    const selected = absolute === picker.selectedIndex;
-    const bg = selected ? PALETTE.selectedBg : PALETTE.bodyBg;
-    fillRange(line, startX, startX + width - 1, bg);
-    const marker = selected ? (picker.focusPane === 'items' ? GLYPHS.navigation.selected : '•') : ' ';
-    const status = provider.configured ? 'configured' : 'unconfigured';
-    writeText(line, startX + 1, width, padDisplay(marker, 2), { fg: PALETTE.text, bg, bold: selected });
-    writeText(line, startX + 3, Math.max(0, width - 30), padDisplay(provider.label, Math.max(0, width - 30)), { fg: selected ? PALETTE.text : PALETTE.muted, bg, bold: selected });
-    writeText(line, startX + Math.max(4, width - 25), 12, padDisplay(`${provider.dimensions}d`, 12), { fg: PALETTE.dim, bg });
-    writeText(line, startX + Math.max(4, width - 13), 12, padDisplay(status, 12), { fg: provider.configured ? PALETTE.good : PALETTE.warn, bg });
-  }
-  if (start > 0 && lines[0]) writeText(lines[0], startX + 1, width - 2, `${GLYPHS.navigation.moreAbove} ${start} more provider(s) above`, { fg: PALETTE.faint, bg: PALETTE.bodyBg });
-  if (end < providers.length && lines[rows - 1]) writeText(lines[rows - 1]!, startX + 1, width - 2, `${GLYPHS.navigation.moreBelow} ${providers.length - end} more provider(s) below`, { fg: PALETTE.faint, bg: PALETTE.bodyBg });
+function kv(canvas: ModalFrame['canvas'], p: KitPanel, y: number, key: string, value: string, fg?: string): number {
+  const t = activeTokens();
+  if (y > p.bottom) return y;
+  panelPut(canvas, p, p.l, y, key, { fg: t.textMuted });
+  return panelWrap(canvas, p, p.l + 12, y, value, { fg: fg ?? t.text });
 }
 
-function writeTableHeader(line: Line, picker: ModelPickerModal, startX: number, width: number): void {
-  fillRange(line, startX, startX + width - 1, PALETTE.footerBg);
-  const style = { fg: PALETTE.muted, bg: PALETTE.footerBg, bold: true };
-  if (picker.mode === 'provider') {
-    writeText(line, startX + 1, width - 2, 'Provider                         Configuration       Catalog', style);
-    return;
-  }
-  if (picker.mode === 'effort') {
-    writeText(line, startX + 1, width - 2, 'Reasoning effort                 Meaning', style);
-    return;
-  }
-  if (picker.mode === 'contextCap') {
-    writeText(line, startX + 1, width - 2, 'Context cap input', style);
-    return;
-  }
-  if (picker.mode === 'embeddingProvider') {
-    writeText(line, startX + 1, width - 2, 'Embedding provider                Dimensions   Status', style);
-    return;
-  }
-  const providerW = clamp(Math.floor(width * 0.14), 10, 18);
-  const ctxW = 8;
-  const tierW = 8;
-  const capsW = 14;
-  const nameW = clamp(Math.floor(width * 0.28), 16, 36);
-  const keyW = Math.max(10, width - providerW - ctxW - tierW - capsW - nameW - 10);
-  let x = startX + 3;
-  writeText(line, x, keyW, padDisplay('Model key', keyW), style); x += keyW + 1;
-  writeText(line, x, nameW, padDisplay('Display name', nameW), style); x += nameW + 1;
-  writeText(line, x, providerW, padDisplay('Provider', providerW), style); x += providerW + 1;
-  writeText(line, x, ctxW, padDisplay('Context', ctxW), style); x += ctxW + 1;
-  writeText(line, x, tierW, padDisplay('Tier', tierW), style); x += tierW + 1;
-  writeText(line, x, capsW, padDisplay('Caps', capsW), style);
-}
-
-export function renderModelWorkspace(picker: ModelPickerModal, width: number, viewportHeight: number): Line[] {
-  const cacheKey = getRenderCacheKey(picker, width, viewportHeight);
-  const cached = renderCache.get(picker);
-  if (cached?.key === cacheKey && cached.tokens === activeTokens()) return cached.lines;
-
-  const safeWidth = Math.max(20, width);
-  const safeHeight = Math.max(12, viewportHeight);
-  const lines: Line[] = [];
-  const targetW = clamp(Math.round(safeWidth * 0.18), 24, 34);
-  const contentX = targetW + 1;
-  const contentW = Math.max(1, safeWidth - contentX - 1);
-
-  const top = borderLine(safeWidth, GLYPHS.frame.topLeft, GLYPHS.frame.horizontal, GLYPHS.frame.topRight);
-  writeText(top, 2, safeWidth - 4, ' Model Workspace / Providers And Models ', { fg: PALETTE.title, bold: true });
-  lines.push(top);
-
-  const header = contentLine(safeWidth, PALETTE.footerBg);
-  writeText(header, 2, targetW - 2, 'Targets', { fg: PALETTE.subtitle, bold: true, bg: PALETTE.footerBg });
-  drawVertical(header, targetW, PALETTE.footerBg);
-  const modeLabel = picker.mode === 'provider' ? 'Provider list' : picker.mode === 'model' ? 'Model list' : picker.mode === 'effort' ? 'Reasoning effort' : picker.mode === 'embeddingProvider' ? 'Embedding providers' : 'Context cap';
-  writeText(header, contentX + 1, contentW - 2, `${modeLabel}  •  ${picker.getItemCount()} item(s)`, { fg: PALETTE.subtitle, bold: true, bg: PALETTE.footerBg });
-  lines.push(header);
-
-  const sep = borderLine(safeWidth, GLYPHS.frame.teeLeft, GLYPHS.frame.horizontal, GLYPHS.frame.teeRight);
-  if (targetW > 0 && targetW < safeWidth - 1) sep[targetW] = createStyledCell(GLYPHS.frame.cross, { fg: PALETTE.border });
-  lines.push(sep);
-
-  const footerRows = 2;
-  const bodyRows = safeHeight - 3 - footerRows;
-  const maxDetailRows = Math.max(3, bodyRows - 2);
-  const minDetailRows = Math.min(6, maxDetailRows);
-  const details = detailLines(picker, contentW - 2);
-  // Never drop detail lines (the modal rule: UI-authored descriptive text is
-  // always shown in full). Size the detail band to the ACTUAL content,
-  // growing past the old fixed proportional default up to maxDetailRows,
-  // the ceiling that keeps at least a header row and one list row available,
-  // rather than silently slicing off whatever didn't fit a 32% guess.
-  const detailRows = clamp(Math.max(details.length, Math.round(bodyRows * 0.32)), minDetailRows, maxDetailRows);
-  const listRows = Math.max(1, bodyRows - detailRows - 1);
-
-  for (let row = 0; row < bodyRows; row += 1) {
-    const inDetail = row < detailRows;
-    const line = contentLine(safeWidth, inDetail ? PALETTE.detailBg : PALETTE.bodyBg);
-    fillRange(line, 1, targetW - 1, PALETTE.targetBg);
-    drawVertical(line, targetW, inDetail ? PALETTE.detailBg : PALETTE.bodyBg);
-    renderTargets(picker, line, 1, targetW - 1, row);
-    if (inDetail) {
-      const text = details[row] ?? '';
-      const fg = row === 0 ? PALETTE.title : row <= 2 ? PALETTE.text : PALETTE.muted;
-      writeText(line, contentX + 1, contentW - 2, text, { fg, bg: PALETTE.detailBg, bold: row === 0 });
-    }
-    lines.push(line);
-  }
-
-  const listStart = 3 + detailRows + 1;
-  if (listStart - 1 < lines.length) {
-    const divider = lines[listStart - 1]!;
-    writeTableHeader(divider, picker, contentX, contentW - 1);
-  }
-
-  const listLines = lines.slice(listStart, listStart + listRows);
-  if (picker.mode === 'provider') {
-    renderProviderRows(picker, listLines, listLines.length, contentX, contentW - 1);
-  } else if (picker.mode === 'model') {
-    renderModelRows(picker, listLines, listLines.length, contentX, contentW - 1);
-  } else if (picker.mode === 'contextCap') {
-    renderContextCapRows(picker, listLines, listLines.length, contentX, contentW - 1);
-  } else if (picker.mode === 'embeddingProvider') {
-    renderEmbeddingProviderRows(picker, listLines, listLines.length, contentX, contentW - 1);
+function drawModelDetail(f: ModalFrame, picker: ModelPickerModal, p: KitPanel): void {
+  const t = activeTokens();
+  const c = f.canvas;
+  const model = picker.getSelected();
+  let y = p.top;
+  if (!model) {
+    y = panelWrap(c, p, p.l, y, 'Nothing is selected.', { fg: t.textMuted });
   } else {
-    renderEffortRows(picker, listLines, listLines.length, contentX, contentW - 1);
+    y = panelWrap(c, p, p.l, y, model.displayName || model.id, { fg: t.text, bold: true });
+    y = panelWrap(c, p, p.l, y, modelKey(model), { fg: t.textFaint });
+    y++;
+    const serves = picker.targetInfos.filter((info) => isTargetModel(info, model)).map((info) => targetLabelFor(info.target));
+    const configured = picker.configuredProviders.has(model.provider);
+    y = kv(c, p, y, 'Provider', model.provider);
+    if (model.tier) y = kv(c, p, y, 'Tier', model.tier);
+    if (serves.length > 0) y = kv(c, p, y, 'Serves', serves.join(' · '));
+    const target = picker.getSelectedTargetInfo();
+    if (target && !isTargetModel(target, model)) y = kv(c, p, y, 'Now', `${targetLabelFor(target.target)}: ${targetSummary(target)}`);
+    y = kv(c, p, y, 'Status', configured ? 'configured' : 'not configured', configured ? t.success : t.warning);
+    if (picker.isPinned(model)) y = kv(c, p, y, 'Pinned', 'yes');
+    y++;
+    // Meters only where the data exists.
+    if (model.contextWindow && y <= p.bottom) {
+      panelPut(c, p, p.l, y, 'Context', { fg: t.textMuted });
+      const end = meter(c, p.l + 12, y, Math.min(1, model.contextWindow / 1_000_000), t.brand, p.bg);
+      panelPut(c, p, end + 2, y++, formatContext(model.contextWindow), { fg: t.textFaint });
+    }
+    const score = picker.benchmarkScore(model);
+    if (score !== null && y <= p.bottom) {
+      panelPut(c, p, p.l, y, 'Quality', { fg: t.textMuted });
+      const end = meter(c, p.l + 12, y, score, t.success, p.bg);
+      panelPut(c, p, end + 2, y++, score.toFixed(2), { fg: t.textFaint });
+    }
+    if (model.pricing && y <= p.bottom) {
+      y = kv(c, p, y, 'Cost', `$${model.pricing.input} in · $${model.pricing.output} out per 1M tokens`);
+    }
+    const caps = capabilityNames(model);
+    if (caps.length > 0 && y <= p.bottom) {
+      let cx = p.l;
+      for (const cap of caps) {
+        if (cx + cap.length + 2 > p.r + 1) break;
+        cx = c.put(cx, y, ` ${cap} `, { fg: t.text, bg: t.border }) + 1;
+      }
+      y += 2;
+    }
+    if (model.description && y <= p.bottom) y = panelWrap(c, p, p.l, y, model.description, { fg: t.textMuted }) + 1;
+    if (picker.isLocalModel(model) && y <= p.bottom) y = panelWrap(c, p, p.l, y, 'Local model: space sets a context cap.', { fg: t.textFaint }) + 1;
   }
-
-  const footer = contentLine(safeWidth, PALETTE.footerBg);
-  const targetHint = picker.focusPane === 'targets' ? 'Focus targets' : 'Focus list';
-  // W3 Finding 2: while search is focused, every printable key (including
-  // c/a/b/g) types into the query, handler-picker-routes.ts guards those
-  // single-key shortcuts with `!searchFocused` (Up/Down blur search first).
-  // Advertising them here regardless of focus state was a footer that lied
-  // about what the keys currently do. Tab still cycles price in both states
-  // (its handler has no searchFocused guard), so it stays in both hint sets.
-  const hints = picker.searchFocused
-    ? `${targetHint} • Typing filters search; Esc clears search • Down: list shortcuts • Tab price • Esc close`
-    : `${targetHint} • Up/Down navigate • Left/Right pane • Enter select • / search • Tab price • C caps • A available • B benchmark • G group • Esc close`;
-  writeText(footer, 2, safeWidth - 4, hints, { fg: PALETTE.muted, bg: PALETTE.footerBg });
-  lines.push(footer);
-  lines.push(borderLine(safeWidth, GLYPHS.frame.bottomLeft, GLYPHS.frame.horizontal, GLYPHS.frame.bottomRight));
-
-  while (lines.length < safeHeight) lines.push(makeLine(safeWidth));
-  const result = lines.slice(0, safeHeight);
-  renderCache.set(picker, { key: cacheKey, tokens: activeTokens(), lines: result });
-  return result;
+  drawTargetFooter(f, picker, p, y);
 }
 
-function getRenderCacheKey(picker: ModelPickerModal, width: number, viewportHeight: number): string {
+function drawTargetFooter(f: ModalFrame, picker: ModelPickerModal, p: KitPanel, fromY: number): void {
+  const t = activeTokens();
+  const target = picker.getSelectedTargetInfo();
+  const lines: Array<{ text: string; fg: string }> = [];
+  const width = p.r - p.l + 1;
+  if (target && picker.mode !== 'model') {
+    for (const l of wrapLines(`${target.label}: ${targetSummary(target)}`, width)) lines.push({ text: l, fg: t.textMuted });
+    if (target.description) for (const l of wrapLines(target.description, width)) lines.push({ text: l, fg: t.textFaint });
+  }
+  if (picker.mode === 'model') {
+    const chords = FILTER_HINTS.map(([key, action]) => `${key} ${action}`).join(' · ');
+    for (const l of wrapLines(chords, width)) lines.push({ text: l, fg: t.textFaint });
+  }
+  // Pinned to the bottom of the panel when there is room, else right after the content.
+  let y = Math.max(fromY, p.bottom - lines.length + 1);
+  for (const line of lines) {
+    if (y > p.bottom) break;
+    panelPut(f.canvas, p, p.l, y++, line.text, { fg: line.fg });
+  }
+}
+
+function drawStepDetail(f: ModalFrame, picker: ModelPickerModal, p: KitPanel): void {
+  const t = activeTokens();
+  const c = f.canvas;
+  let y = p.top;
+  if (picker.mode === 'provider') {
+    const provider = picker.getFilteredProviders()[picker.selectedIndex] ?? '';
+    const target = picker.getSelectedTargetInfo();
+    y = panelWrap(c, p, p.l, y, provider || 'No provider selected', { fg: t.text, bold: true });
+    y++;
+    y = panelWrap(c, p, p.l, y, `Choose a provider, then choose a model for ${target?.label ?? targetLabelFor(picker.target)}.`, { fg: t.textMuted });
+    if (provider) {
+      const via = picker.configuredViaMap.get(provider);
+      y = kv(c, p, y + 1, 'Status', picker.configuredProviders.has(provider) ? `configured${via ? ` via ${via}` : ''}` : 'not configured', picker.configuredProviders.has(provider) ? t.success : t.warning);
+      y = kv(c, p, y, 'Models', String(picker.models.filter((m) => m.provider === provider).length));
+    }
+  } else if (picker.mode === 'embeddingProvider') {
+    const selected = picker.embeddingProviders[picker.selectedIndex];
+    y = panelWrap(c, p, p.l, y, 'Embedding provider', { fg: t.text, bold: true });
+    y = panelWrap(c, p, p.l, y + 1, 'The provider memory search and the code index use to embed content.', { fg: t.textMuted });
+    if (selected) {
+      y = kv(c, p, y + 1, 'Provider', selected.id);
+      y = kv(c, p, y, 'Dimensions', String(selected.dimensions));
+      y = kv(c, p, y, 'Status', selected.configured ? 'configured' : 'unconfigured', selected.configured ? t.success : t.warning);
+      if (selected.detail) y = panelWrap(c, p, p.l, y + 1, selected.detail, { fg: t.textMuted });
+    }
+  } else if (picker.mode === 'effort') {
+    const model = picker.pendingModel;
+    y = panelWrap(c, p, p.l, y, model ? (model.displayName || model.id) : 'Reasoning effort', { fg: t.text, bold: true });
+    if (model) y = panelWrap(c, p, p.l, y, modelKey(model), { fg: t.textFaint });
+    y = panelWrap(c, p, p.l, y + 1, 'Reasoning effort applies to the main chat model. Select the default effort for this model.', { fg: t.textMuted });
+  }
+  drawTargetFooter(f, picker, p, y + 1);
+}
+
+/** The context-cap step: a small form in the list area. */
+function drawContextCap(f: ModalFrame, picker: ModelPickerModal, top: number, x0: number, x1: number): void {
+  const t = activeTokens();
+  const model = picker.contextCapPendingModel;
+  const width = x1 - x0 + 1;
+  let y = top;
+  const line = (text: string, fg: string, bold = false): void => {
+    for (const l of wrapLines(text, width)) if (y <= f.bottom) f.canvas.put(x0, y++, l, { fg, bold });
+  };
+  line(`Model: ${model ? modelKey(model) : '(none)'}`, t.text);
+  line(`Detected context: ${formatContext(model?.contextWindow)}`, t.textMuted);
+  y++;
+  const input = picker.contextCapQuery.length > 0 ? picker.contextCapQuery : '';
+  if (y <= f.bottom) {
+    const end = f.canvas.put(x0, y, 'Override  ', { fg: t.textMuted });
+    const typed = f.canvas.put(end, y, input, { fg: t.text, bold: true });
+    f.canvas.put(typed, y, '▏', { fg: t.brand });
+    if (!input) f.canvas.put(typed + 1, y, 'uses the detected context', { fg: t.textFaint });
+    y += 2;
+  }
+  if (picker.contextCapError) line(picker.contextCapError, t.error);
+  line('Type digits to set a cap. Enter confirms; Esc returns to the model list.', t.textFaint);
+}
+
+// ---------------------------------------------------------------------------
+// Hints
+// ---------------------------------------------------------------------------
+
+/** The filter chords of the model list (shown in the detail panel, or in the hints without one). */
+const FILTER_HINTS: readonly KitHint[] = [['ctrl+t', 'price'], ['ctrl+k', 'capability'], ['ctrl+a', 'available'], ['ctrl+b', 'benchmark sort'], ['ctrl+g', 'group']];
+
+function pickerHints(picker: ModelPickerModal, withFilters: boolean): KitHint[] {
+  const target = picker.getSelectedTargetInfo()?.label ?? targetLabelFor(picker.target);
+  switch (picker.mode) {
+    case 'effort': return [['↑↓', 'move'], ['⏎', 'use this effort'], ['esc', 'back to models']];
+    case 'contextCap': return [['0-9', 'cap'], ['⏎', 'confirm'], ['esc', 'back to models']];
+    case 'embeddingProvider': return [['↑↓', 'move'], ['⏎', 'use'], ['tab', 'next target']];
+    case 'provider': return [['↑↓', 'move'], ['⏎', 'choose provider'], ['tab', 'next target']];
+    default: return [
+      ['⏎', `use for ${target}`], ['tab', 'next target'], ['ctrl+f', 'pin'], ['ctrl+r', 'refresh catalog'],
+      ...(withFilters ? FILTER_HINTS : []),
+    ];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Renderer
+// ---------------------------------------------------------------------------
+
+const renderCache = new WeakMap<ModelPickerModal, { key: string; tokens: object; layer: SurfaceLayer }>();
+
+export function renderModelWorkspace(picker: ModelPickerModal, screenWidth: number, screenHeight: number): SurfaceLayer {
+  const cacheKey = getRenderCacheKey(picker, screenWidth, screenHeight);
+  const cached = renderCache.get(picker);
+  if (cached?.key === cacheKey && cached.tokens === activeTokens()) return cached.layer;
+
+  const pending = picker.mode === 'effort' ? picker.pendingModel : picker.mode === 'contextCap' ? picker.contextCapPendingModel : null;
+  const crumbs = picker.mode === 'effort' ? [pending?.displayName ?? 'model', 'Reasoning effort']
+    : picker.mode === 'contextCap' ? [pending?.displayName ?? 'model', 'Context cap']
+    : picker.mode === 'provider' ? ['Providers']
+    : undefined;
+  const inner = modalInnerWidth(standardModalWidth(screenWidth));
+  const twoPane = inner >= 60;
+  const f = beginModal(screenWidth, screenHeight, { title: 'Models', crumbs, hints: pickerHints(picker, !twoPane) });
+
+  // Targets as tabs; the active tab carries the gradient.
+  const labels = picker.targetInfos.length > 0
+    ? picker.targetInfos.map((info) => `${targetLabelFor(info.target)}${info.enabled ? '' : ' (off)'}`)
+    : [targetLabelFor(picker.target)];
+  tabs(f.canvas, f.l, f.top, labels, picker.targetInfos.length > 0 ? picker.targetIndex : 0, f.r);
+
+  const searchable = picker.mode === 'model' || picker.mode === 'provider';
+  let body = f.top + 2;
+  if (searchable) {
+    const total = picker.mode === 'model' ? picker.models.length : picker.providers.length;
+    const shown = picker.getItemCount();
+    const counted = picker.query.length > 0 || shown !== total ? `${shown.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}` : `${total.toLocaleString('en-US')} ${picker.mode === 'model' ? 'models' : 'providers'}`;
+    const filters = picker.mode === 'model' ? filterSummary(picker) : '';
+    const count = filters ? `${filters} · ${counted}` : counted;
+    searchRow(f, body, picker.query, picker.mode === 'model' ? 'Search models' : 'Search providers', count);
+    body += 2;
+  }
+
+  const x1 = twoPane ? f.l + Math.floor(inner * 0.5) - 1 : f.r;
+  let result: KitListResult | null = null;
+  const scrollKey = { owner: picker, name: picker.mode };
+  if (picker.mode === 'contextCap') {
+    drawContextCap(f, picker, body, f.l, x1);
+  } else {
+    const rows = picker.mode === 'model' ? modelRows(picker, !twoPane)
+      : picker.mode === 'provider' ? providerRows(picker)
+      : picker.mode === 'embeddingProvider' ? embeddingRows(picker)
+      : effortRows(picker);
+    result = drawList(f.canvas, { rows, top: body, bottom: f.bottom, x0: f.l, x1, scrollKey });
+  }
+  if (twoPane) {
+    const p = panel(f.canvas, x1 + 3, body, f.r + 2 - (x1 + 3) + 1, f.bottom - body + 1);
+    if (picker.mode === 'model' || picker.mode === 'contextCap') drawModelDetail(f, picker, p);
+    else drawStepDetail(f, picker, p);
+  }
+  if (result) f.hintRight = scrollCountText(result.above, result.below);
+  const layer = finishModal(f);
+  renderCache.set(picker, { key: cacheKey, tokens: activeTokens(), layer });
+  return layer;
+}
+
+// ---------------------------------------------------------------------------
+// Render cache key (the catalog can hold thousands of models)
+// ---------------------------------------------------------------------------
+
+const objectIds = new WeakMap<object, number>();
+let nextObjectId = 1;
+
+function getRenderCacheKey(picker: ModelPickerModal, width: number, height: number): string {
   const base: Array<string | number> = [
     width,
-    viewportHeight,
+    height,
     picker.mode,
     picker.target,
-    picker.focusPane,
     picker.targetIndex,
     picker.query,
-    picker.searchFocused ? 1 : 0,
     picker.selectedIndex,
-    picker.scrollOffset,
     picker.categoryFilter,
     picker.capabilityFilter,
     picker.availableOnly ? 1 : 0,
     picker.benchmarkSort,
     picker.groupBy,
+    picker.contextCapError ?? '',
     keyForSet(picker.pinnedIds),
+    picker.recentIds.join('\u001f'),
     keyForSet(picker.configuredProviders),
     keyForMap(picker.configuredViaMap),
     keyForTargets(picker.targetInfos),
   ];
-
   if (picker.mode === 'model') {
     const filtered = picker.getFilteredModels();
     const selected = filtered[picker.selectedIndex];
@@ -540,8 +469,7 @@ function getRenderCacheKey(picker: ModelPickerModal, width: number, viewportHeig
       objectId(picker.effortLevels),
       picker.effortLevels.join('\u001f'),
       picker.pendingModel?.registryKey ?? picker.pendingModel?.id ?? '',
-      // The headline and caveat are rendered content too: two models with the
-      // same level list but different spec kinds must not share a cache entry.
+      // The headline and caveat are rendered content too.
       picker.effortPresentation?.headline ?? '',
       picker.effortPresentation?.caveat ?? '',
     );
@@ -550,7 +478,6 @@ function getRenderCacheKey(picker: ModelPickerModal, width: number, viewportHeig
   } else if (picker.mode === 'embeddingProvider') {
     base.push(objectId(picker.embeddingProviders), picker.embeddingProviders.length);
   }
-
   return base.join('\u001e');
 }
 

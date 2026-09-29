@@ -1,24 +1,42 @@
-import { type Line } from '@pellux/goodvibes-sdk/platform/types';
-import { ModalFactory } from './modal-factory.ts';
 import type { ConversationManager } from '../core/conversation';
-import { getOverlayContentBudget, getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { estimateTokens } from '@pellux/goodvibes-sdk/platform/core';
-import { activeTokens, activeUiTones } from './theme.ts';
+import { activeTokens } from './theme.ts';
+import {
+  beginModal,
+  finishModal,
+  scrollCountText,
+  type KitHint,
+  type SurfaceLayer,
+} from './surface-kit.ts';
+import { drawList, measureRow, type KitRow } from './surface-kit-list.ts';
+import { drawTextBlock, modalHeightFor, modalTextWidth, textBlockHeight, type TextLine } from './surface-kit-extra.ts';
 
 // ─── ContextInspectorModal ────────────────────────────────────────────────────
 
 /**
- * ContextInspectorModal, state for the context inspector overlay.
+ * ContextInspectorModal, state for the context inspector overlay. The list
+ * opens on the newest messages; ↑ scrolls back toward older ones.
  */
 export class ContextInspectorModal {
   public active = false;
+  /** Rows scrolled back from the newest message (0 = the newest are in view). */
+  public scrollBack = 0;
+  /** The furthest the list can scroll back, recorded by the renderer. */
+  public maxScrollBack = 0;
 
   open(): void {
     this.active = true;
+    this.scrollBack = 0;
   }
 
   close(): void {
     this.active = false;
+    this.scrollBack = 0;
+  }
+
+  /** Positive scrolls back toward older messages, negative toward the newest. */
+  scrollBy(delta: number): void {
+    this.scrollBack = Math.max(0, Math.min(this.maxScrollBack, this.scrollBack + delta));
   }
 }
 
@@ -34,179 +52,123 @@ function fmtPct(ratio: number): string {
   return `${(ratio * 100).toFixed(1)}%`;
 }
 
-/**
- * Render the context inspector as Line[] for overlay in the viewport.
- *
- * Lists each message with role, estimated token count, and percentage of total
- * context. Highlights large consumers (>10%). Shows total vs context window
- * capacity and suggests compaction targets.
- *
- * @param conversation  The conversation manager to inspect.
- * @param width         Terminal width.
- * @param _height       Terminal height (reserved for future scrolling).
- * @param contextWindow Optional context window size for capacity display.
- */
-export function renderContextInspector(
-  conversation: ConversationManager,
-  width: number,
-  viewportHeight = 24,
-  contextWindow = 0,
-): Line[] {
-  const messages = conversation.getMessagesForLLM();
-  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
-    margin: 1,
-    maxWidth: 78,
-    chromeRows: 7,
-    minContentRows: 6,
-    maxContentRows: 10,
-  });
-  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8);
+interface MsgEntry {
+  readonly tokens: number;
+  readonly label: string;
+}
 
-  if (messages.length === 0) {
-    return ModalFactory.createModal({
-      title: 'Context Inspector',
-      width: metrics.boxWidth,
-      margin: metrics.margin,
-      targetContentRows,
-      sections: [
-        { type: 'text', content: 'No messages in conversation yet.' },
-      ],
-      hints: ['[Esc] Close'],
-    }, width);
-  }
-
-  // ── Token accounting ──────────────────────────────────────────────────────
-
-  type MsgEntry = {
-    role: string;
-    tokens: number;
-    label: string;
-  };
-
+function messageEntries(conversation: ConversationManager): { entries: MsgEntry[]; total: number } {
   const entries: MsgEntry[] = [];
-  let totalTokens = 0;
-
-  for (const msg of messages) {
+  let total = 0;
+  for (const msg of conversation.getMessagesForLLM()) {
     const role = msg.role;
     let text = '';
     if (typeof msg.content === 'string') {
       text = msg.content;
     } else if (Array.isArray(msg.content)) {
-      // ContentPart[]
       text = (msg.content as Array<{ type: string; text?: string }>)
         .filter((p) => p.type === 'text')
         .map((p) => p.text ?? '')
         .join('');
     }
     // Include tool call text for assistant messages
-    if (role === 'assistant' && (msg as { toolCalls?: Array<{ name: string; arguments: unknown }> }).toolCalls) {
-      const tcs = (msg as { toolCalls?: Array<{ name: string; arguments: unknown }> }).toolCalls!;
-      for (const tc of tcs) {
-        text += tc.name + JSON.stringify(tc.arguments);
-      }
+    const toolCalls = (msg as { toolCalls?: Array<{ name: string; arguments: unknown }> }).toolCalls;
+    if (role === 'assistant' && toolCalls) {
+      for (const tc of toolCalls) text += tc.name + JSON.stringify(tc.arguments);
     }
     const tokens = estimateTokens(text);
-    totalTokens += tokens;
-
+    total += tokens;
+    // A one-line excerpt identifies the message; the inspector is about its
+    // token cost, not its content.
+    const excerpt = (limit: number): string => `${text.slice(0, limit).replace(/\s+/g, ' ')}${text.length > limit ? '…' : ''}`;
     let label: string;
-    if (role === 'user') {
-      label = `user: ${text.slice(0, 40).replace(/\n/g, ' ')}${text.length > 40 ? '...' : ''}`;
-    } else if (role === 'assistant') {
-      label = `assistant: ${text.slice(0, 36).replace(/\n/g, ' ')}${text.length > 36 ? '...' : ''}`;
-    } else if (role === 'tool') {
-      const toolMsg = msg as { callId?: string };
-      label = `tool-result (${(toolMsg.callId ?? '').slice(0, 12)})`;
-    } else {
-      label = role;
-    }
+    if (role === 'user') label = `user: ${excerpt(60)}`;
+    else if (role === 'assistant') label = `assistant: ${excerpt(56)}`;
+    else if (role === 'tool') label = `tool result ${((msg as { callId?: string }).callId ?? '').slice(0, 12)}`;
+    else label = role;
+    entries.push({ tokens, label });
+  }
+  return { entries, total };
+}
 
-    entries.push({ role, tokens, label });
+/**
+ * Render the context inspector as a SurfaceLayer in screen coordinates.
+ *
+ * Lists each message with its estimated token count and share of the total
+ * (right-aligned), marks large consumers (>10%) with an amber ●, shows the
+ * total against the context window, and suggests compaction targets.
+ */
+export function renderContextInspector(
+  conversation: ConversationManager,
+  screenWidth: number,
+  screenHeight = 24,
+  contextWindow = 0,
+  modal?: ContextInspectorModal,
+): SurfaceLayer {
+  const t = activeTokens();
+  const { entries, total } = messageEntries(conversation);
+
+  if (entries.length === 0) {
+    const lines: TextLine[] = [{ text: 'No messages in conversation yet.', style: { fg: t.textMuted } }];
+    const width = modalTextWidth(screenWidth, screenHeight);
+    const height = modalHeightFor(screenWidth, screenHeight, {}, textBlockHeight(lines, width));
+    const f = beginModal(screenWidth, screenHeight, { title: 'Context inspector', height, center: true });
+    drawTextBlock(f.canvas, f.l, f.top, f.r - f.l + 1, lines, f.bottom);
+    return finishModal(f);
   }
 
-  // ── Identify large consumers (>10%) ───────────────────────────────────────
-
-  const largeThreshold = totalTokens * 0.10;
-
-  // ── Build sections ────────────────────────────────────────────────────────
-
-  const sections: import('./modal-factory.ts').ModalSection[] = [];
-
-  // Summary header
-  const capacityStr = contextWindow > 0
-    ? `  |  Capacity: ${fmtN(totalTokens)} / ${fmtN(contextWindow)} (${fmtPct(totalTokens / contextWindow)})`
-    : '';
-  sections.push({
-    type: 'text',
-    content: `Total: ~${fmtN(totalTokens)} tokens (${messages.length} messages)${capacityStr}`,
-    style: { bold: true },
-  });
-
-  if (contextWindow > 0 && totalTokens / contextWindow >= 0.80) {
-    sections.push({
-      type: 'text',
-      content: 'WARNING: context is 80%+ full. Run /compact to free space.',
-      style: { fg: activeUiTones().state.warn, bold: true },
-    });
+  const largeThreshold = total * 0.10;
+  const large = entries.filter((e) => e.tokens > largeThreshold);
+  const capacity = contextWindow > 0 ? ` · ${fmtN(total)} of ${fmtN(contextWindow)} (${fmtPct(total / contextWindow)})` : '';
+  const topLines: TextLine[] = [
+    { text: `Total ~${fmtN(total)} tokens in ${entries.length} message${entries.length === 1 ? '' : 's'}${capacity}`, style: { fg: t.text, bold: true } },
+  ];
+  if (contextWindow > 0 && total / contextWindow >= 0.80) {
+    topLines.push({ text: 'Context is 80% full or more. Run /compact to free space.', style: { fg: t.warning, bold: true } });
+  }
+  const bottomLines: TextLine[] = [];
+  if (large.length > 0) {
+    const share = fmtPct(large.reduce((s, e) => s + e.tokens, 0) / total);
+    bottomLines.push({ text: `● ${large.length} message${large.length > 1 ? 's use' : ' uses'} ${share} of context (each over 10%).`, style: { fg: t.accent } });
+    bottomLines.push({ text: 'Run /compact to summarise and reduce context size.', style: { fg: t.textFaint } });
   }
 
-  sections.push({ type: 'separator' });
+  const hints: KitHint[] = [['↑↓', 'scroll']];
+  const f = beginModal(screenWidth, screenHeight, { title: 'Context inspector', hints });
+  const width = f.r - f.l + 1;
+  let top = drawTextBlock(f.canvas, f.l, f.top, width, topLines, f.bottom) + 1;
+  const bottomRows = bottomLines.length > 0 ? textBlockHeight(bottomLines, width) + 1 : 0;
+  const listBottom = f.bottom - bottomRows;
+  if (bottomRows > 0) drawTextBlock(f.canvas, f.l, listBottom + 2, width, bottomLines, f.bottom);
 
-  // Per-message list (up to 20 rows to keep modal manageable)
-  const maxVisibleRows = getOverlayContentBudget(viewportHeight, {
-    chromeRows: 7,
-    minContentRows: 6,
-    maxContentRows: 10,
-  });
-  const display = entries.slice(-maxVisibleRows);
-  const startOffset = entries.length - display.length;
-  if (startOffset > 0) {
-    sections.push({
-      type: 'text',
-      content: `(${startOffset} older messages not shown)`,
-      style: { fg: activeTokens().textFaint },
-    });
-  }
-
-  for (let i = 0; i < display.length; i++) {
-    const e = display[i];
-    const pct = totalTokens > 0 ? e.tokens / totalTokens : 0;
-    const pctStr = fmtPct(pct).padStart(6);
-    const tokStr = `~${fmtN(e.tokens)}`.padStart(8);
+  const rows: KitRow[] = entries.map((e) => {
     const isLarge = e.tokens > largeThreshold;
-    const marker = isLarge ? '* ' : '  ';
-    const line = `${marker}${pctStr}  ${tokStr}  ${e.label}`;
-    sections.push({
-      type: 'text',
-      content: line,
-      style: isLarge ? { fg: activeUiTones().state.warn, bold: true } : {},
-    });
-  }
+    return {
+      label: e.label,
+      right: `${fmtPct(total > 0 ? e.tokens / total : 0)} · ~${fmtN(e.tokens)}`,
+      mark: isLarge ? '●' : undefined,
+      markFg: t.warning,
+      labelFg: isLarge ? t.warning : undefined,
+      bold: isLarge,
+    };
+  });
 
-  // Compaction suggestions
-  const largeMsgs = entries.filter((e) => e.tokens > largeThreshold);
-  if (largeMsgs.length > 0) {
-    sections.push({ type: 'separator' });
-    const largePct = fmtPct(
-      largeMsgs.reduce((s, e) => s + e.tokens, 0) / totalTokens,
-    );
-    sections.push({
-      type: 'text',
-      content: `Compaction hint: ${largeMsgs.length} message${largeMsgs.length > 1 ? 's' : ''} use ${largePct} of context.`,
-      style: { fg: activeTokens().accent },
-    });
-    sections.push({
-      type: 'text',
-      content: 'Run /compact to summarise and reduce context size.',
-      style: { fg: activeTokens().textFaint },
-    });
+  // Open on the newest messages: find the first row of the tail that fits,
+  // then step back by the modal's scroll position.
+  const listCapacity = Math.max(1, listBottom - top + 1);
+  let tailStart = rows.length;
+  let used = 0;
+  while (tailStart > 0 && used + measureRow(rows[tailStart - 1]!, f.l, f.r) <= listCapacity) {
+    tailStart--;
+    used += measureRow(rows[tailStart]!, f.l, f.r);
   }
-
-  return ModalFactory.createModal({
-    title: 'Context Inspector',
-    width: metrics.boxWidth,
-    margin: metrics.margin,
-    targetContentRows,
-    sections,
-    hints: ['[*] >10% of context', '[Esc] Close'],
-  }, width);
+  if (modal) {
+    modal.maxScrollBack = tailStart;
+    modal.scrollBack = Math.min(modal.scrollBack, tailStart);
+  }
+  const scrollStart = Math.max(0, tailStart - (modal?.scrollBack ?? 0));
+  if (top > listBottom) top = listBottom;
+  const res = drawList(f.canvas, { rows, top, bottom: listBottom, x0: f.l, x1: f.r, scrollStart });
+  f.hintRight = scrollCountText(res.above, res.below);
+  return finishModal(f);
 }

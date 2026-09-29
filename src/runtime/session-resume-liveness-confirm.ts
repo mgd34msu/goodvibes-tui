@@ -17,6 +17,7 @@
 import { checkSessionLiveness } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { SessionSurface } from '@/runtime/index.ts';
 import type { SelectionItem, SelectionResult } from '../input/selection-modal.ts';
+import type { ConfirmOptions } from '../input/confirm-dialog.ts';
 
 export type LiveResumeSelectionOpener = (
   title: string,
@@ -54,6 +55,8 @@ export interface ConfirmLiveResumeDeps {
   readonly surface: SessionSurface;
   /** Late-bound: the shell builds its selection opener after the resume handler exists. */
   readonly openSelection: () => LiveResumeSelectionOpener | undefined;
+  /** Late-bound confirm dialog; preferred over the selection list when the shell has one. */
+  readonly confirm?: () => ((options: ConfirmOptions) => Promise<boolean>) | undefined;
   /** Injectable for tests; defaults to this process's own pid. */
   readonly selfPid?: number;
 }
@@ -71,6 +74,15 @@ export async function confirmLiveResume(sessionId: string, deps: ConfirmLiveResu
   const selfPid = deps.selfPid ?? process.pid;
   const liveness = checkSessionLiveness(deps.surface, sessionId);
   if (!liveness.live || liveness.pid === null || liveness.pid === selfPid) return true;
+  const confirm = deps.confirm?.();
+  if (confirm) {
+    return confirm({
+      title: `${LIVE_RESUME_CONFIRM_TITLE}?`,
+      body: `This session appears open in another terminal (pid ${liveness.pid}); resuming will fork its live state. Both terminals would hold their own copy of the conversation from this point on.`,
+      confirmLabel: 'Resume anyway',
+      tone: 'warning',
+    });
+  }
   const open = deps.openSelection();
   if (!open) return true;
   return new Promise<boolean>((resolve) => {

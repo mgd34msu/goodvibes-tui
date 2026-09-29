@@ -10,8 +10,9 @@
  * silently cut whenever at least one policy reason precedes it. These tests
  * pin that it always gets its own row, clearly labeled, never truncated away.
  */
+import { promptCardLines } from '../helpers/permission-card.ts';
 import { describe, expect, test } from 'bun:test';
-import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
+import type { PermissionPromptRequest } from '../../permissions/prompt.ts';
 
 const WIDTH = 80;
 
@@ -32,7 +33,7 @@ function makeEscalationRequest(reasons: readonly string[]): PermissionPromptRequ
   };
 }
 
-function linesToText(lines: ReturnType<typeof PermissionPromptUI.createPromptLines>): string[] {
+function linesToText(lines: ReturnType<typeof promptCardLines>): string[] {
   return lines.map((line) => line.map((c) => c.char).join(''));
 }
 
@@ -42,7 +43,7 @@ describe('model-judgment annotation rendering', () => {
       'The exec-sandbox sandbox boundary needs host access: wants-network.',
       'model judgment: looks safe because the command only reaches a known public API.',
     ];
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, makeEscalationRequest(reasons));
+    const lines = promptCardLines(WIDTH, makeEscalationRequest(reasons));
     const text = linesToText(lines);
     const judgmentRow = text.find((l) => l.includes('Judgment'));
     expect(judgmentRow).toBeDefined();
@@ -56,27 +57,26 @@ describe('model-judgment annotation rendering', () => {
       'Policy reason two.',
       'model judgment: flags risk because the target host is not in the egress allowlist history.',
     ];
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, makeEscalationRequest(reasons));
+    const lines = promptCardLines(WIDTH, makeEscalationRequest(reasons));
     const text = linesToText(lines);
     expect(text.some((l) => l.includes('model judgment: flags risk because'))).toBe(true);
   });
 
   test('absent when no model-judgment annotation is present (annotate-only default off, or judgment tier disabled)', () => {
     const reasons = ['The exec-sandbox sandbox boundary needs host access: wants-network.'];
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, makeEscalationRequest(reasons));
+    const lines = promptCardLines(WIDTH, makeEscalationRequest(reasons));
     const text = linesToText(lines);
     expect(text.some((l) => l.includes('Judgment'))).toBe(false);
   });
 
-  test('getPromptHeight/createPromptLines stay in parity when a judgment annotation is present', () => {
+  test('with a judgment annotation the whole card still fits an 80x24 screen (it scrolls rather than spilling)', () => {
     const reasons = [
       'The exec-sandbox sandbox boundary needs host access: wants-network.',
       'Policy reason one.',
       'model judgment: looks safe because nothing unusual.',
     ];
-    const request = makeEscalationRequest(reasons);
-    const height = PermissionPromptUI.getPromptHeight(request);
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
-    expect(lines.length).toBe(height);
-  });
+    const lines = promptCardLines(WIDTH, makeEscalationRequest(reasons), undefined, true, undefined, undefined, 24);
+    expect(lines).toHaveLength(24);
+    for (const line of lines) expect(line).toHaveLength(WIDTH);
+  });;
 });

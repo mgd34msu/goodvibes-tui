@@ -1,11 +1,14 @@
 /**
- * Tests for renderHelpOverlay.
+ * Tests for renderHelpOverlay and renderShortcutsOverlay (modal surface kit).
  */
 import { describe, test, expect } from 'bun:test';
-import { renderHelpOverlay } from '../../renderer/help-overlay.ts';
+import { renderHelpOverlay, renderShortcutsOverlay } from '../../renderer/help-overlay.ts';
 import type { SlashCommand } from '../../input/command-registry.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
-import { lineToString, linesToText } from '../setup.ts';
+import { OverlayFilter, OverlayFilters } from '../../input/overlay-filter.ts';
+import { handleOverlayToken } from '../../input/handler-ui-state.ts';
+import { layerText, layerTextBlock } from '../helpers/surface-frame.ts';
+import type { SurfaceLayer } from '../../renderer/surface-kit.ts';
 
 const W = 120;
 const TALL_VIEWPORT = 80;
@@ -17,66 +20,50 @@ const SAMPLE_COMMANDS: SlashCommand[] = [
   { name: 'quit', aliases: ['q'], description: 'Exit application', handler: () => {} },
 ];
 
+function linesToText(layer: SurfaceLayer): string[] {
+  return layerText(layer);
+}
+
+/** Every row of the overlay, scrolled from the top to the end. */
 function renderAllText(commands?: SlashCommand[]): string {
-  const frames: string[] = [];
-  // The overlay is one tall scrolling surface (workspace bindings + in-panel
-  // contract + command groups), so scan a wide offset range to capture every
-  // section regardless of where it lands in the window.
-  for (let offset = 0; offset <= 66; offset += 3) {
-    frames.push(linesToText(renderHelpOverlay(W, KEYBINDINGS, commands, offset, TALL_VIEWPORT)).join('\n'));
+  const filter = new OverlayFilter();
+  const frames: string[] = [linesToText(renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, commands, 0, filter)).join('\n')];
+  for (let offset = 10; offset <= filter.maxScroll + 10; offset += 10) {
+    frames.push(linesToText(renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, commands, offset, filter)).join('\n'));
   }
   return frames.join('\n');
 }
 
 describe('renderHelpOverlay', () => {
-  test('returns an array of Lines', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
-    expect(Array.isArray(lines)).toBe(true);
-    expect(lines.length).toBeGreaterThan(0);
+  test('draws a kit modal inside the screen: caps, ✦ title, esc keycap, no box frame', () => {
+    const layer = renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, undefined, 0);
+    const rows = linesToText(layer);
+    expect(layer.x + rows[0]!.length).toBeLessThanOrEqual(W);
+    expect(layer.y + rows.length).toBeLessThanOrEqual(TALL_VIEWPORT);
+    expect(rows[0]).toMatch(/^▄+$/);
+    expect(rows[2]).toContain('Help');
+    expect(rows[2]).toContain('esc');
+    expect(rows.join('\n')).not.toMatch(/[┌┐└┘│]/);
   });
 
-  test('each line has correct terminal width', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
-    for (const line of lines) {
-      expect(line.length).toBe(W);
-    }
+  test('keycap hints: scroll and close', () => {
+    const text = layerTextBlock(renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, undefined, 0));
+    expect(text).toContain('↑↓  scroll');
+    expect(text).toContain('?  close');
   });
 
-  test('title bar contains "Help"', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
-    const titleLine = lineToString(lines[0]);
-    expect(titleLine).toContain('Help');
-  });
-
-  test('footer contains close hint', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
-    const footerLine = lineToString(lines[lines.length - 1]);
-    expect(footerLine).toContain('Esc');
-  });
-
-  test('contains Core Navigation section', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Core Navigation');
-  });
-
-  test('contains Prompt And Editing section', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Prompt And Editing');
-  });
-
-  test('contains Overlays And Panels section', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 13, TALL_VIEWPORT);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Overlays And Panels');
+  test('groups are kit headers (lowercase)', () => {
+    const texts = renderAllText();
+    expect(texts).toContain('core navigation');
+    expect(texts).toContain('prompt and editing');
+    expect(texts).toContain('overlays and panels');
   });
 
   test('contains Quick Start section when featured commands are registered', () => {
     // Quick Start is built from the live registry: need at least one featured command.
     const cmds: SlashCommand[] = [{ name: 'cockpit', description: 'Control room', handler: () => {} }];
     const texts = renderAllText(cmds);
-    expect(texts).toContain('Quick Start');
+    expect(texts).toContain('quick start');
   });
 
   test('contains an Essentials command group with the memorable commands', () => {
@@ -86,7 +73,7 @@ describe('renderHelpOverlay', () => {
       { name: 'clear', description: 'Clear conversation', handler: () => {} },
     ];
     const texts = renderAllText(cmds);
-    expect(texts).toContain('Essentials');
+    expect(texts).toContain('essentials');
     expect(texts).toContain('/keybindings');
   });
 
@@ -98,7 +85,7 @@ describe('renderHelpOverlay', () => {
     expect(texts).toContain('Alt+9');
     expect(texts).toContain('Jump to workspace panel tab');
     // The shared in-panel contract is documented alongside the global bindings.
-    expect(texts).toContain('In-Panel Controls');
+    expect(texts).toContain('in-panel controls');
     expect(texts).toContain('j / k');
   });
 
@@ -111,19 +98,19 @@ describe('renderHelpOverlay', () => {
   });
 
   test('includes Ctrl+F shortcut in navigation', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
+    const lines = renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, undefined, 0);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Ctrl+F');
   });
 
   test('includes PageUp/PageDn in navigation', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
+    const lines = renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, undefined, 0);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('PageUp');
   });
 
   test('includes ? toggle shortcut', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
+    const lines = renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, undefined, 0);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('?');
   });
@@ -145,18 +132,28 @@ describe('renderHelpOverlay', () => {
     expect(texts).toContain('/help');
   });
 
-  test('lines are correct at narrow terminal width', () => {
-    const narrowW = 60;
-    const lines = renderHelpOverlay(narrowW, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
-    for (const line of lines) {
-      expect(line.length).toBe(narrowW);
-    }
+  test('narrow screens take the full width minus one column per side', () => {
+    const layer = renderHelpOverlay(60, 30, KEYBINDINGS, undefined, 0);
+    expect(layer.x).toBe(1);
+    expect(layer.lines[0]!.length).toBe(58);
   });
 
-  test('footer contains scroll hint', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
-    const footerLine = lineToString(lines[lines.length - 1]);
-    expect(footerLine).toContain('Up/Down');
+  test('the search row filters entries and group headers; the count is truthful', () => {
+    const filter = new OverlayFilter();
+    filter.query = 'model';
+    const text = layerTextBlock(renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, SAMPLE_COMMANDS, 0, filter));
+    expect(text).toContain('model▏');
+    expect(text).toContain('/model');
+    expect(text).not.toContain('Scroll by full page');
+    expect(text).toMatch(/\d+ of \d+/);
+  });
+
+  test('the renderer records how far the list scrolls so the input never runs past the end', () => {
+    const filter = new OverlayFilter();
+    renderHelpOverlay(W, 24, KEYBINDINGS, SAMPLE_COMMANDS, 0, filter);
+    expect(filter.maxScroll).toBeGreaterThan(0);
+    const end = linesToText(renderHelpOverlay(W, 24, KEYBINDINGS, SAMPLE_COMMANDS, 10_000, filter)).join('\n');
+    expect(end).not.toMatch(/more ↓/);
   });
 
   test('registry traversal crash guard: throwing command getter does not crash overlay', () => {
@@ -172,10 +169,73 @@ describe('renderHelpOverlay', () => {
 
     // The overlay must not throw even when registry traversal errors occur.
     expect(() => {
-      const lines = renderHelpOverlay(W, KEYBINDINGS, [throwingCmd], 0, TALL_VIEWPORT);
-      // Footer hints must still render (overlay is reachable).
-      const footerLine = lineToString(lines[lines.length - 1]);
-      expect(footerLine).toContain('Esc');
+      const layer = renderHelpOverlay(W, TALL_VIEWPORT, KEYBINDINGS, [throwingCmd], 0);
+      // The title row (with the esc keycap) and the hints still render.
+      expect(linesToText(layer)[2]).toContain('esc');
+      expect(layerTextBlock(layer)).toContain('scroll');
     }).not.toThrow();
+  });
+});
+
+describe('renderShortcutsOverlay (the concept keys screen)', () => {
+  test('keys bold, actions muted, in columns; filterable by typing', () => {
+    const layer = renderShortcutsOverlay(140, 40, KEYBINDINGS, 0, new OverlayFilter());
+    const text = layerTextBlock(layer);
+    expect(text).toContain('Keyboard shortcuts');
+    expect(text).toContain('navigation & editing');
+    const row = layer.lines.find((line) => line.map((c) => c.char).join('').includes('Shift+Enter'))!;
+    const x = row.map((c) => c.char).join('').indexOf('Shift+Enter');
+    expect(row[x]!.bold).toBe(true);
+    // Three columns at this width: a group header sits past the first third.
+    const headerCols = layerText(layer).flatMap((line) => [...line.matchAll(/✦/g)].map((m) => m.index!));
+    expect(Math.max(...headerCols)).toBeGreaterThan(40);
+
+    const filter = new OverlayFilter();
+    filter.query = 'newline';
+    const filtered = layerTextBlock(renderShortcutsOverlay(140, 40, KEYBINDINGS, 0, filter));
+    expect(filtered).toContain('Shift+Enter');
+    expect(filtered).not.toContain('Mouse wheel');
+  });
+
+  test('an unmatched query says so honestly', () => {
+    const filter = new OverlayFilter();
+    filter.query = 'zzzz-nothing';
+    expect(layerTextBlock(renderShortcutsOverlay(100, 30, KEYBINDINGS, 0, filter))).toContain('No shortcuts match "zzzz-nothing"');
+  });
+});
+
+describe('handleOverlayToken (help / shortcuts search rows)', () => {
+  function helpState() {
+    const filters = new OverlayFilters();
+    const escapes = { n: 0 };
+    const state = {
+      helpOverlayActive: true, helpScrollOffset: 0, shortcutsOverlayActive: false, shortcutsScrollOffset: 0,
+      overlayFilters: filters, requestRender: () => {}, handleEscape: () => { escapes.n++; },
+    };
+    return { state, filters, escapes };
+  }
+
+  test('typing goes into the query; ? closes help only while the query is empty', () => {
+    const { state, filters } = helpState();
+    handleOverlayToken(state, { type: 'text', value: 'm' } as never);
+    handleOverlayToken(state, { type: 'text', value: '?' } as never);
+    expect(filters.help.query).toBe('m?');
+    expect(state.helpOverlayActive).toBe(true);
+    handleOverlayToken(state, { type: 'key', logicalName: 'backspace' } as never);
+    handleOverlayToken(state, { type: 'key', logicalName: 'backspace' } as never);
+    expect(filters.help.query).toBe('');
+    handleOverlayToken(state, { type: 'text', value: '?' } as never);
+    expect(state.helpOverlayActive).toBe(false);
+  });
+
+  test('Esc closes in one press whatever the query holds; down never passes the recorded end', () => {
+    const { state, filters, escapes } = helpState();
+    filters.help.maxScroll = 2;
+    for (let k = 0; k < 5; k++) handleOverlayToken(state, { type: 'key', logicalName: 'down' } as never);
+    expect(state.helpScrollOffset).toBe(2);
+    handleOverlayToken(state, { type: 'text', value: 'abc' } as never);
+    expect(state.helpScrollOffset).toBe(0);
+    handleOverlayToken(state, { type: 'key', logicalName: 'escape' } as never);
+    expect(escapes.n).toBe(1);
   });
 });

@@ -93,7 +93,8 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   //, this rule just can't see the indirection, and each's own test
   // exercises algorithmic edge cases (color-math rounding, threshold
   // boundaries, tokenizer branches) the wrapper's tests don't isolate.
-  'src/renderer/overlay-viewport.ts#getOverlayWidthClass', // wired via getOverlaySurfaceMetrics; width-band boundaries also pinned by a release-gate test
+  'src/renderer/toast-center.ts#ToastCenter', // constructed by getSharedToastCenter; exported so tests drive expiry with a fake clock and scheduler
+  'src/renderer/settings-modal.ts#settingsDocumentation', // the complete per-row documentation the settings modal windows over; tests assert its completeness
   'src/renderer/panel-composite.ts#renderPanel', // wired via buildPanelCompositeData; dedicated cache/dirty-flag test suite
   'src/renderer/theme.ts#resolveTheme', // mode-explicit transcript resolver: activeTheme covers the active mode; per-mode token derivations pinned directly by theme tests
   'src/renderer/theme.ts#resolveUiTones', // mode-explicit resolver: activeUiTones delegates to it internally; light/dark token derivations pinned directly by theme + batch-refutation tests

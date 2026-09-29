@@ -6,7 +6,7 @@ import type {
   ConfigModalTab,
   ConfigModalView,
 } from './config-modal-types.ts';
-import type { ModalSectionStyle } from '../renderer/modal-factory.ts';
+import type { ModalSectionStyle } from './config-modal-types.ts';
 import { truncateDisplay, wrapText } from '../utils/terminal-width.ts';
 
 export type {
@@ -35,6 +35,8 @@ export interface ConfigModalRenderRow {
   /** True when this frozen row has no live counterpart this tick (value went
    *  stale, kept in place, dimmed, until the next interaction boundary). */
   readonly stale: boolean;
+  /** A group header row (see ConfigModalRow.header). */
+  readonly header: boolean;
 }
 
 /** Everything renderConfigModal needs, computed by overlaying live values onto
@@ -47,18 +49,20 @@ export interface ConfigModalRenderModel {
   readonly emptyText?: string;
   readonly degraded?: string;
   readonly status?: string;
+  /** True while a destructive action waits for its second key press. */
+  readonly confirmPending: boolean;
+  /** Surface, tab and action hints as "key action" strings (the renderer draws keycaps). */
   readonly hints: readonly string[];
   readonly scroll: { readonly offset: number; readonly total: number; readonly visible: number };
+  /** The always-live search row: the query and a truthful match count over the active tab's selectable rows. */
+  readonly search: { readonly query: string; readonly matched: number; readonly total: number };
 }
 
 const DEFAULT_VISIBLE_ROWS = 10;
 
 /**
  * Default label wrap width for getRenderModel() callers that don't pass one
- * (tests, mainly). Matches the renderer's real list-item wrap width at the
- * common terminal sizes this codebase tests against: default box width 76,
- * minus the 4-column text margin and 2-column selection indicator (see
- * ModalFactory._renderListSection's `contentW - 2`). renderConfigModal()
+ * (tests, mainly). renderConfigModal()
  * itself always computes and passes the ACTUAL width for the current
  * terminal size, this constant only matters when getRenderModel() is
  * called directly without going through the renderer.
@@ -97,31 +101,15 @@ export class ConfigModal {
   private pendingConfirmKey: string | null = null;
 
   /**
-   * item 1, the host's own type-to-filter, armed with '/' (matching
-   * the pre-existing "'/' to filter" convention: scrollable-list-panel.ts's
-   * opt-in filter, and SettingsModal's own '/'-armed search). `filterActive`
-   * gates whether printable keys go to the query instead of nav/actions;
-   * `filterQuery` is the TEXT-CAPTURE buffer itself (a multi-char paste token
-   * appends in one shot, see handleConfigModalToken). Filtering only ever
-   * narrows the ACTIVE tab's rows and is reset on tab switch (a query typed
-   * against one tab's rows has no defined meaning against another's).
-   *
-   * FILTER-CONVENTION RULING (batch integration, where '/'-armed vs instant
-   * filtering is decided across the TUI's list UIs):
-   *   - '/'-ARMED here (config-modal host surfaces): these surfaces bind PLAIN
-   *     single keys to ACTION HOTKEYS (e.g. 'r' refresh, 'd' delete). A key
-   *     can't be both an action and a filter character, so filtering must be
-   *     explicitly armed with '/' first. This is a deliberate design choice.
-   *   - INSTANT filtering (pure pickers, help overlay, command palette,
-   *     selection-modal): these have no single-key actions, so every printable
-   *     key is unambiguously a filter character and narrows the list on the
-   *     first keystroke. This is a deliberate design choice (selection-modal-overlay.ts).
-   *   - Both keep single-Esc-close semantics. The only extra step is here: a
-   *     two-stage Esc (first Esc clears a NON-EMPTY query, second Esc closes)
-   *    , see the Esc branch in handleConfigModalToken. With an empty query,
-   *     one Esc closes, exactly like the instant pickers.
+   * The always-live search row. Every printable key the modal receives is
+   * typed here, except a key the surface claims as an action, which fires
+   * the action while the query is empty (handleConfigModalToken). The query
+   * is the TEXT-CAPTURE buffer itself (a multi-char paste token appends in
+   * one shot). Filtering only ever narrows the ACTIVE tab's rows and is reset
+   * on tab switch (a query typed against one tab's rows has no defined
+   * meaning against another's). Esc never clears it as a separate step: Esc
+   * cancels an armed destructive confirm first, otherwise it closes.
    */
-  private filterActive = false;
   private filterQuery = '';
 
   /**
@@ -131,6 +119,8 @@ export class ConfigModal {
   private frozenView: ConfigModalView | null = null;
 
   private scrollOffset = 0;
+  /** The label wrap width of the last render, so scrolling can count wrapped lines. */
+  private lastWrapWidth = DEFAULT_LABEL_WRAP_WIDTH;
   private visibleRows = DEFAULT_VISIBLE_ROWS;
 
   /**
@@ -153,7 +143,6 @@ export class ConfigModal {
     this.statusMessage = '';
     this.pendingConfirmKey = null;
     this.scrollOffset = 0;
-    this.filterActive = false;
     this.filterQuery = '';
     this.interactedSinceOpen = false;
     const view = surface.buildView();
@@ -171,7 +160,6 @@ export class ConfigModal {
     this.frozenView = null;
     this.statusMessage = '';
     this.pendingConfirmKey = null;
-    this.filterActive = false;
     this.filterQuery = '';
   }
 
@@ -221,55 +209,48 @@ export class ConfigModal {
     this._clampScroll();
   }
 
-  // ── Filter (item 1, each mutation is an interaction boundary) ──────
+  // ── Search row (each mutation is an interaction boundary) ─────────────────
 
+  /** True while the search row holds a query. */
   isFilterActive(): boolean {
-    return this.filterActive;
+    return this.filterQuery.length > 0;
   }
 
   getFilterQuery(): string {
     return this.filterQuery;
   }
 
-  /** Arm the filter (handleConfigModalToken calls this on '/'). Idempotent. */
-  activateFilter(): void {
-    if (this.filterActive) return;
-    this._clearConfirm();
-    this.filterActive = true;
-    this.syncStructure();
-  }
-
   /**
    * Append text to the query, the WHOLE token value in one call, so a
    * multi-char paste token lands in the filter atomically rather than being
-   * split into per-char nav/action dispatch (the text-capture invariant this
-   * item's brief calls out). A no-op when the filter isn't armed.
+   * split into per-char nav/action dispatch.
    */
   appendFilterText(text: string): void {
-    if (!this.filterActive || text.length === 0) return;
+    if (text.length === 0) return;
+    this._clearConfirm();
     this.filterQuery += text;
     this.syncStructure();
   }
 
   backspaceFilter(): void {
-    if (!this.filterActive || this.filterQuery.length === 0) return;
+    if (this.filterQuery.length === 0) return;
     this.filterQuery = this.filterQuery.slice(0, -1);
     this.syncStructure();
   }
 
+  /** True while a destructive action waits for its second key press. */
+  hasPendingConfirm(): boolean {
+    return this.pendingConfirmKey !== null;
+  }
+
   /**
-   * Esc while filtering: a non-empty query is CLEARED (stays armed, ready to
-   * retype without pressing '/' again) and this returns true so the caller
-   * (handleConfigModalToken) stops here instead of closing the modal. An
-   * empty query returns false, the caller falls through to the ordinary
-   * close path, preserving single-Esc-close for the no-filter case (the one
-   * documented exception: two-stage Esc only when there is something to
-   * clear).
+   * Esc's first level inside the modal: an armed destructive confirm is a
+   * sub-state of the modal, so Esc cancels it (returns true) before a second
+   * Esc closes the modal. Returns false when nothing was armed.
    */
-  clearFilterOrFallthrough(): boolean {
-    if (!this.filterActive || this.filterQuery.length === 0) return false;
-    this.filterQuery = '';
-    this.syncStructure();
+  cancelPendingConfirm(): boolean {
+    if (this.pendingConfirmKey === null) return false;
+    this._clearConfirm();
     return true;
   }
 
@@ -279,7 +260,13 @@ export class ConfigModal {
     this._clearConfirm();
     this.syncStructure();
     const ids = this._selectableIds(this._frozenTab());
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+      // A tab of informational rows only (pairing, planning): the arrows
+      // scroll it instead, so nothing below the fold is out of reach.
+      this.scrollOffset++;
+      this._clampScroll();
+      return;
+    }
     const i = ids.indexOf(this.selectedRowId);
     this.selectedRowId = ids[(i + 1) % ids.length]!;
     this._clampScroll();
@@ -289,7 +276,11 @@ export class ConfigModal {
     this._clearConfirm();
     this.syncStructure();
     const ids = this._selectableIds(this._frozenTab());
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+      this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+      this._clampScroll();
+      return;
+    }
     const i = ids.indexOf(this.selectedRowId);
     this.selectedRowId = ids[(i - 1 + ids.length) % ids.length]!;
     this._clampScroll();
@@ -306,8 +297,7 @@ export class ConfigModal {
   private _switchTab(dir: 1 | -1): void {
     this._clearConfirm();
     // A filter query is scoped to the tab it was typed against, switching
-    // tabs resets it (item 1), same as statusMessage below.
-    this.filterActive = false;
+    // tabs resets it, same as statusMessage below.
     this.filterQuery = '';
     this.syncStructure();
     const tabs = this.frozenView?.tabs ?? [];
@@ -376,7 +366,6 @@ export class ConfigModal {
    */
   jumpToRow(tabId: string, rowId: string): void {
     this._clearConfirm();
-    this.filterActive = false;
     this.filterQuery = '';
     this.syncStructure();
     const tab = this.frozenView?.tabs.find((t) => t.id === tabId);
@@ -418,9 +407,10 @@ export class ConfigModal {
    * does NOT sync structure, so calling it repeatedly with only value mutations
    * yields byte-identical layout (the liveness contract).
    *
-   * `labelWrapWidth` is the wrap column ModalFactory's list section will use
-   * for row labels (renderConfigModal computes and passes the real one for
-   * the current terminal size). It exists so the wrap-clamp below (* item 2) can pre-empt a live label growing past ModalFactory's wrap width
+   * `labelWrapWidth` is the wrap column the kit list uses for row labels
+   * (renderConfigModal computes and passes the real one for the current
+   * terminal size). It exists so the wrap-clamp below can pre-empt a live
+   * label growing past that wrap width
    * mid-tick, a structural change (an extra visible line) without an
    * interaction, by measuring wrapped line counts here, before the label
    * ever reaches the renderer.
@@ -429,11 +419,12 @@ export class ConfigModal {
     // Pre-first-interaction: async onOpen loads may restructure freely (the
     // user hasn't engaged a cursor yet), sync so "Loading…" is replaced by
     // real content on the load's own requestRender, not the next keypress.
+    this.lastWrapWidth = labelWrapWidth;
     if (this.active && !this.interactedSinceOpen) this.syncStructure();
     const live = this.surface?.buildView() ?? null;
     const frozen = this.frozenView;
     if (!frozen) {
-      return { title: '', tabs: [], header: [], rows: [], hints: [], scroll: { offset: 0, total: 0, visible: this.visibleRows } };
+      return { title: '', tabs: [], header: [], rows: [], hints: [], confirmPending: false, scroll: { offset: 0, total: 0, visible: this.visibleRows }, search: { query: this.filterQuery, matched: 0, total: 0 } };
     }
 
     const tabs: ConfigModalRenderTab[] = frozen.tabs.map((ft) => {
@@ -461,35 +452,25 @@ export class ConfigModal {
         label: this._clampRowLabel(fr.label, src.label, labelWrapWidth),
         style: src.style,
         selected: fr.id === this.selectedRowId,
-        selectable: fr.selectable !== false,
+        selectable: fr.selectable !== false && fr.header !== true,
         stale: lr === undefined,
+        header: fr.header === true,
       };
     });
 
     const visible = this.visibleRows;
     const windowed = this._windowRowsByLineBudget(allRows, this.scrollOffset, visible, labelWrapWidth);
 
-    // item 1: while filtering, the surface's own action/tab hints are
-    // unreliable (their printable-letter keys are captured by the filter
-    // instead of firing, see handleConfigModalToken), so the footer swaps
-    // to just the filter status (query + a truthful match count) and the
-    // Esc contract for this mode. See getFilterQuery/isFilterActive callers.
-    const filtering = this.filterActive;
-    const hasQuery = filtering && this.filterQuery.length > 0;
-    const hints = filtering
-      ? [
-          this._filterStatusHint(
-            frozenRows.filter((r) => r.selectable !== false).length,
-            (liveTab?.rows ?? []).filter((r) => r.selectable !== false).length,
-          ),
-          hasQuery ? 'Esc clear · Esc close' : 'Esc close',
-        ]
-      : [
-          ...(frozen.hints ?? []),
-          ...(frozenTab?.hints ?? []),
-          ...this._actionHints(),
-          'Esc close',
-        ];
+    // The search row is always live, so the surface, tab and action hints
+    // always show; Esc sits on the title row as a keycap, not in the hints.
+    const hints = [
+      ...(frozen.hints ?? []),
+      ...(frozenTab?.hints ?? []),
+      ...this._actionHints(),
+    ];
+    const unfilteredTab = this.surface?.buildView().tabs.find((t) => t.id === this.activeTabId);
+    const countSelectable = (rows: readonly ConfigModalRow[] | undefined): number =>
+      (rows ?? []).filter((r) => r.selectable !== false && r.header !== true).length;
 
     return {
       title: live?.title ?? frozen.title,
@@ -499,8 +480,14 @@ export class ConfigModal {
       emptyText: frozenRows.length === 0 ? (frozenTab?.emptyText ?? 'Nothing to show.') : undefined,
       degraded: live?.degraded ?? frozen.degraded,
       status: this.statusMessage || undefined,
+      confirmPending: this.pendingConfirmKey !== null,
       hints,
       scroll: { offset: this.scrollOffset, total: allRows.length, visible },
+      search: {
+        query: this.filterQuery,
+        matched: countSelectable(frozenRows),
+        total: countSelectable(unfilteredTab?.rows),
+      },
     };
   }
 
@@ -534,9 +521,9 @@ export class ConfigModal {
    * Modal sizing rule (owner, zero tolerance: a modal/list must never clip
    * its full descriptive text, size to content or scroll, never clip).
    * `scrollOffset`/`visible` are ROW-count based, which is exactly right when
-   * every row wraps to one line, but ModalFactory renders each row's WRAPPED
-   * lines and then bounds the whole section to a fixed content-row budget
-   * computed from `visible` (see renderConfigModal's targetContentRows). A
+   * every row wraps to one line, but the kit list renders each row's WRAPPED
+   * lines inside a fixed list height (renderConfigModal passes that height
+   * to setViewportRows). A
    * row whose label wraps to MULTIPLE lines can therefore push the total past
    * that budget, and the LAST row handed to the renderer gets cut off
    * mid-line instead of being deferred to the next scroll page, the
@@ -568,16 +555,9 @@ export class ConfigModal {
     return out;
   }
 
-  /** Footer text for the active filter: the query + a truthful match count. */
-  private _filterStatusHint(matched: number, total: number): string {
-    const q = this.filterQuery;
-    if (q.length === 0) return `/ type to filter (${total} row${total === 1 ? '' : 's'})`;
-    return `/${q}: ${matched} of ${total} match${matched === 1 ? '' : 'es'}`;
-  }
-
   /** Apply the active filter query to every tab's rows. A no-op passthrough when not filtering. */
   private _applyFilter(view: ConfigModalView): ConfigModalView {
-    if (!this.filterActive || this.filterQuery === '') return view;
+    if (this.filterQuery === '') return view;
     const query = this.filterQuery.toLowerCase();
     return { ...view, tabs: view.tabs.map((tab) => this._filterTab(tab, query)) };
   }
@@ -593,9 +573,9 @@ export class ConfigModal {
    * describes "no data at all", not "no data matches your filter").
    */
   private _filterTab(tab: ConfigModalTab, query: string): ConfigModalTab {
-    const kept = tab.rows.filter((r) => r.selectable === false || r.label.toLowerCase().includes(query));
-    const hadSelectable = tab.rows.some((r) => r.selectable !== false);
-    const stillMatched = kept.some((r) => r.selectable !== false);
+    const kept = tab.rows.filter((r) => r.selectable === false || r.header === true || r.label.toLowerCase().includes(query));
+    const hadSelectable = tab.rows.some((r) => r.selectable !== false && r.header !== true);
+    const stillMatched = kept.some((r) => r.selectable !== false && r.header !== true);
     if (hadSelectable && !stillMatched) {
       return {
         ...tab,
@@ -632,23 +612,44 @@ export class ConfigModal {
   }
 
   private _selectableIds(tab: ConfigModalTab | undefined): string[] {
-    return (tab?.rows ?? []).filter((r) => r.selectable !== false).map((r) => r.id);
+    return (tab?.rows ?? []).filter((r) => r.selectable !== false && r.header !== true).map((r) => r.id);
   }
 
   private _firstSelectableId(tab: ConfigModalTab | undefined): string {
     return this._selectableIds(tab)[0] ?? '';
   }
 
+  /**
+   * Keep the selected row inside the visible line budget and never scroll
+   * past the point where the last rows fill the list. Counts wrapped lines
+   * (at the last render's wrap width), matching _windowRowsByLineBudget.
+   */
   private _clampScroll(): void {
     const tab = this._frozenTab();
     const rows = tab?.rows ?? [];
-    const idx = rows.findIndex((r) => r.id === this.selectedRowId);
+    const lines = rows.map((r) => Math.max(1, wrapText(r.label, this.lastWrapWidth).length));
+    const span = (from: number, to: number): number => {
+      let n = 0;
+      for (let k = from; k <= to; k++) n += lines[k] ?? 0;
+      return n;
+    };
     const visible = Math.max(3, this.visibleRows);
+    const idx = rows.findIndex((r) => r.id === this.selectedRowId);
     if (idx >= 0) {
       if (idx < this.scrollOffset) this.scrollOffset = idx;
-      else if (idx >= this.scrollOffset + visible) this.scrollOffset = idx - visible + 1;
+      while (this.scrollOffset < idx && span(this.scrollOffset, idx) > visible) this.scrollOffset++;
     }
-    const maxOffset = Math.max(0, rows.length - visible);
+    let maxOffset = rows.length;
+    while (maxOffset > 0 && span(maxOffset - 1, rows.length - 1) <= visible) maxOffset--;
+    // Informational rows before the first or after the last selectable row
+    // would otherwise never scroll into view: selecting the first selectable
+    // row shows the rows above it, the last one shows the rows below it.
+    const selectable = rows.map((r, k) => (r.selectable !== false && r.header !== true ? k : -1)).filter((k) => k >= 0);
+    if (idx >= 0 && idx === selectable[selectable.length - 1]) {
+      this.scrollOffset = Math.max(this.scrollOffset, Math.min(maxOffset, idx));
+    }
+    if (idx >= 0 && idx === selectable[0] && span(0, idx) <= visible) this.scrollOffset = 0;
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxOffset));
   }
+
 }

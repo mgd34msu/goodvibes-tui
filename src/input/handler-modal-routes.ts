@@ -12,14 +12,11 @@ type SelectionRouteState = {
   selectionModal: {
     active: boolean;
     query: string;
-    searchFocused: boolean;
     allowSearch: boolean;
     customActions: Map<string, SelectionAction>;
     selectedIndex: number;
     getSelected: () => SelectionResult['item'] | null | undefined;
     setQuery: (query: string) => void;
-    focusSearch: () => void;
-    blurSearch: () => void;
     moveUp: () => void;
     moveDown: () => void;
     close: () => void;
@@ -78,44 +75,42 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
     return shift ? baseStep * 10 : baseStep;
   };
 
+  const fireClaimedKey = (key: string): boolean => {
+    const action = state.selectionModal.customActions.get(key);
+    if (!action) return false;
+    const selected = state.selectionModal.getSelected();
+    if (selected) dispatchSelectionAction(action, selected);
+    return true;
+  };
+
+  const fireSpace = (): void => {
+    const selected = state.selectionModal.getSelected();
+    const action = getSpaceAction(selected);
+    if (action && selected && state.selectionCallback) {
+      state.selectionCallback({ item: selected, action });
+    }
+  };
+
+  // The search row is always live (no search mode): printable text goes into
+  // the query, except a key the picker claims (a custom action, or Space for
+  // a toggle) which fires while the query is empty. Pickers without search
+  // only have their claimed keys.
   if (token.type === 'text') {
-    if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && token.value === '/') {
-      state.selectionModal.focusSearch();
-    } else if (state.selectionModal.allowSearch && state.selectionModal.searchFocused) {
+    const queryEmpty = state.selectionModal.query.length === 0;
+    const single = [...token.value].length === 1;
+    if (queryEmpty && single && token.value === ' ' && getSpaceAction(state.selectionModal.getSelected())) {
+      fireSpace();
+    } else if (queryEmpty && single && state.selectionModal.customActions.has(token.value)) {
+      fireClaimedKey(token.value);
+    } else if (state.selectionModal.allowSearch) {
       state.selectionModal.setQuery(state.selectionModal.query + token.value);
-    } else if (token.value === ' ') {
-      const selected = state.selectionModal.getSelected();
-      const action = getSpaceAction(selected);
-      if (action && selected && state.selectionCallback) {
-        state.selectionCallback({ item: selected, action });
-      }
-    } else {
-      const action = state.selectionModal.customActions.get(token.value);
-      if (action) {
-        const selected = state.selectionModal.getSelected();
-        if (selected) {
-          dispatchSelectionAction(action, selected);
-        }
-      } else if (state.selectionModal.allowSearch) {
-        // instant filter: an unclaimed keystroke arms search AND starts
-        // the query immediately, instead of silently doing nothing until the
-        // user discovers '/' first (the "help search needs '/' arming while
-        // the palette filters instantly" evaluator finding, /help has no
-        // customActions, so every letter used to be swallowed here). '/'
-        // above still works too; this is additive, not a replacement, and
-        // never fires for a claimed hotkey letter (checked first, above).
-        state.selectionModal.focusSearch();
-        state.selectionModal.setQuery(token.value);
-      }
+    } else if (single && token.value === ' ') {
+      fireSpace();
     }
   } else if (token.type === 'key') {
     if (token.logicalName === 'escape') {
-      // ONE Escape always closes the modal, regardless of search state.
-      // Clearing an in-progress query is Backspace's job, not Esc's, the old
-      // two-stage contract (1st Esc clears query, 2nd blurs search, 3rd
-      // finally closes) was the "help modal took 3 Escapes after searching"
-      // evaluator finding (searchFocused is not modal-specific, every
-      // SelectionModal-based picker had the same multi-Esc pattern).
+      // ONE Escape always closes the modal, whatever the query holds. Clearing
+      // the query is Backspace's job, not Esc's.
       state.handleEscape();
       return true;
     }
@@ -125,24 +120,12 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
         dispatchSelectionAction(getPrimaryAction(selected) ?? 'select', selected);
       }
     } else if (token.logicalName === 'space') {
-      const selected = state.selectionModal.getSelected();
-      const action = getSpaceAction(selected);
-      if (action && selected && state.selectionCallback) {
-        state.selectionCallback({ item: selected, action });
-      }
+      fireSpace();
     } else if (token.logicalName === 'up') {
-      if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && state.selectionModal.selectedIndex === 0) {
-        state.selectionModal.focusSearch();
-      } else {
-        state.selectionModal.moveUp();
-      }
+      state.selectionModal.moveUp();
     } else if (token.logicalName === 'down') {
-      if (state.selectionModal.allowSearch && state.selectionModal.searchFocused) {
-        state.selectionModal.blurSearch();
-      } else {
-        state.selectionModal.moveDown();
-      }
-    } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.selectionModal.searchFocused) {
+      state.selectionModal.moveDown();
+    } else if (token.logicalName === 'left' || token.logicalName === 'right') {
       const selected = state.selectionModal.getSelected();
       if (selected?.adjustable) {
         dispatchSelectionAction(
@@ -152,22 +135,16 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
         );
       }
     } else if (isTextBackspace(token.logicalName ?? '')) {
-      if (state.selectionModal.allowSearch && state.selectionModal.searchFocused && state.selectionModal.query.length > 0) {
+      if (state.selectionModal.allowSearch && state.selectionModal.query.length > 0) {
         state.selectionModal.setQuery(state.selectionModal.query.slice(0, -1));
       }
       // 'delete' is intentionally absent here: modal search filters are
       // end-anchored with no cursor, so forward-delete is a no-op per the
       // delete-key policy (src/input/delete-key-policy.ts).
-    } else if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && token.logicalName === '/') {
-      state.selectionModal.focusSearch();
-    } else if (!state.selectionModal.searchFocused && token.logicalName && token.logicalName.length === 1) {
-      const action = state.selectionModal.customActions.get(token.logicalName);
-      if (action) {
-        const selected = state.selectionModal.getSelected();
-        if (selected) {
-          dispatchSelectionAction(action, selected);
-        }
-      }
+    } else if (token.logicalName && [...token.logicalName].length === 1) {
+      // A modified letter (a CSI-u chord): fires a claimed action whatever
+      // the query holds, it is never typed.
+      fireClaimedKey(token.logicalName);
     }
   }
 
@@ -179,6 +156,8 @@ type BookmarkRouteState = {
   bookmarkModal: {
     active: boolean;
     entries: Array<unknown>;
+    query: string;
+    setQuery: (query: string) => void;
     moveUp: () => void;
     moveDown: () => void;
     getSelected: () => { key: string } | null;
@@ -191,33 +170,49 @@ type BookmarkRouteState = {
   handleEscape: () => void;
 };
 
+/**
+ * Bookmarks: the search row is always live. `d` (remove) and `o` (open the
+ * saved file) fire while the query is empty; otherwise every printable key is
+ * typed into the query. Backspace edits it; Esc closes.
+ */
 export function handleBookmarkModalToken(state: BookmarkRouteState, token: InputToken): boolean {
   if (!state.bookmarkModal.active) return false;
+  const modal = state.bookmarkModal;
+
+  const act = (key: string): boolean => {
+    if (key === 'd') {
+      modal.removeSelected();
+      if (modal.entries.length === 0) modal.close();
+      return true;
+    }
+    if (key === 'o') {
+      modal.openSelectedFile();
+      return true;
+    }
+    return false;
+  };
 
   if (token.type === 'key') {
     if (token.logicalName === 'escape') {
       state.handleEscape();
       return true;
     }
-    if (token.logicalName === 'up') state.bookmarkModal.moveUp();
-    else if (token.logicalName === 'down') state.bookmarkModal.moveDown();
+    if (token.logicalName === 'up') modal.moveUp();
+    else if (token.logicalName === 'down') modal.moveDown();
     else if (token.logicalName === 'enter') {
-      const entry = state.bookmarkModal.getSelected();
+      const entry = modal.getSelected();
       if (entry) state.commandContext?.jumpToBookmark?.(entry.key);
-      state.bookmarkModal.close();
-    } else if (token.logicalName === 'd') {
-      state.bookmarkModal.removeSelected();
-      if (state.bookmarkModal.entries.length === 0) state.bookmarkModal.close();
-    } else if (token.logicalName === 'o') {
-      state.bookmarkModal.openSelectedFile();
+      modal.close();
+    } else if (isTextBackspace(token.logicalName ?? '')) {
+      if (modal.query.length > 0) modal.setQuery(modal.query.slice(0, -1));
+    } else if (token.logicalName) {
+      // Modified letters (CSI-u chords) fire their action whatever the query holds.
+      act(token.logicalName);
     }
   } else if (token.type === 'text') {
-    if (token.value === 'd') {
-      state.bookmarkModal.removeSelected();
-      if (state.bookmarkModal.entries.length === 0) state.bookmarkModal.close();
-    } else if (token.value === 'o') {
-      state.bookmarkModal.openSelectedFile();
-    }
+    const claimed = modal.query.length === 0 && (token.value === 'd' || token.value === 'o');
+    if (claimed) act(token.value);
+    else modal.setQuery(modal.query + token.value);
   }
 
   state.requestRender();
@@ -374,114 +369,104 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
     }
   }
 
+  // The search row is always live: printable text goes to the query. While
+  // the query is non-empty the list shows search results across every
+  // category (searchFocused); clearing it returns to the category view. Space
+  // toggles the selected setting only while the query is empty; resets are
+  // key chords (ctrl+r selected, shift+R category, ctrl+shift+R all) so every
+  // letter can be searched for.
+  const modal = state.settingsModal;
+  const searching = modal.searchQuery.length > 0;
+  const setQuery = (query: string): void => {
+    if (query.length === 0) modal.clearSearch();
+    else modal.setSearchQuery(query);
+  };
+  const resetSelected = (): void => {
+    const reset = modal.resetSelected?.();
+    if (reset) syncRuntimeAfterSettingReset(state.commandContext, reset.key, reset.value);
+  };
+
   if (token.type === 'key') {
-    const focusPane = state.settingsModal.focusPane ?? 'settings';
+    const focusPane = modal.focusPane ?? 'settings';
     if (token.logicalName === 'escape') {
-      // Cancel inline edit first, mirrors the global contract in handler-modal-stack.ts.
-      // Must check editingMode before searchFocused: the reachable path
-      // search→Enter(string/number)→Esc must cancel the edit, NOT just clear search.
-      if (state.settingsModal.editingMode) {
-        state.settingsModal.cancelEdit();
-        state.requestRender();
-        return true;
-      }
-      // Two-stage escape: if in search mode, first Esc exits search (clearSearch),
-      // second Esc closes the modal.
-      if (state.settingsModal.searchFocused) {
-        state.settingsModal.clearSearch();
+      // One level per press: an inline edit is a sub-dialog and is cancelled
+      // first (mirrors handler-modal-stack.ts); otherwise the modal closes.
+      if (modal.editingMode) {
+        modal.cancelEdit();
         state.requestRender();
         return true;
       }
       state.handleEscape();
       return true;
     }
-    if (token.logicalName === 'enter' || (token.logicalName === 'space' && !state.settingsModal.editingMode && !state.settingsModal.searchFocused)) {
-      if (state.settingsModal.editingMode) state.settingsModal.commitEdit();
-      else if (state.settingsModal.searchFocused) {
-        // Enter in search mode: activate the selected search result
-        state.settingsModal.activateSelected();
-        consumeSettingsPickerRequest(state);
-      } else if (focusPane === 'categories') state.settingsModal.focusSettings?.();
+    if (token.logicalName === 'enter' || (token.logicalName === 'space' && !modal.editingMode && !searching)) {
+      if (modal.editingMode) modal.commitEdit();
+      else if (focusPane === 'categories' && !searching) modal.focusSettings?.();
       else {
-        // Feature-unit toggle headers are boolean settings rows now, so
-        // activateSelected toggles them (via the flag-toggle chokepoint) the same
-        // way it edits/toggles any other setting, no flags-category special case.
-        state.settingsModal.activateSelected();
+        // Feature-unit toggle headers are boolean settings rows, so
+        // activateSelected toggles them the same way it edits/toggles any
+        // other setting (search results included).
+        modal.activateSelected();
         consumeSettingsPickerRequest(state);
       }
-    } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
-      if (token.logicalName === 'left') state.settingsModal.focusCategories?.();
-      else state.settingsModal.focusSettings?.();
+    } else if (token.logicalName === 'space' && searching && !modal.editingMode) {
+      setQuery(`${modal.searchQuery} `);
+    } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !modal.editingMode && !searching) {
+      if (token.logicalName === 'left') modal.focusCategories?.();
+      else modal.focusSettings?.();
     } else if (token.logicalName === 'up') {
-      if (state.settingsModal.searchFocused) {
-        state.settingsModal.moveUp?.();
-      } else if (state.settingsModal.moveFocusedUp) state.settingsModal.moveFocusedUp();
-      else state.settingsModal.moveUp?.();
+      if (searching) modal.moveUp?.();
+      else if (modal.moveFocusedUp) modal.moveFocusedUp();
+      else modal.moveUp?.();
     } else if (token.logicalName === 'down') {
-      if (state.settingsModal.searchFocused) {
-        state.settingsModal.moveDown?.();
-      } else if (state.settingsModal.moveFocusedDown) state.settingsModal.moveFocusedDown();
-      else state.settingsModal.moveDown?.();
+      if (searching) modal.moveDown?.();
+      else if (modal.moveFocusedDown) modal.moveFocusedDown();
+      else modal.moveDown?.();
     }
-    else if (token.logicalName === 'r' && token.shift && token.ctrl && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
-      state.settingsModal.initiateResetAll?.();
+    else if (token.logicalName === 'r' && token.shift && token.ctrl && !modal.editingMode && !searching) {
+      modal.initiateResetAll?.();
     }
-    else if (token.logicalName === 'r' && token.shift && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
-      state.settingsModal.initiateResetCategory?.();
+    else if (token.logicalName === 'r' && token.ctrl && !modal.editingMode) {
+      resetSelected();
     }
-    else if (token.logicalName === 'r' && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
-      const reset = state.settingsModal.resetSelected?.();
-      if (reset) syncRuntimeAfterSettingReset(state.commandContext, reset.key, reset.value);
+    else if (token.logicalName === 'r' && token.shift && !modal.editingMode && !searching) {
+      modal.initiateResetCategory?.();
     }
-    else if (token.logicalName === 'pageup' && !state.settingsModal.editingMode) {
-      state.settingsModal.scrollContext?.(-3);
+    else if (token.logicalName === 'pageup' && !modal.editingMode) {
+      modal.scrollContext?.(-3);
     }
-    else if (token.logicalName === 'pagedown' && !state.settingsModal.editingMode) {
-      state.settingsModal.scrollContext?.(3);
+    else if (token.logicalName === 'pagedown' && !modal.editingMode) {
+      modal.scrollContext?.(3);
     }
-    else if (token.logicalName === 'tab' && !state.settingsModal.searchFocused) {
-      if (state.settingsModal.toggleFocusPane) state.settingsModal.toggleFocusPane();
-      else if (focusPane === 'categories') state.settingsModal.focusSettings?.();
-      else state.settingsModal.focusCategories?.();
+    else if (token.logicalName === 'tab' && !searching) {
+      if (modal.toggleFocusPane) modal.toggleFocusPane();
+      else if (focusPane === 'categories') modal.focusSettings?.();
+      else modal.focusCategories?.();
     }
     else if (isTextBackspace(token.logicalName ?? '')) {
-      if (state.settingsModal.editingMode) {
-        state.settingsModal.editBackspace();
-      } else if (state.settingsModal.searchFocused) {
-        // Backspace in search mode: trim query
-        const trimmed = state.settingsModal.searchQuery.slice(0, -1);
-        state.settingsModal.setSearchQuery(trimmed);
-      }
+      if (modal.editingMode) modal.editBackspace();
+      else if (searching) setQuery(modal.searchQuery.slice(0, -1));
     }
     // token.logicalName === 'delete' is intentionally absent: search filters
     // are end-anchored with no cursor, so forward-delete is a no-op per
     // delete-key policy (src/input/delete-key-policy.ts).
-    else if (!state.settingsModal.editingMode && !state.settingsModal.searchFocused && token.logicalName === '/') {
-      state.settingsModal.focusSearch();
-    }
   } else if (token.type === 'text') {
-    if (state.settingsModal.editingMode) {
-      // editingMode takes priority over search, Enter on a string/number search
-      // result enters inline edit; subsequent chars must go to editChar, not the query.
-      state.settingsModal.editChar(token.value);
-    } else if (state.settingsModal.searchFocused) {
-      // Any printable char in search mode appends to the query
-      state.settingsModal.setSearchQuery(state.settingsModal.searchQuery + token.value);
-    } else if (token.value === '/' && !state.settingsModal.editingMode) {
-      // / enters search mode
-      state.settingsModal.focusSearch();
-    } else if (token.value === ' ' && !state.settingsModal.editingMode) {
-      const focusPane = state.settingsModal.focusPane ?? 'settings';
-      if (focusPane === 'categories') state.settingsModal.focusSettings?.();
+    if (modal.editingMode) {
+      // Inline edit takes priority over search: characters go to the edit buffer.
+      modal.editChar(token.value);
+    } else if (searching) {
+      setQuery(modal.searchQuery + token.value);
+    } else if (token.value === ' ') {
+      const focusPane = modal.focusPane ?? 'settings';
+      if (focusPane === 'categories') modal.focusSettings?.();
       else {
-        // See the Enter/Space handler above: feature-unit headers toggle through
-        // activateSelected now, so no flags-category special case is needed.
-        state.settingsModal.activateSelected();
+        modal.activateSelected();
         consumeSettingsPickerRequest(state);
       }
-    } else if (token.value === 'r') {
-      const reset = state.settingsModal.resetSelected?.();
-      if (reset) syncRuntimeAfterSettingReset(state.commandContext, reset.key, reset.value);
+    } else if (token.value !== '/') {
+      // '/' used to arm search; search is always live now, so it is ignored
+      // as a first character rather than searched for.
+      setQuery(token.value);
     }
   }
 
@@ -492,6 +477,8 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
 type SessionPickerRouteState = {
   sessionPickerModal: {
     active: boolean;
+    query: string;
+    setQuery: (query: string) => void;
     loadSelected: (conversationManager: CommandContext['session']['conversationManager']) => void;
     moveUp: () => void;
     moveDown: () => void;
@@ -502,8 +489,14 @@ type SessionPickerRouteState = {
   handleEscape: () => void;
 };
 
+/**
+ * The session picker's search row is always live: printable keys go to the
+ * query. `d` arms (then confirms) delete only while the query is empty, so a
+ * search can still contain the letter d.
+ */
 export function handleSessionPickerToken(state: SessionPickerRouteState, token: InputToken): boolean {
   if (!state.sessionPickerModal.active) return false;
+  const modal = state.sessionPickerModal;
 
   if (token.type === 'key') {
     if (token.logicalName === 'escape') {
@@ -513,13 +506,15 @@ export function handleSessionPickerToken(state: SessionPickerRouteState, token: 
     if (token.logicalName === 'enter') {
       const conversationManager = state.commandContext?.session.conversationManager;
       if (conversationManager) {
-        state.sessionPickerModal.loadSelected(conversationManager);
+        modal.loadSelected(conversationManager);
       }
-    } else if (token.logicalName === 'up') state.sessionPickerModal.moveUp();
-    else if (token.logicalName === 'down') state.sessionPickerModal.moveDown();
-    else if (token.logicalName === 'd') state.sessionPickerModal.deleteSelected();
-  } else if (token.type === 'text' && token.value === 'd') {
-    state.sessionPickerModal.deleteSelected();
+    } else if (token.logicalName === 'up') modal.moveUp();
+    else if (token.logicalName === 'down') modal.moveDown();
+    else if (isTextBackspace(token.logicalName ?? '')) modal.setQuery(modal.query.slice(0, -1));
+    else if (token.logicalName === 'd' && !token.ctrl && modal.query.length === 0) modal.deleteSelected();
+  } else if (token.type === 'text') {
+    if (token.value === 'd' && modal.query.length === 0) modal.deleteSelected();
+    else modal.setQuery(modal.query + token.value);
   }
 
   state.requestRender();
@@ -529,6 +524,9 @@ export function handleSessionPickerToken(state: SessionPickerRouteState, token: 
 type ProfilePickerRouteState = {
   profilePickerModal: {
     active: boolean;
+    query: string;
+    setQuery: (query: string) => void;
+    cancelDeleteConfirmation: () => boolean;
     loadSelected: (configManager: CommandContext['platform']['configManager']) => void;
     moveUp: () => void;
     moveDown: () => void;
@@ -540,32 +538,48 @@ type ProfilePickerRouteState = {
   handleEscape: () => void;
 };
 
+/**
+ * Profiles: the search row is always live. `d` (arm, then delete) and `s`
+ * (save the current settings) fire while the query is empty; otherwise every
+ * printable key is typed into the query. Esc drops an armed delete first,
+ * otherwise it closes.
+ */
 export function handleProfilePickerToken(state: ProfilePickerRouteState, token: InputToken): boolean {
   if (!state.profilePickerModal.active) return false;
+  const modal = state.profilePickerModal;
 
   const saveCurrent = (): void => {
     if (state.commandContext?.platform.configManager) {
       const name = `profile-${Date.now()}`;
-      state.profilePickerModal.saveCurrentAs(name, state.commandContext.platform.configManager);
+      modal.saveCurrentAs(name, state.commandContext.platform.configManager);
     }
+  };
+  const act = (key: string): void => {
+    if (key === 'd') modal.deleteSelected();
+    else if (key === 's') saveCurrent();
   };
 
   if (token.type === 'key') {
     if (token.logicalName === 'escape') {
+      if (modal.cancelDeleteConfirmation()) {
+        state.requestRender();
+        return true;
+      }
       state.handleEscape();
       return true;
     }
     if (token.logicalName === 'enter') {
       if (state.commandContext?.platform.configManager) {
-        state.profilePickerModal.loadSelected(state.commandContext.platform.configManager);
+        modal.loadSelected(state.commandContext.platform.configManager);
       }
-    } else if (token.logicalName === 'up') state.profilePickerModal.moveUp();
-    else if (token.logicalName === 'down') state.profilePickerModal.moveDown();
-    else if (token.logicalName === 'd') state.profilePickerModal.deleteSelected();
-    else if (token.logicalName === 's') saveCurrent();
+    } else if (token.logicalName === 'up') modal.moveUp();
+    else if (token.logicalName === 'down') modal.moveDown();
+    else if (isTextBackspace(token.logicalName ?? '')) {
+      if (modal.query.length > 0) modal.setQuery(modal.query.slice(0, -1));
+    } else if (token.logicalName) act(token.logicalName);
   } else if (token.type === 'text') {
-    if (token.value === 'd') state.profilePickerModal.deleteSelected();
-    else if (token.value === 's') saveCurrent();
+    if (modal.query.length === 0 && (token.value === 'd' || token.value === 's')) act(token.value);
+    else modal.setQuery(modal.query + token.value);
   }
 
   state.requestRender();
@@ -581,20 +595,18 @@ type ConfigModalRouteState = {
 
 /**
  * Route a key to the generic config-modal host (MIGRATE-TO-MODAL
- * surfaces). The host owns the reserved navigation keys (Esc, up/down/j/k tab
- * left/right, and now '/', item 1's type-to-filter, armed the same
- * way as scrollable-list-panel.ts's opt-in filter and SettingsModal's own
- * '/'-armed search); every other key is offered to the active surface's
- * declarative action table (fireAction handles the two-press confirm for
- * destructive actions). Any unrecognised key is absorbed so the modal stays
- * modal, this is the same "active modal captures all keys" shape as the
- * other modal routers.
+ * surfaces). The host owns the reserved navigation keys (Esc, up/down, tab,
+ * left/right) and the always-live search row: a printable key the surface
+ * claims as an action fires the action while the query is empty; every other
+ * printable key (and any multi-char paste) is typed into the query, and
+ * Backspace edits it. Other named keys (Enter, ctrl chords) go to the
+ * surface's declarative action table (fireAction handles the two-press
+ * confirm for destructive actions). Any unrecognised key is absorbed so the
+ * modal stays modal.
  *
- * While the filter is armed (`configModal.isFilterActive()`), printable text
- * tokens go to the query instead of nav/action dispatch, this is WHY 'j'/'k'
- * lose their vim-nav meaning mid-filter (you're typing, not navigating) but
- * Escape, Backspace, and the arrow/tab nav keys keep their ordinary meaning
- * (arrows navigate the FILTERED list; Enter still acts on the selected row).
+ * Esc pops exactly one level: an armed destructive confirm is cancelled
+ * first; otherwise the modal closes through handleEscape. Esc never clears
+ * the query as a separate step.
  */
 export function handleConfigModalToken(state: ConfigModalRouteState, token: InputToken): boolean {
   if (!state.configModal.active) return false;
@@ -605,29 +617,17 @@ export function handleConfigModalToken(state: ConfigModalRouteState, token: Inpu
   // without a keypress (batch refutation finding 3).
   state.configModal.noteInteraction();
 
-  const filtering = state.configModal.isFilterActive();
-
   if (token.type === 'key') {
     if (token.logicalName === 'escape') {
-      // Two-stage Esc, but ONLY while there is a query to clear (the one
-      // documented exception to single-Esc-close): clearFilterOrFallthrough
-      // returns false on an empty query, so an armed-but-empty filter (or no
-      // filter at all) closes the modal in one press, same as every other
-      // modal here.
-      if (state.configModal.clearFilterOrFallthrough()) {
+      if (state.configModal.cancelPendingConfirm()) {
         state.requestRender();
         return true;
       }
       state.handleEscape();
       return true;
     }
-    if (filtering && isTextBackspace(token.logicalName ?? '')) {
+    if (isTextBackspace(token.logicalName ?? '')) {
       state.configModal.backspaceFilter();
-      state.requestRender();
-      return true;
-    }
-    if (!filtering && token.logicalName === '/') {
-      state.configModal.activateFilter();
       state.requestRender();
       return true;
     }
@@ -650,25 +650,19 @@ export function handleConfigModalToken(state: ConfigModalRouteState, token: Inpu
         state.requestRender();
         return true;
     }
-    // Any other 'key' token (e.g. 'enter') falls through to the action table
-    // below even while filtering, only printable TEXT tokens are captured
-    // by the filter (below), so Enter still fires on the current selection.
+    // Any other 'key' token (Enter, a ctrl chord) falls through to the
+    // action table below, whatever the query holds.
   } else if (token.type === 'text') {
-    if (!filtering && token.value === '/') {
-      state.configModal.activateFilter();
-      state.requestRender();
-      return true;
-    }
-    if (filtering) {
-      // The WHOLE token value lands in the filter in one call, including a
-      // multi-char paste token, never split into per-char nav/action
-      // dispatch (the text-capture invariant this item's brief calls out).
+    const claimed = state.configModal.getFilterQuery().length === 0
+      && [...token.value].length === 1
+      && state.configModal.resolveAction(token.value) !== null;
+    if (!claimed) {
+      // The WHOLE token value lands in the query in one call, including a
+      // multi-char paste token, never split into per-char dispatch.
       state.configModal.appendFilterText(token.value);
       state.requestRender();
       return true;
     }
-    if (token.value === 'j') { state.configModal.moveDown(); state.requestRender(); return true; }
-    if (token.value === 'k') { state.configModal.moveUp(); state.requestRender(); return true; }
   }
 
   const actionKey = token.type === 'key' ? (token.logicalName ?? '') : token.type === 'text' ? token.value : '';

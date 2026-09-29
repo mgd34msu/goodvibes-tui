@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { ProfilePickerModal } from '../../input/profile-picker-modal.ts';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
 import { renderProfilePickerModal } from '../../renderer/profile-picker-modal.ts';
-import { lineToString, linesToText } from '../setup.ts';
+import { layerText, layerTextBlock } from '../helpers/surface-frame.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 
 const W = 120;
 const profileManager = new ProfileManager(join(tmpdir(), 'gv-renderer-profile-picker'));
@@ -24,78 +25,70 @@ function makeModal(overrides: Partial<ProfilePickerModal> = {}): ProfilePickerMo
   return modal;
 }
 
-describe('renderProfilePickerModal', () => {
-  test('returns a non-empty Line[] array', () => {
-    const lines = renderProfilePickerModal(makeModal(), W);
-    expect(Array.isArray(lines)).toBe(true);
-    expect(lines.length).toBeGreaterThan(0);
+const H = 30;
+
+describe('renderProfilePickerModal (modal surface kit)', () => {
+  test('draws a kit modal inside the screen with the title and no box frame', () => {
+    const layer = renderProfilePickerModal(makeModal(), W, H);
+    expect(layer.x + layer.lines[0]!.length).toBeLessThanOrEqual(W);
+    expect(layer.y + layer.lines.length).toBeLessThanOrEqual(H);
+    expect(layerText(layer)[2]).toContain('Profiles');
+    expect(layerTextBlock(layer)).not.toMatch(/[┌┐└┘│]/);
   });
 
-  test('each line has correct terminal width', () => {
-    const lines = renderProfilePickerModal(makeModal(), W);
-    for (const line of lines) {
-      expect(line.length).toBe(W);
-    }
+  test('keycap hints: move, load, delete, save current', () => {
+    const text = layerTextBlock(renderProfilePickerModal(makeModal(), W, H));
+    expect(text).toContain('↑↓  move');
+    expect(text).toContain('⏎  load');
+    expect(text).toContain('d  delete');
+    expect(text).toContain('s  save current');
   });
 
-  test('title bar contains "Profiles"', () => {
-    const lines = renderProfilePickerModal(makeModal(), W);
-    const title = lineToString(lines[0]);
-    expect(title).toContain('Profiles');
+  test('shows profile names and saved times; the selected row is the gradient row', () => {
+    const layer = renderProfilePickerModal(makeModal(), W, H);
+    const text = layerTextBlock(layer);
+    expect(text).toContain('work-profile');
+    expect(text).toContain('minimal-profile');
+    const ink = activeTokens().selectedListItemText;
+    const row = layer.lines.findIndex((line) => line.some((c) => c.fg === ink && c.bold && c.char.trim() !== ''));
+    expect(layerText(layer)[row]).toContain('work-profile');
   });
 
-  test('footer contains navigation hints', () => {
-    const lines = renderProfilePickerModal(makeModal(), W);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Navigate');
-    expect(texts).toContain('Load');
-    expect(texts).toContain('Arm/Delete');
-    expect(texts).toContain('Save curr');
-  });
-
-  test('shows profile names in list', () => {
-    const lines = renderProfilePickerModal(makeModal(), W);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('work-profile');
-    expect(texts).toContain('minimal-profile');
-  });
-
-  test('selected item has arrow indicator', () => {
-    const lines = renderProfilePickerModal(makeModal(), W);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('▸');
-  });
-
-  test('empty profiles shows helpful message', () => {
+  test('empty profiles shows the honest empty state', () => {
     const modal = makeModal();
     modal.profiles = [];
-    const lines = renderProfilePickerModal(modal, W);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('No saved profiles');
-    expect(texts).toContain('[s]');
+    const text = layerTextBlock(renderProfilePickerModal(modal, W, H));
+    expect(text).toContain('No saved profiles');
+    expect(text).toContain('Press s to save the current settings');
   });
 
   test('status message is displayed when set', () => {
     const modal = makeModal();
     modal.statusMessage = 'Loaded profile: work-profile';
-    const lines = renderProfilePickerModal(modal, W);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Loaded profile: work-profile');
+    expect(layerTextBlock(renderProfilePickerModal(modal, W, H))).toContain('Loaded profile: work-profile');
   });
 
-  test('delete confirmation guidance is displayed when armed', () => {
+  test('an armed delete marks the row in the error color and says what the next d does', () => {
     const modal = makeModal();
-    modal.deleteConfirmationTarget = 'work-profile';
-    const lines = renderProfilePickerModal(modal, W);
-    const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Press [d] again to permanently delete work-profile');
+    modal.deleteConfirmationTarget = 'minimal-profile';
+    const layer = renderProfilePickerModal(modal, W, H);
+    expect(layerTextBlock(layer)).toContain('Press d again to permanently delete minimal-profile');
+    const row = layerText(layer).findIndex((line) => line.includes('minimal-profile') && line.includes('✕'));
+    expect(row).toBeGreaterThan(0);
   });
 
-  test('works at narrow terminal width', () => {
-    const narrowW = 60;
-    const lines = renderProfilePickerModal(makeModal(), narrowW);
-    for (const line of lines) {
-      expect(line.length).toBe(narrowW);
-    }
+  test('the search row filters by name', () => {
+    const modal = makeModal();
+    modal.setQuery('mini');
+    const text = layerTextBlock(renderProfilePickerModal(modal, W, H));
+    expect(text).toContain('mini▏');
+    expect(text).toContain('1 of 2');
+    expect(text).not.toContain('work-profile');
+  });
+
+  test('works at a narrow terminal width', () => {
+    const layer = renderProfilePickerModal(makeModal(), 60, 24);
+    expect(layer.x).toBe(1);
+    expect(layer.lines[0]!.length).toBe(58);
   });
 });

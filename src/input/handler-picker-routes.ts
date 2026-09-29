@@ -4,6 +4,7 @@ import type { CommandContext } from './command-registry.ts';
 import type { CapabilityFilter, CategoryFilter, ModelPickerModal } from './model-picker.ts';
 import { MODEL_PICKER_CHROME_LINES } from '../renderer/model-picker-overlay.ts';
 import { ensureProviderKeyThenSelect } from './provider-key-intake.ts';
+import { isTextBackspace } from './delete-key-policy.ts';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { BlockActionId } from '../renderer/block-actions.ts';
@@ -49,17 +50,10 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
 
   if (token.type === 'key') {
     if (token.logicalName === 'escape') {
-      // Search now starts focused by default (see
-      // ModelPickerModal.openAllModels() doc comment). Escape with an empty
-      // query used to only blurSearch() here, leaving the picker open and
-      // requiring a SECOND Escape to actually close it, confusing on a
-      // freshly-opened, untouched picker where there is nothing to "clear".
-      // Clearing a non-empty query is still a distinct first Escape (whether
-      // or not search is focused); an empty query falls through to the same
-      // effort/contextCap/previousMode/close cascade as before.
-      if (state.modelPicker.mode !== 'contextCap' && state.modelPicker.query.length > 0) {
-        state.modelPicker.clearQuery();
-      } else if (state.modelPicker.mode === 'effort') {
+      // Esc pops exactly one level: the effort and context-cap steps and a
+      // provider-first model list are sub-levels of the picker; otherwise the
+      // picker closes. A typed query is not a level, it goes with the picker.
+      if (state.modelPicker.mode === 'effort') {
         state.modelPicker.mode = 'model';
         state.modelPicker.selectedIndex = 0;
       } else if (state.modelPicker.mode === 'contextCap') {
@@ -73,9 +67,9 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         state.handleEscape();
         return true;
       }
-    } else if (token.logicalName === 'backspace') {
+    } else if (isTextBackspace(token.logicalName ?? '')) {
       if (state.modelPicker.mode === 'contextCap') state.modelPicker.deleteContextCapChar();
-      else if (state.modelPicker.searchFocused && (state.modelPicker.mode === 'model' || state.modelPicker.mode === 'provider')) state.modelPicker.deleteChar();
+      else if (state.modelPicker.canFocusSearch()) state.modelPicker.deleteChar();
     } else if (token.logicalName === 'enter') {
       if (state.modelPicker.focusPane === 'targets') {
         state.modelPicker.focusItems();
@@ -174,89 +168,58 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
           if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
         }
       }
-    } else if (token.logicalName === 'up') {
-      if (state.modelPicker.focusPane === 'targets') {
-        state.modelPicker.moveTarget(-1);
-        state.requestRender();
-        return true;
-      }
-      if (state.modelPicker.canFocusSearch() && !state.modelPicker.searchFocused && state.modelPicker.selectedIndex === 0) {
-        state.modelPicker.focusSearch();
-      } else if (state.modelPicker.searchFocused) {
-        // Symmetric with 'down' (below): search now starts focused by default
-        // so 'up' must have a way out of it too, or it would be a
-        // silent no-op the very first time a user reaches for the list.
-        state.modelPicker.blurSearch();
-      } else {
-        const maxVis = Math.max(5, state.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
-        state.modelPicker.moveUp(maxVis);
-      }
-    } else if (token.logicalName === 'down') {
-      if (state.modelPicker.focusPane === 'targets') {
-        state.modelPicker.moveTarget(1);
-        state.requestRender();
-        return true;
-      }
-      if (state.modelPicker.searchFocused) {
-        state.modelPicker.blurSearch();
-      } else {
-        const maxVis = Math.max(5, state.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
-        state.modelPicker.moveDown(maxVis);
-      }
-    } else if (token.logicalName === 'left' && !state.modelPicker.searchFocused && state.modelPicker.mode !== 'contextCap') {
-      state.modelPicker.focusTargets();
-    } else if (token.logicalName === 'right' && !state.modelPicker.searchFocused && state.modelPicker.mode !== 'contextCap') {
+    } else if (token.logicalName === 'up' || token.logicalName === 'down') {
+      // The search row is always live, so arrows always walk the list.
+      const maxVis = Math.max(5, state.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
       state.modelPicker.focusItems();
-    } else if (token.logicalName === 'tab' && state.modelPicker.mode === 'model') {
-      if (state.modelPicker.focusPane === 'targets') {
-        state.modelPicker.focusItems();
-      } else {
+      if (token.logicalName === 'up') state.modelPicker.moveUp(maxVis);
+      else state.modelPicker.moveDown(maxVis);
+    } else if ((token.logicalName === 'tab' || token.logicalName === 'right' || token.logicalName === 'left') && state.modelPicker.mode !== 'contextCap' && state.modelPicker.mode !== 'effort') {
+      // The five model targets are tabs: tab / → next, shift+tab / ← previous.
+      const back = token.logicalName === 'left' || (token.logicalName === 'tab' && token.shift);
+      state.modelPicker.moveTarget(back ? -1 : 1);
+    } else if (token.ctrl && state.modelPicker.mode === 'model') {
+      const picker = state.modelPicker;
+      if (token.logicalName === 't') {
         const cycle: CategoryFilter[] = ['all', 'free', 'paid', 'subscription'];
-        const cur = cycle.indexOf(state.modelPicker.categoryFilter);
-        state.modelPicker.setCategoryFilter(cycle[(cur + 1) % cycle.length]!);
+        picker.setCategoryFilter(cycle[(cycle.indexOf(picker.categoryFilter) + 1) % cycle.length]!);
+      } else if (token.logicalName === 'k') cycleCapabilityFilter(picker);
+      else if (token.logicalName === 'a') picker.toggleAvailableOnly();
+      else if (token.logicalName === 'b') picker.cycleBenchmarkSort();
+      else if (token.logicalName === 'g') picker.cycleGroupBy();
+      else if (token.logicalName === 'f') togglePin(state);
+      else if (token.logicalName === 'r') {
+        void state.commandContext?.executeCommand?.('refresh-models', []);
       }
-    } else if (!state.modelPicker.searchFocused && token.logicalName === 'g' && state.modelPicker.mode === 'model') {
-      state.modelPicker.cycleGroupBy();
-    } else if (!state.modelPicker.searchFocused && token.logicalName === 'c' && state.modelPicker.mode === 'model') {
-      cycleCapabilityFilter(state.modelPicker);
-    } else if (!state.modelPicker.searchFocused && token.logicalName === 'a' && state.modelPicker.mode === 'model') {
-      state.modelPicker.toggleAvailableOnly();
-    } else if (!state.modelPicker.searchFocused && token.logicalName === 'b' && state.modelPicker.mode === 'model') {
-      state.modelPicker.cycleBenchmarkSort();
-    } else if (!state.modelPicker.searchFocused && token.logicalName === '/' && state.modelPicker.canFocusSearch()) {
-      state.modelPicker.focusItems();
-      state.modelPicker.focusSearch();
     }
   } else if (token.type === 'text') {
-    if (state.modelPicker.mode === 'contextCap') {
-      if (token.value.length === 1) state.modelPicker.appendContextCapChar(token.value);
-    } else if ((state.modelPicker.mode === 'model' || state.modelPicker.mode === 'provider') && state.modelPicker.searchFocused) {
-      // When search is focused every printable char, including space, goes to the query.
-      // The space=context-cap shortcut remains active only in the non-search branch below.
-      const ch = token.value;
-      if (ch.length === 1 && ch >= ' ') state.modelPicker.appendChar(ch);
-    } else if (token.value === ' ' && state.modelPicker.mode === 'model') {
-      const selected = state.modelPicker.getSelected();
-      if (selected && state.modelPicker.isLocalModel(selected)) state.modelPicker.enterContextCapMode(selected);
+    const picker = state.modelPicker;
+    if (picker.mode === 'contextCap') {
+      if (token.value.length === 1) picker.appendContextCapChar(token.value);
+    } else if (token.value === ' ' && picker.mode === 'model' && picker.query.length === 0) {
+      // Space on an untouched search sets a context cap for a local model.
+      const selected = picker.getSelected();
+      if (selected && picker.isLocalModel(selected)) picker.enterContextCapMode(selected);
     } else if (token.value === '\t') {
-      if (state.modelPicker.focusPane === 'targets') state.modelPicker.focusItems();
-      else state.modelPicker.focusTargets();
-    } else if (token.value === 'g' && state.modelPicker.mode === 'model') {
-      state.modelPicker.cycleGroupBy();
-    } else if (token.value === 'c' && state.modelPicker.mode === 'model') {
-      cycleCapabilityFilter(state.modelPicker);
-    } else if (token.value === 'a' && state.modelPicker.mode === 'model') {
-      state.modelPicker.toggleAvailableOnly();
-    } else if (token.value === 'b' && state.modelPicker.mode === 'model') {
-      state.modelPicker.cycleBenchmarkSort();
-    } else if (token.value === '/' && state.modelPicker.canFocusSearch()) {
-      state.modelPicker.focusItems();
-      state.modelPicker.focusSearch();
+      picker.moveTarget(1);
+    } else if (picker.canFocusSearch() && !(token.value === '/' && picker.query.length === 0)) {
+      // Every printable character goes to the always-live search.
+      picker.focusItems();
+      picker.focusSearch();
+      for (const ch of token.value) if (ch >= ' ') picker.appendChar(ch);
     }
   }
 
   state.requestRender();
   return true;
+}
+
+/** Pin or unpin the selected model: flipped locally at once, persisted through /pin or /unpin. */
+function togglePin(state: ModelPickerRouteState): void {
+  const model = state.modelPicker.getSelected();
+  if (!model) return;
+  const pinned = state.modelPicker.togglePinnedLocal(model);
+  void state.commandContext?.executeCommand?.(pinned ? 'pin' : 'unpin', [model.registryKey]);
 }
 
 function cycleCapabilityFilter(modelPicker: ModelPickerModal): void {
@@ -274,6 +237,8 @@ type EscapeOnlyModalRouteState = {
   active: boolean;
   requestRender: () => void;
   handleEscape: () => void;
+  /** Optional scrolling for read-only modals: ↑ passes +1 (back), ↓ passes -1. */
+  scroll?: (delta: number) => void;
 };
 
 export function handleEscapeOnlyModalToken(state: EscapeOnlyModalRouteState, token: InputToken): boolean {
@@ -281,6 +246,12 @@ export function handleEscapeOnlyModalToken(state: EscapeOnlyModalRouteState, tok
   if (token.type === 'key' && token.logicalName === 'escape') {
     state.handleEscape();
     return true;
+  }
+  if (token.type === 'key' && state.scroll) {
+    if (token.logicalName === 'up') state.scroll(1);
+    else if (token.logicalName === 'down') state.scroll(-1);
+    else if (token.logicalName === 'pageup') state.scroll(10);
+    else if (token.logicalName === 'pagedown') state.scroll(-10);
   }
   state.requestRender();
   return true;
@@ -319,21 +290,16 @@ type FilePickerRouteState = {
 export function handleFilePickerToken(state: FilePickerRouteState, token: InputToken): boolean {
   if (!state.filePicker.active) return false;
 
+  // The query is always live: typing filters, arrows move, Esc closes.
   if (token.type === 'text') {
-    if (!state.filePicker.searchFocused && token.value === '/') {
-      state.filePicker.focusSearch();
-    } else if (state.filePicker.searchFocused && token.value === ' ' && state.filePicker.query === '') {
+    if (token.value === ' ' && state.filePicker.query === '') {
       state.filePicker.close();
-    } else if (state.filePicker.searchFocused) {
+    } else {
+      state.filePicker.focusSearch();
       state.filePicker.setQuery(state.filePicker.query + token.value);
     }
   } else if (token.type === 'key') {
     if (token.logicalName === 'escape') {
-      if (state.filePicker.searchFocused && state.filePicker.query.length > 0) {
-        state.filePicker.setQuery('');
-        state.requestRender();
-        return true;
-      }
       state.handleEscape();
       return true;
     } else if (token.logicalName === 'enter') {
@@ -379,21 +345,13 @@ export function handleFilePickerToken(state: FilePickerRouteState, token: InputT
       }
       state.filePicker.close();
     } else if (token.logicalName === 'up') {
-      if (!state.filePicker.searchFocused && state.filePicker.selectedIndex === 0) {
-        state.filePicker.focusSearch();
-      } else if (!state.filePicker.searchFocused) {
-        state.filePicker.moveUp();
-      }
+      state.filePicker.moveUp();
     } else if (token.logicalName === 'down') {
-      if (state.filePicker.searchFocused) {
-        state.filePicker.blurSearch();
-      } else {
-        state.filePicker.moveDown();
-      }
+      state.filePicker.moveDown();
     } else if (token.logicalName === 'backspace') {
-      if (state.filePicker.searchFocused && state.filePicker.query.length > 0) {
+      if (state.filePicker.query.length > 0) {
         state.filePicker.setQuery(state.filePicker.query.slice(0, -1));
-      } else if (state.filePicker.searchFocused) {
+      } else {
         const removeCount = state.filePicker.injectMode ? 2 : 1;
         if (state.cursorPos >= removeCount) {
           state.prompt = state.prompt.slice(0, state.cursorPos - removeCount) + state.prompt.slice(state.cursorPos);

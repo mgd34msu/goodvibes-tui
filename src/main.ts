@@ -29,7 +29,7 @@ import { buildShellFooter, estimateShellFooterHeight, promptCursorOffset } from 
 import { createFailoverTurnState, resolveActiveModelDisplay } from './core/active-model-identity.ts';
 import { computePromptContentWidth } from './renderer/prompt-content-width.ts';
 import { buildConversationViewport } from './renderer/conversation-layout.ts';
-import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
+import { applyConversationOverlays, buildConversationLayers } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
@@ -542,7 +542,6 @@ async function main() {
     // Calculate how many rows are consumed by overlays (thinking, permissions, queue, file picker)
     let overlayRows = 0;
     if (orchestrator.isThinking) overlayRows += 2; // spinner + blank
-    if (pendingPermission) overlayRows += PermissionPromptUI.getPromptHeight(pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy, PermissionPromptUI.promptViewState(pendingPermission, conversationWidth, approvalBroker));
     overlayRows += orchestrator.messageQueue.length * 3; // queued messages
     // File picker and model picker overlay rows computed from actual rendered line count below
     // Selection modal overlay rows are computed from actual rendered line count below
@@ -591,22 +590,11 @@ async function main() {
       }
     }
 
-    if (pendingPermission) {
-      viewport.push(...PermissionPromptUI.createPromptLines(conversationWidth, pendingPermission, pendingPermission.hunkState, pendingPermission.detailsExpanded, pendingPermission.requestedBy, PermissionPromptUI.promptViewState(pendingPermission, conversationWidth, approvalBroker)));
-    }
-
     viewport.push(...UIFactory.createQueuedMessageList(conversationWidth, orchestrator.listQueuedMessages()));
     viewport.push(...memoryProvenanceUi.renderChip(conversationWidth, configManager));
 
-    viewport = applyConversationOverlays(viewport, {
-      input,
-      conversation,
-      commandRegistry,
-      keybindingsManager: ctx.services.keybindingsManager,
-      conversationWidth,
-      viewportHeight: vHeight,
-      contextWindow,
-    });
+    const overlayContext = { input, conversation, commandRegistry, keybindingsManager: ctx.services.keybindingsManager, contextWindow };
+    viewport = applyConversationOverlays(viewport, { ...overlayContext, conversationWidth, viewportHeight: vHeight });
 
     // Panel composite data
     const panelComposite = onboardingOwnsScreen
@@ -635,6 +623,7 @@ async function main() {
       } : undefined,
       panel: panelComposite.panelData,
       panelWidth: panelComposite.panelWidth,
+      layers: buildConversationLayers({ ...overlayContext, screenWidth: width, screenHeight: height, permission: pendingPermission ? PermissionPromptUI.renderPromptModal(width, height, pendingPermission, pendingPermission, approvalBroker) : null }),
     });
   };
   const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // coalescer; no frames after terminal restore

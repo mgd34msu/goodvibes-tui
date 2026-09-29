@@ -225,6 +225,14 @@ export function buildFilteredModels(
     result = [...recent, ...rest];
   }
 
+  // Pinned models lead (before recent), so the picker's Pinned group sits at
+  // the top and up/down walks the list in the order it is drawn. Pins may be
+  // recorded by model id or by registry key.
+  if (pinnedIds.size > 0) {
+    const isPinned = (m: ModelDefinition): boolean => pinnedIds.has(m.id) || pinnedIds.has(m.registryKey);
+    result = [...result.filter(isPinned), ...result.filter((m) => !isPinned(m))];
+  }
+
   const newCache: FilteredModelsCache = {
     modelsRef: models,
     configuredProvidersKey,

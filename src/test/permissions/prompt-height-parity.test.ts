@@ -1,17 +1,21 @@
 /**
- * PermissionPromptUI.getPromptHeight(request, hunkState) must equal the
- * actual number of Line rows PermissionPromptUI.createPromptLines(width,
- * request, hunkState) returns, main.ts's render loop reserves viewport
- * space from getPromptHeight *before* the real render happens (see
- * src/main.ts's overlayRows computation), so any drift between the two
- * clips or misplaces the conversation viewport. This is the single
- * highest-value regression test for the hunk-selection feature
- * (Risk 2 in the work order brief).
+ * Permission dialog layout: the dialog is a kit modal stamped over the
+ * dimmed screen, so it no longer reserves viewport rows (the old
+ * getPromptHeight / createPromptLines parity contract is gone with the row
+ * splicing it protected). What must hold instead:
+ *
+ *  - every card shape fits the screen it is drawn on, with its buttons in view;
+ *  - the hunk under the cursor is always visible, whatever the cursor;
+ *  - the subject shows the real path(s), never a JSON blob; many files
+ *    collapse to an "N files: …" summary; the raw args stay in the details;
+ *  - details are one key (d) away, and the requester and the exact rule
+ *    "Allow for session" remembers are shown.
  */
 import { describe, expect, test } from 'bun:test';
 import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
 import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { HunkSelectionState } from '../../permissions/hunk-selection.ts';
+import { promptCardLines, promptCardText } from '../helpers/permission-card.ts';
 
 const WIDTH = 80;
 
@@ -22,7 +26,7 @@ function makeRequest(editCount: number): PermissionPromptRequest & { resolve: (a
     replace: `replacement${i}`,
   }));
   return {
-    callId: 'parity-test',
+    callId: 'layout-test',
     tool: 'edit',
     args: { edits },
     category: 'write',
@@ -43,140 +47,96 @@ function makeHunkState(count: number, cursor = 0): HunkSelectionState {
   };
 }
 
-describe('PermissionPromptUI.getPromptHeight / createPromptLines parity', () => {
-  test('non-hunk-mode baseline (hunkState omitted): height matches exactly, unaffected by this feature', () => {
-    const request = makeRequest(0);
-    const height = PermissionPromptUI.getPromptHeight(request);
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
-    expect(lines.length).toBe(height);
+function makeFilesRequest(
+  tool: string,
+  category: 'read' | 'write' | 'execute',
+  paths: string[],
+): PermissionPromptRequest & { resolve: (approved: boolean) => void } {
+  const args = { files: paths.map((path) => ({ path })) };
+  return { callId: 'files-test', tool, args, category, analysis: analyzePermissionRequest(tool, args, category), resolve: () => {} };
+}
+
+function expectFits(lines: ReturnType<typeof promptCardLines>, width: number, height: number): void {
+  expect(lines).toHaveLength(height);
+  for (const line of lines) expect(line).toHaveLength(width);
+}
+
+describe('permission dialog layout', () => {
+  test('a plain edit card fits 80x24 with its buttons', () => {
+    const lines = promptCardLines(WIDTH, makeRequest(1), undefined, false, undefined, undefined, 24);
+    expectFits(lines, WIDTH, 24);
+    expect(lines.map((l) => l.map((c) => c.char).join('')).join('\n')).toContain(' Deny ');
   });
 
   for (const hunkCount of [1, 3, 8, 20]) {
-    test(`hunk-mode with ${hunkCount} hunks: height matches exactly`, () => {
-      const request = makeRequest(hunkCount);
-      const hunkState = makeHunkState(hunkCount);
-      const height = PermissionPromptUI.getPromptHeight(request, hunkState);
-      const lines = PermissionPromptUI.createPromptLines(WIDTH, request, hunkState);
-      expect(lines.length).toBe(height);
+    test(`hunk mode with ${hunkCount} hunks fits 80x24, buttons in view`, () => {
+      const lines = promptCardLines(WIDTH, makeRequest(hunkCount), makeHunkState(hunkCount), false, undefined, undefined, 24);
+      expectFits(lines, WIDTH, 24);
+      const text = lines.map((l) => l.map((c) => c.char).join('')).join('\n');
+      expect(text).toContain(' Apply selected ');
+      expect(text).toContain(' Deny ');
     });
   }
 
-  test('cursor position does not change the row count', () => {
-    const request = makeRequest(8);
-    const hunkState = makeHunkState(8, 5);
-    const height = PermissionPromptUI.getPromptHeight(request, hunkState);
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request, hunkState);
-    expect(lines.length).toBe(height);
+  test('the hunk under the cursor is always visible', () => {
+    for (const cursor of [0, 4, 7]) {
+      const text = promptCardText(WIDTH, makeRequest(8), makeHunkState(8, cursor), false, undefined, undefined, 24).join('\n');
+      expect(text).toContain(`${cursor + 1}. file${cursor}.ts`);
+    }
   });
 
-  test('partial selection does not change the row count', () => {
-    const request = makeRequest(5);
-    const hunkState: HunkSelectionState = { ...makeHunkState(5), selected: new Set([0, 2]) };
-    const height = PermissionPromptUI.getPromptHeight(request, hunkState);
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request, hunkState);
-    expect(lines.length).toBe(height);
+  test('more than eight hunks are counted, not dropped', () => {
+    const text = promptCardText(WIDTH, makeRequest(20), makeHunkState(20)).join('\n');
+    expect(text).toContain('+12 more hunks');
   });
 
-  // item 2a/2b: condensed low-risk cards, multi-path fields, and the `d`
-  // details toggle must all keep getPromptHeight and createPromptLines in sync,
-  // or the render loop clips the viewport.
-  function makeFilesRequest(
-    tool: string,
-    category: 'read' | 'write' | 'execute',
-    paths: string[],
-  ): PermissionPromptRequest & { resolve: (approved: boolean) => void } {
-    const args = { files: paths.map((path) => ({ path })) };
-    return {
-      callId: 'files-test',
-      tool,
-      args,
-      category,
-      analysis: analyzePermissionRequest(tool, args, category),
-      resolve: () => {},
-    };
-  }
+  test('partial selection is shown on the checkboxes and the count', () => {
+    const text = promptCardText(WIDTH, makeRequest(5), { ...makeHunkState(5), selected: new Set([0, 2]) }).join('\n');
+    expect(text).toContain('2 of 5 hunks selected');
+    expect(text).toContain('[x] 1. file0.ts');
+    expect(text).toContain('[ ] 2. file1.ts');
+  });
 
-  for (const tool of [
-    { name: 'read', cat: 'read' as const },
-    { name: 'write', cat: 'write' as const },
-  ]) {
+  for (const tool of [{ name: 'read', cat: 'read' as const }, { name: 'write', cat: 'write' as const }]) {
     for (const fileCount of [1, 2, 3, 5]) {
       for (const expanded of [false, true]) {
-        test(`${tool.name} with ${fileCount} file(s), expanded=${expanded}: height matches`, () => {
+        test(`${tool.name} with ${fileCount} file(s), details ${expanded ? 'open' : 'closed'}: fits 80x24 and names the target`, () => {
           const request = makeFilesRequest(tool.name, tool.cat, Array.from({ length: fileCount }, (_, i) => `dir/file${i}.ts`));
-          const height = PermissionPromptUI.getPromptHeight(request, undefined, expanded);
-          const lines = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, expanded);
-          expect(lines.length).toBe(height);
+          const lines = promptCardLines(WIDTH, request, undefined, expanded, undefined, undefined, 24);
+          expectFits(lines, WIDTH, 24);
+          expect(lines.map((l) => l.map((c) => c.char).join('')).join('\n')).toContain('file0.ts');
         });
       }
     }
   }
 
-  const lineText = (line: { char: string }[]): string => line.map((c) => c.char).join('');
-
-  test('2a: a nested {files:[{path}]} arg renders the real path in the Path field, raw JSON only in Args', () => {
-    const request = makeFilesRequest('write', 'write', ['notes/haiku.txt']);
-    const rows = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, true).map(lineText);
-    const pathRow = rows.find((r) => r.trimStart().startsWith('Path'));
-    expect(pathRow).toBeDefined();
-    expect(pathRow!).toContain('notes/haiku.txt');
-    expect(pathRow!).not.toContain('{"files"'); // never a JSON blob in the Path field
-    // Raw args stay reachable in the dedicated Args row (behind the details view).
+  test('a nested {files:[{path}]} arg shows the real path in the subject, raw JSON only in Args', () => {
+    const rows = promptCardText(WIDTH, makeFilesRequest('write', 'write', ['notes/haiku.txt']), undefined, true);
+    const subject = rows.find((r) => /^\s*(Path|Target|File)/.test(r) && r.includes('notes/haiku.txt'));
+    expect(subject).toBeDefined();
+    expect(subject!).not.toContain('{"files"');
     const argsRow = rows.find((r) => r.trimStart().startsWith('Args'));
     expect(argsRow!).toContain('{"files"');
   });
 
-  test('2a: many files collapse to a "N files: …" summary line', () => {
-    const request = makeFilesRequest('write', 'write', Array.from({ length: 6 }, (_, i) => `f${i}.ts`));
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, true).map(lineText).join('\n');
-    expect(text).toContain('6 files:');
+  test('many files collapse to an "N files: …" summary', () => {
+    const text = promptCardText(WIDTH, makeFilesRequest('write', 'write', Array.from({ length: 6 }, (_, i) => `f${i}.ts`)), undefined, false).join('\n');
+    expect(text).toContain('6 files: f0.ts, f1.ts, +4 more');
   });
 
-  test('2b: a low-risk local read is condensed by default and expands with details', () => {
+  test('details are one key away: closed by default, opened with d', () => {
     const request = makeFilesRequest('read', 'read', ['src/foo.ts']);
-    const collapsedHeight = PermissionPromptUI.getPromptHeight(request, undefined, false);
-    const expandedHeight = PermissionPromptUI.getPromptHeight(request, undefined, true);
-    // Condensed cards are much shorter; expanding reveals the full block.
-    expect(expandedHeight).toBeGreaterThan(collapsedHeight);
-    const collapsed = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, false);
-    expect(collapsed.length).toBe(collapsedHeight);
-    // The condensed card still names the file and offers the details toggle.
-    const text = collapsed.map(lineText).join('\n');
-    expect(text).toContain('foo.ts');
-    expect(text).toContain('[d] details');
-  });
-
-  // Item 3 (b/c): attribution + remember-scope preview must keep height in sync
-  // in BOTH card shapes, with and without a known requester.
-  for (const requestedBy of [undefined, 'session abc12345']) {
-    for (const expanded of [false, true]) {
-      test(`full-card parity with requestedBy=${requestedBy}, expanded=${expanded}`, () => {
-        const request = makeFilesRequest('write', 'write', ['dir/a.ts']);
-        const height = PermissionPromptUI.getPromptHeight(request, undefined, expanded, requestedBy);
-        const lines = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, expanded, requestedBy);
-        expect(lines.length).toBe(height);
-      });
-      test(`condensed-card parity with requestedBy=${requestedBy}`, () => {
-        const request = makeFilesRequest('read', 'read', ['src/foo.ts']);
-        const height = PermissionPromptUI.getPromptHeight(request, undefined, false, requestedBy);
-        const lines = PermissionPromptUI.createPromptLines(WIDTH, request, undefined, false, requestedBy);
-        expect(lines.length).toBe(height);
-      });
-    }
-  }
-
-  test('hunk-mode parity is unaffected by requestedBy (no whole-request remember key)', () => {
-    const request = makeRequest(3);
-    const hunkState = makeHunkState(3);
-    const height = PermissionPromptUI.getPromptHeight(request, hunkState, false, 'session abc12345');
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request, hunkState, false, 'session abc12345');
-    expect(lines.length).toBe(height);
+    const closed = promptCardText(WIDTH, request, undefined, false).join('\n');
+    const open = promptCardText(WIDTH, request, undefined, true).join('\n');
+    expect(closed).toContain('foo.ts');
+    expect(closed).toContain('d details');
+    expect(closed).not.toMatch(/Tool +read/);
+    expect(open).toMatch(/Tool +read/);
+    expect(open).toContain('d hide details');
   });
 });
 
 describe('PermissionPromptUI: attribution + remember-scope preview (Item 3 b/c)', () => {
-  const lineText = (line: { char: string }[]): string => line.map((c) => c.char).join('');
-
   function req(tool: string, args: Record<string, unknown>, category: 'read' | 'write' | 'execute'): PermissionPromptRequest & { resolve: (approved: boolean) => void } {
     return { callId: 'c', tool, args, category, analysis: analyzePermissionRequest(tool, args, category), resolve: () => {} };
   }
@@ -187,16 +147,16 @@ describe('PermissionPromptUI: attribution + remember-scope preview (Item 3 b/c)'
     expect(PermissionPromptUI.rememberScopeKey(req('list', {}, 'read'))).toBe('list');
   });
 
-  test('the prompt shows the exact rule [A] will remember, before it is written', () => {
-    const text = PermissionPromptUI.createPromptLines(80, req('bash', { command: 'rm build' }, 'execute')).map(lineText).join('\n');
+  test('the details show the exact rule "Allow for session" will remember, before it is written', () => {
+    const text = promptCardText(80, req('bash', { command: 'rm build' }, 'execute'), undefined, true).join('\n');
     expect(text).toContain('Remembers');
     expect(text).toContain('bash:rm build');
   });
 
-  test('the prompt names the requesting agent/process when known, and omits the line when not', () => {
-    const withWho = PermissionPromptUI.createPromptLines(80, req('bash', { command: 'ls' }, 'execute'), undefined, false, 'agent 1a2b3c4d').map(lineText).join('\n');
-    expect(withWho).toContain('Requested by: agent 1a2b3c4d');
-    const without = PermissionPromptUI.createPromptLines(80, req('bash', { command: 'ls' }, 'execute')).map(lineText).join('\n');
-    expect(without).not.toContain('Requested by');
+  test('the title row names the requesting agent/process when known, and omits it when not', () => {
+    const withWho = promptCardText(80, req('bash', { command: 'ls' }, 'execute'), undefined, false, 'agent 1a2b3c4d').join('\n');
+    expect(withWho).toContain('agent 1a2b3c4d');
+    const without = promptCardText(80, req('bash', { command: 'ls' }, 'execute'), undefined, false).join('\n');
+    expect(without).not.toContain('agent 1a2b3c4d');
   });
 });

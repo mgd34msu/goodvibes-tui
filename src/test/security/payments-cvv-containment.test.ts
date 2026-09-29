@@ -20,6 +20,7 @@
  * through), not a mock standing in for them. A fake CVV value is used
  * throughout; it is never a real card number or code.
  */
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -250,7 +251,7 @@ describe('payments CVV containment', () => {
       selectCvvEntry();
       modal.editingMode = true;
       modal.editBuffer = FAKE_CVV;
-      const lines = renderSettingsModal(modal, W);
+      const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
       const texts = linesToText(lines).join('\n');
       expect(texts).not.toContain(FAKE_CVV);
       // Keystrokes still visibly register: a bullet mask of the same length, plus cursor.
@@ -267,7 +268,7 @@ describe('payments CVV containment', () => {
       // render path specifically, the same invariant the row assertion above
       // proves, pinned here under its own name because it is the exact surface
       // named in the containment brief.
-      const lines = renderSettingsModal(modal, W);
+      const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
       const texts = linesToText(lines).join('\n');
       expect(texts).not.toContain(modal.editBuffer);
       expect(texts).toContain('•'.repeat(modal.editBuffer.length));
@@ -284,7 +285,7 @@ describe('payments CVV containment', () => {
       const mcpRegistry = { listServerSecurity: () => [], setServerTrustMode: () => {} } as unknown as McpRegistry;
       modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry, secrets);
       selectCvvEntry();
-      const lines = renderSettingsModal(modal, W);
+      const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
       const texts = linesToText(lines).join('\n');
       expect(texts).not.toContain(FAKE_CVV);
     });
@@ -296,7 +297,7 @@ describe('payments CVV containment', () => {
       modal.selectedIndex = modal.searchResults.indexOf(result!);
       modal.editingMode = true;
       modal.editBuffer = FAKE_CVV;
-      const lines = renderSettingsModal(modal, W);
+      const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
       const texts = linesToText(lines).join('\n');
       expect(texts).not.toContain(FAKE_CVV);
     });
@@ -315,7 +316,7 @@ describe('payments CVV containment', () => {
       expect(modal.lastSettingEffectMessage).toBe(SDK_CVV_PROMPT_TRADEOFF_WARNING);
       // And it is NOT the old TUI-local literal this session deleted.
       expect(modal.lastSettingEffectMessage).not.toContain('the daemon stops and waits for you to type it before any purchase can complete');
-      const lines = renderSettingsModal(modal, W);
+      const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
       const header = lineToString(lines.find((l) => lineToString(l).includes('disables unattended purchasing')) ?? lines[0]!);
       expect(header).toContain('disables unattended purchasing');
     });

@@ -1,28 +1,20 @@
 /**
- * renderSessionPickerModal, renders the /sessions picker modal as Line[]
- * using ModalFactory.
+ * renderSessionPickerModal, the /sessions picker drawn with the modal surface kit.
  *
- * Shows a list of saved sessions with:
- *   - name, timestamp (formatted), message count
- * Footer hints: [Enter] Load  [d] Delete  [Esc] Close
- *
- * When the modal was wired with a cross-surface session union
- * (`modal.crossSurfaceView.mode !== 'local'`), an additional read-only
- * "Cross-surface sessions" section is appended, badged kind/status/project
- * (parity with the webui SessionsView) with one of three honest states,
- * true-empty, offline, or stale, never a silently-collapsed list. In
- * 'local' mode (no sessionBroker wired, e.g. every pre-existing caller/test)
- * this section is entirely absent and the box sizing is unchanged.
+ * Saved sessions grouped by recency (today, yesterday, this week, earlier)
+ * with message count and age right-aligned and muted, an always-live search
+ * row, and two read-only groups: sessions hosted on the daemon and the
+ * cross-surface session union (each with its honest state: never read,
+ * offline, stale, empty). Deleting arms the row in red and asks for the same
+ * key again, in place.
  */
 
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
-import { ModalFactory } from './modal-factory.ts';
-import { activeTokens, activeUiTones } from './theme.ts';
+import { activeTokens } from './theme.ts';
 import type { SessionPickerModal } from '../input/session-picker-modal.ts';
 import { formatTimestamp } from './modal-utils.ts';
-import { fitDisplay } from '../utils/terminal-width.ts';
-import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
+import { beginModal, drawWrapped, finishModal, scrollCountText, searchRow, wrapLines, type KitHint, type SurfaceLayer } from './surface-kit.ts';
+import { drawList, drawScrollingList, measureRow, type KitRow } from './surface-kit-list.ts';
 
 // ---------------------------------------------------------------------------
 // Cross-surface badge helpers (parity with webui's src/lib/sessions-union.ts)
@@ -111,31 +103,6 @@ function hostedRosterNote(roster: SessionPickerModal['hostedRoster']): string | 
 }
 
 /**
- * One hosted row: the id first, then what it is doing, what leaving it would
- * do, and finally its title.
- *
- * The id leads because it is the ACTIONABLE part, the row exists so `/hosted
- * attach <id>` can be typed off it, and a narrow terminal clips the tail. What
- * gets clipped must therefore be the descriptive end of the line, never the
- * thing the user has to retype.
- */
-function hostedRowLabel(
-  record: SessionPickerModal['hostedRoster']['sessions'][number],
-  contentWidth: number,
-): string {
-  const policy = record.effectiveDetachPolicy === 'survive' ? 'survives detach' : 'ends on detach';
-  const attached = record.attachedClients.length > 0 ? `${record.attachedClients.length} attached` : 'nobody attached';
-  // Fitted to the content width MINUS the list indent modal-factory adds: at
-  // the full width the row wraps to a second line, which the section's row
-  // accounting does not reserve, and the trailing attach hint is then what the
-  // tail clip eats.
-  return fitDisplay(
-    `${record.id} · ${record.status} · ${policy} · ${attached} · ${record.title || 'untitled'}`,
-    Math.max(8, contentWidth - 4),
-  );
-}
-
-/**
  * Whether the hosted section renders at all.
  *
  * Absent when NOTHING is known: no roster was wired (every pre-existing caller
@@ -146,25 +113,6 @@ function hostedRowLabel(
 function hostedSectionVisible(modal: SessionPickerModal): boolean {
   const roster = modal.hostedRoster;
   return roster.sessions.length > 0 || roster.capturedAt !== null || roster.note !== null;
-}
-
-function hostedRowCount(modal: SessionPickerModal): number {
-  return Math.min(MAX_HOSTED_ROWS, modal.hostedRoster.sessions.length);
-}
-
-/**
- * Extra content rows the hosted section needs: separator + header (+note)
- * + rows (+overflow line + the attach hint). Counted for the same reason the
- * cross-surface section counts its own, an uncounted trailing row is silently
- * eaten by modal-factory's tail clip.
- */
-function hostedExtraRows(modal: SessionPickerModal): number {
-  if (!hostedSectionVisible(modal)) return 0;
-  const rows = hostedRowCount(modal);
-  const noteRow = hostedRosterNote(modal.hostedRoster) ? 1 : 0;
-  const overflowRow = modal.hostedRoster.sessions.length > MAX_HOSTED_ROWS ? 1 : 0;
-  const hintRow = rows > 0 ? 1 : 0;
-  return 2 + noteRow + overflowRow + hintRow + rows;
 }
 
 /**
@@ -185,27 +133,108 @@ function crossSurfaceNote(view: SessionPickerModal['crossSurfaceView'], rowCount
   return null;
 }
 
-function crossSurfaceRowCount(modal: SessionPickerModal): number {
-  return modal.crossSurfaceView.mode === 'local' ? 0 : Math.min(MAX_CROSS_SURFACE_ROWS, modal.crossSurfaceSessions.length);
+// ---------------------------------------------------------------------------
+// Rows
+// ---------------------------------------------------------------------------
+
+const DAY_MS = 86_400_000;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+type RecencyGroup = 'Today' | 'Yesterday' | 'This week' | 'Earlier';
+
+function startOfDay(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
 }
 
-/**
- * Extra content rows the cross-surface section needs: separator + header
- * (+note) + rows (+the "[showing N of M]" overflow line when the union has
- * more records than MAX_CROSS_SURFACE_ROWS, previously uncounted here, which
- * let modal-factory's tail-clip silently eat that trailing line even though
- * the rest of the budget accounting held; see W3 Finding 1).
- */
-function crossSurfaceExtraRows(modal: SessionPickerModal): number {
-  if (modal.crossSurfaceView.mode === 'local') return 0;
-  const rows = crossSurfaceRowCount(modal);
-  const noteRow = crossSurfaceNote(modal.crossSurfaceView, rows) ? 1 : 0;
-  const overflowRow = modal.crossSurfaceSessions.length > MAX_CROSS_SURFACE_ROWS ? 1 : 0;
-  // W4 UX-lens: the plain-language 'reaped' explainer is its own row,
-  // uncounted here it would be silently eaten by modal-factory's tail-clip
-  // exactly the way W3 Finding 1 describes above.
-  const reapedHintRow = hasVisibleReapedRow(modal) ? 1 : 0;
-  return 2 + noteRow + overflowRow + reapedHintRow + Math.max(rows, noteRow === 1 && rows === 0 ? 0 : rows);
+function recencyGroup(ts: number, now: number): RecencyGroup {
+  const today = startOfDay(now);
+  if (ts >= today) return 'Today';
+  if (ts >= today - DAY_MS) return 'Yesterday';
+  if (ts >= today - 6 * DAY_MS) return 'This week';
+  return 'Earlier';
+}
+
+/** Short age for the right column: HH:MM today, "Mon D" this year, the full date otherwise. */
+function shortWhen(ts: number, now: number): string {
+  if (!ts) return 'unknown';
+  const d = new Date(ts);
+  if (ts >= startOfDay(now)) return formatTimestamp(ts).slice(11);
+  if (d.getFullYear() === new Date(now).getFullYear()) return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return formatTimestamp(ts).slice(0, 10);
+}
+
+function hostedRows(modal: SessionPickerModal): KitRow[] {
+  if (!hostedSectionVisible(modal)) return [];
+  const t = activeTokens();
+  const roster = modal.hostedRoster;
+  const rows: KitRow[] = [{ header: 'Hosted', headerRight: 'on the daemon' }];
+  const note = hostedRosterNote(roster);
+  if (note) rows.push({ label: note, labelFg: roster.note ? t.warning : t.textFaint });
+  for (const record of roster.sessions.slice(0, MAX_HOSTED_ROWS)) {
+    const policy = record.effectiveDetachPolicy === 'survive' ? 'survives detach' : 'ends on detach';
+    const attached = record.attachedClients.length > 0 ? `${record.attachedClients.length} attached` : 'nobody attached';
+    const running = record.status === 'running';
+    const terminated = record.status === 'terminated';
+    rows.push({
+      label: record.title || 'untitled',
+      desc: `${record.id} · ${record.status} · ${policy} · ${attached}`,
+      mark: running ? '◐' : terminated ? '○' : '●',
+      markFg: running ? t.brand : terminated ? t.textFaint : t.textMuted,
+      muted: terminated,
+    });
+  }
+  if (roster.sessions.length > MAX_HOSTED_ROWS) rows.push({ label: `showing ${MAX_HOSTED_ROWS} of ${roster.sessions.length}`, labelFg: t.textFaint });
+  if (roster.sessions.length > 0) rows.push({ label: 'Join one with /hosted attach <id>', labelFg: t.textFaint });
+  return rows;
+}
+
+function crossSurfaceRows(modal: SessionPickerModal): KitRow[] {
+  if (modal.crossSurfaceView.mode === 'local') return [];
+  const t = activeTokens();
+  const rows: KitRow[] = [{ header: 'Other surfaces', headerRight: modal.crossSurfaceView.mode }];
+  const note = crossSurfaceNote(modal.crossSurfaceView, modal.crossSurfaceSessions.length);
+  if (note) rows.push({ label: note, labelFg: modal.crossSurfaceView.offlineNote ? t.warning : t.textFaint });
+  for (const record of modal.crossSurfaceSessions.slice(0, MAX_CROSS_SURFACE_ROWS)) {
+    const reaped = isReapedRecord(record);
+    const closed = isClosedStatus(record.status);
+    rows.push({
+      label: record.title || record.id,
+      desc: `${kindLabel(record.kind)} · ${statusLabel(record)} · ${projectLabel(record.project)}`,
+      // Reaped rows get their own tone: they reopen on the next heartbeat, unlike a deliberate close.
+      labelFg: reaped ? t.info : undefined,
+      muted: closed && !reaped,
+    });
+  }
+  if (modal.crossSurfaceSessions.length > MAX_CROSS_SURFACE_ROWS) {
+    rows.push({ label: `showing ${MAX_CROSS_SURFACE_ROWS} of ${modal.crossSurfaceSessions.length}`, labelFg: t.textFaint });
+  }
+  if (hasVisibleReapedRow(modal)) rows.push({ label: REAPED_BADGE_HINT, labelFg: t.info });
+  return rows;
+}
+
+function localRows(modal: SessionPickerModal, now: number): Map<RecencyGroup, KitRow[]> {
+  const t = activeTokens();
+  const groups = new Map<RecencyGroup, KitRow[]>();
+  modal.visibleSessions().forEach((sess, index) => {
+    const selected = index === modal.selectedIndex;
+    const armed = modal.deleteConfirmationTarget === sess.name && selected;
+    const group = recencyGroup(sess.timestamp, now);
+    const title = sess.title && sess.title !== sess.name ? sess.title : '';
+    const row: KitRow = armed
+      ? { label: `Press d again to delete "${sess.name}"`, right: `${sess.messageCount} msgs · ${shortWhen(sess.timestamp, now)}`, danger: true, mark: '✕', markFg: t.error, selected }
+      : {
+          label: title || sess.name,
+          desc: title ? sess.name : undefined,
+          right: `${sess.messageCount} msgs · ${shortWhen(sess.timestamp, now)}`,
+          selected,
+        };
+    const list = groups.get(group) ?? [];
+    list.push(row);
+    groups.set(group, list);
+  });
+  return groups;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,231 +242,82 @@ function crossSurfaceExtraRows(modal: SessionPickerModal): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Render the session picker modal as Line[] for overlay in the viewport.
+ * Render the session picker as a modal layer.
  *
- * @param modal  SessionPickerModal state object.
- * @param width  Terminal width.
+ * @param modal         SessionPickerModal state.
+ * @param screenWidth   Terminal width.
+ * @param screenHeight  Terminal height.
+ * @param now           Clock for the recency groups (tests pass a fixed value).
  */
 export function renderSessionPickerModal(
   modal: SessionPickerModal,
-  width: number,
-  viewportHeight = 24,
-): Line[] {
-  const extraRows = crossSurfaceExtraRows(modal) + hostedExtraRows(modal);
-  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
-    chromeRows: 6,
-    minContentRows: 5,
-    maxContentRows: 9 + extraRows,
-  });
-  const boxMargin = metrics.margin;
-  const boxW = metrics.boxWidth;
-  const contentW = metrics.contentWidth;
-  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8 + extraRows);
+  screenWidth: number,
+  screenHeight = 24,
+  now: number = Date.now(),
+): SurfaceLayer {
+  const t = activeTokens();
+  const armed = modal.deleteConfirmationTarget !== null;
+  const hints: KitHint[] = modal.query.length === 0
+    ? [['↑↓', 'move'], ['⏎', 'open'], ['d', armed ? 'confirm delete' : 'delete']]
+    : [['↑↓', 'move'], ['⏎', 'open'], ['⌫', 'edit search']];
+  const f = beginModal(screenWidth, screenHeight, { title: 'Sessions', hints });
 
-  // W3 Finding 1: when a cross-surface union section is present, cap the
-  // LOCAL list's window to what's left after reserving extraRows for the
-  // union, otherwise the local list expands to fill metrics.contentRows
-  // (which already includes the union's reservation) and modal-factory's
-  // single tail-clip (createModal, targetContentRows) silently drops the
-  // union section, or its trailing rows, once the box fills up. In local
-  // mode (extraRows === 0, every pre-existing caller/test) this reduces to
-  // the exact pre-T2 formula, so local-only output is byte-for-byte
-  // unaffected.
-  let visibleRows: number;
-  if (extraRows === 0) {
-    visibleRows = metrics.contentRows;
-  } else {
-    const localBudget = Math.max(0, targetContentRows - extraRows);
-    const overhead = 2; // header + separator row, present whenever sessions.length > 0
-    const remaining = Math.max(0, localBudget - overhead);
-    visibleRows = modal.sessions.length > remaining
-      ? Math.max(3, remaining - 2) // reserve 2 more rows for the local "[x-y of N]" overflow line
-      : Math.max(3, remaining);
+  const visible = modal.visibleSessions();
+  const count = modal.query.length > 0 ? `${visible.length} of ${modal.sessions.length}` : `${modal.sessions.length} saved`;
+  searchRow(f, f.top, modal.query, 'Search sessions', count);
+
+  // Status and the armed-delete note sit at the bottom of the body, wrapped in full.
+  const footLines: Array<{ text: string; fg: string }> = [];
+  const width = f.r - f.l + 1;
+  // While armed, the row itself carries the "press d again" prompt.
+  if (modal.statusMessage && !armed) {
+    for (const line of wrapLines(modal.statusMessage, width)) footLines.push({ text: line, fg: armed ? t.warning : t.accent });
   }
-  modal.setVisibleRows(visibleRows);
+  if (armed) {
+    for (const line of wrapLines(`Deletion is armed for ${modal.deleteConfirmationTarget}. Move selection or press Esc to cancel.`, width)) footLines.push({ text: line, fg: t.textFaint });
+  }
+  const listBottom = footLines.length > 0 ? f.bottom - footLines.length - 1 : f.bottom;
 
-  const sections: import('./modal-factory.ts').ModalSection[] = [];
-
+  const rows: KitRow[] = [];
+  const local = localRows(modal, now);
+  const pushGroup = (name: RecencyGroup): void => {
+    const group = local.get(name);
+    if (group && group.length > 0) rows.push({ header: name }, ...group);
+  };
   if (modal.sessions.length === 0) {
-    sections.push({
-      type: 'text',
-      content: 'No saved sessions.',
-      style: { fg: activeTokens().textFaint },
-    });
-    sections.push({
-      type: 'text',
-      content: 'Use /save [name] to save the current session.',
-      style: { fg: activeTokens().textFaint },
-    });
-  } else {
-    // Proportional column widths that adapt to the modal's content width:
-    // timestamp ~22% (clamped 10..16), messages ~12% (clamped 4..8), and the
-    // name column absorbs the remainder so the row always fills contentW.
-    const tsW = Math.min(16, Math.max(10, Math.floor(contentW * 0.22)));
-    const msgW = Math.min(8, Math.max(4, Math.floor(contentW * 0.12)));
-    const nameW = Math.max(8, contentW - tsW - msgW - 4); // 4 = separators/spaces
+    rows.push({ label: 'No saved sessions.', labelFg: t.textFaint });
+    rows.push({ label: 'Use /save [name] to save the current session.', labelFg: t.textFaint });
+  } else if (visible.length === 0) {
+    rows.push({ label: `No sessions match "${modal.query}".`, labelFg: t.textFaint });
+  }
+  pushGroup('Today');
+  pushGroup('Yesterday');
+  pushGroup('This week');
+  pushGroup('Earlier');
 
-    // Column header
-    const nameHdr = fitDisplay('Name', nameW);
-    const tsHdr   = fitDisplay('Saved', tsW);
-    const msgHdr  = fitDisplay('Msgs', msgW);
-    sections.push({
-      type: 'text',
-      content: `${nameHdr}  ${tsHdr}  ${msgHdr}`,
-      style: { fg: activeTokens().textFaint },
-    });
-    sections.push({ type: 'separator' });
-
-    const visibleSessions = modal.sessions.slice(modal.scrollOffset, modal.scrollOffset + visibleRows);
-    const listItems: import('./modal-factory.ts').ModalListItem[] = visibleSessions.map((sess, idx) => {
-      const isSelected = modal.scrollOffset + idx === modal.selectedIndex;
-
-      const nameStr = fitDisplay(sess.name, nameW);
-
-      const tsStr = fitDisplay(formatTimestamp(sess.timestamp), tsW);
-      const msgStr = fitDisplay(String(sess.messageCount), msgW);
-
-      const label = `${nameStr}  ${tsStr}  ${msgStr}`;
-      return { label, selected: isSelected };
-    });
-
-    sections.push({ type: 'list', items: listItems });
-    if (modal.sessions.length > visibleRows) {
-      sections.push({ type: 'separator' });
-      sections.push({
-        type: 'text',
-        content: `[${modal.scrollOffset + 1}-${Math.min(modal.sessions.length, modal.scrollOffset + visibleRows)} of ${modal.sessions.length}]`,
-        style: { fg: activeTokens().textFaint },
-      });
-    }
+  // Hosted and cross-surface sessions are read-only (not selectable), so they
+  // are pinned under the saved sessions instead of scrolling with them: a
+  // long saved list can never push them out of reach. Past half the body
+  // they count what they hide.
+  const pinned: KitRow[] = [...hostedRows(modal), ...crossSurfaceRows(modal)];
+  const top = f.top + 2;
+  let savedBottom = listBottom;
+  if (pinned.length > 0) {
+    const pinnedNeed = pinned.reduce((sum, row, i) => sum + measureRow(row, f.l, f.r) + (i > 0 && row.header !== undefined ? 1 : 0), 0);
+    const pinnedRows = Math.min(pinnedNeed, Math.max(3, Math.floor((listBottom - top + 1) / 2)));
+    const pinnedTop = listBottom - pinnedRows + 1;
+    drawScrollingList(f.canvas, { rows: pinned, top: pinnedTop, bottom: listBottom, x0: f.l, x1: f.r });
+    savedBottom = pinnedTop - 2;
   }
 
-  // Cross-surface session union, visible only when a sessionBroker
-  // was wired (mode !== 'local'); absent entirely otherwise, so the box size
-  // and content of every pre-existing (local-only) caller is unaffected.
-  if (modal.crossSurfaceView.mode !== 'local') {
-    sections.push({ type: 'separator' });
-    sections.push({
-      type: 'text',
-      content: `Cross-surface sessions (${modal.crossSurfaceView.mode})`,
-      style: { fg: activeTokens().textFaint, bold: true },
-    });
-    const note = crossSurfaceNote(modal.crossSurfaceView, modal.crossSurfaceSessions.length);
-    if (note) {
-      sections.push({
-        type: 'text',
-        content: note,
-        style: { fg: modal.crossSurfaceView.offlineNote ? activeUiTones().state.warn : activeTokens().textFaint },
-      });
-    }
-    if (modal.crossSurfaceSessions.length > 0) {
-      const rows = modal.crossSurfaceSessions.slice(0, MAX_CROSS_SURFACE_ROWS);
-      const listItems: import('./modal-factory.ts').ModalListItem[] = rows.map((record) => {
-        const reaped = isReapedRecord(record);
-        const closed = isClosedStatus(record.status);
-        const label = fitDisplay(
-          `${record.title || record.id} · ${kindLabel(record.kind)} · ${statusLabel(record)} · ${projectLabel(record.project)}`,
-          contentW,
-        );
-        // Reaped rows get their own tone (not plain dim-closed): the session
-        // will auto-reopen on the next heartbeat, unlike a deliberate close.
-        const style = reaped ? { fg: activeUiTones().state.info } : closed ? { fg: activeTokens().textFaint } : undefined;
-        return { label, style };
-      });
-      sections.push({ type: 'list', items: listItems });
-      if (modal.crossSurfaceSessions.length > MAX_CROSS_SURFACE_ROWS) {
-        sections.push({
-          type: 'text',
-          content: `[showing ${MAX_CROSS_SURFACE_ROWS} of ${modal.crossSurfaceSessions.length}]`,
-          style: { fg: activeTokens().textFaint },
-        });
-      }
-      // W4 UX-lens: only ever rendered when a visible row actually carries
-      // the 'reaped' badge, never speculative noise.
-      if (hasVisibleReapedRow(modal)) {
-        sections.push({
-          type: 'text',
-          content: REAPED_BADGE_HINT,
-          style: { fg: activeUiTones().state.info, dim: true },
-        });
-      }
-    }
-  }
+  modal.setVisibleRows(Math.max(3, savedBottom - top + 1));
+  const result = drawList(f.canvas, { rows, top, bottom: savedBottom, x0: f.l, x1: f.r, scrollKey: { owner: modal, name: 'sessions' } });
+  f.hintRight = scrollCountText(result.above, result.below);
 
-  // Daemon-hosted sessions, conversations whose loop runs in the daemon rather
-  // than in this terminal. Read-only here: joining one is `/hosted attach <id>`,
-  // which opens a live stream this modal has no business owning, so the full id
-  // is rendered for the command to be typed straight off the row.
-  if (hostedSectionVisible(modal)) {
-    sections.push({ type: 'separator' });
-    sections.push({
-      type: 'text',
-      content: 'Daemon-hosted sessions',
-      style: { fg: activeTokens().textFaint, bold: true },
-    });
-    const note = hostedRosterNote(modal.hostedRoster);
-    if (note) {
-      sections.push({
-        type: 'text',
-        content: note,
-        style: { fg: modal.hostedRoster.note ? activeUiTones().state.warn : activeTokens().textFaint },
-      });
-    }
-    if (modal.hostedRoster.sessions.length > 0) {
-      const rows = modal.hostedRoster.sessions.slice(0, MAX_HOSTED_ROWS);
-      sections.push({
-        type: 'list',
-        items: rows.map((record) => ({
-          label: hostedRowLabel(record, contentW),
-          // A terminated hosted session is kept with its reason until retention
-          // retires it; dimming it keeps it readable without looking live.
-          style: record.status === 'terminated'
-            ? { fg: activeTokens().textFaint }
-            : record.status === 'running' ? { fg: activeUiTones().state.good } : undefined,
-        })),
-      });
-      if (modal.hostedRoster.sessions.length > MAX_HOSTED_ROWS) {
-        sections.push({
-          type: 'text',
-          content: `[showing ${MAX_HOSTED_ROWS} of ${modal.hostedRoster.sessions.length}]`,
-          style: { fg: activeTokens().textFaint },
-        });
-      }
-      sections.push({
-        type: 'text',
-        content: 'Join one with /hosted attach <id>',
-        style: { fg: activeTokens().textFaint },
-      });
-    }
+  let y = listBottom + 2;
+  for (const line of footLines) {
+    drawWrapped(f.canvas, f.l, y, width, line.text, { fg: line.fg }, f.bottom);
+    y++;
   }
-
-  // Status message if present
-  if (modal.statusMessage) {
-    sections.push({ type: 'separator' });
-    sections.push({
-      type: 'text',
-      content: modal.statusMessage,
-      style: { fg: modal.deleteConfirmationTarget ? activeTokens().warning : activeTokens().accent },
-    });
-  }
-
-  if (modal.deleteConfirmationTarget) {
-    sections.push({
-      type: 'text',
-      content: `Deletion is armed for ${modal.deleteConfirmationTarget}. Move selection or press Esc to cancel.`,
-      style: { fg: activeTokens().textFaint },
-    });
-  }
-
-  return ModalFactory.createModal(
-    {
-      title: 'Sessions',
-      width: boxW,
-      margin: boxMargin,
-      targetContentRows,
-      sections,
-      hints: ['[\u2191\u2193] Navigate', '[Enter] Load', '[d] Arm / Delete', '[Esc] Close'],
-    },
-    width,
-  );
+  return finishModal(f);
 }

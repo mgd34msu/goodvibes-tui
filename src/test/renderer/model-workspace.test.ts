@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import { ModelPickerModal } from '../../input/model-picker.ts';
 import { renderModelWorkspace } from '../../renderer/model-workspace.ts';
-import { linesToText } from '../setup.ts';
+import { lineToString, linesToText } from '../setup.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 
 const W = 132;
 const H = 34;
@@ -89,36 +91,38 @@ function makePicker(): ModelPickerModal {
 
 describe('renderModelWorkspace', () => {
   test('fills the full viewport with stable-width lines', () => {
-    const lines = renderModelWorkspace(makePicker(), W, H);
+    const lines = frameFromLayer(renderModelWorkspace(makePicker(), W, H), W, H);
 
     expect(lines).toHaveLength(H);
     for (const line of lines) expect(line).toHaveLength(W);
   });
 
-  test('renders targets, selected target details, and model table', () => {
-    const text = linesToText(renderModelWorkspace(makePicker(), W, H)).join('\n');
+  test('renders the five targets as tabs, the model list and the selected model in the detail panel', () => {
+    const text = linesToText(frameFromLayer(renderModelWorkspace(makePicker(), W, H), W, H)).join('\n');
 
-    expect(text).toContain('Model Workspace / Providers And Models');
-    expect(text).toContain('Targets');
+    expect(text).toContain('✦ Models');
     expect(text).toContain('Main Chat');
-    expect(text).toContain('Helper Model');
-    expect(text).toContain('Target: Main Chat');
-    expect(text).toContain('Model key');
-    expect(text).toContain('openai:gpt-test');
+    expect(text).toContain('Helper');
+    expect(text).toContain('Tool LLM');
+    expect(text).toContain('▏Search models');
+    expect(text).toContain('GPT Test');
     expect(text).toContain('Claude Test');
+    // Detail panel: the selected model's key and facts.
+    expect(text).toContain('openai:gpt-test');
+    expect(text).toContain('configured');
+    expect(text).toContain(' ⏎  use for Main Chat');
   });
 
-  test('provider mode renders provider table and configuration state', () => {
+  test('provider mode renders providers with their configuration state', () => {
     const picker = makePicker();
     picker.openProviders(['openai', 'anthropic'], 'openai');
 
-    const text = linesToText(renderModelWorkspace(picker, W, H)).join('\n');
+    const text = linesToText(frameFromLayer(renderModelWorkspace(picker, W, H), W, H)).join('\n');
 
-    expect(text).toContain('Provider list');
-    expect(text).toContain('Provider');
-    expect(text).toContain('Configuration');
+    expect(text).toContain('✦ Models › Providers');
     expect(text).toContain('openai');
     expect(text).toContain('env');
+    expect(text).toMatch(/\d+ models/);
   });
 
   test('embeddingProvider mode renders the provider list honestly, including unconfigured entries', () => {
@@ -130,16 +134,15 @@ describe('renderModelWorkspace', () => {
     picker.mode = 'embeddingProvider';
     picker.selectedIndex = 0;
 
-    const text = linesToText(renderModelWorkspace(picker, W, H)).join('\n');
+    const text = linesToText(frameFromLayer(renderModelWorkspace(picker, W, H), W, H)).join('\n');
 
-    expect(text).toContain('Embedding providers');
     expect(text).toContain('Embedding provider');
     expect(text).toContain('Hashed Local Embeddings');
     expect(text).toContain('OpenAI Embeddings');
     expect(text).toContain('configured');
     expect(text).toContain('unconfigured');
-    // No phantom "model:" concept for this mode.
-    expect(text).not.toContain('Model key');
+    expect(text).toContain('Set');
+    expect(text).toContain('OPENAI_API_KEY to enable.');
   });
 
   test('the embeddings target shows provider id + dimensions + configured state, never a model route', () => {
@@ -159,20 +162,22 @@ describe('renderModelWorkspace', () => {
     ]);
     picker.setTarget('embeddings');
 
-    const text = linesToText(renderModelWorkspace(picker, W, H)).join('\n');
+    const text = linesToText(frameFromLayer(renderModelWorkspace(picker, W, H), W, H)).join('\n');
 
     expect(text).toContain('Embeddings');
     expect(text).toContain('hashed-local · 384d');
   });
 
-  test('target pane focus changes only the target marker', () => {
+  test('the active target is the tab drawn with the gradient', () => {
     const picker = makePicker();
-    picker.focusTargets();
+    picker.setTarget('helper');
 
-    const text = linesToText(renderModelWorkspace(picker, W, H)).join('\n');
-
-    expect(text).toContain('Focus targets');
-    expect(text).toContain('Main Chat');
+    const lines = frameFromLayer(renderModelWorkspace(picker, W, H), W, H);
+    const tabRow = lines.find((line) => lineToString(line).includes('Main Chat'))!;
+    const text = lineToString(tabRow);
+    expect(tabRow[text.indexOf('Helper')]!.bold).toBe(true);
+    expect(tabRow[text.indexOf('Helper')]!.fg).toBe(activeTokens().selectedListItemText);
+    expect(tabRow[text.indexOf('Main Chat')]!.bold).toBe(false);
   });
 
   test('uses a render cache when the picker state has not changed', () => {
@@ -184,94 +189,45 @@ describe('renderModelWorkspace', () => {
     expect(second).toBe(first);
   });
 
-  // Owner design test (v1.16.1 modal rule, extended here): UI-authored
-  // descriptive text is always shown in full, wrap or scroll, never clip.
-  // detailLines(...) used to be sliced to a fixed 32%-of-body-rows proportion
-  // via .slice(0, detailRows), silently dropping whatever detail content
-  // didn't fit that guess (typically the trailing filter line). The fix sizes
-  // the detail band to the actual content instead. Full strings, not
-  // prefixes, a facade assertion that only checks a short substring would
-  // stay green even if the rest were clipped.
-  describe('detail lines are never silently dropped, at 80x24 and 60-col narrow heights', () => {
-    /** The workspace is two columns (targets | detail) sharing one row per
-     * line, flattening whole rows would interleave target-column text
-     * between wrapped detail sentences. Extract just the detail column
-     * (right of the shared vertical divider, itself found from the header
-     * row) and join it back into one string. */
-    function extractDetailColumnText(lines: ReturnType<typeof renderModelWorkspace>): string {
-      const header = lines[1]!;
-      let dividerX = -1;
-      for (let x = 1; x < header.length - 1; x += 1) {
-        if (header[x]!.char === '│') { dividerX = x; break; }
-      }
-      expect(dividerX).toBeGreaterThan(0);
-      const parts: string[] = [];
-      for (const line of lines) {
-        if (line.length <= dividerX + 1) continue;
-        parts.push(line.slice(dividerX + 1, line.length - 1).map((cell) => cell.char).join(''));
-      }
-      return parts.join(' ').replace(/\s+/g, ' ').trim();
-    }
-
-    for (const [label, width, height] of [
-      ['normal', 80, 24],
-      ['narrow', 60, 24],
-    ] as const) {
-      test(`${label} (${width}x${height}): the full model detail and the full filter line both survive`, () => {
-        const picker = makePicker();
-        const selected = picker.getSelected();
-        expect(selected).toBeDefined();
-
-        const detailText = extractDetailColumnText(renderModelWorkspace(picker, width, height));
-
-        // The model-selection instruction line and the full "Selected: ..."
-        // summary line (key | display name | context | capabilities),
-        // previously the first casualty of the 32%-of-body-rows slice.
-        expect(detailText).toContain('Model selection: choose the model to store for Main Chat. Use filters to narrow large catalogs.');
-        expect(detailText).toContain(`Selected: ${selected!.registryKey} | ${selected!.displayName} | context`);
-        // The trailing filter line, previously dropped entirely at narrow
-        // heights because it was always last in the wrapped-lines array.
-        expect(detailText).toContain('Price:');
-        expect(detailText).toContain('Capability:');
-        expect(detailText).toContain('Group:');
-        expect(detailText).toContain('Available only:');
-      });
-    }
-  });
-
-  describe('footer hints are state-aware (only advertise shortcuts that currently work)', () => {
-    test('search blurred: advertises the C/A/B/G single-key shortcuts (they work in this state)', () => {
+  // Owner design rule: descriptive text is shown in full, wrap or scroll,
+  // never clipped. The selected model's key and facts must survive at 80x24,
+  // and at 60 columns (no room for the detail panel) the selected row itself
+  // names the full key.
+  describe('the selected model is never silently dropped, at 80x24 and 60-col narrow heights', () => {
+    test('normal (80x24): the detail panel carries the key, provider and status', () => {
       const picker = makePicker();
-      picker.blurSearch();
-      expect(picker.searchFocused).toBe(false);
-
-      // Wider than the default W: the footer hint string is long enough to
-      // get width-truncated at W=132 (a pre-existing, unrelated constraint),
-      // so use a width that comfortably fits the full hint line.
-      const text = linesToText(renderModelWorkspace(picker, 200, H)).join('\n');
-
-      expect(text).toContain('C caps');
-      expect(text).toContain('A available');
-      expect(text).toContain('B benchmark');
-      expect(text).toContain('G group');
-      expect(text).toContain('Tab price');
+      const selected = picker.getSelected()!;
+      const text = linesToText(frameFromLayer(renderModelWorkspace(picker, 80, 24), 80, 24)).join('\n');
+      expect(text).toContain(selected.registryKey);
+      expect(text).toContain(selected.displayName);
+      expect(text).toMatch(/Status +configured/);
     });
 
-    test('search focused (the default on open): does not advertise C/A/B/G (they type into the query instead), but keeps Tab', () => {
+    test('narrow (60x24): the selected row names the full key', () => {
       const picker = makePicker();
-      expect(picker.searchFocused).toBe(true);
+      const selected = picker.getSelected()!;
+      const text = linesToText(frameFromLayer(renderModelWorkspace(picker, 60, 24), 60, 24)).join('\n');
+      expect(text).toContain(selected.displayName);
+      expect(text).toContain(selected.registryKey);
+    });
+  });
 
-      // Wider than the default W: the footer hint string is long enough to
-      // get width-truncated at W=132 (a pre-existing, unrelated constraint),
-      // so use a width that comfortably fits the full hint line.
-      const text = linesToText(renderModelWorkspace(picker, 200, H)).join('\n');
+  describe('hints and filters', () => {
+    test('the filter chords are advertised (they work while typing, so no letter is stolen from search)', () => {
+      const text = linesToText(frameFromLayer(renderModelWorkspace(makePicker(), 200, H), 200, H)).join('\n');
+      expect(text).toContain(' tab  next target');
+      expect(text).toContain(' ctrl+f  pin');
+      expect(text.replace(/\s+/g, ' ')).toContain('ctrl+t price · ctrl+k capability · ctrl+a available · ctrl+b benchmark sort · ctrl+g group');
+      // Without room for the detail panel, they move into the hint row.
+      const narrow = linesToText(frameFromLayer(renderModelWorkspace(makePicker(), 60, 30), 60, 30)).join('\n');
+      expect(narrow).toContain(' ctrl+t  price');
+    });
 
-      expect(text).not.toContain('C caps');
-      expect(text).not.toContain('A available');
-      expect(text).not.toContain('B benchmark');
-      expect(text).not.toContain('G group');
-      expect(text).toContain('Tab price');
-      expect(text).toContain('Typing filters search');
+    test('active filters are named on the search row', () => {
+      const picker = makePicker();
+      picker.setCategoryFilter('free');
+      const text = linesToText(frameFromLayer(renderModelWorkspace(picker, W, H), W, H)).join('\n');
+      expect(text).toContain('free only');
     });
   });
 });

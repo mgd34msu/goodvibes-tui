@@ -6,6 +6,7 @@ import {
 } from '../providers/reasoning-effort-surface.ts';
 import type { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { compositeScore } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { detectFamily, POPULAR_PROVIDERS, tierToCategoryFilter } from './model-picker-types.ts';
 import type {
@@ -406,6 +407,29 @@ export class ModelPickerModal {
   }
 
   // ── Search helpers ─────────────────────────────────────────────────────────────────────
+
+  /** Composite benchmark score (0..1) for a model, or null when there is no benchmark data. */
+  benchmarkScore(model: ModelDefinition): number | null {
+    const record = this.benchmarkStore.getBenchmarks(model.id) ?? this.benchmarkStore.getBenchmarks(model.displayName);
+    return record ? compositeScore(record.benchmarks) : null;
+  }
+
+  /** Whether a model is pinned (pins may be recorded by id or registry key). */
+  isPinned(model: ModelDefinition): boolean {
+    return this.pinnedIds.has(model.id) || this.pinnedIds.has(model.registryKey);
+  }
+
+  /** Flip a model's pin locally (the caller persists it); returns the new state. */
+  togglePinnedLocal(model: ModelDefinition): boolean {
+    const pinned = this.isPinned(model);
+    const next = new Set(this.pinnedIds);
+    next.delete(model.id);
+    next.delete(model.registryKey);
+    if (!pinned) next.add(model.registryKey);
+    this.pinnedIds = next;
+    this.clearCaches();
+    return !pinned;
+  }
 
   /** Append a character to the search query and clamp selectedIndex. */
   appendChar(ch: string): void {

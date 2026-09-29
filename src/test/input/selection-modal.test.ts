@@ -56,9 +56,9 @@ describe('SelectionModal', () => {
       expect(modal.filteredItems).toHaveLength(3);
     });
 
-    test('starts with list focus even when search is allowed', () => {
+    test('starts with an empty query even when search is allowed', () => {
       modal.open('Test', mkItems(2), { allowSearch: true });
-      expect(modal.searchFocused).toBe(false);
+      expect(modal.query).toBe('');
     });
   });
 
@@ -75,23 +75,6 @@ describe('SelectionModal', () => {
       expect(modal.filteredItems).toHaveLength(0);
       expect(modal.selectedIndex).toBe(0);
       expect(modal.customActions.size).toBe(0);
-      expect(modal.searchFocused).toBe(false);
-    });
-  });
-
-  describe('search focus', () => {
-    test('can focus and blur search when allowed', () => {
-      modal.open('Test', mkItems(3), { allowSearch: true });
-      modal.focusSearch();
-      expect(modal.searchFocused).toBe(true);
-      modal.blurSearch();
-      expect(modal.searchFocused).toBe(false);
-    });
-
-    test('does not focus search when disabled', () => {
-      modal.open('Test', mkItems(3), { allowSearch: false });
-      modal.focusSearch();
-      expect(modal.searchFocused).toBe(false);
     });
   });
 

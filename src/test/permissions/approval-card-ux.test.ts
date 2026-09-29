@@ -2,8 +2,8 @@
  * Approval card UX (SDK remember tiers, colored diff, full wrapped command,
  * deny-with-reason typing, exec-prompt answering, honest queue count):
  *
- *  - the SDK's rememberOptions tiers render as numbered one-key choices and
- *    the matching key resolves with that tier;
+ *  - the SDK's rememberOptions tiers render as numbered choices in the
+ *    "Allow for session ▸" submenu and the matching key resolves with that tier;
  *  - write/edit asks show a real colored diff through the diff-view
  *    machinery; execute asks render the FULL command wrapped, never
  *    truncated (verified at 80 and 60 columns);
@@ -12,8 +12,9 @@
  *    abort; an exec-prompt ask opens in answer mode and the typed answer
  *    rides the decision's modifiedArgs;
  *  - the card names how many other broker asks are waiting;
- *  - getPromptHeight matches createPromptLines for every new card shape.
+ *  - every card shape fits an 80x24 and a 60x24 screen, buttons in view.
  */
+import { promptCardLines } from '../helpers/permission-card.ts';
 import { describe, expect, test } from 'bun:test';
 import type { PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import { PermissionPromptUI, type PromptViewState } from '../../permissions/prompt.ts';
@@ -87,16 +88,62 @@ function press(
 describe('remember tiers as one-key choices', () => {
   const request = makeExecRequest({ rememberOptions: REMEMBER_OPTIONS as never });
 
-  test('the card renders one numbered row per tier (full strings, 80 cols)', () => {
-    const lines = cardText(PermissionPromptUI.createPromptLines(WIDTH, request as never));
-    const rememberRows = lines.filter((t) => /\[\d\]/.test(t));
-    expect(rememberRows.map((t) => t.trimEnd())).toEqual([
-      '   Remember : [1] this exact command; git push origin main',
-      '            : [2] this command class; git push …',
-      '            : [3] every Bash command; all runs of Bash',
-      '            : [4] everything this session; until this session ends',
+  test('the card offers the tiers behind "Allow for session ▸" and names the 1-4 keys', () => {
+    const lines = cardText(promptCardLines(WIDTH, request as never, undefined, false));
+    expect(lines.some((t) => t.includes(' Allow once ') && t.includes(' Allow for session ▸ ') && t.includes(' Deny '))).toBe(true);
+    expect(lines.some((t) => t.includes(' 1-4  remember'))).toBe(true);
+  });
+
+  test('the submenu renders one numbered row per tier (full strings, 80 cols)', () => {
+    const lines = cardText(promptCardLines(WIDTH, request as never, undefined, false, undefined, undefined, 40, { choice: 1, submenuOpen: true }));
+    const rememberRows = lines.filter((t) => /^\s+\d\. /.test(t)).map((t) => t.trim().replace(/\s{2,}/g, '  '));
+    expect(rememberRows).toEqual([
+      '1. this exact command  git push origin main',
+      '2. this command class  git push …',
+      '3. every Bash command  all runs of Bash',
+      '4. everything this session  until this session ends',
     ]);
-    expect(lines.some((t) => t.includes('[Y] Allow once    [1-4] Allow + remember    [N] Deny    type a reason to deny'))).toBe(true);
+  });
+
+  test('Enter on "Allow for session ▸" opens the submenu; a tier is chosen with the arrows and Enter', () => {
+    const decisions: Record<string, unknown>[] = [];
+    let pending: PendingPermissionState | null = makePending(request, (d) => decisions.push(d));
+    pending = press(pending, '\x1b[C').pendingPermission; // → Allow for session ▸
+    pending = press(pending, '\r').pendingPermission;
+    expect(pending?.submenuOpen).toBe(true);
+    pending = press(pending, '\x1b[B').pendingPermission; // ↓ tier 2
+    const done = press(pending, '\r');
+    expect(done.pendingPermission).toBeNull();
+    expect(decisions).toEqual([{ approved: true, remember: false, modifiedArgs: undefined, rememberTier: 'command-class' }]);
+  });
+
+  test('Esc closes the submenu (one level) without answering', () => {
+    const decisions: Record<string, unknown>[] = [];
+    let pending: PendingPermissionState | null = makePending(request, (d) => decisions.push(d));
+    pending = press(pending, '\x1b[C').pendingPermission;
+    pending = press(pending, '\r').pendingPermission;
+    const result = press(pending, '\x1b');
+    expect(result.handled).toBe(true);
+    expect(result.pendingPermission?.submenuOpen).toBe(false);
+    expect(decisions).toEqual([]);
+  });
+
+  test('arrows choose a button and Enter presses it (Deny denies without aborting)', () => {
+    const decisions: Record<string, unknown>[] = [];
+    let aborted = 0;
+    let pending: PendingPermissionState | null = makePending(request, (d) => decisions.push(d));
+    pending = press(pending, '\x1b[D').pendingPermission; // wraps to Deny
+    const done = press(pending, '\r', { abort: () => { aborted += 1; } });
+    expect(done.pendingPermission).toBeNull();
+    expect(aborted).toBe(0);
+    expect(decisions).toEqual([{ approved: false, remember: false, modifiedArgs: undefined }]);
+  });
+
+  test('Enter on the default button allows once', () => {
+    const decisions: Record<string, unknown>[] = [];
+    const pending = makePending(request, (d) => decisions.push(d));
+    press(pending, '\r');
+    expect(decisions).toEqual([{ approved: true, remember: false, modifiedArgs: undefined }]);
   });
 
   test('pressing a tier number approves and remembers at that tier', () => {
@@ -136,9 +183,13 @@ describe('full command rendering: wrapped, never truncated', () => {
 
   for (const width of [80, 60]) {
     test(`${width} cols: every character of the command reaches the card`, () => {
-      const lines = cardText(PermissionPromptUI.createPromptLines(width, request as never));
-      const commandRows = lines.filter((t) => t.includes('Command   :') || /^ {15}\S/.test(t));
-      const joined = commandRows.map((t) => t.replace(/^ {3}Command {3}: /, '').replace(/^ {15}/, '').trimEnd()).join(' ');
+      const lines = cardText(promptCardLines(width, request as never, undefined, false));
+      const start = lines.findIndex((t) => t.includes('$ git commit'));
+      expect(start).toBeGreaterThanOrEqual(0);
+      // The command panel: the $ row and its continuation rows, up to the panel's padding row.
+      const rows: string[] = [];
+      for (let i = start; i < lines.length && lines[i]!.trim() !== ''; i++) rows.push(lines[i]!.trim().replace(/^\$ /, ''));
+      const joined = rows.join(' ');
       expect(joined.replace(/\s+/g, ' ')).toContain('--force-with-lease');
       expect(joined.replace(/\s+/g, ' ').includes('adopt the pricing resolver')).toBe(true);
       // Nothing elided: reassembling the rows yields the entire command.
@@ -154,8 +205,8 @@ describe('write asks show a real colored diff', () => {
       category: 'write',
       args: { path: 'notes/haiku.txt', content: 'line one\nline two' },
     });
-    const lines = cardText(PermissionPromptUI.createPromptLines(WIDTH, request as never));
-    expect(lines.some((t) => t.includes('+++ notes/haiku.txt'))).toBe(true);
+    const lines = cardText(promptCardLines(WIDTH, request as never, undefined, false));
+    expect(lines.some((t) => t.includes('@@ notes/haiku.txt @@'))).toBe(true);
     expect(lines.some((t) => t.includes('line one'))).toBe(true);
     expect(lines.some((t) => t.includes('line two'))).toBe(true);
   });
@@ -163,7 +214,7 @@ describe('write asks show a real colored diff', () => {
   test('long content is capped with an honest more-lines trailer', () => {
     const content = Array.from({ length: 30 }, (_, i) => `row ${i + 1}`).join('\n');
     const request = makeExecRequest({ tool: 'write_file', category: 'write', args: { path: 'big.txt', content } });
-    const lines = cardText(PermissionPromptUI.createPromptLines(WIDTH, request as never));
+    const lines = cardText(promptCardLines(WIDTH, request as never, undefined, false));
     expect(lines.some((t) => t.includes('+20 more lines'))).toBe(true);
     expect(lines.some((t) => t.includes('row 10'))).toBe(true);
     expect(lines.some((t) => t.includes('row 11'))).toBe(false);
@@ -190,10 +241,11 @@ describe('deny-with-reason typing', () => {
   });
 
   test('the reason draft renders on the card with the reply choices', () => {
-    const view: PromptViewState = { replyMode: 'deny-reason', replyBuffer: 'wrong branch', width: WIDTH };
-    const lines = cardText(PermissionPromptUI.createPromptLines(WIDTH, request as never, undefined, false, undefined, view));
-    expect(lines.some((t) => t.includes('Reason   : wrong branch█'))).toBe(true);
-    expect(lines.some((t) => t.includes('[Enter] Deny with this reason    [Esc] Back    [Ctrl+C] Abort turn'))).toBe(true);
+    const view: PromptViewState = { replyMode: 'deny-reason', replyBuffer: 'wrong branch' };
+    const lines = cardText(promptCardLines(WIDTH, request as never, undefined, false, undefined, view));
+    expect(lines.some((t) => /Reason +wrong branch▏/.test(t))).toBe(true);
+    const all = lines.join('\n');
+    for (const hint of [' ⏎  deny with this reason', ' esc  back', ' ctrl+c  abort turn']) expect(all).toContain(hint);
   });
 
   test('Esc backs out of reason mode without resolving', () => {
@@ -233,14 +285,15 @@ describe('exec-prompt asks: an answerable card', () => {
   });
 
   test('the card renders the running command, the prompt text in full, and the answer row', () => {
-    const view: PromptViewState = { replyMode: 'exec-answer', replyBuffer: 'yes', width: WIDTH };
-    const lines = cardText(PermissionPromptUI.createPromptLines(WIDTH, execPromptRequest as never, undefined, false, undefined, view));
-    expect(lines.some((t) => t.includes('Running  : ssh deploy@example.test'))).toBe(true);
+    const view: PromptViewState = { replyMode: 'exec-answer', replyBuffer: 'yes' };
+    const lines = cardText(promptCardLines(WIDTH, execPromptRequest as never, undefined, false, undefined, view));
+    expect(lines.some((t) => /Running +ssh deploy@example.test/.test(t))).toBe(true);
     const joined = lines.map((t) => t.trim()).join(' ');
     expect(joined).toContain("can't be established");
     expect(joined).toContain('continue connecting (yes/no)?');
-    expect(lines.some((t) => t.includes('Answer   : yes█'))).toBe(true);
-    expect(lines.some((t) => t.includes('[Enter] Send answer    [Esc] Clear    [Ctrl+C] Abort turn'))).toBe(true);
+    expect(lines.some((t) => /Answer +yes▏/.test(t))).toBe(true);
+    const all = lines.join('\n');
+    for (const hint of [' ⏎  send answer', ' esc  clear', ' ctrl+c  abort turn']) expect(all).toContain(hint);
   });
 
   test("typed characters (including 'y' and 'n') are answer text, and Enter feeds the run", () => {
@@ -265,9 +318,9 @@ describe('exec-prompt asks: an answerable card', () => {
 describe('honest queue count', () => {
   test('the title names how many other asks are waiting', () => {
     const request = makeExecRequest();
-    const view: PromptViewState = { queueCount: 2, width: WIDTH };
-    const lines = cardText(PermissionPromptUI.createPromptLines(WIDTH, request as never, undefined, false, undefined, view));
-    expect(lines.some((t) => t.includes(': 2 more waiting'))).toBe(true);
+    const view: PromptViewState = { queueCount: 2 };
+    const lines = cardText(promptCardLines(WIDTH, request as never, undefined, false, undefined, view));
+    expect(lines.some((t) => t.includes('2 more waiting'))).toBe(true);
   });
 
   test('promptViewState counts only OTHER pending records (coalesced asks share one record)', () => {
@@ -278,41 +331,40 @@ describe('honest queue count', () => {
         { callId: 'call-3', status: 'approved' },
       ],
     };
-    const view = PermissionPromptUI.promptViewState({ callId: 'call-1' }, WIDTH, broker);
+    const view = PermissionPromptUI.promptViewState({ callId: 'call-1' }, broker);
     expect(view.queueCount).toBe(1);
   });
 });
 
-describe('height parity for every new card shape', () => {
-  const shapes: Array<{ name: string; request: PermissionPromptRequest; view?: PromptViewState }> = [
-    { name: 'tiers', request: makeExecRequest({ rememberOptions: REMEMBER_OPTIONS as never }) },
-    {
-      name: 'long command',
-      request: makeExecRequest({ args: { command: 'x'.repeat(300) } }),
-    },
+describe('every card shape fits the screen, with its buttons in view', () => {
+  const shapes: Array<{ name: string; request: PermissionPromptRequest; view?: PromptViewState; buttons: boolean }> = [
+    { name: 'tiers', request: makeExecRequest({ rememberOptions: REMEMBER_OPTIONS as never }), buttons: true },
+    { name: 'long command', request: makeExecRequest({ args: { command: 'x'.repeat(300) } }), buttons: true },
     {
       name: 'write diff',
       request: makeExecRequest({ tool: 'write_file', category: 'write', args: { path: 'a.txt', content: Array.from({ length: 30 }, (_, i) => `l${i}`).join('\n') } }),
+      buttons: true,
     },
     {
       name: 'exec-prompt with answer draft',
       request: makeExecRequest({ attribution: { kind: 'exec-prompt', command: 'ssh h', prompt: 'p'.repeat(200) } as never }),
       view: { replyMode: 'exec-answer', replyBuffer: 'yes' },
+      buttons: false,
     },
-    {
-      name: 'deny reason draft',
-      request: makeExecRequest(),
-      view: { replyMode: 'deny-reason', replyBuffer: 'because' },
-    },
+    { name: 'deny reason draft', request: makeExecRequest(), view: { replyMode: 'deny-reason', replyBuffer: 'because' }, buttons: true },
   ];
 
   for (const width of [80, 60]) {
     for (const shape of shapes) {
-      test(`${shape.name} at ${width} cols`, () => {
-        const view: PromptViewState = { ...(shape.view ?? {}), width };
-        const height = PermissionPromptUI.getPromptHeight(shape.request, undefined, false, undefined, view);
-        const lines = PermissionPromptUI.createPromptLines(width, shape.request as never, undefined, false, undefined, view);
-        expect(lines.length).toBe(height);
+      test(`${shape.name} at ${width}x24 (details open)`, () => {
+        const lines = promptCardLines(width, shape.request as never, undefined, true, undefined, shape.view, 24);
+        expect(lines).toHaveLength(24);
+        for (const line of lines) expect(line).toHaveLength(width);
+        const text = cardText(lines).join('\n');
+        if (shape.buttons) expect(text).toContain(' Deny ');
+        // Whatever does not fit is counted, never dropped silently.
+        const everything = cardText(promptCardLines(width, shape.request as never, undefined, true, undefined, shape.view)).join('\n');
+        if (everything.split('\n').filter((t) => t.trim()).length > 20) expect(text).toMatch(/\d+ more ↓/);
       });
     }
   }

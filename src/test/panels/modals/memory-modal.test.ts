@@ -6,6 +6,7 @@ import { actionCtx, captureCommands, findAction, open, tabText } from './modal-s
 import type { ConfigModalSurface, ConfigModalView } from '../../../input/config-modal-types.ts';
 import { ConfigModal } from '../../../input/config-modal.ts';
 import { renderConfigModal } from '../../../renderer/config-modal.ts';
+import { frameFromLayer } from '../../helpers/surface-frame.ts';
 
 const FIXED = 1735689600000;
 
@@ -303,12 +304,9 @@ describe('memory modal: Proposals tab at compact height (modal sizing rule)', ()
   const LONG_REASON = 'Duplicates a project-scope decision already captured with more detail and provenance elsewhere in the store.';
 
   /**
-   * Render the Proposals tab and split the row/list CONTENT from the footer
-   * hint bar (the bottom border line, e.g. "d delete · r refresh · v view in
-   * revi…"). The footer hints line is a supplementary shortcut legend that
-   * ModalFactory deliberately truncates at narrow widths (every modal's
-   * footer does this, existing behavior), the modal sizing rule is about the
-   * row/list DESCRIPTIVE TEXT, so the two are asserted on separately.
+   * Render the Proposals tab through the real host. The last row (the bottom
+   * cap) is split off as `footer`; the keycap hints wrap in full on their own
+   * rows above it.
    */
   async function renderProposalsTab(width: number, height: number): Promise<{ content: string; footer: string }> {
     const surface = createMemoryModalSurface({
@@ -323,7 +321,7 @@ describe('memory modal: Proposals tab at compact height (modal sizing rule)', ()
     modal.syncStructure();
     modal.nextTab(); // all -> review
     modal.nextTab(); // review -> proposals
-    const lines = renderConfigModal(modal, width, height);
+    const lines = frameFromLayer(renderConfigModal(modal, width, height), width, height);
     modal.close();
     const asText = lines.map((l) => l.map((c) => (c.char === '' ? ' ' : c.char)).join(''));
     return { content: asText.slice(0, -1).join('\n'), footer: asText[asText.length - 1] ?? '' };
@@ -341,9 +339,13 @@ describe('memory modal: Proposals tab at compact height (modal sizing rule)', ()
   });
 
   test('the same content at an even narrower width still wraps the row content rather than clipping it', async () => {
-    const { content } = await renderProposalsTab(50, 14);
-    expect(content).toContain('Duplicates');
-    expect(content).toContain('provenance elsewhere in the store.');
+    // 50 columns needs more height than 90: the keycap hint rows wrap in
+    // full at this width. Wrapped rows are flowed back into one string.
+    const { content } = await renderProposalsTab(50, 30);
+    const flowed = content.replace(/\s+/g, ' ');
+    expect(flowed).toContain('Duplicates');
+    expect(flowed).toContain('provenance elsewhere in the store.');
+    expect(flowed).toContain('mem-aaa1, mem-bbb2');
     expect(content).not.toContain('…');
   });
 });

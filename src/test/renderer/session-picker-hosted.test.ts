@@ -8,6 +8,7 @@
  * when it is present it distinguishes never-read from hosting-nothing rather
  * than collapsing them into one blank list.
  */
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { rmSync, existsSync } from 'node:fs';
 import { SessionPickerModal, type SessionPickerHostedRoster } from '../../input/session-picker-modal.ts';
@@ -61,8 +62,8 @@ describe('session picker: daemon-hosted sessions', () => {
   test('with no roster wired, the modal renders exactly as it always did', () => {
     const modal = new SessionPickerModal(sessionManager);
     modal.open();
-    const text = frameText(renderSessionPickerModal(modal, 80, 24));
-    expect(text).not.toContain('Daemon-hosted sessions');
+    const text = frameText(frameFromLayer(renderSessionPickerModal(modal, 80, 24), 80, 24));
+    expect(text).not.toContain('✦ hosted');
     expect(modal.hostedRoster).toEqual({ sessions: [], capturedAt: null, note: null });
   });
 
@@ -70,8 +71,9 @@ describe('session picker: daemon-hosted sessions', () => {
     const modal = new SessionPickerModal(sessionManager, undefined,
       fixedRoster({ sessions: [], capturedAt: 1_700_000_000_000, note: null }));
     modal.open();
-    const text = frameText(renderSessionPickerModal(modal, 80, 24));
-    expect(text).toContain('Daemon-hosted sessions');
+    const text = frameText(frameFromLayer(renderSessionPickerModal(modal, 80, 24), 80, 24));
+    expect(text).toContain('✦ hosted');
+    expect(text).toContain('on the daemon');
     expect(text).toContain('The daemon is hosting no sessions.');
     expect(text).not.toContain('Not read yet');
   });
@@ -80,7 +82,7 @@ describe('session picker: daemon-hosted sessions', () => {
     const modal = new SessionPickerModal(sessionManager, undefined,
       fixedRoster({ sessions: [], capturedAt: null, note: 'the daemon did not answer: connection refused' }));
     modal.open();
-    const text = frameText(renderSessionPickerModal(modal, 80, 24));
+    const text = frameText(frameFromLayer(renderSessionPickerModal(modal, 80, 24), 80, 24));
     expect(text).toContain('connection refused');
   });
 
@@ -88,7 +90,7 @@ describe('session picker: daemon-hosted sessions', () => {
     const modal = new SessionPickerModal(sessionManager, undefined,
       fixedRoster({ sessions: [makeRecord()], capturedAt: 1, note: null }));
     modal.open();
-    const text = frameText(renderSessionPickerModal(modal, 110, 26));
+    const text = frameText(frameFromLayer(renderSessionPickerModal(modal, 110, 26), 110, 26));
 
     // The id leads: it is the part the user has to retype, so a narrow terminal
     // must clip the description rather than the actionable field.
@@ -105,14 +107,17 @@ describe('session picker: daemon-hosted sessions', () => {
     }));
     modal.open();
     for (const [width, height] of [[80, 24], [120, 40]] as const) {
-      const lines = renderSessionPickerModal(modal, width, height);
-      expect(lines.length).toBeLessThanOrEqual(height);
-      // Every hosted row fits on ONE line, so the section's row accounting is
-      // true and the trailing hint is never eaten by the tail clip.
-      expect(frameText(lines)).toContain('/hosted attach <id>');
+      const lines = frameFromLayer(renderSessionPickerModal(modal, width, height), width, height);
+      expect(lines.length).toBe(height);
+      // Nothing is silently dropped: the trailing hint is either on screen or
+      // counted in the muted "N more ↓" scroll count.
+      const text = frameText(lines);
+      expect(text.includes('/hosted attach <id>') || /\d+ more ↓/.test(text)).toBe(true);
     }
-    // Nine rows, five shown: the overflow line is real, not a silently truncated list.
-    expect(frameText(renderSessionPickerModal(modal, 110, 40))).toContain('[showing 5 of 9]');
+    // With room, everything shows; nine rows, five listed: the overflow line is real.
+    const roomy = frameText(frameFromLayer(renderSessionPickerModal(modal, 120, 40), 120, 40));
+    expect(roomy).toContain('/hosted attach <id>');
+    expect(roomy).toContain('showing 5 of 9');
   });
 
   test('open() asks the roster for a fresh answer and adopts it when it lands', async () => {

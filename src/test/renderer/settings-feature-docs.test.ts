@@ -12,6 +12,7 @@
  * COMPLETE description string for every one of the features, full-string
  * assertions, never prefixes.
  */
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -24,10 +25,8 @@ import type { FeatureFlagManager } from '@/runtime/index.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import type { SettingsCategory } from '../../input/settings-modal.ts';
-import { renderSettingsModal } from '../../renderer/settings-modal.ts';
-import { getFullscreenWorkspaceMetrics } from '../../renderer/fullscreen-workspace.ts';
+import { renderSettingsModal, settingsDocumentation } from '../../renderer/settings-modal.ts';
 import { getConfigSchemaSetting } from '@pellux/goodvibes-terminal-shell';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
 const HEIGHT = 24;
 
@@ -83,44 +82,18 @@ describe('settings workspace: in-product feature documentation', () => {
     modal.contextScroll = 0;
   }
 
-  /** Extract the documentation-pane rows (text only) from a rendered frame. */
-  function paneRows(lines: Line[], width: number): string[] {
-    const metrics = getFullscreenWorkspaceMetrics({ width, height: HEIGHT });
-    const centerStart = metrics.leftWidth + 2;
-    const rows: string[] = [];
-    for (let y = 3; y < 3 + metrics.contextRows; y += 1) {
-      const line = lines[y] ?? [];
-      rows.push(line.slice(centerStart + 1, centerStart + 1 + metrics.contextWidth).map((c) => c.char).join('').trimEnd());
-    }
-    return rows;
-  }
-
   /**
-   * Reconstruct the COMPLETE documentation text for the selected row by
-   * scrolling the pane until the more-below marker disappears, mapping each
-   * window back to absolute line positions via the markers themselves.
+   * The COMPLETE documentation for the selected row: every line the settings
+   * modal windows over under the cursor (PgUp/PgDn scroll it), and a check that
+   * the rendered frame really shows its opening lines under the selected row.
    */
   function fullDocText(width: number): string {
-    const metrics = getFullscreenWorkspaceMetrics({ width, height: HEIGHT });
-    const visible = metrics.contextRows;
-    const absolute: string[] = [];
-    let requested = 0;
-    for (let guard = 0; guard < 100; guard += 1) {
-      modal.contextScroll = requested;
-      const rows = paneRows(renderSettingsModal(modal, width, HEIGHT), width);
-      const aboveMatch = rows[0]?.match(/^\S+ (\d+) more line\(s\) above; PgUp$/);
-      const offset = aboveMatch ? Number(aboveMatch[1]) : 0;
-      const hasBelow = /more line\(s\) below; PgDn$/.test(rows[rows.length - 1] ?? '');
-      rows.forEach((row, r) => {
-        if (r === 0 && aboveMatch) return;
-        if (r === rows.length - 1 && hasBelow) return;
-        absolute[offset + r] = row;
-      });
-      if (!hasBelow) break;
-      requested = offset + visible - 2;
-    }
-    modal.contextScroll = 0;
-    return normalize(absolute.filter((row) => row !== undefined).join(' '));
+    const docs = settingsDocumentation(modal, width - 20);
+    const frame = frameFromLayer(renderSettingsModal(modal, width, HEIGHT), width, HEIGHT)
+      .map((line) => line.map((c) => c.char).join('')).join('\n');
+    // The row names the selection; the first documentation line follows it.
+    expect(squash(frame)).toContain(squash(docs[0]!).slice(0, 12));
+    return normalize(docs.join(' '));
   }
 
   for (const width of [80, 60]) {
@@ -174,7 +147,7 @@ describe('settings workspace: in-product feature documentation', () => {
       'Pending restart: saved as enabled; effective state stays disabled until the next launch.',
     ));
     // The row itself carries the honest compact marker too.
-    const frame = renderSettingsModal(modal, 80, HEIGHT).map((line) => line.map((c) => c.char).join('')).join('\n');
+    const frame = frameFromLayer(renderSettingsModal(modal, 80, HEIGHT), 80, HEIGHT).map((line) => line.map((c) => c.char).join('')).join('\n');
     expect(frame).toContain('true ⟳');
   });
 

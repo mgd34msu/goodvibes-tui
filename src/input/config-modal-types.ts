@@ -1,4 +1,10 @@
-import type { ModalSectionStyle } from '../renderer/modal-factory.ts';
+/** A row's text style in a config modal (foreground, background, weight). */
+export interface ModalSectionStyle {
+  fg?: string;
+  bg?: string;
+  bold?: boolean;
+  dim?: boolean;
+}
 
 /**
  * Config-modal host, the shared seam every MIGRATE-TO-MODAL surface
@@ -37,6 +43,12 @@ export interface ConfigModalRow {
    * up/down navigation and never receives an action. Defaults to selectable.
    */
   readonly selectable?: boolean;
+  /**
+   * A group header (a section title such as "Next steps"): drawn as a kit
+   * group header (✦ lowercase accent) with a blank row above it. Always
+   * non-selectable and never filtered out.
+   */
+  readonly header?: boolean;
 }
 
 /** One tab (section) of a surface. Tabs are switched with left/right or Tab. */
@@ -124,10 +136,10 @@ export interface ConfigModalAction {
   /**
    * Trigger key: a single printable char ('r', 'd') or a named key ('enter').
    * Must not collide with the host-reserved nav keys (up/down/left/right/tab/
-   * j/k/escape/'/'), those are consumed by the host before actions are
-   * consulted. '/' arms the host's type-to-filter (item 1); while
-   * filtering, EVERY printable key (not just j/k) is captured by the query
-   * instead of firing an action, see handleConfigModalToken.
+   * escape), those are consumed by the host before actions are consulted.
+   * The search row is always live: a printable key that matches an action
+   * fires the action only while the query is empty; otherwise it is typed
+   * into the query, see handleConfigModalToken.
    */
   readonly key: string;
   /** Action id passed to `onAction`. */

@@ -1,6 +1,8 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import type { SearchManager } from './search.ts';
+import type { OverlayFilter, OverlayFilters } from './overlay-filter.ts';
+import { isTextBackspace } from './delete-key-policy.ts';
 import type { HistorySearch } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation';
 import type {
@@ -289,36 +291,64 @@ type OverlayRouteState = {
   helpScrollOffset: number;
   shortcutsOverlayActive: boolean;
   shortcutsScrollOffset: number;
+  /** The overlays' always-live search rows (absent in minimal test states). */
+  overlayFilters?: OverlayFilters;
   requestRender: () => void;
   handleEscape: () => void;
 };
 
+/**
+ * Keys shared by the help and shortcuts overlays: ↑↓ and PgUp/PgDn scroll
+ * (never past the end the renderer recorded), printable text goes into the
+ * always-live search row (the offset returns to the top as the list
+ * narrows), Backspace edits it, Esc closes. Returns the new scroll offset.
+ */
+function routeFilteredOverlayKey(token: InputToken, offset: number, filter: OverlayFilter | undefined): number {
+  const max = filter ? filter.maxScroll : 100;
+  if (token.type === 'key') {
+    if (token.logicalName === 'up') return Math.max(0, Math.min(offset, max) - 1);
+    if (token.logicalName === 'down') return Math.min(offset + 1, max);
+    if (token.logicalName === 'pageup') return Math.max(0, Math.min(offset, max) - 10);
+    if (token.logicalName === 'pagedown') return Math.min(offset + 10, max);
+    if (filter && isTextBackspace(token.logicalName ?? '') && filter.query.length > 0) {
+      filter.query = filter.query.slice(0, -1);
+      return 0;
+    }
+    return offset;
+  }
+  if (token.type === 'text' && filter) {
+    filter.query += token.value;
+    return 0;
+  }
+  return offset;
+}
+
 export function handleOverlayToken(state: OverlayRouteState, token: InputToken): boolean {
   if (state.helpOverlayActive) {
-    if (token.type === 'key') {
-      if (token.logicalName === 'escape') {
-        state.handleEscape();
-        return true;
-      }
-      if (token.logicalName === 'up') state.helpScrollOffset = Math.max(0, state.helpScrollOffset - 1);
-      else if (token.logicalName === 'down') state.helpScrollOffset = Math.min(state.helpScrollOffset + 1, 100);
-    } else if (token.type === 'text' && token.value === '?') {
+    const filter = state.overlayFilters?.help;
+    if (token.type === 'key' && token.logicalName === 'escape') {
+      state.handleEscape();
+      return true;
+    }
+    // '?' toggles help closed, but only while the query is empty; once
+    // something is typed, '?' is just another character.
+    if (token.type === 'text' && token.value === '?' && (!filter || filter.query.length === 0)) {
       state.helpOverlayActive = false;
       state.helpScrollOffset = 0;
+      filter?.clear();
+    } else {
+      state.helpScrollOffset = routeFilteredOverlayKey(token, state.helpScrollOffset, filter);
     }
     state.requestRender();
     return true;
   }
 
   if (state.shortcutsOverlayActive) {
-    if (token.type === 'key') {
-      if (token.logicalName === 'escape') {
-        state.handleEscape();
-        return true;
-      }
-      if (token.logicalName === 'up') state.shortcutsScrollOffset = Math.max(0, state.shortcutsScrollOffset - 1);
-      else if (token.logicalName === 'down') state.shortcutsScrollOffset = Math.min(state.shortcutsScrollOffset + 1, 50);
+    if (token.type === 'key' && token.logicalName === 'escape') {
+      state.handleEscape();
+      return true;
     }
+    state.shortcutsScrollOffset = routeFilteredOverlayKey(token, state.shortcutsScrollOffset, state.overlayFilters?.shortcuts);
     state.requestRender();
     return true;
   }

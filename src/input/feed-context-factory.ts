@@ -24,6 +24,7 @@ import type { InputHistory, HistorySearch } from './input-history.ts';
 import type { ConversationManager } from '../core/conversation';
 import type { BlockActionsMenu } from '../renderer/block-actions.ts';
 import type { ContextInspectorModal } from '../renderer/context-inspector.ts';
+import type { OverlayFilters } from './overlay-filter.ts';
 import type { BookmarkModal } from './bookmark-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';
 import type { McpWorkspace } from './mcp-workspace.ts';
@@ -40,6 +41,7 @@ import type { KillRing } from './kill-ring.ts';
 import type { PanelMouseLayout } from './handler-feed-routes.ts';
 import type { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { PanelBurstGuardState } from './panel-paste-flood-guard.ts';
+import type { SurfaceModalHost } from './surface-modal-host.ts';
 
 /**
  * Initial mutable scalar values for InputFeedContext.
@@ -117,7 +119,11 @@ export interface FeedContextStableRefs {
   modelPicker: ModelPickerModal;
   onboardingWizard: OnboardingWizardController;
   contextInspectorModal: ContextInspectorModal;
+  /** Help / shortcuts overlay search rows (shared by reference with the renderer). */
+  overlayFilters: OverlayFilters;
   blockActionsMenu: BlockActionsMenu;
+  /** Kit modals (command palette, confirm dialog, ...), see surface-modal-host.ts. */
+  surfaceModals?: SurfaceModalHost;
   searchManager: SearchManager;
   modalStack: string[];
   inputHistory: InputHistory | null;

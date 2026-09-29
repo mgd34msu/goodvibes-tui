@@ -5,7 +5,7 @@ import type {
   ConfigModalView,
 } from '../../input/config-modal-types.ts';
 import { MODAL_TONES } from './modal-theme.ts';
-import { infoRow } from './modal-surface-helpers.ts';
+import { infoRow, headerRow } from './modal-surface-helpers.ts';
 import {
   loadEcosystemCatalog,
   listInstalledEcosystemEntries,
@@ -129,7 +129,7 @@ class MarketplaceModalSurface implements ConfigModalSurface {
         rows.push(infoRow('empty:0', 'This is your local plugin, skill, hook-pack, and policy-pack catalog; not a remote store.'));
         rows.push(infoRow('empty:1', "It's empty because nothing has been published or imported into this workspace yet. Entries appear here once you publish a local component or import a bundle."));
       }
-      rows.push(infoRow('empty:title', 'Populate it', { bold: true }));
+      rows.push(headerRow('empty:title', 'Populate it'));
       rows.push(infoRow('empty:publish', '/marketplace publish <kind> <path>  — publish local plugins/skills into the catalog', { fg: MODAL_TONES.dim }));
       rows.push(infoRow('empty:import', '/marketplace bundle import <path>   — import a catalog bundle from disk', { fg: MODAL_TONES.dim }));
       rows.push(infoRow('empty:review', '/marketplace catalog review         — inspect the current local catalog posture', { fg: MODAL_TONES.dim }));
@@ -165,7 +165,7 @@ class MarketplaceModalSurface implements ConfigModalSurface {
     // Recommendations (displayed with their command; digit-jump dropped).
     const recommendations = snapshot?.recommendations ?? [];
     if (recommendations.length > 0) {
-      rows.push(infoRow('rec:title', 'Recommended', { bold: true }));
+      rows.push(headerRow('rec:title', 'Recommended'));
       for (const [i, rec] of recommendations.slice(0, 3).entries()) {
         rows.push(infoRow(`rec:${i}`, `${rec.title}: ${rec.command}`, { fg: MODAL_TONES.dim }));
       }

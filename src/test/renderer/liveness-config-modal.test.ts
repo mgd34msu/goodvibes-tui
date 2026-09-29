@@ -1,7 +1,7 @@
 /**
  * W6 liveness coverage, E's liveness-contract harness (../helpers/liveness.ts)
  * pointed at the config-modal surfaces through the REAL host render path
- * (ConfigModal + renderConfigModal + ModalFactory), as the integrator brief
+ * (ConfigModal + renderConfigModal on the modal surface kit), as the integrator brief
  * requires. A values-only update (mutating a non-selected row's live value while
  * the row-id set is unchanged) must repaint in place: identical skeleton, cursor
  * unmoved, exactly one row differs, no structural glyph touched.
@@ -21,9 +21,17 @@ import { createMemoryModalSurface } from '../../panels/modals/memory-modal.ts';
 import {
   assertFrameLiveness,
   differingCells,
-  selectionRow,
   DEFAULT_STRUCTURAL_GLYPHS,
 } from '../helpers/liveness.ts';
+import { frameFromLayer } from '../helpers/surface-frame.ts';
+import { activeTokens } from '../../renderer/theme.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+
+/** The kit marks the selected row with the gradient and dark bold text (selectedListItemText). */
+function selectionRow(frame: Line[]): number {
+  const ink = activeTokens().selectedListItemText;
+  return frame.findIndex((line) => line.some((cell) => cell.fg === ink && cell.bold && cell.char.trim() !== ''));
+}
 
 const W = 120;
 const H = 28;
@@ -47,7 +55,7 @@ describe('liveness contract: providers-modal (values-only update, real host path
       await tick(); // let the async reinspect populate the cache
       modal.moveDown(); // interaction boundary: re-freeze structure with the loaded cache, select row 2
 
-      const frameA = renderConfigModal(modal, W, H);
+      const frameA = frameFromLayer(renderConfigModal(modal, W, H), W, H);
       const cursorA = selectionRow(frameA);
       expect(cursorA).toBeGreaterThanOrEqual(0);
 
@@ -57,7 +65,7 @@ describe('liveness contract: providers-modal (values-only update, real host path
       // no interaction (exactly what the surface's 3s live tick repaints). No
       // status line, no structural change.
       snaps[0]!.modelCount = 6;
-      const frameB = renderConfigModal(modal, W, H);
+      const frameB = frameFromLayer(renderConfigModal(modal, W, H), W, H);
 
       assertFrameLiveness(frameA, frameB);
       expect(selectionRow(frameB)).toBe(cursorA);
@@ -82,8 +90,8 @@ describe('liveness contract: providers-modal (values-only update, real host path
       modal.open(createProviderHealthModalSurface(runtime), () => {});
       await tick();
       modal.moveDown();
-      const a = renderConfigModal(modal, W, H);
-      const b = renderConfigModal(modal, W, H);
+      const a = frameFromLayer(renderConfigModal(modal, W, H), W, H);
+      const b = frameFromLayer(renderConfigModal(modal, W, H), W, H);
       assertFrameLiveness(a, b);
       expect(differingCells(a, b)).toEqual([]);
     } finally {
@@ -119,13 +127,13 @@ describe('liveness contract: remote-modal (values-only update, real host path)',
       modal.open(surface, () => {});
       modal.moveDown(); // select connection row 2, freeze structure
 
-      const frameA = renderConfigModal(modal, W, H);
+      const frameA = frameFromLayer(renderConfigModal(modal, W, H), W, H);
       const cursorA = selectionRow(frameA);
       expect(cursorA).toBeGreaterThanOrEqual(0);
 
       // Values-only: bump the NON-selected first connection's message count (same width).
       snapshot.acp.activeConnections[0]!.messageCount = 5;
-      const frameB = renderConfigModal(modal, W, H);
+      const frameB = frameFromLayer(renderConfigModal(modal, W, H), W, H);
 
       assertFrameLiveness(frameA, frameB);
       expect(selectionRow(frameB)).toBe(cursorA);
@@ -158,7 +166,7 @@ describe('liveness contract: memory-modal (group-B ported surface, values-only u
       await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); // let the async onOpen refresh land
       modal.moveDown(); // interaction boundary: select the second record, freeze structure
 
-      const frameA = renderConfigModal(modal, W, H);
+      const frameA = frameFromLayer(renderConfigModal(modal, W, H), W, H);
       const cursorA = selectionRow(frameA);
       expect(cursorA).toBeGreaterThanOrEqual(0);
 
@@ -166,7 +174,7 @@ describe('liveness contract: memory-modal (group-B ported surface, values-only u
       // a same-width string. buildView reads the cached record object refs, so
       // the next render reflects it with no interaction and no structural change.
       records[0]!.summary = 'liveness record row DELTA';
-      const frameB = renderConfigModal(modal, W, H);
+      const frameB = frameFromLayer(renderConfigModal(modal, W, H), W, H);
 
       assertFrameLiveness(frameA, frameB);
       expect(selectionRow(frameB)).toBe(cursorA);

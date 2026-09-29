@@ -1,129 +1,76 @@
 /**
- * renderProfilePickerModal, renders the /profiles picker modal as Line[]
- * using ModalFactory.
- *
- * Shows a list of saved profiles with:
- *   - name, timestamp (formatted)
- * Footer hints: [Up/Down] Navigate  [Enter] Load  [d] Arm/Delete  [s] Save current  [Esc] Close
+ * renderProfilePickerModal, the /profiles picker drawn with the modal surface
+ * kit: the always-live search row (filters by name), one kit row per saved
+ * profile (name, saved time right-aligned), an armed delete shown in the
+ * error color with its "press d again" prompt, the status line, and keycap
+ * hints: ↑↓ move · ⏎ load · d delete · s save current.
  */
 
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
-import { ModalFactory } from './modal-factory.ts';
 import type { ProfilePickerModal } from '../input/profile-picker-modal.ts';
 import { formatTimestamp } from './modal-utils.ts';
-import { fitDisplay } from '../utils/terminal-width.ts';
-import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { activeTokens } from './theme.ts';
+import {
+  beginModal,
+  finishModal,
+  searchRow,
+  scrollCountText,
+  type KitHint,
+  type SurfaceLayer,
+} from './surface-kit.ts';
+import { drawList, type KitRow } from './surface-kit-list.ts';
+import { drawTextBlock, listHeight, modalHeightFor, modalTextWidth, textBlockHeight, type TextLine } from './surface-kit-extra.ts';
 
-// ---------------------------------------------------------------------------
-// Renderer
-// ---------------------------------------------------------------------------
+const HINTS: readonly KitHint[] = [['↑↓', 'move'], ['⏎', 'load'], ['d', 'delete'], ['s', 'save current']];
 
 /**
- * Render the profile picker modal as Line[] for overlay in the viewport.
- *
- * @param modal  ProfilePickerModal state object.
- * @param width  Terminal width.
+ * Render the profile picker modal as a SurfaceLayer in screen coordinates.
  */
 export function renderProfilePickerModal(
   modal: ProfilePickerModal,
-  width: number,
-  viewportHeight = 24,
-): Line[] {
-  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
-    chromeRows: 6,
-    minContentRows: 5,
-    maxContentRows: 9,
-  });
-  const boxMargin = metrics.margin;
-  const boxW = metrics.boxWidth;
-  const contentW = metrics.contentWidth;
-  const visibleRows = metrics.contentRows;
-  const targetContentRows = getStableOverlayContentRows(metrics.contentRows, 8);
-  modal.setVisibleRows(visibleRows);
+  screenWidth: number,
+  screenHeight = 24,
+): SurfaceLayer {
+  const t = activeTokens();
+  const visible = modal.visibleProfiles;
+  const armed = modal.deleteConfirmationTarget;
+  const rows: KitRow[] = visible.map((profile, i) => ({
+    label: profile.name,
+    right: formatTimestamp(profile.timestamp),
+    selected: i === modal.selectedIndex,
+    danger: armed === profile.name,
+    mark: armed === profile.name ? '✕' : undefined,
+    markFg: t.error,
+  }));
 
-  const sections: import('./modal-factory.ts').ModalSection[] = [];
+  const notes: TextLine[] = [];
+  if (armed) notes.push({ text: `Press d again to permanently delete ${armed}.`, style: { fg: t.warning, bold: true } });
+  else if (modal.statusMessage) notes.push({ text: modal.statusMessage, style: { fg: t.accent } });
 
-  if (modal.profiles.length === 0) {
-    sections.push({
-      type: 'text',
-      content: 'No saved profiles.',
-      style: { fg: activeTokens().textFaint },
-    });
-    sections.push({
-      type: 'text',
-      content: 'Press [s] to save the current settings as a profile.',
-      style: { fg: activeTokens().textFaint },
-    });
+  const width = modalTextWidth(screenWidth, screenHeight);
+  const allRows = modal.profiles.map((profile): KitRow => ({ label: profile.name, right: formatTimestamp(profile.timestamp) }));
+  const emptyLines: TextLine[] = [
+    { text: 'No saved profiles.', style: { fg: t.textMuted } },
+    { text: 'Press s to save the current settings as a profile.', style: { fg: t.textFaint } },
+  ];
+  const listRows = allRows.length > 0 ? listHeight(allRows, 0, width - 1) : textBlockHeight(emptyLines, width);
+  const noteRows = notes.length > 0 ? textBlockHeight(notes, width) + 1 : 0;
+  const height = modalHeightFor(screenWidth, screenHeight, { hints: HINTS }, 2 + listRows + noteRows);
+
+  const f = beginModal(screenWidth, screenHeight, { title: 'Profiles', hints: HINTS, height });
+  const total = modal.profiles.length;
+  searchRow(f, f.top, modal.query, 'Filter profiles', modal.query ? `${visible.length} of ${total}` : `${total} saved`);
+
+  const top = f.top + 2;
+  const listBottom = f.bottom - noteRows;
+  if (notes.length > 0) drawTextBlock(f.canvas, f.l, listBottom + 2, f.r - f.l + 1, notes, f.bottom);
+
+  if (total === 0) {
+    drawTextBlock(f.canvas, f.l, top, f.r - f.l + 1, emptyLines, listBottom);
+  } else if (rows.length === 0) {
+    drawTextBlock(f.canvas, f.l, top, f.r - f.l + 1, [{ text: `No profiles match "${modal.query}".`, style: { fg: t.textMuted } }], listBottom);
   } else {
-    // Proportional column widths that adapt to the modal's content width:
-    // timestamp ~22% (clamped 10..16); the name column absorbs the remainder
-    // (ported from session-picker-modal.ts). Reserves 4 cols, 2 for the
-    // name/timestamp separator and 2 for the list row's selection indicator
-    // ("▸ ") that ModalFactory prepends outside the wrapped label, so the
-    // row never spills the timestamp's embedded space onto a wrapped line.
-    const tsW = Math.min(16, Math.max(10, Math.floor(contentW * 0.22)));
-    const nameW = Math.max(8, contentW - tsW - 4);
-
-    // Column header
-    const nameHdr = fitDisplay('Name', nameW);
-    const tsHdr   = fitDisplay('Saved', tsW);
-    sections.push({
-      type: 'text',
-      content: `${nameHdr}  ${tsHdr}`,
-      style: { fg: activeTokens().textFaint },
-    });
-    sections.push({ type: 'separator' });
-
-    const visibleProfiles = modal.profiles.slice(modal.scrollOffset, modal.scrollOffset + visibleRows);
-    const listItems: import('./modal-factory.ts').ModalListItem[] = visibleProfiles.map((prof, idx) => {
-      const isSelected = modal.scrollOffset + idx === modal.selectedIndex;
-
-      const nameStr = fitDisplay(prof.name, nameW);
-
-      const tsStr = fitDisplay(formatTimestamp(prof.timestamp), tsW);
-
-      const label = `${nameStr}  ${tsStr}`;
-      return { label, selected: isSelected };
-    });
-
-    sections.push({ type: 'list', items: listItems });
-    if (modal.profiles.length > visibleRows) {
-      sections.push({ type: 'separator' });
-      sections.push({
-        type: 'text',
-        content: `[${modal.scrollOffset + 1}-${Math.min(modal.profiles.length, modal.scrollOffset + visibleRows)} of ${modal.profiles.length}]`,
-        style: { fg: activeTokens().textFaint },
-      });
-    }
+    const res = drawList(f.canvas, { rows, top, bottom: listBottom, x0: f.l, x1: f.r });
+    f.hintRight = scrollCountText(res.above, res.below);
   }
-
-  // Status message if present
-  if (modal.statusMessage) {
-    sections.push({ type: 'separator' });
-    sections.push({
-      type: 'text',
-      content: modal.statusMessage,
-      style: { fg: activeTokens().accent },
-    });
-  }
-  if (modal.deleteConfirmationTarget) {
-    sections.push({
-      type: 'text',
-      content: `Press [d] again to permanently delete ${modal.deleteConfirmationTarget}.`,
-      style: { fg: activeTokens().warning, dim: true },
-    });
-  }
-
-  return ModalFactory.createModal(
-    {
-      title: 'Profiles',
-      width: boxW,
-      margin: boxMargin,
-      targetContentRows,
-      sections,
-      hints: ['[Up/Down] Navigate', '[Enter] Load', '[d] Arm/Delete', '[s] Save current', '[Esc] Close'],
-    },
-    width,
-  );
+  return finishModal(f);
 }

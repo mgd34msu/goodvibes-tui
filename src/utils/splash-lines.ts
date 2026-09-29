@@ -32,7 +32,7 @@ const versionLine = (version: string) =>
 export const SPLASH_GRADIENT = Object.freeze({ start: '#00ffff', end: '#d000ff' } as const);
 
 /** Fixed hint line, the three primary shell entry points. */
-const HINT_LINE = 'Ctrl+P panels  /  ? help  /  F2 fleet';
+const HINT_LINE = 'Ctrl+P commands  /  ? help  /  F2 fleet';
 
 export interface SplashOptions {
   workingDir?: string;

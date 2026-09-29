@@ -1,17 +1,19 @@
 import { describe, test, expect } from 'bun:test';
 import { ConfigModal } from '../../../input/config-modal.ts';
 import { renderConfigModal } from '../../../renderer/config-modal.ts';
+import { frameFromLayer } from '../../helpers/surface-frame.ts';
 import { createDevicesModalSurface, devicesModalGoldenSurface } from '../../../panels/modals/devices-modal.ts';
 import type { ConfigModalSurface } from '../../../input/config-modal-types.ts';
 import type { MintedPairingToken, PublicPairingToken } from '@pellux/goodvibes-sdk/platform/pairing';
 import { actionCtx, open, tabText } from './modal-surface-test-helpers.ts';
 
 /** Render a surface to plain text rows at the given terminal size. */
-function renderRows(surface: ConfigModalSurface, width: number, height: number): string[] {
+function renderRows(surface: ConfigModalSurface, width: number, height: number, prepare?: (modal: ConfigModal) => void): string[] {
   const modal = new ConfigModal();
   modal.open(surface, () => {});
   modal.syncStructure();
-  const lines = renderConfigModal(modal, width, height);
+  prepare?.(modal);
+  const lines = frameFromLayer(renderConfigModal(modal, width, height), width, height);
   modal.close();
   return lines.map((line) => line.map((c) => (c.char === '' ? ' ' : c.char)).join('').replace(/\s+$/, ''));
 }
@@ -19,10 +21,15 @@ function renderRows(surface: ConfigModalSurface, width: number, height: number):
 describe('devices modal render (full text, no clipping)', () => {
   for (const [label, width, height] of [['80x24', 80, 24], ['60-col', 60, 24]] as const) {
     test(`renders the full device list and shared-token line at ${label}`, () => {
-      const rows = renderRows(devicesModalGoldenSurface(), width, height);
+      // Top of the list, then the last device selected (Up wraps to it): the
+      // trailing guidance line scrolls into view when it does not fit at once.
+      const rows = [
+        ...renderRows(devicesModalGoldenSurface(), width, height),
+        ...renderRows(devicesModalGoldenSurface(), width, height, (modal) => modal.moveUp()),
+      ];
       // Flow the wrapped rows back into contiguous text so a line that wraps at a
       // narrow width still reads as its full string (nothing is clipped, only wrapped).
-      const flowed = rows.join(' ').replace(/[│┌┐└┘─▸]/g, ' ').replace(/\s+/g, ' ');
+      const flowed = rows.join(' ').replace(/\s+/g, ' ');
       expect(flowed).toContain('my laptop');
       expect(flowed).toContain('kitchen tablet');
       expect(flowed).toContain('phone (never scanned)');

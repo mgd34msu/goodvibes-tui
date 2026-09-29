@@ -6,6 +6,7 @@
  * PermissionPromptUI rendering per category.
  */
 
+import { promptCardLines } from '../helpers/permission-card.ts';
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -413,7 +414,7 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('write', { path: 'src/output.ts' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
+    const lines = promptCardLines(WIDTH, request);
     expect(lines.length).toBeGreaterThan(0);
   });
 
@@ -426,10 +427,10 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('exec', { command: 'npm run build' }, 'execute'),
       resolve: (_approved: boolean) => {},
     };
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
+    const lines = promptCardLines(WIDTH, request);
     // Line is Cell[], join chars to get the text content of each line
     const hasExecuteLabel = lines.some((line) =>
-      line.map((c) => c.char).join('').includes('[EXECUTE]')
+      line.map((c) => c.char).join('').includes('EXECUTE')
     );
     expect(hasExecuteLabel).toBe(true);
   });
@@ -443,9 +444,9 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('agent', { task: 'do something' }, 'delegate'),
       resolve: (_approved: boolean) => {},
     };
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
+    const lines = promptCardLines(WIDTH, request);
     const hasDelegateLabel = lines.some((line) =>
-      line.map((c) => c.char).join('').includes('[DELEGATE]')
+      line.map((c) => c.char).join('').includes('DELEGATE')
     );
     expect(hasDelegateLabel).toBe(true);
   });
@@ -460,14 +461,14 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest(toolName, { path: 'out.ts' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
+    const lines = promptCardLines(WIDTH, request);
     const hasToolName = lines.some((line) =>
       line.map((c) => c.char).join('').includes(toolName)
     );
     expect(hasToolName).toBe(true);
   });
 
-  test('createPromptLines includes choices [Y] Allow once in output', () => {
+  test('the card offers Allow once as a button and y as its key', () => {
     const request = {
       callId: 'test-call-5',
       tool: 'exec',
@@ -476,11 +477,10 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('exec', { command: 'ls' }, 'execute'),
       resolve: (_approved: boolean) => {},
     };
-    const lines = PermissionPromptUI.createPromptLines(WIDTH, request);
-    const hasChoices = lines.some((line) =>
-      line.map((c) => c.char).join('').includes('[Y]')
-    );
-    expect(hasChoices).toBe(true);
+    const lines = promptCardLines(WIDTH, request);
+    const text = lines.map((line) => line.map((c) => c.char).join('')).join('\n');
+    expect(text).toContain(' Allow once ');
+    expect(text).toContain(' y  allow once');
   });
 
   test('createPromptLines specializes execute prompts for shell execution', () => {
@@ -492,15 +492,15 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('exec', { command: 'ls' }, 'execute'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Shell Execution Approval');
-    expect(text).toContain('Command');
-    expect(text).toContain('Decision  : shell-execution');
-    expect(text).toContain('Surface   : shell  radius=project');
-    expect(text).toContain('Effects   : process execution');
-    expect(text).toContain('Checklist : Confirm shell side effects');
+    expect(text).toContain('$ ls');
+    expect(text).toMatch(/Decision +shell\-execution/);
+    expect(text).toMatch(/Surface +shell · radius project/);
+    expect(text).toMatch(/Effects +process\ execution/);
+    expect(text).toMatch(/Checklist +Confirm\ shell\ side\ effects/);
   });
 
   test('createPromptLines specializes network prompts and includes host context', () => {
@@ -523,14 +523,14 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       },
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Network Access Approval');
     expect(text).toContain('Host');
     expect(text).toContain('example.com');
-    expect(text).toContain('Decision  : external-access');
-    expect(text).toContain('Surface   : network  radius=external');
+    expect(text).toMatch(/Decision +external\-access/);
+    expect(text).toMatch(/Surface +network · radius external/);
   });
 
   test('createPromptLines specializes write prompts for file mutation review', () => {
@@ -542,12 +542,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('write', { path: 'src/output.ts' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('File Mutation Approval');
-    expect(text).toContain('Decision  : file-mutation');
-    expect(text).toContain('Checklist : Confirm target path');
+    expect(text).toMatch(/Decision +file\-mutation/);
+    expect(text).toMatch(/Checklist +Confirm\ target\ path/);
   });
 
   test('createPromptLines specializes notebook edits separately from generic file mutation', () => {
@@ -559,12 +559,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('edit', { path: 'notebooks/analysis.ipynb' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Notebook Edit Approval');
-    expect(text).toContain('Decision  : notebook-edit');
-    expect(text).toContain('Checklist : Confirm notebook cell intent');
+    expect(text).toMatch(/Decision +notebook\-edit/);
+    expect(text).toMatch(/Checklist +Confirm\ notebook\ cell\ intent/);
   });
 
   test('createPromptLines specializes config mutations separately from generic file mutation', () => {
@@ -576,12 +576,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('write', { path: '.env.production' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Configuration Mutation Approval');
-    expect(text).toContain('Decision  : config-mutation');
-    expect(text).toContain('Checklist : Confirm configuration blast radius');
+    expect(text).toMatch(/Decision +config\-mutation/);
+    expect(text).toMatch(/Checklist +Confirm\ configuration\ blast\ radius/);
   });
 
   test('createPromptLines specializes dependency installs separately from generic shell execution', () => {
@@ -593,12 +593,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('exec', { command: 'bun install' }, 'execute'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Dependency Install Approval');
-    expect(text).toContain('Decision  : dependency-install');
-    expect(text).toContain('Checklist : Confirm dependency provenance');
+    expect(text).toMatch(/Decision +dependency\-install/);
+    expect(text).toMatch(/Checklist +Confirm\ dependency\ provenance/);
   });
 
   test('createPromptLines specializes delegation prompts for fan-out review', () => {
@@ -610,13 +610,13 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('agent', { task: 'delegate release verification' }, 'delegate'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Agent Delegation Approval');
-    expect(text).toContain('Decision  : delegation');
-    expect(text).toContain('Surface   : orchestration  radius=delegated');
-    expect(text).toContain('Checklist : Confirm delegated scope');
+    expect(text).toMatch(/Decision +delegation/);
+    expect(text).toMatch(/Surface +orchestration · radius delegated/);
+    expect(text).toMatch(/Checklist +Confirm\ delegated\ scope/);
   });
 
   test('createPromptLines specializes agent spawn approvals separately from generic delegation', () => {
@@ -628,12 +628,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('agent', { task: 'delegate release verification' }, 'delegate'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Agent Spawn Approval');
-    expect(text).toContain('Decision  : agent-spawn');
-    expect(text).toContain('Checklist : Confirm spawned agent scope');
+    expect(text).toMatch(/Decision +agent\-spawn/);
+    expect(text).toMatch(/Checklist +Confirm\ spawned\ agent\ scope/);
   });
 
   test('createPromptLines specializes remote dispatch approvals', () => {
@@ -645,12 +645,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('remote_trigger', { mode: 'dispatch', task: 'run remote verification' }, 'delegate'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Remote Dispatch Approval');
-    expect(text).toContain('Decision  : remote-dispatch');
-    expect(text).toContain('Checklist : Confirm remote target');
+    expect(text).toMatch(/Decision +remote\-dispatch/);
+    expect(text).toMatch(/Checklist +Confirm\ remote\ target/);
   });
 
   test('createPromptLines specializes MCP trust escalation approvals', () => {
@@ -662,12 +662,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('mcp', { mode: 'set-trust', serverName: 'docs', trustMode: 'allow-all' }, 'delegate'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('MCP Trust Escalation Approval');
-    expect(text).toContain('Decision  : mcp-escalation');
-    expect(text).toContain('Checklist : Confirm server identity');
+    expect(text).toMatch(/Decision +mcp\-escalation/);
+    expect(text).toMatch(/Checklist +Confirm\ server\ identity/);
   });
 
   test('createPromptLines specializes hook execution approvals', () => {
@@ -679,12 +679,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('workflow', { eventPath: 'Pre:tool:edit', hookName: 'guard-edit' }, 'delegate'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Hook Execution Approval');
-    expect(text).toContain('Decision  : hook-execution');
-    expect(text).toContain('Checklist : Confirm hook source');
+    expect(text).toMatch(/Decision +hook\-execution/);
+    expect(text).toMatch(/Checklist +Confirm\ hook\ source/);
   });
 
   test('createPromptLines specializes plugin lifecycle approvals', () => {
@@ -696,12 +696,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('write', { path: '.goodvibes/plugins/deploy-audit/manifest.json' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Plugin Lifecycle Approval');
-    expect(text).toContain('Decision  : plugin-lifecycle');
-    expect(text).toContain('Checklist : Confirm package provenance');
+    expect(text).toMatch(/Decision +plugin\-lifecycle/);
+    expect(text).toMatch(/Checklist +Confirm\ package\ provenance/);
   });
 
   test('createPromptLines specializes sandbox policy change approvals', () => {
@@ -713,12 +713,12 @@ describe('PermissionPromptUI: renders correctly per category', () => {
       analysis: analyzePermissionRequest('write', { path: 'sandbox.vmBackend' }, 'write'),
       resolve: (_approved: boolean) => {},
     };
-    const text = PermissionPromptUI.createPromptLines(WIDTH, request)
+    const text = promptCardLines(WIDTH, request)
       .map((line) => line.map((c) => c.char).join(''))
       .join('\n');
     expect(text).toContain('Sandbox Policy Change Approval');
-    expect(text).toContain('Decision  : sandbox-policy-change');
-    expect(text).toContain('Checklist : Confirm isolation-mode impact');
+    expect(text).toMatch(/Decision +sandbox\-policy\-change/);
+    expect(text).toMatch(/Checklist +Confirm\ isolation\-mode\ impact/);
   });
 
   test('getDisplayArg returns path when args has path', () => {

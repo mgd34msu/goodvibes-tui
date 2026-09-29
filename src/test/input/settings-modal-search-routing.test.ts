@@ -3,10 +3,11 @@
  *
  * Tests the full input→state→render pipeline for the settings modal search feature:
  *   - typing a query through handleSettingsModalToken filters the rendered list
- *   - Esc restores normal view (two-stage: first Esc exits search, second Esc closes modal)
+ *   - the search row is always live (no search mode); Esc closes the modal in one press
  *   - Enter on a search result selects that setting (activateSelected path)
  *   - backspace edits the query in search mode
  */
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -84,11 +85,14 @@ describe('settings modal search routing integration', () => {
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('pressing / enters search mode and focuses the search input', () => {
+  test('the search row is always live: / on an empty query is ignored and a letter starts the search', () => {
     const state = makeState();
     handleSettingsModalToken(state, { type: 'text', value: '/' });
-    expect(modal.searchFocused).toBe(true);
+    expect(modal.searchFocused).toBe(false);
     expect(modal.searchQuery).toBe('');
+    handleSettingsModalToken(state, { type: 'text', value: 's' });
+    expect(modal.searchFocused).toBe(true);
+    expect(modal.searchQuery).toBe('s');
   });
 
   test('printable chars in search mode append to query and update searchResults', () => {
@@ -104,51 +108,41 @@ describe('settings modal search routing integration', () => {
     expect(modal.searchResults.some(e => e.setting.key === 'display.stream')).toBe(true);
   });
 
-  test('typed query filters the rendered list: search prompt row appears', () => {
+  test('typed query filters the rendered list: the search row and breadcrumb show it', () => {
     const state = makeState();
-    handleSettingsModalToken(state, { type: 'text', value: '/' });
     for (const ch of 'stream') {
       handleSettingsModalToken(state, { type: 'text', value: ch });
     }
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
-    // The search prompt row should contain the query
-    expect(texts).toContain('stream');
-    // The main header should show "Search:"
-    expect(texts).toContain('Search:');
-    // Setting key should appear in results
-    expect(texts.toLowerCase()).toContain('stream');
+    expect(texts).toContain('stream▏');
+    expect(texts).toContain('✦ Settings › Search');
+    expect(texts.toLowerCase()).toContain('display.stream');
   });
 
-  test('first Esc exits search mode (clears search) but does not close modal', () => {
+  test('Esc closes the modal even with a query typed (a query is not a level)', () => {
     const state = makeState();
-    handleSettingsModalToken(state, { type: 'text', value: '/' });
     for (const ch of 'stream') {
       handleSettingsModalToken(state, { type: 'text', value: ch });
     }
     expect(modal.searchFocused).toBe(true);
-    // First Esc
-    handleSettingsModalToken(state, { type: 'key', name: 'escape', logicalName: 'escape', ctrl: false, shift: false, meta: false });
-    expect(modal.searchFocused).toBe(false);
-    expect(modal.searchQuery).toBe('');
-    expect(modal.active).toBe(true); // modal still open
-    expect(escaped).toBe(false);
-  });
-
-  test('second Esc closes the modal (two-stage escape contract)', () => {
-    const state = makeState();
-    handleSettingsModalToken(state, { type: 'text', value: '/' });
-    for (const ch of 'theme') {
-      handleSettingsModalToken(state, { type: 'text', value: ch });
-    }
-    // First Esc exits search
-    handleSettingsModalToken(state, { type: 'key', name: 'escape', logicalName: 'escape', ctrl: false, shift: false, meta: false });
-    expect(modal.searchFocused).toBe(false);
-    expect(modal.active).toBe(true);
-    // Second Esc closes modal
     handleSettingsModalToken(state, { type: 'key', name: 'escape', logicalName: 'escape', ctrl: false, shift: false, meta: false });
     expect(escaped).toBe(true);
     expect(modal.active).toBe(false);
+  });
+
+  test('backspacing the query to empty returns to the category view without closing', () => {
+    const state = makeState();
+    for (const ch of 'ui') {
+      handleSettingsModalToken(state, { type: 'text', value: ch });
+    }
+    expect(modal.searchFocused).toBe(true);
+    handleSettingsModalToken(state, { type: 'key', name: 'backspace', logicalName: 'backspace', ctrl: false, shift: false, meta: false });
+    handleSettingsModalToken(state, { type: 'key', name: 'backspace', logicalName: 'backspace', ctrl: false, shift: false, meta: false });
+    expect(modal.searchQuery).toBe('');
+    expect(modal.searchFocused).toBe(false);
+    expect(modal.active).toBe(true);
+    expect(escaped).toBe(false);
   });
 
   test('Esc with no search active immediately closes modal', () => {
@@ -207,10 +201,11 @@ describe('settings modal search routing integration', () => {
     expect(after).not.toBe(before);
   });
 
-  test('/ key token also enters search mode (key branch)', () => {
+  test('a / key token on an empty query changes nothing', () => {
     const state = makeState();
     handleSettingsModalToken(state, { type: 'key', name: '/', logicalName: '/', ctrl: false, shift: false, meta: false });
-    expect(modal.searchFocused).toBe(true);
+    expect(modal.searchFocused).toBe(false);
+    expect(modal.searchQuery).toBe('');
   });
 
   test('edit-mode keystroke routing: chars after Enter on string/number search result go to editBuffer not searchQuery', () => {
@@ -245,52 +240,40 @@ describe('settings modal search routing integration', () => {
     expect(modal.searchQuery).toBe(queryBefore);
   });
 
-  test('Down/Up with empty query in search mode is a no-op (does not navigate category list)', () => {
+  test('with no query, arrows keep navigating the category list', () => {
     const state = makeState();
-    // Enter search mode but leave query empty
     handleSettingsModalToken(state, { type: 'text', value: '/' });
-    expect(modal.searchFocused).toBe(true);
-    expect(modal.searchResults.length).toBe(0);
-    // Record current category before nav
+    expect(modal.searchFocused).toBe(false);
     const catBefore = modal.categoryIndex;
-    const selBefore = modal.selectedIndex;
-    // Down should be a no-op, categoryIndex must NOT change
     handleSettingsModalToken(state, { type: 'key', name: 'down', logicalName: 'down', ctrl: false, shift: false, meta: false });
-    expect(modal.categoryIndex).toBe(catBefore);
-    expect(modal.selectedIndex).toBe(selBefore);
-    // Up should also be a no-op
+    expect(modal.categoryIndex).not.toBe(catBefore);
     handleSettingsModalToken(state, { type: 'key', name: 'up', logicalName: 'up', ctrl: false, shift: false, meta: false });
     expect(modal.categoryIndex).toBe(catBefore);
-    expect(modal.selectedIndex).toBe(selBefore);
   });
 
-  test('rendered output shows "Search Results" context pane header when in search mode', () => {
+  test('rendered output names the search in the breadcrumb and counts the results', () => {
     const state = makeState();
-    handleSettingsModalToken(state, { type: 'text', value: '/' });
     for (const ch of 'stream') {
       handleSettingsModalToken(state, { type: 'text', value: ch });
     }
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Search Results');
+    expect(texts).toContain('› Search');
+    expect(texts).toMatch(/\d+ results?/);
   });
 
-  test('Esc restores normal category view in renderer after exiting search', () => {
+  test('clearing the query restores the category view in the renderer', () => {
     const state = makeState();
-    handleSettingsModalToken(state, { type: 'text', value: '/' });
     for (const ch of 'stream') {
       handleSettingsModalToken(state, { type: 'text', value: ch });
     }
-    // Confirm search UI is active
-    let lines = renderSettingsModal(modal, W);
+    let lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     let texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Search:');
-    // Exit search with Esc
-    handleSettingsModalToken(state, { type: 'key', name: 'escape', logicalName: 'escape', ctrl: false, shift: false, meta: false });
-    // Re-render: should show category view again
-    lines = renderSettingsModal(modal, W);
+    expect(texts).toContain('› Search');
+    for (let i = 0; i < 'stream'.length; i++) handleSettingsModalToken(state, { type: 'key', name: 'backspace', logicalName: 'backspace', ctrl: false, shift: false, meta: false });
+    lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     texts = linesToText(lines).join('\n');
-    expect(texts).not.toContain('Search:');
+    expect(texts).not.toContain('› Search');
     expect(texts).toContain('Display');
   });
 

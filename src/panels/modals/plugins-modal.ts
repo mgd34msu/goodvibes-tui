@@ -1,5 +1,5 @@
 import { MODAL_TONES } from './modal-theme.ts';
-import { infoRow } from './modal-surface-helpers.ts';
+import { infoRow, headerRow } from './modal-surface-helpers.ts';
 import type {
   ConfigModalActionContext,
   ConfigModalRow,
@@ -87,7 +87,7 @@ class PluginsModalSurface implements ConfigModalSurface {
 
     if (all.length === 0) {
       rows.push(infoRow('empty:0', 'No plugins discovered.'));
-      rows.push(infoRow('empty:title', 'Next steps'));
+      rows.push(headerRow('empty:title', 'Next steps'));
       rows.push(infoRow('empty:list', '/plugin list  — inspect plugin discovery paths and current registry state', { fg: MODAL_TONES.dim }));
       rows.push(infoRow('empty:market', '/marketplace  — review curated ecosystem entries and provenance posture', { fg: MODAL_TONES.dim }));
       return { title: 'Plugins', tabs: [{ id: 'plugins', label: 'Plugins', rows, emptyText: '' }] };

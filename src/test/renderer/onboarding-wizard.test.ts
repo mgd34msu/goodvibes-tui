@@ -4,28 +4,40 @@ import {
   getOnboardingWizardVisibleFieldCount,
 } from '../../input/onboarding/onboarding-wizard.ts';
 import { renderOnboardingWizard } from '../../renderer/onboarding/onboarding-wizard.ts';
-import { linesToText } from '../setup.ts';
+import { frameFromLayer, frameText } from '../helpers/surface-frame.ts';
+import type { SurfaceLayer } from '../../renderer/surface-kit.ts';
+
+/** The wizard's layer on its screen, as text rows. */
+function linesToText(layer: SurfaceLayer, width = layer.lines[0]!.length + 2, height = layer.lines.length): string[] {
+  return frameText(frameFromLayer(layer, width, height));
+}
 
 describe('renderOnboardingWizard', () => {
-  test('renders a viewport-sized onboarding shell with stable chrome', () => {
+  test('owns the screen as one kit surface: full width minus 1 per side, full height, caps, keycap hints', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('edit');
 
     const width = 100;
     const height = 20;
-    const lines = renderOnboardingWizard(wizard, width, height);
+    const layer = renderOnboardingWizard(wizard, width, height);
 
-    expect(lines).toHaveLength(height);
-    for (const line of lines) {
-      expect(line.length).toBe(width);
-    }
+    expect(layer.x).toBe(1);
+    expect(layer.y).toBe(0);
+    expect(layer.dim).toBe(false);
+    expect(layer.lines).toHaveLength(height);
+    for (const line of layer.lines) expect(line.length).toBe(width - 2);
 
-    const text = linesToText(lines).join('\n');
-    expect(text).toContain('Onboarding Wizard');
-    expect(text).toContain('Summary');
-    expect(text).toContain('Steps');
-    expect(text).toContain('Controls:');
-    expect(text).toContain('Esc');
+    const rows = linesToText(layer, width, height);
+    expect(rows[0]!.trim()).toMatch(/^▄+$/);
+    expect(rows[height - 1]!.trim()).toMatch(/^▀+$/);
+    const text = rows.join('\n');
+    expect(text).toContain('Onboarding');
+    expect(text).toContain('edit existing');
+    expect(text).toContain('step 1 of');
+    expect(text).toContain('esc');
+    expect(text).toContain('↑↓  move');
+    expect(text).toContain('tab  next screen');
+    expect(text).not.toMatch(/[┌┐└┘│├┤]/);
   });
 
   test('uses visible frame chrome and readable rail labels on wide terminals', () => {
@@ -34,8 +46,9 @@ describe('renderOnboardingWizard', () => {
 
     const text = linesToText(renderOnboardingWizard(wizard, 188, 42)).join('\n');
 
-    expect(text).toContain('┌─Onboarding Wizard');
+    expect(text).toContain('Onboarding');
     expect(text).toContain('1. Capabilities');
+    expect(text).toContain('Selected capabilities');
     expect(text).not.toContain('Capabilit…');
     expect(text).toContain('Choose what GoodVibes should be able to do.');
   });
@@ -47,7 +60,7 @@ describe('renderOnboardingWizard', () => {
 
     const text = linesToText(renderOnboardingWizard(wizard, 100, 14)).join('\n');
 
-    expect(text).toContain('more above');
+    expect(text).toMatch(/\d+ more ↑/);
     expect(text).toContain('Next section');
   });
 
@@ -96,7 +109,6 @@ describe('renderOnboardingWizard', () => {
     // rejoined and whitespace-normalized back to the source sentence.
     const collapsedText = linesToText(renderOnboardingWizard(wizard, 80, 40))
       .join(' ')
-      .replace(/[│┌┐└┘├┤┬┴┼─]/g, ' ')
       .replace(/\s+/g, ' ');
     expect(collapsedText).toContain(fullHint);
 

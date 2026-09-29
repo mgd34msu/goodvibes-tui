@@ -280,15 +280,31 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         ctx.openSelection('Sessions', items, { allowSearch: true, customActions: deleteAction }, (result) => {
           if (!result) return;
           if (result.action === 'delete') {
-            try {
-              const sessionInfo = sessions.find(s => s.name === result.item.id);
-              if (sessionInfo) {
+            const sessionInfo = sessions.find(s => s.name === result.item.id);
+            if (!sessionInfo) return;
+            const remove = (): void => {
+              try {
                 unlinkSync(sessionInfo.filePath);
                 ctx.print(`Session deleted: ${result.item.id}`);
+              } catch (e) {
+                ctx.print(`Failed to delete session: ${summarizeError(e)}`);
               }
-            } catch (e) {
-              ctx.print(`Failed to delete session: ${summarizeError(e)}`);
+              ctx.renderRequest();
+            };
+            // Deleting is permanent, so it asks first where a confirm dialog exists.
+            if (!ctx.confirm) {
+              remove();
+              return;
             }
+            void ctx.confirm({
+              title: 'Delete session?',
+              body: `This removes "${sessionInfo.name}" and its ${sessionInfo.messageCount} message${sessionInfo.messageCount === 1 ? '' : 's'} from this project.\nIt cannot be undone.`,
+              confirmLabel: 'Delete',
+              tone: 'danger',
+            }).then((confirmed) => {
+              if (confirmed) remove();
+              else ctx.renderRequest();
+            });
           } else {
             try {
               const { meta, messages } = sessionManager.load(result.item.id);

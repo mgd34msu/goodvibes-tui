@@ -9,6 +9,7 @@
 // toggle, or a statement that nothing is configurable.
 // ---------------------------------------------------------------------------
 
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, expect, test } from 'bun:test';
 import type { ModelDefinition, ReasoningEffortSpec } from '@pellux/goodvibes-sdk/platform/providers';
 import { ModelPickerModal } from '../../input/model-picker.ts';
@@ -46,7 +47,7 @@ function renderEffortStep(spec: ReasoningEffortSpec | undefined, current = 'medi
   const model = makeModel(spec);
   picker.models = [model];
   picker.showEffortPicker(model, current);
-  return linesToText(renderModelWorkspace(picker, W, H)).join('\n');
+  return linesToText(frameFromLayer(renderModelWorkspace(picker, W, H), W, H)).join('\n');
 }
 
 describe("the effort step renders the selected model's own options", () => {
@@ -75,7 +76,8 @@ describe("the effort step renders the selected model's own options", () => {
       canDisableReasoning: true,
     });
     expect(text).toContain('thinking-token budget');
-    expect(text).toContain('8,192 thinking tokens');
+    // The level row wraps its description; the budget it sends is on it.
+    expect(text).toMatch(/8,192 thinking/);
   });
 
   test('toggle: says on-or-off rather than implying a depth choice', () => {

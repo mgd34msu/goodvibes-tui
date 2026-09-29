@@ -1,5 +1,5 @@
 import { MODAL_TONES } from './modal-theme.ts';
-import { infoRow } from './modal-surface-helpers.ts';
+import { infoRow, headerRow } from './modal-surface-helpers.ts';
 import { readFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
@@ -136,7 +136,7 @@ class SkillsModalSurface implements ConfigModalSurface {
     const rows: ConfigModalRow[] = [];
     if (this.cached.length === 0) {
       rows.push(infoRow('empty:0', 'No skills discovered.'));
-      rows.push(infoRow('empty:title', 'Next steps'));
+      rows.push(headerRow('empty:title', 'Next steps'));
       rows.push(infoRow('empty:dir', '.goodvibes/skills       — place skill .md files here (project-local) or ~/.goodvibes/skills (global)', { fg: MODAL_TONES.dim }));
       rows.push(infoRow('empty:registry', '/registry search skills — inspect the same skill directories from the shell', { fg: MODAL_TONES.dim }));
       return { title: 'Skills', tabs: [{ id: 'skills', label: 'Skills', rows, emptyText: '' }] };

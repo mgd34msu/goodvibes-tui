@@ -5,9 +5,10 @@ import { OnboardingWizardController } from '../../input/onboarding/onboarding-wi
 import { renderOnboardingWizard } from '../../renderer/onboarding/onboarding-wizard.ts';
 import { makeOnboardingSnapshot } from '../helpers/onboarding-snapshot.ts';
 import { linesToText } from '../setup.ts';
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 
 function overlayText(modal: SelectionModal, width: number): { lines: string[]; text: string } {
-  const cells = renderSelectionModalOverlay(modal, width);
+  const cells = frameFromLayer(renderSelectionModalOverlay(modal, width, 24), width, 24);
   for (const line of cells) expect(line.length).toBe(width);
   const lines = cells.map((line) => line.map((cell) => cell.char).join(''));
   return { lines, text: lines.join('\n') };
@@ -68,7 +69,7 @@ describe('onboarding provider step renders provider-agnostic key fields', () => 
   for (const [width, height] of [[80, 24], [60, 24]] as const) {
     test(`provider-agnostic key field label shows at ${width}x${height}`, () => {
       const wizard = providerStepController();
-      const lines = renderOnboardingWizard(wizard, width, height);
+      const lines = frameFromLayer(renderOnboardingWizard(wizard, width, height), width, height);
       expect(lines).toHaveLength(height);
       for (const line of lines) expect(line.length).toBe(width);
       const text = linesToText(lines).join('\n');

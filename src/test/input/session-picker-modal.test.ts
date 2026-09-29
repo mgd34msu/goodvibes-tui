@@ -4,6 +4,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { rmSync, existsSync } from 'fs';
 import { SessionPickerModal } from '../../input/session-picker-modal.ts';
+import { handleSessionPickerToken } from '../../input/handler-modal-routes.ts';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { makeTestSurface } from '../helpers/session-surface.ts';
@@ -144,5 +145,58 @@ describe('SessionPickerModal', () => {
     modal.moveUp();
     modal.moveDown();
     expect(modal.selectedIndex).toBe(0);
+  });
+});
+
+describe('session picker: always-live search and arm-then-delete', () => {
+  function makeState(modal: SessionPickerModal) {
+    let escaped = 0;
+    return {
+      state: {
+        sessionPickerModal: modal,
+        requestRender: () => {},
+        handleEscape: () => { escaped++; modal.close(); },
+      },
+      escaped: () => escaped,
+    };
+  }
+  function modalWith(names: string[]): SessionPickerModal {
+    const modal = new SessionPickerModal({ list: () => names.map((name, i) => ({ name, title: '', model: 'm', provider: 'p', timestamp: i, messageCount: 1, filePath: `/x/${name}.jsonl` })) } as never);
+    modal.open();
+    return modal;
+  }
+  const text = (value: string) => ({ type: 'text', value }) as never;
+  const key = (name: string) => ({ type: 'key', name, logicalName: name, ctrl: false, shift: false, meta: false }) as never;
+
+  test('typing filters the sessions at once; the selection follows the filtered list', () => {
+    const modal = modalWith(['alpha', 'beta', 'gamma']);
+    const { state } = makeState(modal);
+    for (const ch of 'gam') handleSessionPickerToken(state as never, text(ch));
+    expect(modal.query).toBe('gam');
+    expect(modal.visibleSessions().map((s) => s.name)).toEqual(['gamma']);
+    expect(modal.getSelected()?.name).toBe('gamma');
+    handleSessionPickerToken(state as never, key('backspace'));
+    expect(modal.query).toBe('ga');
+  });
+
+  test('d arms delete (and asks again) only while the query is empty; otherwise it is search text', () => {
+    const modal = modalWith(['delta', 'epsilon']);
+    const { state } = makeState(modal);
+    handleSessionPickerToken(state as never, text('d'));
+    expect(modal.deleteConfirmationTarget).toBe('delta');
+    const other = modalWith(['delta', 'epsilon']);
+    const second = makeState(other);
+    handleSessionPickerToken(second.state as never, text('e'));
+    handleSessionPickerToken(second.state as never, text('d'));
+    expect(other.query).toBe('ed');
+    expect(other.deleteConfirmationTarget).toBeNull();
+  });
+
+  test('Esc closes in one press even with a query (a query is not a level)', () => {
+    const modal = modalWith(['alpha']);
+    const { state, escaped } = makeState(modal);
+    handleSessionPickerToken(state as never, text('a'));
+    handleSessionPickerToken(state as never, key('escape'));
+    expect(escaped()).toBe(1);
   });
 });

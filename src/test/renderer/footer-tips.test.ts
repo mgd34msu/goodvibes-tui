@@ -5,15 +5,15 @@ describe('footer-tips', () => {
   test('default tip leads with panels; F2 names the Fleet panel and quit advertises the double-press honestly', () => {
     // e: F2 opens Fleet (not the retired process modal). f: an empty
     // composer needs Ctrl+C TWICE within ~1s to exit, so the tip says "x2".
-    // Ctrl+P is a TOGGLE (open+focus / hide), not just "panels",
+    // Ctrl+P opens the command palette,
     // naming the verb keeps the tip honest.
     expect(buildFooterTip({ agentActive: false }))
-      .toBe('Ctrl+P toggle panels · F2 fleet · ? help · Ctrl+C x2 quit');
+      .toBe('Ctrl+P commands · F2 fleet · ? help · Ctrl+C x2 quit');
   });
 
   test('agent-active tip promotes the Fleet panel jump to the front', () => {
     expect(buildFooterTip({ agentActive: true }))
-      .toBe('F2 fleet · Ctrl+P toggle panels · ? help · Ctrl+C x2 quit');
+      .toBe('F2 fleet · Ctrl+P commands · ? help · Ctrl+C x2 quit');
   });
 
   test('isAgentActive recognizes in-flight turn statuses', () => {

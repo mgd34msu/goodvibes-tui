@@ -13,6 +13,10 @@ import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { ServiceInspectionQuery } from '@/runtime/index.ts';
 import type { EmbeddingProviderPickerEntry, ModelPickerTargetInfo } from '../input/model-picker.ts';
+import { CommandPalette, buildPaletteEntries } from '../input/command-palette.ts';
+import { confirmThrough } from '../input/confirm-dialog.ts';
+import { bridgeNotificationFeedToToasts, getSharedToastCenter } from '../renderer/toast-center.ts';
+import { getSharedNotificationFeed } from '../panels/notifications-feed.ts';
 import type { SelectionItem } from '../input/selection-modal.ts';
 import { categorizeBuiltinCommands } from '../input/commands.ts';
 import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
@@ -382,6 +386,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     if (!input.helpOverlayActive) input.modalOpened('help');
     input.helpOverlayActive = !input.helpOverlayActive;
     input.helpScrollOffset = 0;
+    input.overlayFilters.help.clear();
     render();
   };
 
@@ -398,6 +403,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     if (!input.shortcutsOverlayActive) input.modalOpened('shortcuts');
     input.shortcutsOverlayActive = !input.shortcutsOverlayActive;
     input.shortcutsScrollOffset = 0;
+    input.overlayFilters.shortcuts.clear();
     render();
   };
 
@@ -552,51 +558,43 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   // the same categories as the palette and the generated reference.
   commandContext.getCommandCategories = () => getCommandCategoryMap();
 
+  input.surfaceModals.onChange = render;
+  commandContext.confirm = (options) => confirmThrough(input.surfaceModals, options);
+  const toasts = getSharedToastCenter();
+  toasts.onChange = render;
+  commandContext.showToast = (toast) => toasts.show(toast);
+  bridgeNotificationFeedToToasts(getSharedNotificationFeed(), toasts);
+
   commandContext.openCommandPalette = () => {
     // The palette is built live from the command registry, never a hardcoded
     // list, so it can never drift from the real command set. Category labels
     // come from the same source the generated docs use (getCommandCategoryMap).
     const registry = input.commandRegistry;
     if (!registry) return;
-    const categoryByName = getCommandCategoryMap();
-    const items: SelectionItem[] = registry
-      .getAll()
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((cmd) => {
-        const argsHint = cmd.argsHint ?? cmd.usage;
-        const detailParts: string[] = [];
-        if (cmd.description) detailParts.push(cmd.description);
-        if (argsHint) detailParts.push(`(args: ${argsHint})`);
-        if ((cmd.aliases ?? []).length > 0) detailParts.push(`[aka ${(cmd.aliases ?? []).map((a) => `/${a}`).join(', ')}]`);
-        return {
-          id: cmd.name,
-          label: `/${cmd.name}`,
-          detail: detailParts.join(' '),
-          category: categoryByName.get(cmd.name) ?? 'Other',
-          primaryAction: 'select' as const,
-        };
-      });
-    commandContext.openSelection?.(
-      'Command Palette',
-      items,
-      { allowSearch: true, primaryVerbLabel: 'Run' },
-      (result) => {
-        if (!result) return;
-        const cmd = registry.get(result.item.id);
-        if (!cmd) return;
-        // Pre-fill the composer with the command (and a trailing space so the
-        // inline args hint shows what the command wants). Keyboard-first: focus
-        // returns to the composer with command mode armed so the user fills any
-        // args and presses Enter, matching tab-completion's fill behavior.
-        input.prompt = `/${cmd.name} `;
+    const top = input.surfaceModals.top();
+    if (top instanceof CommandPalette) return;
+    const palette = new CommandPalette({
+      entries: buildPaletteEntries(registry.getAll(), getCommandCategoryMap()),
+      describe: (id) => (id === 'model' ? commandContext.session.runtime.model || undefined : undefined),
+      onRun: (entry, mode) => {
+        if (mode === 'run' && commandContext.executeCommand) {
+          void commandContext.executeCommand(entry.id, []).finally(() => render());
+          return;
+        }
+        // Fill the composer with the command (and a trailing space so the
+        // inline args hint shows what the command wants), command mode armed,
+        // so the user types any arguments and presses Enter, matching
+        // tab-completion's fill behavior.
+        input.prompt = `/${entry.id} `;
         input.cursorPos = input.prompt.length;
         input.commandMode = true;
         input.autocomplete?.reset();
         commandContext.focusPrompt?.();
         render();
       },
-    );
+    });
+    input.surfaceModals.push(palette);
+    render();
   };
 
   commandContext.focusPanels = () => {

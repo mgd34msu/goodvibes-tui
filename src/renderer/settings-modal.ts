@@ -1,779 +1,375 @@
 /**
- * Fullscreen configuration workspace.
+ * renderSettingsModal, the settings modal drawn with the surface kit.
  *
- * This intentionally does not use ModalFactory. Configuration needs a stable,
- * roomy workspace with contextual documentation, not a cramped modal list.
+ *   ✦ Settings › Display › Theme                                  esc
+ *
+ *   ▏Search all settings                                       display
+ *
+ *   ✦ interface          ┌ element panel ─────────────────────────────┐
+ *     Display        9     ◇ Theme                        goodvibes
+ *     UI             4       Color palette for the whole interface…
+ *   ✦ ai routing             display.theme · default goodvibes · …
+ *     Provider       7     Theme mode                          dark
+ *
+ *   ↑↓ move   ⏎ change   ←→ category   ctrl+r reset to default
+ *
+ * Search reaches every setting in every category at once (the search row is
+ * always live). Categories on the left, plain rows on the right: name, value,
+ * and a ◇ when the value differs from the default. The selected row explains
+ * itself in place, wrapped in full, with its key, default, type and source
+ * (PgUp/PgDn scroll long documentation). The breadcrumb in the title says
+ * where you are. Changes to the theme preview live (see theme-settings-actions).
  */
 
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
-import type { SettingsModal, SettingEntry, McpEntry, SubscriptionEntry, SettingsCategory } from '../input/settings-modal.ts';
+import type { SettingsModal, SettingEntry, SettingsCategory } from '../input/settings-modal.ts';
 import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../input/settings-modal.ts';
-import { FEATURE_SETTINGS_BY_ID, isFeatureValueEnabled } from '@pellux/goodvibes-terminal-shell';
-import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
-import { CATEGORY_INFO, CATEGORY_LABELS, describeUiRouting, formatValue, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
-import { buildConnectionContext, renderConnectionRows } from './settings-modal-connections.ts';
-import { isSecretConfigKey } from '../config/secret-config.ts';
-import { maskConcealedText } from '../input/concealed-input.ts';
-import { CVV_PROMPT_TRADEOFF_WARNING } from '@pellux/goodvibes-sdk/platform/payments';
-import { GLYPHS } from './ui-primitives.ts';
-import { formatHints, joinHints } from './hint-grammar.ts';
+import { isFeatureValueEnabled } from '@pellux/goodvibes-terminal-shell';
+import { CATEGORY_LABELS, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
+import { connectionRows } from './settings-modal-connections.ts';
+import { categoryItemCount, currentSettingValue, settingContextLines } from './settings-modal-context.ts';
+import { activeTokens } from './theme.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 import {
-  clamp,
-  getFullscreenWorkspaceMetrics,
-  padDisplay,
-  renderFullscreenWorkspace,
-  stableWindow,
-  WORKSPACE_PALETTE as PALETTE,
-  type WorkspaceRow,
-} from './fullscreen-workspace.ts';
+  beginModal,
+  clipText,
+  finishModal,
+  scrollCountText,
+  searchRow,
+  tailText,
+  wrapLines,
+  type KitHint,
+  type ModalFrame,
+  type SurfaceLayer,
+} from './surface-kit.ts';
+import { drawRow, drawScrollingList, measureRow, rememberStart, rememberedStart, type KitRow } from './surface-kit-list.ts';
+import { panel, type KitPanel } from './surface-kit-parts.ts';
 
-
-const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
-  'display.themeMode': {
-    auto: 'Probe the terminal background colour (OSC 11) once at startup and pick light or dark. Falls back to dark on unreadable/unsupported terminals. Only evaluated at startup: selecting auto takes effect next launch.',
-    dark: 'Force the dark theme regardless of terminal background. Applies immediately.',
-    light: 'Force the light theme regardless of terminal background. Applies immediately.',
-  },
-  'behavior.hitlMode': {
-    quiet: 'Minimize operational interruptions and surface fewer Human-in-the-Loop prompts.',
-    balanced: 'Show important Human-in-the-Loop prompts without turning routine work into noise.',
-    operator: 'Surface more operational detail for users actively supervising agents, tools, services, and automation.',
-  },
-  'behavior.guidanceMode': {
-    off: 'Do not add extra guidance beyond direct command output.',
-    minimal: 'Show concise guidance only when it helps avoid mistakes.',
-    guided: 'Provide more explanation and next-step context during configuration and operations.',
-  },
-  'permissions.mode': {
-    prompt: 'Normal: ask before powerful or risky actions according to tool policy.',
-    plan: 'Plan mode: read-only planning posture; writes, commands, and network calls are blocked so the model can plan without changing anything. Toggle with /plan or Shift+Tab.',
-    'accept-edits': 'Accept edits: file writes and edits are auto-approved, but exec, network, and escalations are still gated.',
-    'allow-all': 'Auto: allow all actions without prompting. Fast, but removes an important safety gate.',
-    custom: 'Use per-tool-class permission settings from the rows below.',
-  },
-  'permissions.backgroundAgents': {
-    inherit: 'Background and subagent tool calls run through the SAME session permission mode as foreground work.',
-    'allow-all': 'Background and subagent tool calls are exempt from prompting (auto-approved) even when foreground work is gated.',
-  },
-  'diagnostics.postEdit': {
-    on: 'After the model edits or writes a file, run language diagnostics on it and surface any new problems.',
-    off: 'Do not run diagnostics automatically after edits.',
-  },
-  'storage.secretPolicy': {
-    preferred_secure: 'Use secure secret storage when available, with supported fallback behavior.',
-    require_secure: 'Require secure secret storage and reject plaintext fallback.',
-    plaintext_allowed: 'Allow plaintext fallback when secure storage is unavailable.',
-  },
-  'batch.mode': {
-    off: 'Keep daemon work on the immediate local path.',
-    explicit: 'Use batch only when callers explicitly request batch execution.',
-    'eligible-by-default': 'Allow eligible daemon work to use the batch path unless callers opt out.',
-  },
-  'controlPlane.hostMode': {
-    localhost: 'Bind only to this computer.',
-    network: 'Bind for LAN access using the default network host.',
-    custom: 'Use the explicit host value in the related host setting.',
-  },
-  'httpListener.hostMode': {
-    localhost: 'Bind only to this computer.',
-    network: 'Bind for LAN/webhook access using the default network host.',
-    custom: 'Use the explicit host value in the related host setting.',
-  },
-  'web.hostMode': {
-    localhost: 'Serve the browser UI only on this computer.',
-    network: 'Serve the browser UI on the LAN.',
-    custom: 'Use the explicit host value in the related host setting.',
-  },
-  'ui.systemMessages': {
-    panel: 'Show system messages in panels only.',
-    conversation: 'Show system messages inline in the transcript.',
-    both: 'Show system messages in both panels and the transcript.',
-  },
-  'ui.operationalMessages': {
-    panel: 'Show operational messages in panels only.',
-    conversation: 'Show operational messages inline in the transcript.',
-    both: 'Show operational messages in both panels and the transcript.',
-  },
-  'ui.wrfcMessages': {
-    panel: 'Show WRFC messages in panels only.',
-    conversation: 'Show WRFC messages inline in the transcript.',
-    both: 'Show WRFC messages in both panels and the transcript.',
-  },
-  'surfaces.telegram.mode': {
-    webhook: 'Receive Telegram updates through webhook delivery.',
-    polling: 'Poll Telegram for updates from the service.',
-  },
-  'surfaces.whatsapp.provider': {
-    'meta-cloud': 'Use Meta Cloud API credentials and identifiers.',
-    bridge: 'Use a bridge service URL/token flow instead of direct Meta Cloud API delivery.',
-  },
-  'payments.cvvHandling': {
-    stored: 'Store the CVV through the secret manager so the daemon can complete a purchase unattended.',
-    prompt: CVV_PROMPT_TRADEOFF_WARNING,
-  },
-};
-
-function paddedWrapped(text: string, width: number, prefix = ''): string[] {
-  const safeWidth = Math.max(1, width - getDisplayWidth(prefix));
-  const wrapped = wrapText(text, safeWidth);
-  if (prefix.length === 0) return wrapped;
-  return wrapped.map((line, index) => `${index === 0 ? prefix : ' '.repeat(getDisplayWidth(prefix))}${line}`);
-}
-
-function formatDefaultValue(value: unknown): string {
-  if (value === '') return '(empty)';
-  if (value === null || value === undefined) return '(unset)';
-  return String(value);
-}
-
-function currentSettingValue(modal: SettingsModal, entry: SettingEntry, selected: boolean): string {
-  if (selected && modal.editingMode) {
-    // Secret-backed keys (surfaces.*.botToken, .signingSecret, etc., see
-    // secret-config.ts) must never echo the in-progress plaintext buffer:
-    // not in the row, not in the "Current: ..." context line, not in search
-    // results. Reuse the composer's concealed-input mask (concealed-input.ts)
-    // rather than a second masking implementation, same bullet-per-character
-    // shape, so keystrokes still visibly register without revealing content.
-    const buffer = isSecretConfigKey(entry.setting.key) ? maskConcealedText(modal.editBuffer) : modal.editBuffer;
-    return `${buffer}${GLYPHS.surface.cursor}`;
-  }
-  return formatValue(entry);
-}
-
-function buildSettingContext(modal: SettingsModal, entry: SettingEntry): string[] {
-  const lines: string[] = [
-    getSettingLabel(entry),
-    `Key: ${entry.setting.key}`,
-    `Current: ${currentSettingValue(modal, entry, true)}`,
-    `Default: ${formatDefaultValue(entry.setting.default)}`,
-    `Type: ${entry.setting.type}${entry.setting.enumValues ? ` with ${entry.setting.enumValues.length} possible value(s)` : ''}`,
-    `Source: ${entry.effectiveSource ?? 'default'}${entry.sourceLabel ? ` from ${entry.sourceLabel}` : ''}`,
-  ];
-
-  if (entry.locked) lines.push(`Locked: ${entry.lockReason ?? 'This setting is locked by a higher-priority layer.'}`);
-  if (entry.conflict) lines.push(`Conflict: resolve with /settings-sync resolve ${entry.setting.key} local|synced.`);
-
-  // A settings sub-row owned by a feature unit names its feature so "what does this do" is answerable without scrolling back to the header row.
-  if (entry.ownerFlagId) {
-    const owner = FEATURE_SETTINGS_BY_ID.get(entry.ownerFlagId);
-    if (owner) lines.push(`Part of feature: ${owner.name} (the header row above).`);
-  }
-
-  lines.push('', entry.setting.description);
-
-  if (
-    entry.setting.key === 'ui.systemMessages'
-    || entry.setting.key === 'ui.operationalMessages'
-    || entry.setting.key === 'ui.wrfcMessages'
-  ) {
-    lines.push(`Routing meaning: ${describeUiRouting(String(entry.currentValue))}.`);
-  }
-
-  if (entry.setting.type === 'boolean') {
-    lines.push('');
-    lines.push('Possible values:');
-    lines.push('true: enabled or allowed for this setting.');
-    lines.push('false: disabled or not allowed for this setting.');
-  }
-
-  if (entry.setting.type === 'enum' && entry.setting.enumValues) {
-    lines.push('');
-    lines.push('Possible values:');
-    const descriptions = ENUM_VALUE_DESCRIPTIONS[entry.setting.key] ?? {};
-    for (const value of entry.setting.enumValues) {
-      lines.push(`${value}: ${descriptions[value] ?? `Use ${value} for this setting.`}`);
-    }
-  }
-
-  if (isSecretConfigKey(entry.setting.key)) {
-    lines.push('');
-    lines.push('Secret handling: raw values entered here are stored through the secret manager and the config receives a goodvibes:// secret reference. Empty input clears the config value.');
-  }
-
-  if (entry.setting.type === 'number') {
-    lines.push('');
-    lines.push('Editing: Enter opens inline edit, then type the value and press Enter to save. Arrow keys only navigate.');
-  }
-
-  if (entry.setting.type === 'string' && !isSecretConfigKey(entry.setting.key)) {
-    lines.push('');
-    lines.push('Editing: Enter opens inline edit. Delete the current text to save an empty value when that is valid for the setting.');
-  }
-
-  return lines;
-}
+// ---------------------------------------------------------------------------
+// Rows
+// ---------------------------------------------------------------------------
 
 /**
- * The option shape of a feature header, rendered from the same schema the
- * write path uses: enum headers list every mode choice (marking the current
- * value and which values keep the feature active), boolean headers state the
- * two positions.
+ * Keep a long value from crowding the name out (the documentation shows it in
+ * full). While editing, the value gets all the room the label leaves, and a
+ * draft longer than that keeps its end (where the cursor is) in view.
  */
-function buildFeatureOptionLines(entry: SettingEntry): string[] {
-  const feature = entry.flag!.feature;
-  const setting = entry.setting;
-  const lines: string[] = [];
-  if (setting.type === 'enum' && setting.enumValues) {
-    lines.push('', `Mode choices for ${setting.key}:`);
-    const activeValues = feature.enablement.enabledValues ?? [];
-    const descriptions = ENUM_VALUE_DESCRIPTIONS[setting.key] ?? {};
-    for (const value of setting.enumValues) {
-      const marks: string[] = [];
-      if (value === String(entry.currentValue)) marks.push('current');
-      if (feature.enablement.kind === 'enum') {
-        marks.push(activeValues.includes(value) ? 'feature on' : 'feature off');
-      }
-      const suffix = marks.length > 0 ? ` (${marks.join(', ')})` : '';
-      lines.push(`${value}${suffix}: ${descriptions[value] ?? `Use ${value} for this setting.`}`);
-    }
-  } else if (setting.type === 'boolean') {
-    lines.push('');
-    lines.push('Possible values:');
-    lines.push('true: the feature is enabled.');
-    lines.push('false: the feature is disabled.');
-  }
-  return lines;
+function fitValue(value: string, width: number, editing: boolean, label = ''): string {
+  if (editing) return tailText(value, Math.max(8, width - getDisplayWidth(label) - 4));
+  return clipText(value, Math.max(8, Math.floor(width * 0.45)));
 }
 
-/**
- * Under-cursor documentation for a feature-unit header, rendered entirely
- * from the SDK's per-feature settings metadata: full behavior description,
- * the real option shape, every settings key that tunes the feature, and the
- * honest live/restart state from the gate manager.
- */
-function buildFlagContext(entry: SettingEntry | null): string[] {
-  const flagEntry = entry?.flag ?? null;
-  if (!entry || !flagEntry) return ['Features', 'No feature is selected.'];
-  const { feature, flag, state, persistedState, pendingRestart } = flagEntry;
-  const configOn = isFeatureValueEnabled(feature, entry.currentValue);
-  const displayState = state === 'killed' ? 'killed' : configOn ? 'enabled' : 'disabled';
-  const lines: string[] = [
-    feature.name,
-    `Feature: ${feature.id} (${feature.domain} domain)`,
-    `Setting: ${feature.enablement.key} = ${formatValue(entry)}`,
-    `State: ${displayState}`,
-    // A capability the registry declares not operable reads as disabled no
-    // matter what its settings key says. Without this line the row shows a
-    // value of true beside a state of disabled and explains nothing, the
-    // written reason exists in the registry, so render it where the user meets
-    // the contradiction rather than leaving it to be discovered.
-    ...(feature.operable === false && feature.inoperableDetail
-      ? [`Not available in this build: ${feature.inoperableDetail}`]
-      : []),
-    `Default: ${feature.defaultEnabled ? 'enabled' : 'disabled'}`,
-    `Applies: ${feature.restartRequired ? 'on next launch (startup-gated)' : 'immediately'}`,
-    ...(pendingRestart
-      ? [`Pending restart: saved as ${persistedState}; effective state stays ${state} until the next launch.`]
-      : []),
-    '',
-    feature.description,
-  ];
-
-  lines.push(...buildFeatureOptionLines(entry));
-
-  lines.push('');
-  if (feature.enablement.kind === 'enum') {
-    lines.push(`How it turns on: active while ${feature.enablement.key} is ${(feature.enablement.enabledValues ?? []).join(' or ')}.`);
-  } else if (feature.enablement.kind === 'constant' && entry.setting.type !== 'boolean') {
-    lines.push('How it turns on: always active; the settings listed below tune its behavior directly.');
-  } else {
-    lines.push(`How it turns on: ${feature.enablement.key} set to true.`);
-  }
-
-  if (feature.settings.length > 1) {
-    lines.push('', 'Settings in this feature:');
-    for (const key of feature.settings) {
-      lines.push(key === feature.enablement.key ? `${key} (this row)` : key);
-    }
-  }
-
-  if (state === 'killed' && flag.killReason) {
-    lines.push('', `Kill reason: ${flag.killReason}`);
-  }
-  return lines;
-}
-
-function buildMcpContext(modal: SettingsModal, entry: McpEntry | null): string[] {
-  if (!entry) return ['MCP trust', 'No MCP server is selected.'];
-  const scope = entry.allowedPaths.length > 0
-    ? `Allowed paths: ${entry.allowedPaths.join(', ')}`
-    : entry.allowedHosts.length > 0
-      ? `Allowed hosts: ${entry.allowedHosts.join(', ')}`
-      : 'No explicit path or host scope is configured.';
-  const confirmation = modal.mcpAllowAllConfirmationTarget === entry.name
-    ? `Confirmation required: type ALLOW ALL ${entry.name} to grant unrestricted trust.`
-    : 'Enter edits the trust mode. Valid values are constrained, ask-on-risk, allow-all, and blocked.';
-  return [
-    entry.name,
-    `Connection: ${entry.connected ? 'connected' : 'disconnected'}`,
-    `Role: ${entry.role}`,
-    `Trust mode: ${entry.trustMode}`,
-    confirmation,
-    '',
-    scope,
-    '',
-    'Trust meanings:',
-    'constrained: keep MCP activity inside declared paths/hosts and prompt on risk.',
-    'ask-on-risk: allow routine MCP operations but ask before risky behavior.',
-    'allow-all: allow unrestricted MCP operations for this server after explicit confirmation.',
-    'blocked: prevent this MCP server from being used.',
-  ];
-}
-
-function buildSubscriptionContext(modal: SettingsModal, entry: SubscriptionEntry | null): string[] {
-  if (!entry) return ['Subscriptions', 'No subscription provider is selected.'];
-  const expires = entry.expiresAt ? new Date(entry.expiresAt).toISOString() : 'not reported';
-  const routeReason = inferSubscriptionRouteReason(entry);
-  const logout = entry.state === 'active' || entry.state === 'pending'
-    ? modal.subscriptionLogoutConfirmationTarget === entry.provider
-      ? `Sign out ${entry.provider}? Enter/y to confirm, n/Esc to cancel.`
-      : 'Press Enter to begin sign-out for this provider session.'
-    : `Use /subscription login ${entry.provider} start to begin OAuth sign-in for this provider.`;
-  return [
-    entry.provider,
-    `State: ${entry.state}`,
-    ...(routeReason ? [routeReason] : []),
-    logout,
-    `Active route: ${entry.activeRoute ?? 'n/a'}`,
-    `Preferred route: ${entry.preferredRoute ?? 'n/a'}`,
-    `OAuth configured: ${entry.oauthConfigured ? 'yes' : 'no'}`,
-    `Freshness: ${entry.authFreshness ?? 'n/a'}`,
-    `Expires: ${expires}`,
-    ...((entry.issues ?? []).length > 0 ? ['', 'Issues:', ...(entry.issues ?? [])] : []),
-    ...((entry.nextActions ?? []).length > 0 ? ['', 'Next actions:', ...(entry.nextActions ?? [])] : []),
-  ];
-}
-
-function buildContextLines(modal: SettingsModal, width: number): string[] {
-  const category = modal.currentCategory;
-
-  // Search mode: show context for the selected search result, or a help blurb
-  if (modal.searchFocused) {
-    const selected = modal.getSelected();
-    const lines: string[] = ['Search Results'];
-    if (selected) {
-      lines.push(...buildSettingContext(modal, selected));
-    } else {
-      lines.push(
-        modal.searchQuery.trim().length === 0
-          ? 'Type a query to search across all settings categories.'
-          : 'No settings matched the search query.',
-      );
-    }
-    const wrapped: string[] = [];
-    for (const line of lines) {
-      if (line === '') { wrapped.push(''); continue; }
-      wrapped.push(...paddedWrapped(line, width));
-    }
-    return wrapped;
-  }
-
-  const lines: string[] = [
-    `${CATEGORY_LABELS[category]} configuration`,
-  ];
-
-  if (category === 'mcp') {
-    lines.push(...buildMcpContext(modal, modal.getSelectedMcp()));
-  } else if (category === 'subscriptions') {
-    lines.push(...buildSubscriptionContext(modal, modal.getSelectedSubscription()));
-  } else if (category === 'connections') {
-    lines.push(...buildConnectionContext(modal));
-  } else {
-    const selected = modal.getSelected();
-    // A feature-unit header shows the feature's documentation (full
-    // description, option shape, settings list, live/restart state); its
-    // settings sub-rows and plain settings show the setting context.
-    if (selected?.flag) lines.push(...buildFlagContext(selected));
-    else if (selected) lines.push(...buildSettingContext(modal, selected));
-    else lines.push('No setting is selected in this category.');
-  }
-
-  lines.push('', `Category purpose: ${CATEGORY_INFO[category]}`);
-
-  const wrapped: string[] = [];
-  for (const line of lines) {
-    if (line === '') {
-      wrapped.push('');
-      continue;
-    }
-    wrapped.push(...paddedWrapped(line, width));
-  }
-  return wrapped;
-}
-
-function categoryItemCount(modal: SettingsModal, category: SettingsCategory): number {
-  if (category === 'mcp') return modal.mcpEntries.length;
-  if (category === 'subscriptions') return modal.subscriptionEntries.length;
-  if (category === 'connections') return modal.connectionEntries.length;
-  return modal.groups.get(category)?.length ?? 0;
-}
-
-type CategoryRailEntry =
-  | { readonly type: 'group'; readonly label: string }
-  | { readonly type: 'category'; readonly category: SettingsCategory; readonly index: number };
-
-type CategoryRailRow = {
-  readonly text: string;
-  readonly type: CategoryRailEntry['type'] | 'more' | 'empty';
-  readonly selected: boolean;
-};
-
-function buildCategoryRailEntries(): CategoryRailEntry[] {
-  const entries: CategoryRailEntry[] = [];
-  for (const group of SETTINGS_CATEGORY_GROUPS) {
-    const categories = group.categories.filter(category => SETTINGS_CATEGORIES.includes(category));
-    if (categories.length === 0) continue;
-    entries.push({ type: 'group', label: group.label });
-    for (const category of categories) {
-      entries.push({
-        type: 'category',
-        category,
-        index: SETTINGS_CATEGORIES.indexOf(category),
-      });
-    }
-  }
-  return entries;
-}
-
-function renderCategories(modal: SettingsModal, width: number, height: number): CategoryRailRow[] {
-  const rows: CategoryRailRow[] = [];
-  const entries = buildCategoryRailEntries();
-  const selectedEntryIndex = Math.max(0, entries.findIndex(entry => entry.type === 'category' && entry.index === modal.categoryIndex));
-  const window = stableWindow(entries.length, selectedEntryIndex, height);
-  if (window.start > 0) rows.push({ text: `${GLYPHS.navigation.moreAbove} ${window.start} more row(s) above`, type: 'more', selected: false });
-  for (let railIndex = window.start; railIndex < window.end; railIndex += 1) {
-    const entry = entries[railIndex]!;
-    if (entry.type === 'group') {
-      rows.push({ text: entry.label.toUpperCase(), type: 'group', selected: false });
-      continue;
-    }
-    const category = entry.category;
-    const active = entry.index === modal.categoryIndex;
-    const count = categoryItemCount(modal, category);
-    const cursor = active ? (modal.focusPane === 'categories' ? GLYPHS.navigation.selected : '•') : ' ';
-    rows.push({ text: `  ${cursor} ${CATEGORY_LABELS[category]} (${count})`, type: 'category', selected: active });
-  }
-  if (window.end < entries.length) rows.push({ text: `${GLYPHS.navigation.moreBelow} ${entries.length - window.end} more row(s) below`, type: 'more', selected: false });
-  while (rows.length < height) rows.push({ text: '', type: 'empty', selected: false });
-  return rows.slice(0, height);
-}
-
-function renderSettingRows(modal: SettingsModal, width: number, height: number): string[] {
-  const rows: string[] = [];
-  const items = modal.currentItems;
-  if (items.length === 0) return ['No settings in this category.'];
-  const selectedIndex = clamp(modal.selectedIndex, 0, items.length - 1);
-  const typeWidth = 9;
-  const sourceWidth = 12;
-  const defaultWidth = 12;
-  const available = Math.max(24, width - typeWidth - sourceWidth - defaultWidth - 13);
-  const keyWidth = clamp(Math.floor(available * 0.56), 18, 52);
-  const valueWidth = Math.max(10, available - keyWidth);
-  rows.push(`  ${padDisplay('Setting', keyWidth)}  ${padDisplay('Value', valueWidth)}  ${padDisplay('Type', typeWidth)}  ${padDisplay('Source', sourceWidth)}  ${padDisplay('Default', defaultWidth)}`);
-  const visibleCount = Math.max(1, height - 2);
-  const window = stableWindow(items.length, selectedIndex, visibleCount);
-  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more setting(s) above`);
-
-  for (let index = window.start; index < window.end; index += 1) {
-    const entry = items[index]!;
-    const selected = index === selectedIndex;
-    const marker = selected ? (modal.focusPane === 'settings' ? GLYPHS.navigation.selected : '•') : entry.isDefault ? ' ' : '◇';
-    rows.push(renderSettingTableRow(modal, entry, selected, marker, keyWidth, valueWidth, typeWidth, sourceWidth, defaultWidth));
-  }
-
-  if (window.end < items.length) rows.push(`${GLYPHS.navigation.moreBelow} ${items.length - window.end} more setting(s) below`);
-  return rows.slice(0, height);
-}
-
-/**
- * One settings-table row. A feature-unit toggle header (entry.flag) shows the
- * flag name, its live state, tier/toggleability, and default state. A config
- * sub-option owned by a feature unit (entry.ownerFlagId) is indented under its
- * header. Everything else renders as a plain setting row.
- */
-function renderSettingTableRow(
-  modal: SettingsModal,
-  entry: SettingEntry,
-  selected: boolean,
-  marker: string,
-  keyWidth: number,
-  valueWidth: number,
-  typeWidth: number,
-  sourceWidth: number,
-  defaultWidth: number,
-): string {
+function settingRow(modal: SettingsModal, entry: SettingEntry, selected: boolean, focused: boolean, width: number, category?: string): KitRow {
+  const t = activeTokens();
+  const editing = selected && modal.editingMode;
+  const danger = modal.currentCategory === 'danger' && !modal.searchFocused;
   if (entry.flag) {
     const { feature, state, pendingRestart } = entry.flag;
     const configOn = isFeatureValueEnabled(feature, entry.currentValue);
-    const stateMark = state === 'killed' ? '✕' : configOn ? '●' : '○';
-    const label = `${stateMark} ${feature.name}`;
-    const source = feature.restartRequired ? 'restart' : 'live';
+    const raw = currentSettingValue(modal, entry, selected);
     // A startup-gated feature changed this session shows its saved value with
-    // a compact restart-pending marker (⟳), so the row never implies the
-    // change already took effect; the documentation pane spells out the full
-    // "Pending restart: ..." sentence.
-    const rawValue = currentSettingValue(modal, entry, selected);
-    const value = pendingRestart ? `${rawValue} ⟳` : rawValue;
-    return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay('feature', typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(feature.defaultEnabled ? 'enabled' : 'disabled', defaultWidth)}`;
+    // a restart-pending marker (⟳); the documentation spells it out.
+    const value = pendingRestart ? `${raw} ⟳` : raw;
+    return {
+      label: feature.name,
+      desc: category,
+      right: fitValue(value, width, editing, feature.name),
+      rightFg: valueColor(entry),
+      mark: state === 'killed' ? '✕' : configOn ? '●' : '○',
+      markFg: state === 'killed' ? t.error : configOn ? t.success : t.textFaint,
+      selected: selected && focused,
+      current: selected && !focused,
+      labelFg: danger ? t.error : undefined,
+    };
   }
-  const value = currentSettingValue(modal, entry, selected);
-  const source = `${entry.effectiveSource ?? 'default'}${entry.locked ? ' locked' : ''}${entry.conflict ? ' conflict' : ''}`;
-  // Sub-options of a feature unit are indented under their toggle header so the
-  // "one unit = toggle + its knobs" grouping reads at a glance.
-  const label = entry.ownerFlagId ? `  · ${getSettingLabel(entry)}` : getSettingLabel(entry);
-  return `${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay(entry.setting.type, typeWidth)}  ${padDisplay(source, sourceWidth)}  ${padDisplay(formatDefaultValue(entry.setting.default), defaultWidth)}`;
+  const flags = [entry.locked ? 'locked' : '', entry.conflict ? 'conflict' : ''].filter(Boolean).join(' · ');
+  const desc = [category, flags].filter(Boolean).join(' · ');
+  return {
+    // Sub-options of a feature unit read as part of the unit above them.
+    label: entry.ownerFlagId ? `· ${getSettingLabel(entry)}` : getSettingLabel(entry),
+    desc: desc || undefined,
+    right: fitValue(currentSettingValue(modal, entry, selected), width, editing, getSettingLabel(entry)),
+    rightFg: valueColor(entry),
+    mark: entry.isDefault ? undefined : '◇',
+    markFg: t.warning,
+    selected: selected && focused,
+    current: selected && !focused,
+    labelFg: danger ? t.error : undefined,
+  };
 }
 
-function renderMcpRows(modal: SettingsModal, width: number, height: number): string[] {
-  const rows: string[] = [];
-  const items = modal.mcpEntries;
-  if (items.length === 0) return ['No MCP servers registered.'];
-  const selectedIndex = clamp(modal.selectedIndex, 0, items.length - 1);
-  const nameWidth = clamp(Math.floor(width * 0.32), 18, 44);
-  const trustWidth = 14;
-  const roleWidth = 12;
-  const statusWidth = 12;
-  const scopeWidth = Math.max(12, width - nameWidth - trustWidth - roleWidth - statusWidth - 10);
-  rows.push(`  ${padDisplay('Server', nameWidth)}  ${padDisplay('Trust', trustWidth)}  ${padDisplay('Role', roleWidth)}  ${padDisplay('Status', statusWidth)}  ${padDisplay('Scope', scopeWidth)}`);
-  const window = stableWindow(items.length, selectedIndex, Math.max(1, height - 2));
-  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more MCP server(s) above`);
-  for (let index = window.start; index < window.end; index += 1) {
-    const entry = items[index]!;
-    const selected = index === selectedIndex;
-    const trust = selected && modal.editingMode ? `${modal.editBuffer}${GLYPHS.surface.cursor}` : entry.trustMode;
-    const scope = entry.allowedPaths.length > 0 ? entry.allowedPaths.join(', ') : entry.allowedHosts.length > 0 ? entry.allowedHosts.join(', ') : 'none';
-    const marker = selected ? (modal.focusPane === 'settings' ? GLYPHS.navigation.selected : '•') : ' ';
-    rows.push(`${marker} ${padDisplay(entry.name, nameWidth)}  ${padDisplay(trust, trustWidth)}  ${padDisplay(entry.role, roleWidth)}  ${padDisplay(entry.connected ? 'connected' : 'offline', statusWidth)}  ${padDisplay(scope, scopeWidth)}`);
+function categoryOf(entry: SettingEntry): string {
+  const prefix = entry.setting.key.split('.')[0] ?? '';
+  return CATEGORY_LABELS[prefix as SettingsCategory] ?? prefix;
+}
+
+/** The rows of the right-hand list for the current view, and which one is selected. */
+function listRows(modal: SettingsModal, width: number): { rows: KitRow[]; selected: number } {
+  const focused = modal.searchFocused || (modal.focusPane ?? 'settings') === 'settings';
+  const clampIndex = (n: number): number => Math.max(0, Math.min(modal.selectedIndex, n - 1));
+  if (modal.searchFocused) {
+    const results = modal.searchResults;
+    if (results.length === 0) return { rows: [], selected: -1 };
+    const sel = clampIndex(results.length);
+    return { rows: results.map((entry, i) => settingRow(modal, entry, i === sel, true, width, categoryOf(entry))), selected: sel };
   }
-  if (window.end < items.length) rows.push(`${GLYPHS.navigation.moreBelow} ${items.length - window.end} more MCP server(s) below`);
-  return rows.slice(0, height);
-}
-
-function renderSubscriptionRows(modal: SettingsModal, width: number, height: number): string[] {
-  const rows: string[] = [];
-  const items = modal.subscriptionEntries;
-  if (items.length === 0) return ['No provider subscriptions available or configured.'];
-  const selectedIndex = clamp(modal.selectedIndex, 0, items.length - 1);
-  const providerWidth = clamp(Math.floor(width * 0.28), 14, 36);
-  const stateWidth = 10;
-  const routeWidth = 16;
-  const freshnessWidth = 14;
-  const oauthWidth = 8;
-  const noteWidth = Math.max(12, width - providerWidth - stateWidth - routeWidth - freshnessWidth - oauthWidth - 12);
-  rows.push(`  ${padDisplay('Provider', providerWidth)}  ${padDisplay('State', stateWidth)}  ${padDisplay('Route', routeWidth)}  ${padDisplay('Freshness', freshnessWidth)}  ${padDisplay('OAuth', oauthWidth)}  ${padDisplay('Note', noteWidth)}`);
-  const window = stableWindow(items.length, selectedIndex, Math.max(1, height - 2));
-  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more subscription provider(s) above`);
-  for (let index = window.start; index < window.end; index += 1) {
-    const entry = items[index]!;
-    const selected = index === selectedIndex;
-    const marker = selected ? (modal.focusPane === 'settings' ? GLYPHS.navigation.selected : '•') : ' ';
-    rows.push(`${marker} ${padDisplay(entry.provider, providerWidth)}  ${padDisplay(entry.state, stateWidth)}  ${padDisplay(entry.activeRoute ?? 'n/a', routeWidth)}  ${padDisplay(entry.authFreshness ?? 'n/a', freshnessWidth)}  ${padDisplay(entry.oauthConfigured ? 'yes' : 'no', oauthWidth)}  ${padDisplay(inferSubscriptionRouteReason(entry) ?? '', noteWidth)}`);
+  const t = activeTokens();
+  switch (modal.currentCategory) {
+    case 'mcp': {
+      const items = modal.mcpEntries;
+      if (items.length === 0) return { rows: [{ label: 'No MCP servers registered.', muted: true }], selected: -1 };
+      const sel = clampIndex(items.length);
+      return {
+        rows: items.map((entry, i) => {
+          const scope = entry.allowedPaths.length > 0 ? entry.allowedPaths.join(', ') : entry.allowedHosts.length > 0 ? entry.allowedHosts.join(', ') : 'no scope';
+          const trust = i === sel && modal.editingMode ? `${modal.editBuffer}▏` : entry.trustMode;
+          return {
+            label: entry.name,
+            desc: `${entry.role} · ${scope}`,
+            right: trust,
+            mark: entry.connected ? '●' : '○',
+            markFg: entry.connected ? t.success : t.textFaint,
+            selected: i === sel && focused,
+            current: i === sel && !focused,
+          };
+        }),
+        selected: sel,
+      };
+    }
+    case 'subscriptions': {
+      const items = modal.subscriptionEntries;
+      if (items.length === 0) return { rows: [{ label: 'No provider subscriptions available or configured.', muted: true }], selected: -1 };
+      const sel = clampIndex(items.length);
+      return {
+        rows: items.map((entry, i) => ({
+          label: entry.provider,
+          desc: [entry.activeRoute ?? '', entry.authFreshness ?? '', inferSubscriptionRouteReason(entry) ?? ''].filter(Boolean).join(' · ') || undefined,
+          right: entry.state,
+          rightFg: entry.state === 'active' ? t.success : undefined,
+          selected: i === sel && focused,
+          current: i === sel && !focused,
+        })),
+        selected: sel,
+      };
+    }
+    case 'connections':
+      return { rows: connectionRows(modal, focused), selected: modal.connectionEntries.length > 0 ? clampIndex(modal.connectionEntries.length) : -1 };
+    default: {
+      const items = modal.currentItems;
+      if (items.length === 0) return { rows: [{ label: 'No settings in this category.', muted: true }], selected: -1 };
+      const sel = clampIndex(items.length);
+      return { rows: items.map((entry, i) => settingRow(modal, entry, i === sel, focused, width)), selected: sel };
+    }
   }
-  if (window.end < items.length) rows.push(`${GLYPHS.navigation.moreBelow} ${items.length - window.end} more subscription provider(s) below`);
-  return rows.slice(0, height);
 }
 
-function renderSearchRows(modal: SettingsModal, width: number, height: number): string[] {
-  const rows: string[] = [];
-  const query = modal.searchQuery;
-  // Search-prompt row shows the current query
-  const promptRow = `/ ${query}${GLYPHS.surface.cursor}`;
-  rows.push(promptRow);
-
-  const results = modal.searchResults;
-  if (query.trim().length === 0 || results.length === 0) {
-    rows.push(query.trim().length === 0 ? 'Type to search across all categories.' : 'No results.');
-    return rows.slice(0, height);
+function categoryRows(modal: SettingsModal): KitRow[] {
+  const focused = !modal.searchFocused && modal.focusPane === 'categories';
+  const rows: KitRow[] = [];
+  for (const group of SETTINGS_CATEGORY_GROUPS) {
+    const categories = group.categories.filter((category) => SETTINGS_CATEGORIES.includes(category));
+    if (categories.length === 0) continue;
+    rows.push({ header: group.label });
+    for (const category of categories) {
+      const active = SETTINGS_CATEGORIES.indexOf(category) === modal.categoryIndex && !modal.searchFocused;
+      const count = categoryItemCount(modal, category);
+      rows.push({
+        label: CATEGORY_LABELS[category],
+        right: count > 0 ? String(count) : undefined,
+        selected: active && focused,
+        current: active && !focused,
+      });
+    }
   }
+  return rows;
+}
 
-  const selectedIndex = clamp(modal.selectedIndex, 0, results.length - 1);
-  const typeWidth = 9;
-  const sourceWidth = 12;
-  const categoryWidth = 14;
-  const available = Math.max(24, width - typeWidth - sourceWidth - categoryWidth - 16);
-  const keyWidth = clamp(Math.floor(available * 0.56), 18, 52);
-  const valueWidth = Math.max(10, available - keyWidth);
-  rows.push(`  ${padDisplay('Setting', keyWidth)}  ${padDisplay('Value', valueWidth)}  ${padDisplay('Type', typeWidth)}  ${padDisplay('Category', categoryWidth)}  ${padDisplay('Source', sourceWidth)}`);
+// ---------------------------------------------------------------------------
+// Documentation block
+// ---------------------------------------------------------------------------
 
-  const visibleCount = Math.max(1, height - 3);
-  const window = stableWindow(results.length, selectedIndex, visibleCount);
-  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more result(s) above`);
+interface DocLine { readonly text: string; readonly fg: string; readonly bold?: boolean }
 
-  for (let index = window.start; index < window.end; index += 1) {
-    const entry = results[index]!;
-    const selected = index === selectedIndex;
-    const marker = selected ? GLYPHS.navigation.selected : entry.isDefault ? ' ' : '◇';
-    const value = currentSettingValue(modal, entry, selected);
-    const source = `${entry.effectiveSource ?? 'default'}${entry.locked ? ' locked' : ''}${entry.conflict ? ' conflict' : ''}`;
-    const label = getSettingLabel(entry);
-    // Derive category label from setting key prefix
-    const keyPrefix = entry.setting.key.split('.')[0] ?? '';
-    const categoryLabel = CATEGORY_LABELS[keyPrefix as SettingsCategory] ?? keyPrefix;
-    rows.push(`${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay(entry.setting.type, typeWidth)}  ${padDisplay(categoryLabel, categoryWidth)}  ${padDisplay(source, sourceWidth)}`);
+const FACT_PREFIXES = ['Key:', 'Current:', 'Default:', 'Type:', 'Source:', 'Feature:', 'Setting:', 'Applies:', 'Connection:', 'Role:', 'Trust mode:', 'State:', 'Active route:', 'Preferred route:', 'OAuth configured:', 'Freshness:', 'Expires:'];
+const WARN_PREFIXES = ['Locked:', 'Conflict:', 'Pending restart:', 'Not available in this build:', 'Confirmation required:', 'Kill reason:', 'Secret handling:'];
+
+/** Fact lines folded into one compact line under the selected row (the row itself shows the current value). */
+const FOLDED_FACTS: ReadonlyArray<readonly [string, (value: string) => string]> = [
+  ['Key: ', (v) => v],
+  ['Default: ', (v) => `default ${v}`],
+  ['Type: ', (v) => v],
+  ['Source: ', (v) => `source ${v}`],
+];
+
+function docLines(modal: SettingsModal, hasSelection: boolean, width: number): DocLine[] {
+  const t = activeTokens();
+  const source = settingContextLines(modal);
+  // With a selected row, the first line (its name) is already on the row.
+  const lines = hasSelection ? source.slice(1) : source;
+  const facts: string[] = [];
+  const rest: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith('Current: ')) continue;
+    const fact = FOLDED_FACTS.find(([prefix]) => line.startsWith(prefix));
+    if (fact) facts.push(fact[1](line.slice(fact[0].length)));
+    else rest.push(line);
   }
-
-  if (window.end < results.length) rows.push(`${GLYPHS.navigation.moreBelow} ${results.length - window.end} more result(s) below`);
-  return rows.slice(0, height);
+  const out: DocLine[] = [];
+  if (facts.length > 0) for (const wrapped of wrapLines(facts.join(' · '), width)) out.push({ text: wrapped, fg: t.textFaint });
+  for (const line of rest) {
+    if (line === '') {
+      if (out.length > 0 && out[out.length - 1]!.text !== '') out.push({ text: '', fg: t.textMuted });
+      continue;
+    }
+    const fg = WARN_PREFIXES.some((p) => line.startsWith(p)) ? t.warning
+      : FACT_PREFIXES.some((p) => line.startsWith(p)) ? t.textFaint
+      : t.textMuted;
+    const bold = line.endsWith(':');
+    for (const wrapped of wrapLines(line, width)) out.push({ text: wrapped, fg: bold ? t.text : fg, bold });
+  }
+  while (out.length > 0 && out[out.length - 1]!.text === '') out.pop();
+  return out;
 }
 
-function renderControlRows(modal: SettingsModal, width: number, height: number): string[] {
-  if (modal.searchFocused) return renderSearchRows(modal, width, height);
-  if (modal.currentCategory === 'mcp') return renderMcpRows(modal, width, height);
-  if (modal.currentCategory === 'subscriptions') return renderSubscriptionRows(modal, width, height);
-  if (modal.currentCategory === 'connections') return renderConnectionRows(modal, width, height);
-  return renderSettingRows(modal, width, height);
+/**
+ * The complete documentation the selected row explains itself with (its name
+ * first), as the wrapped lines the renderer windows over with PgUp/PgDn.
+ */
+export function settingsDocumentation(modal: SettingsModal, width: number): string[] {
+  return docLines(modal, false, width).map((line) => line.text);
 }
 
-function rowColorForSetting(modal: SettingsModal, rowText: string): string {
-  if (modal.currentCategory === 'danger') return PALETTE.bad;
-  if (rowText.startsWith(GLYPHS.navigation.selected)) return PALETTE.text;
-  const selected = modal.getSelected();
-  if (!selected) return PALETTE.text;
-  return valueColor(selected);
+/** Window the documentation by modal.contextScroll, marking hidden lines honestly. */
+function windowDoc(modal: SettingsModal, lines: DocLine[], budget: number): DocLine[] {
+  const t = activeTokens();
+  if (lines.length <= budget) return lines;
+  const maxOffset = Math.max(0, lines.length - budget);
+  const offset = Math.max(0, Math.min(modal.contextScroll ?? 0, maxOffset));
+  const shown = lines.slice(offset, offset + budget);
+  if (offset > 0) shown[0] = { text: `${offset} more ↑ · pgup`, fg: t.textFaint };
+  const below = lines.length - offset - budget;
+  if (below > 0) shown[shown.length - 1] = { text: `${below} more ↓ · pgdn`, fg: t.textFaint };
+  return shown;
 }
 
-function footerText(modal: SettingsModal, width: number): string {
-  // Every branch speaks the shared hint grammar: bracketed [Key] Verb segments
-  // joined by the middle dot, with Esc sorted last. Leading words like
-  // "Focus settings" are state labels appended verbatim, not key hints.
-  // Armed reset gate takes priority over all other footer states.
-  if (modal.resetCategoryConfirm !== null || modal.resetAllConfirm !== null)
-    return joinHints('Reset armed', formatHints([
-      { key: 'Enter/y', verb: 'confirm' },
-      { key: 'Esc/n', verb: 'cancel' },
-    ]));
-  if (modal.searchFocused)
-    return joinHints('Search', 'type to filter', formatHints([
-      { key: 'Up/Down', verb: 'Navigate' },
-      { key: 'Enter', verb: 'Select' },
-      { key: 'Esc', verb: 'Exit search' },
-    ]));
-  if (modal.editingMode)
-    return formatHints([
-      { key: 'Enter', verb: 'Confirm edit' },
-      { key: 'Esc', verb: 'Cancel edit' },
-    ]);
-  if (modal.focusPane === 'categories')
-    return joinHints('Focus categories', formatHints([
-      { key: 'Up/Down', verb: 'Choose' },
-      { key: 'Right/Enter', verb: 'Settings' },
-      { key: 'Tab', verb: 'Pane' },
-      { key: '/', verb: 'Search' },
-      { key: 'Esc', verb: 'Close' },
-    ]));
-  if (modal.currentCategory === 'subscriptions')
-    return joinHints('Focus settings', formatHints([
-      { key: 'Up/Down', verb: 'Provider' },
-      { key: 'Left', verb: 'Categories' },
-      { key: 'Tab', verb: 'Pane' },
-      { key: '/', verb: 'Search' },
-      { key: 'Enter', verb: 'Review/sign out' },
-      { key: 'Esc', verb: 'Close' },
-    ]));
-  if (modal.currentCategory === 'mcp')
-    return joinHints('Focus settings', formatHints([
-      { key: 'Up/Down', verb: 'Server' },
-      { key: 'Left', verb: 'Categories' },
-      { key: 'Tab', verb: 'Pane' },
-      { key: '/', verb: 'Search' },
-      { key: 'Enter', verb: 'Edit trust' },
-      { key: 'Esc', verb: 'Close' },
-    ]));
-  // Every topical category that hosts feature units flows through the default
-  // settings footer below, Enter/Space toggles a feature-unit header exactly
-  // as it edits/toggles any setting row.
-  // Default settings pane: tier the reset affordances by available width.
-  // W<80:  minimal, only the most critical action survives.
-  // W<160: compact but still shows both reset affordances.
-  // W≥160: standard with all navigation tokens.
-  if (width < 80)
-    return formatHints([{ key: 'R', verb: 'reset' }, { key: 'Esc', verb: 'Close' }]);
-  if (width < 160)
-    return formatHints([
-      { key: 'Up/Down', verb: 'Move' },
-      { key: 'Enter/Space', verb: 'Edit' },
-      { key: 'PgUp/PgDn', verb: 'docs' },
-      { key: '⇧R', verb: 'reset cat' },
-      { key: '^⇧R', verb: 'reset all' },
-      { key: 'Esc', verb: 'Close' },
-    ]);
-  return joinHints('Focus settings', formatHints([
-    { key: 'Up/Down', verb: 'Setting' },
-    { key: 'Left', verb: 'Categories' },
-    { key: 'Enter/Space', verb: 'Edit/toggle' },
-    { key: 'PgUp/PgDn', verb: 'Scroll docs' },
-    { key: '⇧R', verb: 'reset cat' },
-    { key: '^⇧R', verb: 'reset all' },
-    { key: 'Esc', verb: 'Close' },
-  ]));
-}
+// ---------------------------------------------------------------------------
+// Right pane
+// ---------------------------------------------------------------------------
 
-export function renderSettingsModal(
-  modal: SettingsModal,
-  width: number,
-  viewportHeight = 24,
-): Line[] {
+function drawSettingsPane(f: ModalFrame, modal: SettingsModal, p: KitPanel): { above: number; below: number } {
+  const t = activeTokens();
+  const sx = p.x + 4;
+  const sr = p.x + p.w - 5;
+  const width = sr - sx + 1;
+
   const notices = [
     ...(modal.lastSaveTriggeredRestart ? [`Restarting ${modal.lastSaveTriggeredRestart}`] : []),
     ...(modal.lastSettingEffectMessage ? [modal.lastSettingEffectMessage] : []),
-  ];
-  const metrics = getFullscreenWorkspaceMetrics({ width, height: viewportHeight });
-  const categoryRows = renderCategories(modal, metrics.leftWidth - 2, metrics.bodyRows);
-  // Documentation pane: long content SCROLLS (PgUp/PgDn) with honest
-  // more-above/below markers, it is never silently clipped.
-  const allContextLines = buildContextLines(modal, metrics.contextWidth);
-  const visibleContext = metrics.contextRows;
-  const maxContextScroll = Math.max(0, allContextLines.length - visibleContext);
-  const contextOffset = Math.min(Math.max(0, modal.contextScroll ?? 0), maxContextScroll);
-  const windowedContext = allContextLines.slice(contextOffset, contextOffset + visibleContext);
-  if (contextOffset > 0) {
-    windowedContext[0] = `${GLYPHS.navigation.moreAbove} ${contextOffset} more line(s) above; PgUp`;
-  }
-  if (contextOffset + visibleContext < allContextLines.length) {
-    const below = allContextLines.length - contextOffset - visibleContext;
-    windowedContext[windowedContext.length - 1] = `${GLYPHS.navigation.moreBelow} ${below} more line(s) below; PgDn`;
-  }
-  const contextRows = windowedContext.map((text, row): WorkspaceRow => {
-    const selectedSetting = modal.getSelected();
-    const isTitle = (row === 0 && contextOffset === 0) || (selectedSetting !== null && text === getSettingLabel(selectedSetting));
-    return {
-      text,
-      fg: row === 0 && contextOffset === 0 ? PALETTE.title : text.endsWith(':') ? PALETTE.subtitle : PALETTE.text,
-      bold: isTitle,
-      dim: text.length === 0,
-    };
-  });
-  const controlRows = renderControlRows(modal, metrics.contextWidth, metrics.controlRows).map((text): WorkspaceRow => {
-    const selected = text.startsWith(GLYPHS.navigation.selected);
-    return {
-      text,
-      selected,
-      fg: selected
-        ? PALETTE.text
-        : text.startsWith('value:') || text.trimStart().startsWith('value:')
-          ? PALETTE.info
-          : rowColorForSetting(modal, text),
-      bold: selected,
-      dim: text.length === 0,
-    };
-  });
+  ].flatMap((n) => wrapLines(n, width));
+  const bottom = notices.length > 0 ? p.bottom - notices.length - 1 : p.bottom;
+  notices.forEach((line, k) => f.canvas.put(sx, bottom + 2 + k, line, { fg: t.accent }));
 
-  return renderFullscreenWorkspace({
-    width,
-    height: viewportHeight,
-    title: 'Configuration Workspace / Settings',
-    leftHeader: 'Categories',
-    mainHeader: modal.searchFocused
-       ? `Search: ${modal.searchQuery || '…'} (${modal.searchResults.length} result${modal.searchResults.length === 1 ? '' : 's'})${notices.length > 0 ? ` · ${notices.join(' · ')}` : ''}`
-       : `${CATEGORY_LABELS[modal.currentCategory]} (${categoryItemCount(modal, modal.currentCategory)})${notices.length > 0 ? ` · ${notices.join(' · ')}` : ''}`,
-    leftRows: categoryRows.map((row): WorkspaceRow => ({
-      text: row.text,
-      selected: row.selected,
-      kind: row.type === 'group' ? 'group' : row.type === 'more' ? 'more' : row.type === 'empty' ? 'empty' : 'item',
-      bold: row.selected || row.type === 'group',
-    })),
-    contextRows,
-    controlRows,
-    footer: footerText(modal, width),
-  });
+  const { rows, selected } = listRows(modal, width);
+  const capacity = Math.max(1, bottom - p.top + 1);
+  const doc = docLines(modal, selected >= 0, width);
+
+  if (selected < 0) {
+    let y = p.top;
+    for (const row of rows) y += drawRow(f.canvas, y, row, sx, sr, bottom);
+    if (rows.length > 0) y++;
+    for (const line of windowDoc(modal, doc, Math.max(1, bottom - y + 1))) {
+      if (y > bottom) break;
+      f.canvas.put(sx, y++, line.text, { fg: line.fg, bold: line.bold });
+    }
+    return { above: 0, below: 0 };
+  }
+
+  const heights = rows.map((row) => measureRow(row, sx, sr));
+  // The documentation takes what the rows leave, but never less than a few lines.
+  const rowsTotal = heights.reduce((a, b) => a + b, 0);
+  const docBudget = Math.max(3, Math.min(doc.length, capacity - Math.min(rowsTotal, Math.max(3, Math.floor(capacity * 0.35))) - 2));
+  const shownDoc = windowDoc(modal, doc, docBudget);
+  const blockH = shownDoc.length > 0 ? shownDoc.length + 2 : 0;
+  const rowCapacity = Math.max(1, capacity - blockH);
+
+  // Scroll so the selected row (and its block) is in view; the window only
+  // moves when the selection leaves it.
+  const listName = modal.searchFocused ? 'search' : `category:${modal.currentCategory}`;
+  const scrollKey = { owner: modal, name: listName };
+  let start = Math.max(0, Math.min(rememberedStart(scrollKey) ?? 0, rows.length - 1));
+  const span = (from: number, to: number): number => heights.slice(from, to + 1).reduce((a, b) => a + b, 0);
+  if (selected < start) start = selected;
+  while (start < selected && span(start, selected) > rowCapacity) start++;
+  while (start > 0 && span(start - 1, rows.length - 1) <= rowCapacity) start--;
+  rememberStart(scrollKey, start);
+
+  let y = p.top;
+  let last = start - 1;
+  for (let i = start; i < rows.length; i++) {
+    if (y + heights[i]! - 1 > bottom) break;
+    if (i !== selected && i > selected && y + heights[i]! - 1 > bottom) break;
+    y += drawRow(f.canvas, y, rows[i]!, sx, sr, bottom);
+    last = i;
+    if (i === selected && shownDoc.length > 0) {
+      y++;
+      for (const line of shownDoc) {
+        if (y > bottom) break;
+        f.canvas.put(sx, y++, line.text, { fg: line.fg, bold: line.bold });
+      }
+      y++;
+    }
+  }
+  return { above: start, below: Math.max(0, rows.length - last - 1) };
+}
+
+// ---------------------------------------------------------------------------
+// Hints
+// ---------------------------------------------------------------------------
+
+function settingsHints(modal: SettingsModal): KitHint[] {
+  if (modal.resetCategoryConfirm !== null || modal.resetAllConfirm !== null) return [['⏎', 'confirm reset'], ['esc', 'cancel']];
+  if (modal.subscriptionLogoutConfirmationTarget) return [['⏎', 'sign out'], ['esc', 'cancel']];
+  if (modal.editingMode) return [['⏎', 'save'], ['esc', 'cancel edit']];
+  if (modal.searchFocused) return [['↑↓', 'move'], ['⏎', 'change'], ['⌫', 'edit search'], ['ctrl+r', 'reset']];
+  if (modal.focusPane === 'categories') return [['↑↓', 'category'], ['→', 'settings'], ['tab', 'pane']];
+  const enter: KitHint = modal.currentCategory === 'mcp' ? ['⏎', 'edit trust']
+    : modal.currentCategory === 'subscriptions' ? ['⏎', 'review or sign out']
+    : ['⏎', 'change'];
+  return [['↑↓', 'move'], enter, ['←→', 'category'], ['pgup pgdn', 'docs'], ['ctrl+r', 'reset'], ['shift+r', 'reset category'], ['ctrl+shift+r', 'reset all']];
+}
+
+// ---------------------------------------------------------------------------
+// Renderer
+// ---------------------------------------------------------------------------
+
+/** Below this many text columns the category list folds into the breadcrumb (←→ still switch). */
+const MIN_TWO_PANE_WIDTH = 56;
+
+export function renderSettingsModal(modal: SettingsModal, screenWidth: number, screenHeight = 24): SurfaceLayer {
+  const selectedEntry = !modal.searchFocused && modal.currentCategory !== 'mcp' && modal.currentCategory !== 'subscriptions' && modal.currentCategory !== 'connections'
+    ? modal.getSelected()
+    : null;
+  const crumbs = modal.searchFocused
+    ? ['Search']
+    : [CATEGORY_LABELS[modal.currentCategory], ...(selectedEntry ? [selectedEntry.flag ? selectedEntry.flag.feature.name : getSettingLabel(selectedEntry)] : [])];
+  const f = beginModal(screenWidth, screenHeight, { title: 'Settings', crumbs, hints: settingsHints(modal) });
+
+  const count = modal.searchFocused
+    ? `${modal.searchResults.length} result${modal.searchResults.length === 1 ? '' : 's'}`
+    : CATEGORY_LABELS[modal.currentCategory].toLowerCase();
+  searchRow(f, f.top, modal.searchQuery, 'Search all settings', count);
+
+  const body = f.top + 2;
+  const inner = f.r - f.l + 1;
+  let panelX = 2;
+  // Search spans every category, so the category list steps aside for it.
+  if (inner >= MIN_TWO_PANE_WIDTH && !modal.searchFocused) {
+    const catW = Math.max(18, Math.min(26, Math.round(inner * 0.22)));
+    const x1 = f.l + catW - 1;
+    drawScrollingList(f.canvas, { rows: categoryRows(modal), top: body, bottom: f.bottom, x0: f.l, x1, scrollKey: { owner: modal, name: 'categories' } });
+    panelX = x1 + 3;
+  }
+  const p = panel(f.canvas, panelX, body, f.r + 2 - panelX + 1, f.bottom - body + 1);
+  const hidden = drawSettingsPane(f, modal, p);
+  f.hintRight = scrollCountText(hidden.above, hidden.below);
+  return finishModal(f);
 }

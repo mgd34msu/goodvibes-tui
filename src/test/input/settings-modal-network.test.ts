@@ -293,7 +293,7 @@ describe('SettingsModal: network category', () => {
   test('render-layer: network tab description appears in renderSettingsModal output', () => {
     const { renderSettingsModal } = require('../../renderer/settings-modal.ts');
     openOnNetworkTab();
-    const lines: unknown[] = renderSettingsModal(modal, 120, 30);
+    const lines: unknown[] = renderSettingsModal(modal, 120, 30).lines;
     // Flatten lines to text for inspection
     const text = lines
       .map((line: unknown) =>
@@ -315,7 +315,7 @@ describe('SettingsModal: network category', () => {
     modal.activateSelected();
     expect(modal.lastSaveTriggeredRestart).not.toBeNull();
     // Render and verify the banner text is present
-    const lines: unknown[] = renderSettingsModal(modal, 120, 30);
+    const lines: unknown[] = renderSettingsModal(modal, 120, 30).lines;
     const text = lines
       .map((line: unknown) =>
         Array.isArray(line)

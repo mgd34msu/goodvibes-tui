@@ -29,8 +29,8 @@ export interface SelectionResult {
 export class SelectionModal {
   public active = false;
   public title = '';
-  public query = '';           // fuzzy search query
-  public searchFocused = false;
+  /** The always-live search row's query (fuzzy). Typing edits it directly; there is no search mode. */
+  public query = '';
   public items: SelectionItem[] = [];
   public filteredItems: SelectionItem[] = [];
   public selectedIndex = 0;
@@ -68,7 +68,6 @@ export class SelectionModal {
     this.items = items;
     this.query = '';
     this.allowSearch = opts?.allowSearch ?? true;
-    this.searchFocused = false;
     this.customActions = opts?.customActions ?? new Map();
     this.primaryVerbLabel = opts?.primaryVerbLabel;
     this.active = true;
@@ -92,7 +91,6 @@ export class SelectionModal {
     this.active = false;
     this.title = '';
     this.query = '';
-    this.searchFocused = false;
     this.items = [];
     this.filteredItems = [];
     this.selectedIndex = 0;
@@ -123,18 +121,6 @@ export class SelectionModal {
     this.selectedIndex = 0;
     this.filterItems();
     this.emitHighlight();
-  }
-
-  canFocusSearch(): boolean {
-    return this.allowSearch;
-  }
-
-  focusSearch(): void {
-    if (this.allowSearch) this.searchFocused = true;
-  }
-
-  blurSearch(): void {
-    this.searchFocused = false;
   }
 
   /** Get currently highlighted item */

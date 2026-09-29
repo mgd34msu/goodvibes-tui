@@ -1,5 +1,6 @@
 import type { PermissionRequest, RememberTier } from '@pellux/goodvibes-sdk/platform/permissions';
 import { applyHunkKey, buildModifiedEditArgs, type HunkSelectionState } from '../permissions/hunk-selection.ts';
+import { permissionButtons } from '../permissions/prompt-card.ts';
 
 export type PendingPermissionState = PermissionRequest & {
   resolve: (approved: boolean, remember?: boolean, modifiedArgs?: Record<string, unknown>, extras?: { rememberTier?: RememberTier; reason?: string }) => void;
@@ -25,7 +26,28 @@ export type PendingPermissionState = PermissionRequest & {
   openedAt?: number;
   /** Requester attribution ("session abc12345" / a named agent) shown on the prompt; absent when unknown. */
   requestedBy?: string;
+  /** The chosen button (index into permissionButtons); arrows move it, Enter presses it. */
+  choice?: number;
+  /** The "Allow for session ▸" remember-tier submenu is open, and which tier is highlighted. */
+  submenuOpen?: boolean;
+  submenuIndex?: number;
+  /** First card-body row shown when the card is taller than the screen. */
+  scroll?: number;
 };
+
+const KEY_LEFT = '\x1b[D';
+const KEY_RIGHT = '\x1b[C';
+const KEY_UP = '\x1b[A';
+const KEY_DOWN = '\x1b[B';
+const KEY_PAGE_UP = '\x1b[5~';
+const KEY_PAGE_DOWN = '\x1b[6~';
+
+/** Move the chosen button by delta (wrapping). */
+function withChoice(req: PendingPermissionState, delta: number): PendingPermissionState {
+  const count = permissionButtons(req, req).length;
+  if (count === 0) return req;
+  return { ...req, choice: ((req.choice ?? 0) + delta + count) % count };
+}
 
 /**
  * Settle window after a permission prompt appears during which buffered
@@ -73,6 +95,17 @@ export function handleBlockingShellInput(
     }
 
     if (req.hunkState) {
+      // Buttons (Apply selected / Deny): arrows and tab choose, Enter presses.
+      if (data === KEY_LEFT || data === KEY_RIGHT || data === '\t') {
+        render();
+        return { handled: true, pendingPermission: withChoice(req, data === KEY_LEFT ? -1 : 1) };
+      }
+      if ((data === '\r' || data === '\n') && permissionButtons(req, req)[req.choice ?? 0]?.id === 'deny') {
+        req.resolve(false, false);
+        abortTurn();
+        render();
+        return { handled: true, pendingPermission: null };
+      }
       const { state, commit } = applyHunkKey(req.hunkState, data);
       if (commit === 'apply') {
         req.resolve(true, false, buildModifiedEditArgs(req, state));
@@ -143,8 +176,65 @@ export function handleBlockingShellInput(
       return { handled: true, pendingPermission };
     }
 
-    // Scroll, mouse, PageUp/Down, arrow, and panel-navigation keys, plus a
-    // bare Esc, are not card answers. Pass them through to the normal input
+    // The remember-tier submenu is a sub-level of the card: arrows pick a
+    // tier, Enter approves and remembers at it, Esc closes just the submenu.
+    if (req.submenuOpen) {
+      const tiers = req.rememberOptions ?? [];
+      const index = req.submenuIndex ?? 0;
+      if (data === '\x1b') {
+        render();
+        return { handled: true, pendingPermission: { ...req, submenuOpen: false } };
+      }
+      if (data === KEY_UP || data === KEY_DOWN) {
+        const next = tiers.length === 0 ? 0 : (index + (data === KEY_UP ? -1 : 1) + tiers.length) % tiers.length;
+        render();
+        return { handled: true, pendingPermission: { ...req, submenuIndex: next } };
+      }
+      if (data === '\r' || data === '\n') {
+        const option = tiers[index];
+        if (option) {
+          req.resolve(true, option.tier === 'session', undefined, { rememberTier: option.tier });
+          render();
+          return { handled: true, pendingPermission: null };
+        }
+      }
+    }
+
+    // Button choice and the body scroll are card keys.
+    if (data === KEY_LEFT || data === KEY_RIGHT || data === '\t') {
+      render();
+      return { handled: true, pendingPermission: withChoice(req, data === KEY_LEFT ? -1 : 1) };
+    }
+    if (data === KEY_UP || data === KEY_DOWN || data === KEY_PAGE_UP || data === KEY_PAGE_DOWN) {
+      const step = data === KEY_UP ? -1 : data === KEY_DOWN ? 1 : data === KEY_PAGE_UP ? -5 : 5;
+      render();
+      return { handled: true, pendingPermission: { ...req, scroll: Math.max(0, (req.scroll ?? 0) + step) } };
+    }
+    if (data === '\r' || data === '\n') {
+      const pressed = permissionButtons(req, req)[req.choice ?? 0];
+      if (pressed?.id === 'allow') {
+        req.resolve(true, false);
+        render();
+        return { handled: true, pendingPermission: null };
+      }
+      if (pressed?.id === 'session') {
+        req.resolve(true, true, undefined, { rememberTier: 'session' });
+        render();
+        return { handled: true, pendingPermission: null };
+      }
+      if (pressed?.id === 'remember') {
+        render();
+        return { handled: true, pendingPermission: { ...req, submenuOpen: true, submenuIndex: req.submenuIndex ?? 0 } };
+      }
+      if (pressed?.id === 'deny') {
+        req.resolve(false, false);
+        render();
+        return { handled: true, pendingPermission: null };
+      }
+    }
+
+    // Mouse, panel-navigation and other escape sequences, plus a bare Esc,
+    // are not card answers. Pass them through to the normal input
     // handler so the transcript stays scrollable and Esc only drops focus. The
     // request stays pending (answer it with y/n or a remember tier when ready);
     // Ctrl+C above is still the hard abort, and 'n' still denies.

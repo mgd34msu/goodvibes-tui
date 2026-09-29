@@ -210,6 +210,14 @@ export interface CommandShellUiOpeners {
    */
   openCommandPalette?: () => void;
   /**
+   * Ask a yes/no question in a small centered confirm dialog (a kit modal on
+   * top of whatever is open). Resolves true only when the confirming button
+   * is pressed; Esc and "no" resolve false.
+   */
+  confirm?: (options: import('./confirm-dialog.ts').ConfirmOptions) => Promise<boolean>;
+  /** Show a toast in the top right corner for five seconds (a colored ┃ on both sides). */
+  showToast?: (toast: import('../renderer/surface-kit-parts.ts').ToastSpec) => void;
+  /**
    * Command name -> reference-category label, from the same single source of
    * truth as the generated command reference (categorizeBuiltinCommands),
    * memoized by the shell. Lets registry-driven surfaces built inside command

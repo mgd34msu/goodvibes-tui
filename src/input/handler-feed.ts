@@ -1,6 +1,7 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
 import type { CommandContext, CommandRegistry } from './command-registry.ts';
+import type { SurfaceModalHost } from './surface-modal-host.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';
 import { ModelPickerModal } from './model-picker.ts';
@@ -11,6 +12,7 @@ import type { InputHistory, HistorySearch } from './input-history.ts';
 import type { BlockMeta, ConversationManager } from '../core/conversation';
 import { BlockActionsMenu } from '../renderer/block-actions.ts';
 import { ContextInspectorModal } from '../renderer/context-inspector.ts';
+import type { OverlayFilters } from './overlay-filter.ts';
 import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import type { McpWorkspace } from './mcp-workspace.ts';
@@ -121,7 +123,10 @@ export interface InputFeedContext {
   readonly modelPicker: ModelPickerModal;
   readonly onboardingWizard: OnboardingWizardController;
   readonly contextInspectorModal: ContextInspectorModal;
+  readonly overlayFilters: OverlayFilters;
   readonly blockActionsMenu: BlockActionsMenu;
+  /** Kit modals (command palette, confirm dialog, ...): they take every key while open. */
+  readonly surfaceModals?: SurfaceModalHost;
   readonly searchManager: SearchManager;
   readonly panelManager: PanelManager;
   panelMouseLayout: PanelMouseLayout | null;
@@ -223,6 +228,16 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       continue;
     }
 
+    // Kit modals sit on top of everything else: focus belongs to the top one.
+    // Esc goes through the shared chain (handler-modal-stack.ts), which pops
+    // exactly one level of the host before anything else.
+    if (context.surfaceModals?.active && (token.type === 'key' || token.type === 'text')) {
+      if (token.type === 'key' && token.logicalName === 'escape') context.handleEscape();
+      else context.surfaceModals.handleToken(token);
+      context.requestRender();
+      continue;
+    }
+
     const modalRoute = handleModalTokenRoutes({
       history,
       conversationManager: context.conversationManager,
@@ -254,6 +269,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       requestRender: context.requestRender,
       handleEscape: context.handleEscape,
       contextInspectorModal: context.contextInspectorModal,
+      overlayFilters: context.overlayFilters,
       modalOpened: context.modalOpened,
       filePicker: context.filePicker,
       imageRegistry: context.imageRegistry,

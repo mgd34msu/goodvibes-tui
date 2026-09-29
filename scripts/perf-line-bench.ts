@@ -540,7 +540,7 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
   // --- overlay.open ----------------------------------------------------------
   {
     const kb = new KeybindingsManager({ configPath: '/nonexistent/perf-bench-keybindings.json' });
-    const build = (): Line[] => renderHelpOverlay(width, kb, [], 0, 40);
+    const build = (): Line[] => renderHelpOverlay(width, 40, kb, [], 0).lines;
     const linesProduced = build().length;
     const t = timeOp(build, 500, 50);
     const heap = measureHeap(build, 300);

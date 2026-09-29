@@ -106,7 +106,7 @@ describe('shell/blocking-input', () => {
     expect(aborted).toBe(0);
   });
 
-  test('scroll, mouse, and PageUp keys pass through to input while a card is up (transcript stays scrollable)', () => {
+  test('mouse events pass through to input while a card is up; arrows and PageUp/PageDown are card keys', () => {
     const { conversation } = makeConversation();
     const { router } = makeRouter();
 
@@ -117,18 +117,30 @@ describe('shell/blocking-input', () => {
       resolve: () => { throw new Error('scroll/mouse must never resolve the request'); },
     } as unknown as PendingPermissionState;
 
-    // PageUp, PageDown, an SGR mouse-wheel event, and an arrow key.
-    for (const data of ['\x1b[5~', '\x1b[6~', '\x1b[<64;10;5M', '\x1b[A']) {
+    // An SGR mouse-wheel event is not the card's: it falls through to input.feed.
+    const mouse = handleBlockingShellInput({
+      data: '\x1b[<64;10;5M',
+      pendingPermission,
+      abortTurn: () => { throw new Error('scroll/mouse must never abort'); },
+      render: () => {},
+    });
+    expect(mouse.handled).toBe(false);
+    expect(mouse.pendingPermission).toBe(pendingPermission);
+
+    // The dialog is a modal: arrows choose buttons or scroll its body,
+    // PageUp/PageDown scroll it. They are consumed, never answer the request.
+    for (const data of ['\x1b[5~', '\x1b[6~', '\x1b[A', '\x1b[B', '\x1b[C', '\x1b[D']) {
       const result = handleBlockingShellInput({
         data,
         pendingPermission,
-        abortTurn: () => { throw new Error('scroll/mouse must never abort'); },
+        abortTurn: () => { throw new Error('card keys must never abort'); },
         render: () => {},
       });
-      // Not consumed: falls through to input.feed. The card is untouched.
-      expect(result.handled).toBe(false);
-      expect(result.pendingPermission).toBe(pendingPermission);
+      expect(result.handled).toBe(true);
+      expect(result.pendingPermission).not.toBeNull();
     }
+    void conversation;
+    void router;
   });
 
   test('answer keys still act while a card is up (passthrough does not swallow y/n)', () => {

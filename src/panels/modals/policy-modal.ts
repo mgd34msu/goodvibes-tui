@@ -10,7 +10,7 @@ import type {
   PolicySimulationSummary,
 } from '@/runtime/index.ts';
 import { registerThemeRefresh } from '../../renderer/theme.ts';
-import type { ModalSectionStyle } from '../../renderer/modal-factory.ts';
+import type { ModalSectionStyle } from '../../input/config-modal-types.ts';
 import type {
   ConfigModalActionContext,
   ConfigModalRow,

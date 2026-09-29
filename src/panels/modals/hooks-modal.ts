@@ -1,5 +1,5 @@
 import { MODAL_TONES } from './modal-theme.ts';
-import { infoRow } from './modal-surface-helpers.ts';
+import { infoRow, headerRow } from './modal-surface-helpers.ts';
 import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
 import type {
   HookActivityTracker,
@@ -70,7 +70,7 @@ class HooksModalSurface implements ConfigModalSurface {
         infoRow('empty:0', 'No hooks are currently registered.'),
         infoRow('empty:1', `contracts ${contracts.length}  chains ${chains.length}  managed ${managedHooks.length}`, { fg: MODAL_TONES.dim }),
         infoRow('empty:2', `hooks file: ${hooksFilePath}`, { fg: MODAL_TONES.dim }),
-        infoRow('empty:title', 'Next steps'),
+        headerRow('empty:title', 'Next steps'),
         infoRow('empty:hooks', '/hooks     — review hook contracts and managed authoring actions', { fg: MODAL_TONES.dim }),
         infoRow('empty:settings', '/settings  — review hook/runtime behavior in the settings surface', { fg: MODAL_TONES.dim }),
       ];
@@ -110,7 +110,7 @@ class HooksModalSurface implements ConfigModalSurface {
       });
     }
 
-    rows.push(infoRow('auth:title', 'Authoring'));
+    rows.push(headerRow('auth:title', 'Authoring'));
     const recentAuthoring = this.deps.hookWorkbench.listRecentActions(3);
     if (recentAuthoring.length === 0) {
       rows.push(infoRow('auth:none', 'No managed hook authoring actions recorded yet.', { fg: MODAL_TONES.dim }));

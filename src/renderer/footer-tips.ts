@@ -24,11 +24,9 @@ export function isAgentActive(composerStatus: string | undefined): boolean {
   return composerStatus !== undefined && ACTIVE_TURN_STATUSES.has(composerStatus);
 }
 
-// Ctrl+P is a TOGGLE (open+focus when nothing is open or unfocused,
-// hide when the workspace already has focus, see openPanelPicker in
-// shell/ui-openers.ts). The bare noun 'panels' undersold that; naming the verb
-// keeps the tip honest about what the chord actually does.
-const TIP_PANELS = 'Ctrl+P toggle panels';
+// Ctrl+P opens the command palette (every command, view and setting in one
+// searchable list, see input/command-palette.ts).
+const TIP_PANELS = 'Ctrl+P commands';
 // F2 now opens the Fleet panel (the process modal was retired), so the
 // tip names 'fleet', not 'processes'.
 const TIP_PROCESSES = 'F2 fleet';

@@ -17,8 +17,8 @@ import {
   setActiveThemeMode,
 } from '../../renderer/theme.ts';
 import { DEFAULT_PANEL_PALETTE, extendPalette } from '../../panels/polish-core.ts';
-import { FULLSCREEN_PALETTE } from '../../renderer/fullscreen-primitives.ts';
-import { DEFAULT_OVERLAY_PALETTE } from '../../renderer/overlay-box.ts';
+import { beginModal, finishModal } from '../../renderer/surface-kit.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 import { renderMarkdown } from '../../renderer/markdown.ts';
 import { addConversationSplashScreen } from '../../core/conversation-rendering.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
@@ -74,22 +74,15 @@ describe('chrome palette in-place rebuild', () => {
     expect({ ...DEFAULT_PANEL_PALETTE }).toEqual(darkSnapshot);
   });
 
-  test('fullscreen palette flips its info role and restores', () => {
-    const darkInfo = FULLSCREEN_PALETTE.info;
+  test('kit surfaces read the active tokens at render time and follow a mode flip', () => {
+    const fillOf = (): string => finishModal(beginModal(100, 30, { title: 'x' })).lines[1]![0]!.bg;
+    const dark = fillOf();
+    expect(dark).toBe(activeTokens().backgroundPanel);
     setActiveThemeMode('light');
-    expect(FULLSCREEN_PALETTE.info).toBe(resolveUiTones('light').state.info);
-    expect(FULLSCREEN_PALETTE.info).not.toBe(darkInfo);
+    expect(fillOf()).toBe(activeTokens().backgroundPanel);
+    expect(fillOf()).not.toBe(dark);
     setActiveThemeMode('dark');
-    expect(FULLSCREEN_PALETTE.info).toBe(darkInfo);
-  });
-
-  test('overlay palette object identity is stable across flips (mutated in place)', () => {
-    const ref = DEFAULT_OVERLAY_PALETTE;
-    const darkSnapshot = { ...DEFAULT_OVERLAY_PALETTE };
-    setActiveThemeMode('light');
-    setActiveThemeMode('dark');
-    expect(DEFAULT_OVERLAY_PALETTE).toBe(ref); // never replaced, only rebuilt
-    expect({ ...DEFAULT_OVERLAY_PALETTE }).toEqual(darkSnapshot);
+    expect(fillOf()).toBe(dark);
   });
 
   test('extendPalette-derived palette tracks the base flip; extras stay put', () => {

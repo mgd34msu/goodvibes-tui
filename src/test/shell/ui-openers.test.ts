@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { SurfaceModalHost } from '../../input/surface-modal-host.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
@@ -57,6 +58,7 @@ describe('wireShellUiOpeners', () => {
       },
       modalOpened: mock(() => {}),
       openSelection: mock(() => {}),
+      surfaceModals: new SurfaceModalHost(),
     };
     panelManager = {
       isVisible: mock(() => false),

@@ -218,6 +218,11 @@ export class McpWorkspace {
   public tools: readonly RegisteredTool[] = [];
   public loadingTools = false;
   public lastError: string | null = null;
+  /**
+   * The browser's always-live search row. Narrows the server and action rows;
+   * selectedIndex indexes the narrowed list (visibleRows).
+   */
+  public query = '';
   private context: CommandContext | null = null;
   private snapshot: McpWorkspaceSnapshot = {
     projectPath: '',
@@ -233,6 +238,7 @@ export class McpWorkspace {
     this.selectedIndex = 0;
     this.formIndex = 0;
     this.lastError = null;
+    this.query = '';
     this.refreshSnapshot();
     void this.refreshTools();
   }
@@ -264,8 +270,23 @@ export class McpWorkspace {
     ];
   }
 
+  /** The rows the search row lets through (servers by name, role or source; actions by label). */
+  get visibleRows(): readonly McpWorkspaceRow[] {
+    const q = this.query.trim().toLowerCase();
+    if (!q) return this.rows;
+    return this.rows.filter((row) => row.type === 'server'
+      ? [row.server.name, row.server.role, row.server.source].some((v) => v.toLowerCase().includes(q))
+      : row.label.toLowerCase().includes(q));
+  }
+
+  /** Replace the browser query; the selection moves to the first match. */
+  setQuery(query: string): void {
+    this.query = query;
+    this.selectedIndex = 0;
+  }
+
   get selectedRow(): McpWorkspaceRow | null {
-    return this.rows[this.selectedIndex] ?? null;
+    return this.visibleRows[this.selectedIndex] ?? null;
   }
 
   get selectedServer(): McpWorkspaceServerRow | null {
@@ -303,7 +324,7 @@ export class McpWorkspace {
       effectiveConfig,
       servers: mergeServers(effectiveConfig, runtimeServers),
     };
-    this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, this.rows.length - 1));
+    this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, this.visibleRows.length - 1));
   }
 
   async refreshTools(): Promise<void> {
@@ -417,7 +438,7 @@ export class McpWorkspace {
   }
 
   moveSelection(delta: number): void {
-    const total = this.mode === 'form' ? this.formFields.length : this.rows.length;
+    const total = this.mode === 'form' ? this.formFields.length : this.visibleRows.length;
     if (total <= 0) return;
     if (this.mode === 'form') {
       this.formIndex = Math.max(0, Math.min(total - 1, this.formIndex + delta));
@@ -496,6 +517,16 @@ export function handleMcpWorkspaceToken(
     return true;
   }
 
+  const browseAction = (key: string): boolean => {
+    if (key === 'a') workspace.openAddForm();
+    else if (key === 'e' && workspace.selectedServer) workspace.openEditForm(workspace.selectedServer.name);
+    else if (key === 'd' && workspace.selectedServer) workspace.requestDelete(workspace.selectedServer.name);
+    else if (key === 'r') void workspace.reloadRuntime();
+    else if (key === 't') void workspace.refreshTools();
+    else return false;
+    return true;
+  };
+
   if (token.type === 'text') {
     if (workspace.mode === 'form') {
       workspace.appendFormText(token.value);
@@ -503,12 +534,11 @@ export function handleMcpWorkspaceToken(
       if (token.value.toLowerCase() === 'y') void workspace.confirmDelete();
       else if (token.value.toLowerCase() === 'n') workspace.cancelForm();
     } else {
+      // Browse: the search row is always live. An action letter fires while
+      // the query is empty; everything else is typed into the query.
       const value = token.value.toLowerCase();
-      if (value === 'a') workspace.openAddForm();
-      else if (value === 'e' && workspace.selectedServer) workspace.openEditForm(workspace.selectedServer.name);
-      else if (value === 'd' && workspace.selectedServer) workspace.requestDelete(workspace.selectedServer.name);
-      else if (value === 'r') void workspace.reloadRuntime();
-      else if (value === 't') void workspace.refreshTools();
+      const claimed = workspace.query.length === 0 && [...token.value].length === 1 && 'aedrt'.includes(value);
+      if (!claimed || !browseAction(value)) workspace.setQuery(workspace.query + token.value);
     }
     requestRender();
     return true;
@@ -516,6 +546,8 @@ export function handleMcpWorkspaceToken(
 
   if (token.type !== 'key') return true;
   if (token.logicalName === 'escape') {
+    // One level per Esc: the form or the remove confirmation returns to the
+    // browser; the browser closes the workspace.
     if (workspace.mode === 'form' || workspace.mode === 'delete-confirm') {
       workspace.cancelForm();
       requestRender();
@@ -530,7 +562,10 @@ export function handleMcpWorkspaceToken(
   else if (token.logicalName === 'pageup') workspace.moveSelection(-10);
   else if (token.logicalName === 'pagedown') workspace.moveSelection(10);
   else if (token.logicalName === 'enter') void workspace.activateSelected();
-  else if (token.logicalName === 'backspace' || token.logicalName === 'delete') {
+  else if (token.logicalName === 'backspace') {
+    if (workspace.mode === 'form') workspace.backspaceFormText();
+    else if (workspace.mode === 'browse' && workspace.query.length > 0) workspace.setQuery(workspace.query.slice(0, -1));
+  } else if (token.logicalName === 'delete') {
     if (workspace.mode === 'form') workspace.backspaceFormText();
     else if (workspace.mode === 'browse' && workspace.selectedServer) workspace.requestDelete(workspace.selectedServer.name);
   } else if (token.logicalName === 'left') {
@@ -539,14 +574,10 @@ export function handleMcpWorkspaceToken(
     if (workspace.mode === 'form') workspace.adjustFormEnum(1);
   } else if (token.logicalName === 'space') {
     if (workspace.mode === 'form') workspace.appendFormText(' ');
-  } else if (token.logicalName === 'a' && workspace.mode === 'browse') {
-    workspace.openAddForm();
-  } else if (token.logicalName === 'd' && workspace.mode === 'browse' && workspace.selectedServer) {
-    workspace.requestDelete(workspace.selectedServer.name);
-  } else if (token.logicalName === 'r' && workspace.mode === 'browse') {
-    void workspace.reloadRuntime();
-  } else if (token.logicalName === 't' && workspace.mode === 'browse') {
-    void workspace.refreshTools();
+    else if (workspace.mode === 'browse') workspace.setQuery(workspace.query + ' ');
+  } else if (workspace.mode === 'browse' && token.logicalName) {
+    // Modified letters (CSI-u chords) fire their action whatever the query holds.
+    browseAction(token.logicalName);
   }
 
   requestRender();

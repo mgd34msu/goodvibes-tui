@@ -271,6 +271,7 @@ export function handleEscapeForHandler(handler: InputHandler): void {
       modelPicker: handler.modelPicker,
       filePicker: handler.filePicker,
       blockActionsMenu: handler.blockActionsMenu,
+      surfaceModals: handler.surfaceModals,
       selectionModal: handler.selectionModal,
       onboardingWizard: handler.onboardingWizard,
       commandMode: handler.commandMode,

@@ -1,6 +1,7 @@
 /**
  * Tests for renderSessionPickerModal renderer.
  */
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,6 +9,7 @@ import { SessionPickerModal } from '../../input/session-picker-modal.ts';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { renderSessionPickerModal } from '../../renderer/session-picker-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 import { makeTestSurface } from '../helpers/session-surface.ts';
 
 const W = 120;
@@ -27,50 +29,50 @@ function makeModal(overrides: Partial<SessionPickerModal> = {}): SessionPickerMo
 
 describe('renderSessionPickerModal', () => {
   test('returns a non-empty Line[] array', () => {
-    const lines = renderSessionPickerModal(makeModal(), W);
+    const lines = frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24);
     expect(Array.isArray(lines)).toBe(true);
     expect(lines.length).toBeGreaterThan(0);
   });
 
   test('each line has correct terminal width', () => {
-    const lines = renderSessionPickerModal(makeModal(), W);
+    const lines = frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24);
     for (const line of lines) {
       expect(line.length).toBe(W);
     }
   });
 
-  test('title bar contains "Sessions"', () => {
-    const lines = renderSessionPickerModal(makeModal(), W);
-    const title = lineToString(lines[0]);
-    expect(title).toContain('Sessions');
+  test('title row carries the ✦ mark and the title', () => {
+    const lines = frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24);
+    expect(linesToText(lines).join('\n')).toContain('✦ Sessions');
   });
 
-  test('footer contains navigation hints', () => {
-    const lines = renderSessionPickerModal(makeModal(), W);
-    const footer = lineToString(lines[lines.length - 1]);
-    expect(footer).toContain('Navigate');
-    expect(footer).toContain('Load');
-    expect(footer).toContain('Delete');
-    expect(footer).toContain('Esc');
+  test('hint row shows keycap hints (move, open, delete) and the search row is live', () => {
+    const texts = linesToText(frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24)).join('\n');
+    expect(texts).toContain(' ↑↓  move');
+    expect(texts).toContain(' ⏎  open');
+    expect(texts).toContain(' d  delete');
+    expect(texts).toContain('▏Search sessions');
   });
 
   test('shows session names in list', () => {
-    const lines = renderSessionPickerModal(makeModal(), W);
+    const lines = frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('alpha-session');
     expect(texts).toContain('beta-session');
   });
 
-  test('selected item has arrow indicator', () => {
-    const lines = renderSessionPickerModal(makeModal(), W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '▸'));
-    expect(hasArrow).toBe(true);
+  test('the selected session is drawn as the selected row', () => {
+    const lines = frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24);
+    const row = lines.find((line) => lineToString(line).includes('alpha-session'))!;
+    const cell = row[lineToString(row).indexOf('Alpha')] ?? row[lineToString(row).indexOf('alpha-session')]!;
+    expect(cell.bold).toBe(true);
+    expect(cell.fg).toBe(activeTokens().selectedListItemText);
   });
 
   test('empty sessions shows helpful message', () => {
     const modal = makeModal({ sessions: [] as typeof makeModal extends () => infer R ? (R extends { sessions: infer S } ? S : never) : never });
     modal.sessions = [];
-    const lines = renderSessionPickerModal(modal, W);
+    const lines = frameFromLayer(renderSessionPickerModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('No saved sessions');
   });
@@ -78,7 +80,7 @@ describe('renderSessionPickerModal', () => {
   test('status message is displayed when set', () => {
     const modal = makeModal();
     modal.statusMessage = 'Deleted: alpha-session';
-    const lines = renderSessionPickerModal(modal, W);
+    const lines = frameFromLayer(renderSessionPickerModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Deleted: alpha-session');
   });
@@ -87,22 +89,23 @@ describe('renderSessionPickerModal', () => {
     const modal = makeModal();
     modal.deleteConfirmationTarget = 'alpha-session';
     modal.statusMessage = 'Press d again to delete alpha-session.';
-    const lines = renderSessionPickerModal(modal, W);
+    const lines = frameFromLayer(renderSessionPickerModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Deletion is armed for alpha-session');
-    expect(texts).toContain('Arm / Delete');
+    expect(texts).toContain('Press d again to delete "alpha-session"');
+    expect(texts).toContain(' d  confirm delete');
   });
 
   test('works at narrow terminal width', () => {
     const narrowW = 60;
-    const lines = renderSessionPickerModal(makeModal(), narrowW);
+    const lines = frameFromLayer(renderSessionPickerModal(makeModal(), narrowW), narrowW, 24);
     for (const line of lines) {
       expect(line.length).toBe(narrowW);
     }
   });
 
   test('message count shown in list', () => {
-    const lines = renderSessionPickerModal(makeModal(), W);
+    const lines = frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24);
     const texts = linesToText(lines).join('\n');
     // Session has 5 messages
     expect(texts).toContain('5');

@@ -9,6 +9,7 @@
  * update (mutating one visible entry's currentValue, which renderSettingsModal
  * reads via formatValue) must not reflow the table or move the cursor.
  */
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, test, expect } from 'bun:test';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -85,7 +86,7 @@ describe('liveness contract: settings modal (values-only update)', () => {
       // non-selected row rendered below the cursor (selectedIndex starts at 0).
       expect(items.length).toBeGreaterThanOrEqual(2);
 
-      const frameA = renderSettingsModal(modal, W, H);
+      const frameA = frameFromLayer(renderSettingsModal(modal, W, H), W, H);
       const cursorRowA = selectionRow(frameA);
       expect(cursorRowA).toBeGreaterThanOrEqual(0);
 
@@ -94,7 +95,7 @@ describe('liveness contract: settings modal (values-only update)', () => {
       // renderSettingsModal reads entry.currentValue via formatValue, the same
       // shape as a live config tick.
       items[1]!.currentValue = bumpValue(items[1]!.currentValue);
-      const frameB = renderSettingsModal(modal, W, H);
+      const frameB = frameFromLayer(renderSettingsModal(modal, W, H), W, H);
 
       // Core contract: identical skeleton + width, cursor on the same row.
       assertFrameLiveness(frameA, frameB);
@@ -111,8 +112,8 @@ describe('liveness contract: settings modal (values-only update)', () => {
 
   test('an identical re-render trivially satisfies the contract (no diffs)', () => {
     withSettingsModal((modal) => {
-      const frameA = renderSettingsModal(modal, W, H);
-      const frameB = renderSettingsModal(modal, W, H);
+      const frameA = frameFromLayer(renderSettingsModal(modal, W, H), W, H);
+      const frameB = frameFromLayer(renderSettingsModal(modal, W, H), W, H);
       assertFrameLiveness(frameA, frameB);
       expect(differingCells(frameA, frameB)).toEqual([]);
     });

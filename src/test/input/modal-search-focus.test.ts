@@ -81,7 +81,7 @@ afterEach(() => {
 });
 
 describe('modal search focus routing', () => {
-  test('selection modal keeps typable custom actions active until search is focused', () => {
+  test('selection modal: a claimed action letter fires while the query is empty; once typing, it is a character', () => {
     const modal = new SelectionModal();
     const customActions = new Map([['d', 'delete' as const]]);
     modal.open('Pick', [
@@ -107,14 +107,13 @@ describe('modal search focus routing', () => {
       { id: 'one', label: 'One' },
       { id: 'two', label: 'Two' },
     ], { allowSearch: true, customActions });
-    handleSelectionModalToken(state, { type: 'text', value: '/' });
-    expect(modal.searchFocused).toBe(true);
+    handleSelectionModalToken(state, { type: 'text', value: 't' });
     handleSelectionModalToken(state, { type: 'text', value: 'd' });
     expect(result).toBeNull();
-    expect(modal.query).toBe('d');
+    expect(modal.query).toBe('td');
   });
 
-  test('selection modal moves into and out of search with up/down', () => {
+  test('selection modal: up/down always move the selection (there is no search mode to enter)', () => {
     const modal = new SelectionModal();
     modal.open('Pick', [
       { id: 'one', label: 'One' },
@@ -129,14 +128,15 @@ describe('modal search focus routing', () => {
       handleEscape: () => {},
     };
 
-    handleSelectionModalToken(state, { type: 'key', name: 'up', logicalName: 'up', ctrl: false, shift: false, meta: false });
-    expect(modal.searchFocused).toBe(true);
     handleSelectionModalToken(state, { type: 'key', name: 'down', logicalName: 'down', ctrl: false, shift: false, meta: false });
-    expect(modal.searchFocused).toBe(false);
+    expect(modal.selectedIndex).toBe(1);
+    handleSelectionModalToken(state, { type: 'key', name: 'up', logicalName: 'up', ctrl: false, shift: false, meta: false });
     expect(modal.selectedIndex).toBe(0);
+    handleSelectionModalToken(state, { type: 'key', name: 'up', logicalName: 'up', ctrl: false, shift: false, meta: false });
+    expect(modal.selectedIndex).toBe(1); // wraps
   });
 
-  test('model picker keeps group hotkey active until search is focused', () => {
+  test('model picker: letters always type into the live search; ctrl+g cycles the grouping', () => {
     const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
     picker.openAllModels([
       {
@@ -151,11 +151,6 @@ describe('modal search focus routing', () => {
         tier: 'premium',
       },
     ], 'gpt-1');
-    // Search starts focused by default now (see openAllModels() doc
-    // comment), this test is specifically about hotkey behavior OUTSIDE
-    // search, so set up that precondition explicitly.
-    picker.blurSearch();
-
     const state = {
       modelPicker: picker,
       modalStack: [],
@@ -167,92 +162,90 @@ describe('modal search focus routing', () => {
 
     expect(picker.groupBy).toBe('provider');
     handleModelPickerToken(state, { type: 'text', value: 'g' });
+    expect(picker.query).toBe('g');
+    expect(picker.groupBy).toBe('provider');
+    handleModelPickerToken(state, { type: 'key', name: 'g', logicalName: 'g', ctrl: true, shift: false, meta: false });
     expect(picker.groupBy).toBe('family');
+  });
 
-    handleModelPickerToken(state, { type: 'text', value: '/' });
-    expect(picker.searchFocused).toBe(true);
+  test('model picker: left/right and tab/shift+tab switch the target tab', () => {
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
+    picker.openAllModels([
+      {
+        id: 'gpt-1',
+        provider: 'openai',
+        registryKey: 'openai:gpt-1',
+        displayName: 'GPT 1',
+        description: '',
+        capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+        contextWindow: 8192,
+        selectable: true,
+        tier: 'premium',
+      },
+    ], 'gpt-1');
+    picker.setTargetInfos([
+      { target: 'main', label: 'Main Chat', description: '', provider: 'openai', model: 'openai:gpt-1', enabled: true, inherited: false },
+      { target: 'helper', label: 'Helper', description: '', provider: 'openai', model: 'openai:gpt-1', enabled: true, inherited: false },
+    ]);
+    const state = {
+      modelPicker: picker,
+      modalStack: [],
+      commandContext: undefined,
+      getViewportHeight: () => 30,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleModelPickerToken(state, { type: 'key', name: 'right', logicalName: 'right', ctrl: false, shift: false, meta: false });
+    expect(picker.target).toBe('helper');
+    handleModelPickerToken(state, { type: 'key', name: 'left', logicalName: 'left', ctrl: false, shift: false, meta: false });
+    expect(picker.target).toBe('main');
+    handleModelPickerToken(state, { type: 'key', name: 'tab', logicalName: 'tab', ctrl: false, shift: false, meta: false });
+    expect(picker.target).toBe('helper');
+    handleModelPickerToken(state, { type: 'key', name: 'tab', logicalName: 'tab', ctrl: false, shift: true, meta: false });
+    expect(picker.target).toBe('main');
+  });
+
+  test('model picker: capability, availability and benchmark filters are ctrl chords that work while typing', () => {
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
+    picker.openAllModels([
+      {
+        id: 'gpt-1',
+        provider: 'openai',
+        registryKey: 'openai:gpt-1',
+        displayName: 'GPT 1',
+        description: '',
+        capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+        contextWindow: 8192,
+        selectable: true,
+        tier: 'premium',
+      },
+    ], 'gpt-1');
+    const state = {
+      modelPicker: picker,
+      modalStack: [],
+      commandContext: undefined,
+      getViewportHeight: () => 30,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
     handleModelPickerToken(state, { type: 'text', value: 'g' });
-    expect(picker.groupBy).toBe('family');
+    handleModelPickerToken(state, { type: 'key', name: 'k', logicalName: 'k', ctrl: true, shift: false, meta: false });
+    expect(picker.capabilityFilter).toBe('reasoning');
+    handleModelPickerToken(state, { type: 'key', name: 'a', logicalName: 'a', ctrl: true, shift: false, meta: false });
+    expect(picker.availableOnly).toBe(false);
+    handleModelPickerToken(state, { type: 'key', name: 'b', logicalName: 'b', ctrl: true, shift: false, meta: false });
+    expect(picker.benchmarkSort).not.toBe('none');
+    handleModelPickerToken(state, { type: 'key', name: 't', logicalName: 't', ctrl: true, shift: false, meta: false });
+    expect(picker.categoryFilter).toBe('free');
+    // The typed query was never disturbed.
     expect(picker.query).toBe('g');
   });
 
-  test('model picker uses left and right to switch target/list panes', () => {
-    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
-    picker.openAllModels([
-      {
-        id: 'gpt-1',
-        provider: 'openai',
-        registryKey: 'openai:gpt-1',
-        displayName: 'GPT 1',
-        description: '',
-        capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
-        contextWindow: 8192,
-        selectable: true,
-        tier: 'premium',
-      },
-    ], 'gpt-1');
-    // Left/Right pane switching is gated on !searchFocused, and search
-    // now starts focused by default (see openAllModels() doc comment).
-    picker.blurSearch();
-
-    const state = {
-      modelPicker: picker,
-      modalStack: [],
-      commandContext: undefined,
-      getViewportHeight: () => 30,
-      requestRender: () => {},
-      handleEscape: () => {},
-    };
-
-    handleModelPickerToken(state, { type: 'key', name: 'left', logicalName: 'left', ctrl: false, shift: false, meta: false });
-    expect(picker.focusPane).toBe('targets');
-
-    handleModelPickerToken(state, { type: 'key', name: 'right', logicalName: 'right', ctrl: false, shift: false, meta: false });
-    expect(picker.focusPane).toBe('items');
-    expect(picker.selectedIndex).toBe(0);
-  });
-
-  test('model picker exposes capability, availability, and benchmark hotkeys outside search', () => {
-    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
-    picker.openAllModels([
-      {
-        id: 'gpt-1',
-        provider: 'openai',
-        registryKey: 'openai:gpt-1',
-        displayName: 'GPT 1',
-        description: '',
-        capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
-        contextWindow: 8192,
-        selectable: true,
-        tier: 'premium',
-      },
-    ], 'gpt-1');
-    // This test is specifically "outside search", search now starts
-    // focused by default (see openAllModels() doc comment).
-    picker.blurSearch();
-
-    const state = {
-      modelPicker: picker,
-      modalStack: [],
-      commandContext: undefined,
-      getViewportHeight: () => 30,
-      requestRender: () => {},
-      handleEscape: () => {},
-    };
-
-    handleModelPickerToken(state, { type: 'text', value: 'c' });
-    expect(picker.capabilityFilter).toBe('reasoning');
-
-    handleModelPickerToken(state, { type: 'text', value: 'a' });
-    expect(picker.availableOnly).toBe(false);
-
-    handleModelPickerToken(state, { type: 'text', value: 'b' });
-    expect(picker.benchmarkSort).toBe('composite');
-  });
-
-  test('model picker appends space to search query when searchFocused; no context-cap hijack', () => {
-    // Regression test for #21: space while searchFocused must go to query even
-    // when the highlighted item is a local model.
+  test('model picker: once typing has started, space is query text (no context-cap hijack); on an untouched search it sets a local model\'s cap', () => {
+    // Regression #21: space while typing must go to the query even when the
+    // highlighted item is a local model.
     const local: Parameters<typeof ModelPickerModal.prototype.openAllModels>[0][0] = {
       id: 'local-1',
       provider: 'ollama',
@@ -267,7 +260,6 @@ describe('modal search focus routing', () => {
     };
     const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
     picker.openAllModels([local], local.id!);
-    picker.searchFocused = true;
 
     const state = {
       modelPicker: picker,
@@ -278,10 +270,14 @@ describe('modal search focus routing', () => {
       handleEscape: () => {},
     };
 
+    handleModelPickerToken(state, { type: 'text', value: 'l' });
     handleModelPickerToken(state, { type: 'text', value: ' ' });
-    // Space must go to query, not trigger contextCap mode
     expect(picker.mode).toBe('model');
-    expect(picker.query).toBe(' ');
+    expect(picker.query).toBe('l ');
+
+    picker.clearQuery();
+    handleModelPickerToken(state, { type: 'text', value: ' ' });
+    expect(picker.mode).toBe('contextCap');
   });
 
   test('W3-T2: opening /model and immediately typing a search term filters the list, instead of silently hitting hotkeys', () => {

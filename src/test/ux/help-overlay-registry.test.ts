@@ -26,6 +26,7 @@ function makeCmd(name: string): SlashCommand {
 
 // Import renderHelpOverlay
 import { renderHelpOverlay } from '../../renderer/help-overlay.ts';
+import { OverlayFilter } from '../../input/overlay-filter.ts';
 
 /**
  * Render the overlay across multiple scroll offsets and concatenate all visible text.
@@ -34,9 +35,11 @@ import { renderHelpOverlay } from '../../renderer/help-overlay.ts';
 function renderAllText(commands: SlashCommand[]): string {
   const allFrames: string[] = [];
   // Render at multiple scroll offsets to capture all sections
-  for (let offset = 0; offset <= 30; offset += 6) {
-    const lines = renderHelpOverlay(120, KEYBINDINGS_STUB, commands, offset, 80);
-    const frame = lines.map(line => line.map(cell => cell.char).join('').trimEnd()).join('\n');
+  const filter = new OverlayFilter();
+  renderHelpOverlay(120, 80, KEYBINDINGS_STUB, commands, 0, filter);
+  for (let offset = 0; offset <= filter.maxScroll + 6; offset += 6) {
+    const layer = renderHelpOverlay(120, 80, KEYBINDINGS_STUB, commands, offset, filter);
+    const frame = layer.lines.map(line => line.map(cell => cell.char).join('').trimEnd()).join('\n');
     allFrames.push(frame);
   }
   return allFrames.join('\n');
@@ -97,11 +100,9 @@ describe('renderHelpOverlay Quick Start sourced from live registry (β3)', () =>
     // Since the window is limited, we test the structural contract: rendering
     // succeeds and returns a non-empty line array.
     const commands = [makeCmd('model'), makeCmd('clear')];
-    const lines = renderHelpOverlay(120, KEYBINDINGS_STUB, commands);
-    expect(lines.length).toBeGreaterThan(0);
-    // Each line has width 120
-    for (const line of lines) {
-      expect(line.length).toBe(120);
-    }
+    const layer = renderHelpOverlay(120, 40, KEYBINDINGS_STUB, commands);
+    expect(layer.lines.length).toBeGreaterThan(0);
+    // The layer stays inside the 120-column screen.
+    expect(layer.x + layer.lines[0]!.length).toBeLessThanOrEqual(120);
   });
 });

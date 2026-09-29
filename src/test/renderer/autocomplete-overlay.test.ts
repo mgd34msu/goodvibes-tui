@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { renderAutocompleteOverlay } from '../../renderer/autocomplete-overlay.ts';
-import { DEFAULT_OVERLAY_PALETTE } from '../../renderer/overlay-box.ts';
+import { POPUP_BAR_X } from '../../renderer/surface-kit-parts.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 import { AutocompleteEngine } from '../../input/autocomplete.ts';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 
 describe('renderAutocompleteOverlay', () => {
-  test('keeps selected-row highlight inside intact box borders', () => {
+  test('draws a composer popup: ┃ bar on every row, surface fill, gradient selected row, no frame', () => {
     const registry = new CommandRegistry();
     registry.register({
       name: 'approval',
@@ -28,38 +29,38 @@ describe('renderAutocompleteOverlay', () => {
 
     const width = 80;
     const lines = renderAutocompleteOverlay(autocomplete, width);
+    const t = activeTokens();
 
-    expect(lines.length).toBeGreaterThanOrEqual(5);
+    expect(lines.length).toBeGreaterThanOrEqual(4);
     for (const line of lines) {
       expect(line.length).toBe(width);
+      // The ┃ bar runs the popup's full height, the fill starts right of it.
+      expect(line[POPUP_BAR_X]!.char).toBe('┃');
+      expect(line[POPUP_BAR_X + 1]!.bg).not.toBe('');
+      // No box-drawing frame anywhere.
+      expect(line.some((cell) => '┌┐└┘│─'.includes(cell.char) && cell.char !== '')).toBe(false);
     }
-
-    const top = lines[0];
-    const boxMargin = top.findIndex((cell) => cell.char === '┌');
-    const rightX = top.findLastIndex((cell) => cell.char === '┐');
-    expect(boxMargin).toBeGreaterThanOrEqual(0);
-    expect(rightX).toBeGreaterThan(boxMargin);
-
-    const bottom = lines[lines.length - 1];
-    expect(bottom[boxMargin].char).toBe('└');
-    expect(bottom[rightX].char).toBe('┘');
-
-    const selectedRow = lines[2];
-    expect(selectedRow[boxMargin].char).toBe('│');
-    expect(selectedRow[boxMargin].bg).toBe('');
-    expect(selectedRow[rightX].char).toBe('│');
-    expect(selectedRow[rightX].bg).toBe('');
-    expect(selectedRow[boxMargin + 1].bg).toBe(DEFAULT_OVERLAY_PALETTE.selectedBg);
-    expect(selectedRow[rightX - 1].bg).toBe(DEFAULT_OVERLAY_PALETTE.selectedBg);
-    expect(selectedRow[boxMargin + 1].char).not.toBe('│');
-    expect(selectedRow[rightX - 1].char).not.toBe('│');
+    // Padding rows above and below the list.
+    expect(lines[0]!.slice(POPUP_BAR_X + 1).every((cell) => cell.char === ' ')).toBe(true);
+    expect(lines[lines.length - 1]!.slice(POPUP_BAR_X + 1).every((cell) => cell.char === ' ')).toBe(true);
+    // The selected row carries the gradient across the fill with dark bold text.
+    const selectedRow = lines[1]!;
+    expect(selectedRow[POPUP_BAR_X + 1]!.bg).toBe(t.brand);
+    const nameCell = selectedRow[POPUP_BAR_X + 3]!;
+    expect(nameCell.char).toBe('/');
+    expect(nameCell.fg).toBe(t.selectedListItemText);
+    expect(nameCell.bold).toBe(true);
+    expect(lines.map((line) => line.map((c) => c.char).join('')).join('\n')).toContain('tab complete');
   });
 
   function flatten(lines: ReturnType<typeof renderAutocompleteOverlay>): string {
     return lines
       .map((line) => line.map((cell) => cell.char).join(''))
       .join(' ')
-      .replace(/[│┌┐└┘├┤┬┴┼─▸]/g, ' ')
+      .replace(/[│┌┐└┘├┤┬┴┼─▸┃]/g, ' ')
+      // The selected row's right-aligned "tab complete" sits on the first
+      // line of its wrapped description; it is not part of the description.
+      .replace(/tab complete/g, ' ')
       .replace(/\s+/g, ' ');
   }
 

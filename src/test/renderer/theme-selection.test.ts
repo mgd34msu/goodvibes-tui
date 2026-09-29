@@ -36,7 +36,6 @@ import {
 import { DEFAULT_PANEL_PALETTE, extendPalette } from '../../panels/polish-core.ts';
 import { buildStatusBadge } from '../../panels/polish-tables.ts';
 import { MODAL_TONES } from '../../panels/modals/modal-theme.ts';
-import { DEFAULT_OVERLAY_PALETTE } from '../../renderer/overlay-box.ts';
 import { BORDERS } from '../../renderer/layout.ts';
 import { addConversationSplashScreen } from '../../core/conversation-rendering.ts';
 import { SPLASH_GRADIENT } from '../../utils/splash-lines.ts';
@@ -132,10 +131,7 @@ describe('the system theme', () => {
 
 describe('a theme change reaches every palette', () => {
   test('base palettes rebuild in place', () => {
-    const overlay = DEFAULT_OVERLAY_PALETTE;
     setActiveThemeName('dracula');
-    expect(DEFAULT_OVERLAY_PALETTE).toBe(overlay);
-    expect(DEFAULT_OVERLAY_PALETTE.selectedBg).toBe(activeUiTones().bg.selected);
     expect(DEFAULT_PANEL_PALETTE.good).toBe(activeTokens().success);
     expect(MODAL_TONES.info).toBe(activeTokens().info);
   });

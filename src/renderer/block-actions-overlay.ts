@@ -1,60 +1,41 @@
 /**
- * renderBlockActionsMenu, renders the BlockActionsMenu (src/renderer/block-actions.ts)
- * as a docked overlay, so opening it via Enter-on-an-empty-composer actually
- * shows something. Follows the established docked-overlay pattern (see
- * selection-modal-overlay.ts / bookmark-modal.ts): ModalFactory sizes the box
- * to its content, and every text section wraps rather than clips, so the
- * block summary and action list are always shown in full.
+ * renderBlockActionsMenu, the block-actions menu (Enter on an empty composer)
+ * as a small centered kit dialog: the target block's summary wrapped in full,
+ * then one kit row per action with its key right-aligned, the selected action
+ * as the gradient row, and keycap hints. Each action's key fires it directly.
  */
 
-import { type Line } from '@pellux/goodvibes-sdk/platform/types';
-import { ModalFactory, type ModalSection } from './modal-factory.ts';
 import type { BlockActionsMenu } from './block-actions.ts';
 import { describeBlockForReceipt } from '../input/handler-content-actions.ts';
-import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
-import { formatHints } from './hint-grammar.ts';
 import { activeTokens } from './theme.ts';
+import { beginModal, finishModal, type KitHint, type SurfaceLayer } from './surface-kit.ts';
+import { drawList, type KitRow } from './surface-kit-list.ts';
+import { drawTextBlock, listHeight, modalHeightFor, modalTextWidth, textBlockHeight, type TextLine } from './surface-kit-extra.ts';
+
+const HINTS: readonly KitHint[] = [['↑↓', 'move'], ['⏎', 'select']];
+/** Preferred width: a menu, not a workspace. */
+const MENU_WIDTH = 72;
 
 export function renderBlockActionsMenu(
   menu: BlockActionsMenu,
-  width: number,
-  viewportHeight = 24,
-): Line[] {
-  if (!menu.active || !menu.block) return [];
+  screenWidth: number,
+  screenHeight = 24,
+): SurfaceLayer | null {
+  if (!menu.active || !menu.block) return null;
+  const t = activeTokens();
 
-  const summary = describeBlockForReceipt(menu.block);
-  const metrics = getOverlaySurfaceMetrics(width, viewportHeight, {
-    margin: 4,
-    maxWidth: 64,
-    chromeRows: 5,
-    minContentRows: 3,
-    maxContentRows: Math.max(6, viewportHeight - 8),
-  });
+  const target: TextLine[] = [{ text: `Target: ${describeBlockForReceipt(menu.block)}`, style: { fg: t.textMuted } }];
+  const rows: KitRow[] = menu.actions.map((action, i) => ({
+    label: action.label,
+    right: action.key === 'Tab' ? 'tab' : action.key,
+    selected: i === menu.selectedIndex,
+  }));
+  const width = modalTextWidth(screenWidth, screenHeight, MENU_WIDTH);
+  const body = textBlockHeight(target, width) + 1 + listHeight(rows, 0, width - 1);
+  const height = modalHeightFor(screenWidth, screenHeight, { width: MENU_WIDTH, hints: HINTS }, body);
 
-  const sections: ModalSection[] = [
-    { type: 'text', content: `Target: ${summary}`, style: { fg: activeTokens().textFaint } },
-    { type: 'separator' },
-    {
-      type: 'list',
-      items: menu.actions.map((action, i) => ({
-        label: `[${action.key}] ${action.label}`,
-        selected: i === menu.selectedIndex,
-      })),
-    },
-  ];
-
-  return ModalFactory.createModal(
-    {
-      title: 'Block Actions',
-      width: metrics.boxWidth,
-      margin: metrics.margin,
-      sections,
-      hints: [formatHints([
-        { key: 'Up/Down', verb: 'Navigate' },
-        { key: 'Enter', verb: 'Select' },
-        { key: 'Esc', verb: 'Close' },
-      ])],
-    },
-    width,
-  );
+  const f = beginModal(screenWidth, screenHeight, { title: 'Block actions', hints: HINTS, width: MENU_WIDTH, height, center: true });
+  const y = drawTextBlock(f.canvas, f.l, f.top, f.r - f.l + 1, target, f.bottom) + 1;
+  drawList(f.canvas, { rows, top: y, bottom: f.bottom, x0: f.l, x1: f.r });
+  return finishModal(f);
 }

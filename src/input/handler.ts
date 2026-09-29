@@ -22,6 +22,7 @@ import { InputHistory, HistorySearch } from './input-history.ts';
 import type { BlockMeta, ConversationManager } from '../core/conversation';
 import { BlockActionsMenu } from '../renderer/block-actions.ts';
 import { ContextInspectorModal } from '../renderer/context-inspector.ts';
+import { OverlayFilters } from './overlay-filter.ts';
 import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import { McpWorkspace } from './mcp-workspace.ts';
@@ -120,6 +121,7 @@ import type { Panel } from '../panels/types.ts';
 import type { UiRuntimeServices } from '../runtime/ui-services.ts';
 export { handlePanelIntegrationAction } from './panel-integration-actions.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
+import { SurfaceModalHost } from './surface-modal-host.ts';
 
 type SelectionModalCallback = (result: SelectionResult | null) => void;
 
@@ -193,8 +195,10 @@ export class InputHandler implements InputHandlerLike {
   public selectionModal = new SelectionModal();
   public searchManager = new SearchManager();
   public contextInspectorModal = new ContextInspectorModal();
+  public readonly overlayFilters = new OverlayFilters();
   public bookmarkModal: BookmarkModal;
   public blockActionsMenu = new BlockActionsMenu();
+  public surfaceModals = new SurfaceModalHost();
   public settingsModal = new SettingsModal();
   public configModal = new ConfigModal();
   /** item 5, paste-flood guard state, mutated in place across tokens (never reallocated). */
@@ -327,7 +331,9 @@ export class InputHandler implements InputHandlerLike {
         modelPicker: this.modelPicker,
         onboardingWizard: this.onboardingWizard,
         contextInspectorModal: this.contextInspectorModal,
+        overlayFilters: this.overlayFilters,
         blockActionsMenu: this.blockActionsMenu,
+        surfaceModals: this.surfaceModals,
         searchManager: this.searchManager,
         modalStack: this.modalStack,
         inputHistory: this.inputHistory,

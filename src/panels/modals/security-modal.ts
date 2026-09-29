@@ -1,8 +1,8 @@
 import { MODAL_TONES } from './modal-theme.ts';
-import { infoRow } from './modal-surface-helpers.ts';
+import { infoRow, headerRow } from './modal-surface-helpers.ts';
 import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security';
 import { registerThemeRefresh } from '../../renderer/theme.ts';
-import type { ModalSectionStyle } from '../../renderer/modal-factory.ts';
+import type { ModalSectionStyle } from '../../input/config-modal-types.ts';
 import type { UiReadModel, UiSecuritySnapshot } from '../../runtime/ui-read-models.ts';
 import type {
   ConfigModalActionContext,
@@ -113,7 +113,7 @@ class SecurityModalSurface implements ConfigModalSurface {
       rows.push(infoRow('empty:0', 'No API tokens are registered with the security auditor yet.'));
       rows.push(infoRow('empty:1', 'The security control room can already review policy, MCP, plugin, and incident posture, but token-specific scope and rotation audit data has not been registered.', { fg: MODAL_TONES.dim }));
       if (quarantinedMcp.length > 0) rows.push(infoRow('empty:mcp', 'MCP quarantine still active despite no registered tokens.', WARN));
-      rows.push(infoRow('empty:title', 'Inspect further'));
+      rows.push(headerRow('empty:title', 'Inspect further'));
       rows.push(infoRow('empty:storage', '/storage review — inspect secure secret storage and environment overrides', { fg: MODAL_TONES.dim }));
       rows.push(infoRow('empty:mcptrust', '/mcp trust      — inspect active MCP trust and quarantine posture', { fg: MODAL_TONES.dim }));
       return { id: 'tokens', label: 'Tokens', header, rows, emptyText: '' };
@@ -150,7 +150,7 @@ class SecurityModalSurface implements ConfigModalSurface {
     }
 
     const review = snapshot.attackPathReview;
-    rows.push(infoRow('atk:title', 'MCP Attack-Path Review'));
+    rows.push(headerRow('atk:title', 'MCP Attack-Path Review'));
     rows.push(infoRow('atk:counts', `critical ${review.criticalFindings}  incoherent ${review.incoherentFindings}`, review.criticalFindings > 0 ? BAD : { fg: MODAL_TONES.dim }));
     rows.push(infoRow('atk:summary', review.summary, { fg: MODAL_TONES.dim }));
     const shown = review.findings.slice(0, MAX_FINDINGS_SHOWN);

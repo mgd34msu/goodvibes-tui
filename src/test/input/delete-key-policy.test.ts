@@ -95,7 +95,6 @@ describe('selection modal delete-key policy', () => {
   test('backspace removes last char from search filter', () => {
     const modal = new SelectionModal();
     modal.open('Pick', [{ id: 'a', label: 'A' }], { allowSearch: true });
-    modal.focusSearch();
     modal.setQuery('abc');
 
     const state = makeModalState(modal);
@@ -106,7 +105,6 @@ describe('selection modal delete-key policy', () => {
   test('delete is a no-op: filter remains intact', () => {
     const modal = new SelectionModal();
     modal.open('Pick', [{ id: 'a', label: 'A' }], { allowSearch: true });
-    modal.focusSearch();
     modal.setQuery('abc');
 
     const state = makeModalState(modal);

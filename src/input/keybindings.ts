@@ -129,11 +129,14 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'copy-selection':        [{ key: 'c', ctrl: true, shift: true }],
   'clear-cancel':          [{ key: 'c', ctrl: true }],
   'screen-clear':          [{ key: 'l', ctrl: true }],
-  // Ctrl+K opens the command palette (the standard palette chord across editors).
-  // The readline kill-to-end-of-line that historically owned Ctrl+K is repointed
-  // to Alt+K below so the capability is kept, not lost.
-  'command-palette':       [{ key: 'k', ctrl: true }],
-  'panel-picker':          [{ key: 'p', ctrl: true }],
+  // Ctrl+P opens the command palette, the one entry point for every command,
+  // view and setting; Ctrl+K (the other common palette chord) opens it too. The
+  // readline kill-to-end-of-line that historically owned Ctrl+K is repointed to
+  // Alt+K below so the capability is kept, not lost.
+  'command-palette':       [{ key: 'p', ctrl: true }, { key: 'k', ctrl: true }],
+  // The pane picker gave Ctrl+P to the palette and moves to Ctrl+Shift+P
+  // (it is also the palette's "Panels" entry, /panel).
+  'panel-picker':          [{ key: 'p', ctrl: true, shift: true }],
   'panel-close':            [{ key: 'x', ctrl: true }],
   'panel-close-all':         [{ key: 'x', ctrl: true, shift: true }],
   // Ctrl+] stays the primary next-tab chord; Ctrl+PageDown is added as a second

@@ -1,5 +1,5 @@
 import { MODAL_TONES } from './modal-theme.ts';
-import { infoRow } from './modal-surface-helpers.ts';
+import { infoRow, headerRow } from './modal-surface-helpers.ts';
 import type {
   ConfigModalActionContext,
   ConfigModalRow,
@@ -109,7 +109,7 @@ class KnowledgeModalSurface implements ConfigModalSurface {
     ];
     const rows: ConfigModalRow[] = this.browseRows.map((row) => this.rowFor(row));
     if (this.schedules.length > 0) {
-      rows.push(infoRow('sched:title', 'Schedules'));
+      rows.push(headerRow('sched:title', 'Schedules'));
       this.schedules.slice(0, 4).forEach((s, i) => rows.push(infoRow(`sched:${i}`, `${s.enabled ? 'on ' : 'off'}  ${s.label}`, s.enabled ? undefined : { fg: MODAL_TONES.dim })));
     }
     return { id: 'browse', label: 'Browse', header, rows, emptyText: 'No ingested knowledge yet.', hints: ['m memory'] };

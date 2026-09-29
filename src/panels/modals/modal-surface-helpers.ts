@@ -1,11 +1,12 @@
 import { DEFAULT_PANEL_PALETTE } from '../polish.ts';
-import type { ModalSectionStyle } from '../../renderer/modal-factory.ts';
+import type { ModalSectionStyle } from '../../input/config-modal-types.ts';
 import type { ConfigModalRow } from '../../input/config-modal-types.ts';
 
 /**
  * Shared formatting helpers for config-modal surfaces. Row styling reuses
- * DEFAULT_PANEL_PALETTE (the retired panels' palette) so a migrated modal reads
- * as the same surface it replaced, the goldens stay panel-consistent.
+ * DEFAULT_PANEL_PALETTE (theme tokens). The frame, tabs, search row, group
+ * headers and keycap hints are drawn by the modal surface kit in
+ * renderConfigModal; surfaces only describe rows.
  */
 export const PALETTE = DEFAULT_PANEL_PALETTE;
 
@@ -51,4 +52,13 @@ export function postureLine(cells: string[]): string {
  */
 export function infoRow(id: string, label: string, style?: ModalSectionStyle): ConfigModalRow {
   return { id, label, selectable: false, ...(style ? { style } : {}) };
+}
+
+/**
+ * A group header row (a section title such as "Next steps"). The kit draws it
+ * as a ✦ lowercase accent header with a blank row above it; it is never
+ * selectable and never filtered out by the search row.
+ */
+export function headerRow(id: string, label: string): ConfigModalRow {
+  return { id, label, selectable: false, header: true };
 }

@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { SurfaceModalHost } from '../../input/surface-modal-host.ts';
 import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config';
 import { ConversationManager } from '../../core/conversation';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { GLYPHS } from '../../renderer/ui-primitives.ts';
-import { getOverlayWidthClass } from '../../renderer/overlay-viewport.ts';
+import { modalGeometry, standardModalWidth } from '../../renderer/surface-kit.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
@@ -62,6 +63,7 @@ describe('UI roadmap gate', () => {
       profilePickerModal: { open: () => {} },
       settingsModal: { open: () => {} },
       sessionPickerModal: { open: () => {} },
+      surfaceModals: new SurfaceModalHost(),
     } as unknown as Parameters<typeof wireShellUiOpeners>[0]['input'];
     let visible = false;
     let focused = false;
@@ -116,9 +118,12 @@ describe('UI roadmap gate', () => {
     expect(panelManager.getFocusTarget()).toBe('panel');
   });
 
-  test('keeps overlays on shared width bands for narrow, medium, and wide terminals', () => {
-    expect(getOverlayWidthClass(70)).toBe('narrow');
-    expect(getOverlayWidthClass(100)).toBe('medium');
-    expect(getOverlayWidthClass(140)).toBe('wide');
+  test('sizes every modal by the Measurements table: 86% wide (max 124), full width minus 1 per side below 90, top edge at 8%', () => {
+    expect(standardModalWidth(70)).toBe(68);
+    expect(standardModalWidth(89)).toBe(87);
+    expect(standardModalWidth(100)).toBe(86);
+    expect(standardModalWidth(200)).toBe(124);
+    expect(modalGeometry(100, 24).y).toBe(2);
+    expect(modalGeometry(100, 50).y).toBe(4);
   });
 });

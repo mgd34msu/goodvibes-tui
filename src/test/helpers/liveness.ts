@@ -21,6 +21,7 @@
  *      region, proving ONLY values changed.
  */
 
+import { activeTokens } from '../../renderer/theme.ts';
 import { expect } from 'bun:test';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 
@@ -28,6 +29,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 export const DEFAULT_STRUCTURAL_GLYPHS: ReadonlySet<string> = new Set([
   ...'│─┌┐└┘├┤┬┴┼╭╮╯╰║═╔╗╚╝╠╣╦╩╬', // box drawing
   ...'▸▶►❯➤◆◇•',                     // selection + gutter markers
+  ...'✦┃▄▀',                          // surface-kit group marks, bars and caps
 ]);
 
 /** Glyphs that mark the currently-selected row. */
@@ -71,6 +73,12 @@ export function differingCells(a: Line[], b: Line[]): CellDiff[] {
 export function selectionRow(frame: Line[], selectionGlyphs: ReadonlySet<string> = DEFAULT_SELECTION_GLYPHS): number {
   for (let r = 0; r < frame.length; r++) {
     if (frame[r]!.some((cell) => selectionGlyphs.has(cell.char))) return r;
+  }
+  // Surface-kit lists mark the selected row by style, not a glyph: bold text
+  // in the theme's selectedListItemText color on the gradient.
+  const ink = activeTokens().selectedListItemText;
+  for (let r = 0; r < frame.length; r++) {
+    if (frame[r]!.some((cell) => cell.bold && cell.fg === ink && cell.char.trim() !== '')) return r;
   }
   return -1;
 }

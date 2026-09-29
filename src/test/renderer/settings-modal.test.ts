@@ -1,6 +1,7 @@
 /**
  * Tests for renderSettingsModal renderer.
  */
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
@@ -15,6 +16,7 @@ import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
+import { activeTokens } from '../../renderer/theme.ts';
 
 const W = 120;
 
@@ -96,75 +98,79 @@ describe('renderSettingsModal', () => {
   });
 
   test('returns a non-empty Line[] array', () => {
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     expect(Array.isArray(lines)).toBe(true);
     expect(lines.length).toBeGreaterThan(0);
   });
 
   test('each line has correct terminal width', () => {
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     for (const line of lines) {
       expect(line.length).toBe(W);
     }
   });
 
-  test('title bar contains "Settings"', () => {
-    const lines = renderSettingsModal(modal, W);
-    const titleLine = lineToString(lines[0]);
-    expect(titleLine).toContain('Settings');
+  test('title row carries the ✦ mark, the title and the breadcrumb', () => {
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain('✦ Settings › Display');
   });
 
-  test('footer contains navigation hints', () => {
-    const lines = renderSettingsModal(modal, W);
-    const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('Tab');
-    expect(footer).toContain('Esc');
+  test('hint row shows keycap hints and the title row the esc keycap', () => {
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain(' tab  pane');
+    expect(texts).toMatch(/ esc$/m);
   });
 
-  test('category rail and header show the active category count', () => {
-    const lines = renderSettingsModal(modal, W);
+  test('category rail shows the active category count right-aligned', () => {
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     // 9 = the SDK's 9 display.* CONFIG_SCHEMA keys (display.themeMode included).
-    expect(texts).toContain('Display (9)');
+    expect(texts).toMatch(/Display +9/);
   });
 
   test('category rail is grouped and opens with category focus', () => {
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(modal.focusPane).toBe('categories');
-    expect(texts).toContain('INTERFACE');
-    expect(texts).toContain('AI ROUTING');
-    expect(texts).toContain('  ▸ Display (9)');
-    const interfaceLine = lines.find(line => lineToString(line).includes('INTERFACE'));
+    expect(texts).toContain('✦ interface');
+    expect(texts).toContain('✦ ai routing');
+    const interfaceLine = lines.find(line => lineToString(line).includes('interface'));
     expect(interfaceLine).toBeDefined();
-    const interfaceIndex = lineToString(interfaceLine!).indexOf('INTERFACE');
+    const interfaceIndex = lineToString(interfaceLine!).indexOf('interface');
     expect(interfaceLine![interfaceIndex]?.bold).toBe(true);
+    // The focused category is the selected (gradient, bold, dark text) row.
+    const displayLine = lines.find(line => /Display +9/.test(lineToString(line)))!;
+    const displayCell = displayLine[lineToString(displayLine).indexOf('Display')]!;
+    expect(displayCell.bold).toBe(true);
+    expect(displayCell.fg).toBe(activeTokens().selectedListItemText);
   });
 
   test('settings list shows setting keys', () => {
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     // display category should show stream, lineNumbers, etc.
     expect(texts.toLowerCase()).toMatch(/stream|linenumbers|theme/);
   });
 
-  test('selected item has arrow indicator', () => {
-    const lines = renderSettingsModal(modal, W);
-    const hasArrow = lines.some(line => line.some(cell => cell.char === '▸'));
-    expect(hasArrow).toBe(true);
+  test('the selected row is drawn as the selected row (bold dark text on the gradient)', () => {
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
+    const selectedText = lines.some(line => line.some(cell => cell.bold && cell.fg === activeTokens().selectedListItemText && cell.char.trim() !== ''));
+    expect(selectedText).toBe(true);
   });
 
   test('description of selected setting is shown', () => {
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     // The first setting in display is 'display.stream' with description containing 'Stream'
     expect(texts).toMatch(/stream|Stream/);
   });
 
   test('selected setting surfaces resolved source metadata', () => {
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Source');
+    expect(texts).toContain('source default');
   });
 
   test('selected conflicting setting surfaces conflict provenance', () => {
@@ -172,7 +178,7 @@ describe('renderSettingsModal', () => {
     expect(selected).not.toBeNull();
     selected!.conflict = true;
     modal.groups.set(modal.currentCategory, [selected!]);
-    const lines = renderSettingsModal(modal, W, 40);
+    const lines = frameFromLayer(renderSettingsModal(modal, W, 40), W, 40);
     const texts = linesToText(lines).join('\n');
     expect(texts.toLowerCase()).toContain('conflict');
   });
@@ -182,23 +188,23 @@ describe('renderSettingsModal', () => {
     expect(selected).not.toBeNull();
     selected!.effectiveSource = 'synced';
     modal.groups.set(modal.currentCategory, [selected!]);
-    const lines = renderSettingsModal(modal, W, 40);
+    const lines = frameFromLayer(renderSettingsModal(modal, W, 40), W, 40);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Source: synced');
+    expect(texts).toContain('source synced');
   });
 
-  test('footer shows [Enter] Confirm/[Esc] Cancel in editing mode', () => {
+  test('hint row shows save / cancel edit in editing mode', () => {
     modal.editingMode = true;
-    const lines = renderSettingsModal(modal, W);
-    const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('Confirm');
-    expect(footer).toContain('Cancel');
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain(' ⏎  save');
+    expect(texts).toContain(' esc  cancel edit');
   });
 
   test('edit cursor shown when in editing mode', () => {
     modal.editingMode = true;
     modal.editBuffer = 'test';
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     // Block cursor character
     expect(texts).toContain('test\u2588');
@@ -211,7 +217,7 @@ describe('renderSettingsModal', () => {
     expect(modal.selectedIndex).toBeGreaterThanOrEqual(0);
     modal.editingMode = true;
     modal.editBuffer = 'http://homeassistant.local:8123';
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('http://homeassistant.local:8123\u2588');
   });
@@ -224,7 +230,7 @@ describe('renderSettingsModal', () => {
     modal.editingMode = true;
     const typed = 'ha-super-secret-long-lived-token';
     modal.editBuffer = typed;
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     // The plaintext must not appear anywhere in the rendered frame: not in the
     // settings table row, not in the "Current: ..." documentation line.
@@ -241,23 +247,23 @@ describe('renderSettingsModal', () => {
     modal.editingMode = true;
     const typed = 'another-secret-value';
     modal.editBuffer = typed;
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).not.toContain(typed);
   });
 
   test('changing category shows different settings', () => {
     modal.nextCategory();
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('UI (4)');
+    expect(texts).toMatch(/UI +4/);
   });
 
   test('mcp category renders server trust editing surface', () => {
     while (modal.currentCategory !== 'mcp') modal.nextCategory();
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('MCP (1)');
+    expect(texts).toMatch(/MCP +1/);
     expect(texts).toContain('docs-server');
     expect(texts).toContain('ask-on-risk');
   });
@@ -266,7 +272,7 @@ describe('renderSettingsModal', () => {
     while (modal.currentCategory !== 'mcp') modal.nextCategory();
     modal.editingMode = true;
     modal.mcpAllowAllConfirmationTarget = 'docs-server';
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('ALLOW ALL docs-server');
   });
@@ -279,9 +285,9 @@ describe('renderSettingsModal', () => {
       tokenType: 'Bearer',
       oauthConfigured: true,
     }];
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Subscriptions (1)');
+    expect(texts).toMatch(/Subscriptions +1/);
     expect(texts).toContain('openai');
     expect(texts).toContain('active');
     expect(texts).toContain('ambient key ov');
@@ -296,36 +302,37 @@ describe('renderSettingsModal', () => {
       oauthConfigured: true,
     }];
     modal.subscriptionLogoutConfirmationTarget = 'openai';
-    const lines = renderSettingsModal(modal, W);
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Sign out openai? Enter/y to confirm, n/Esc to cancel.');
   });
 
   test('works with narrow terminal width', () => {
     const narrowW = 60;
-    const lines = renderSettingsModal(modal, narrowW);
+    const lines = frameFromLayer(renderSettingsModal(modal, narrowW), narrowW, 24);
     for (const line of lines) {
       expect(line.length).toBe(narrowW);
     }
   });
 
-  test('footer shows both reset affordances at W=120 in compact form', () => {
+  test('hint row shows both reset affordances at W=120', () => {
     // Navigate to settings category (has Setting entries, not flags/mcp/subscriptions)
     while (modal.currentCategory !== 'display') modal.nextCategory();
     modal.focusPane = 'settings';
     // W=120 must render both reset affordances in compact form.
-    const lines = renderSettingsModal(modal, W);
-    const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('[⇧R] reset cat');
-    expect(footer).toContain('[^⇧R] reset all');
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain(' shift+r  reset category');
+    expect(texts).toContain(' ctrl+shift+r  reset all');
   });
 
-  test('footer degrades gracefully at W=80 with at least R reset', () => {
+  test('hint row wraps rather than dropping resets at W=80', () => {
     while (modal.currentCategory !== 'display') modal.nextCategory();
     modal.focusPane = 'settings';
-    const lines = renderSettingsModal(modal, 80);
-    const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('[⇧R] reset cat');
+    const lines = frameFromLayer(renderSettingsModal(modal, 80), 80, 24);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain(' shift+r  reset category');
+    expect(texts).toContain(' ctrl+shift+r  reset all');
   });
 
   test('footer shows confirm prompt when resetCategoryConfirm is armed', () => {
@@ -333,10 +340,10 @@ describe('renderSettingsModal', () => {
     modal.initiateResetCategory();
     expect(modal.resetCategoryConfirm).not.toBeNull();
     // Armed footer is short; W=120 is sufficient.
-    const lines = renderSettingsModal(modal, W);
-    const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('[Enter/y] confirm');
-    expect(footer).toContain('[Esc/n] cancel');
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain(' ⏎  confirm reset');
+    expect(texts).toContain(' esc  cancel');
     // Cleanup
     modal.resetCategoryConfirm = null;
   });
@@ -345,10 +352,10 @@ describe('renderSettingsModal', () => {
     modal.initiateResetAll();
     expect(modal.resetAllConfirm).not.toBeNull();
     // Armed footer is short; W=120 is sufficient.
-    const lines = renderSettingsModal(modal, W);
-    const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('[Enter/y] confirm');
-    expect(footer).toContain('[Esc/n] cancel');
+    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
+    const texts = linesToText(lines).join('\n');
+    expect(texts).toContain(' ⏎  confirm reset');
+    expect(texts).toContain(' esc  cancel');
     // Cleanup
     modal.resetAllConfirm = null;
   });

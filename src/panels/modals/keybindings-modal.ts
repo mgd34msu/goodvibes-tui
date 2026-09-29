@@ -1,5 +1,5 @@
 import { MODAL_TONES } from './modal-theme.ts';
-import { infoRow } from './modal-surface-helpers.ts';
+import { infoRow, headerRow } from './modal-surface-helpers.ts';
 import type {
   ConfigModalActionContext,
   ConfigModalRow,
@@ -92,7 +92,7 @@ class KeybindingsModalSurface implements ConfigModalSurface {
     const rows: ConfigModalRow[] = [];
     let n = 0;
     const category = (title: string, entries: ReadonlyArray<readonly [string, string]>): void => {
-      rows.push(infoRow(`sc:t:${n++}`, title));
+      rows.push(headerRow(`sc:t:${n++}`, title));
       for (const [key, desc] of entries) rows.push(infoRow(`sc:${n++}`, `${key.padEnd(20)} ${desc}`));
     };
     category('Navigation', [['Up / Down', 'Scroll / history recall'], ['PageUp / PageDn', 'Scroll by full page'], ['Home / End', 'Jump to start / end of line'], [kb('search'), 'Search conversation'], ['n / N (search)', 'Next / previous match'], ['Mouse wheel', 'Scroll conversation or hovered panel']]);
