@@ -118,6 +118,19 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   'src/renderer/terminal-bg-probe.ts#classifyBackgroundLuminance',
   'src/renderer/terminal-bg-probe.ts#TerminalBackgroundProbe',
   'src/renderer/terminal-bg-probe.ts#wrapForTmuxPassthrough',
+  // terminal-palette-probe: same shape as terminal-bg-probe above. The parser,
+  // window constant, and filter class are wired internally via
+  // installBackgroundThemeProbe({ probePalette: true }) from main.ts; the
+  // harness pins per-channel width scaling, terminators, and the 175 ms window directly.
+  'src/renderer/terminal-palette-probe.ts#PALETTE_PROBE_TIMEOUT_MS',
+  'src/renderer/terminal-palette-probe.ts#parseOscColorToHex',
+  // terminal-palette: the read side of the startup palette store. The theme
+  // engine (goodvibes-theme-system round) is its consumer; until it lands,
+  // the store's contract (null until probed, listener fires once) is pinned by
+  // terminal-palette-probe.test.ts. resetTerminalPaletteForTests is test-only.
+  'src/renderer/terminal-palette.ts#getTerminalPalette',
+  'src/renderer/terminal-palette.ts#onTerminalPalette',
+  'src/renderer/terminal-palette.ts#resetTerminalPaletteForTests',
   // DARK_THEME is the frozen dark-token singleton (=== resolveTheme('dark')).
   // Call sites moved to activeTheme(); it stays as the public convenience alias and
   // is pinned by theme.test.ts's identity assertions.

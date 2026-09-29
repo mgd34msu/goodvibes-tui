@@ -730,8 +730,9 @@ async function main() {
   stdin.setRawMode(true); stdin.resume(); stdin.setEncoding('utf8');
   allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE + FOCUS_ENABLE));
   // forced dark/light applies before first paint; auto (TTY only) fires the
-  // OSC 11 probe and repaints once if light wins. filterInput strips the reply from stdin.
-  const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), env: process.env, writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); } });
+  // OSC 11 probe and repaints once if light wins. probePalette adds OSC 10 + OSC 4;0..15 to the
+  // same write (stored via terminal-palette.ts, nothing renders from it). filterInput strips replies from stdin.
+  const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), env: process.env, writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); }, probePalette: true });
 
   // continueRecovery lets --continue/bare --resume check the target session for a live crash snapshot newer than its store before resuming (see tui-startup.ts).
   applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, surface: ctx.services.surface, render, continueRecovery: { sessionManager: ctx.services.sessionManager, runtime, conversation, writeLastSessionPointer, receipt: (line) => systemMessageRouter.userReceipt(line) } });

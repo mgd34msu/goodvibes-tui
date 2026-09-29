@@ -31,11 +31,25 @@
  *   the outer terminal sees it. This only elicits a reply if the user has
  *   `allow-passthrough` enabled; otherwise the query is swallowed and the timeout
  *   fallback (dark) covers it silently.
+ *
+ * Palette (opt-in via `probePalette`):
+ *   OSC 10 (foreground) and OSC 4;0..15 ride in the same write, after the OSC 11
+ *   query, and the same tmux envelope. This probe's filter runs first and hands
+ *   the OSC 11 body to the palette filter (terminal-palette-probe.ts), which
+ *   consumes the other 17 replies within a 175 ms window (150 ms + 25 ms margin)
+ *   and stores the result via terminal-palette.ts. With `probePalette` unset the
+ *   bytes written and the filtering are exactly as described above.
  */
 
 import { setActiveThemeMode, type ThemeMode } from './theme.ts';
 import { resolveConfiguredThemeMode } from './theme-mode-config.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import {
+  PALETTE_QUERIES,
+  type PaletteProbeResolution,
+  TerminalPaletteProbe,
+} from './terminal-palette-probe.ts';
+import { setTerminalPalette } from './terminal-palette.ts';
 
 /** OSC 11 "query background colour" request, ST-terminated. */
 export const OSC11_QUERY = '\x1b]11;?\x1b\\';
@@ -172,6 +186,12 @@ export interface TerminalBackgroundProbeOptions {
   readonly onResolve: (result: ProbeResolution) => void;
   /** Probe window in ms (default DEFAULT_PROBE_TIMEOUT_MS). */
   readonly timeoutMs?: number;
+  /**
+   * Observer for the raw body of a complete OSC 11 reply (before
+   * classification). The palette probe uses it to record the background
+   * colour, since this filter consumes the reply ahead of it.
+   */
+  readonly onReplySpec?: (spec: string) => void;
 }
 
 /**
@@ -187,10 +207,12 @@ export class TerminalBackgroundProbe {
   private resolved = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly onResolve: (result: ProbeResolution) => void;
+  private readonly onReplySpec: ((spec: string) => void) | undefined;
   private readonly timeoutMs: number;
 
   constructor(options: TerminalBackgroundProbeOptions) {
     this.onResolve = options.onResolve;
+    this.onReplySpec = options.onReplySpec;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
   }
 
@@ -235,6 +257,7 @@ export class TerminalBackgroundProbe {
       // keystrokes must be preserved here, not read back off this.buffer).
       const spec = this.buffer.slice(prefixIdx + OSC11_PREFIX.length, term.start);
       const remainder = this.buffer.slice(term.end);
+      this.onReplySpec?.(spec);
       const rgb = parseColorSpec(spec);
       if (rgb === null) {
         this.resolve('dark', 'unparseable');
@@ -295,6 +318,16 @@ export interface InstallThemeProbeOptions {
   readonly timeoutMs?: number;
   /** Optional resolution observer (tests / diagnostics). */
   readonly onResolve?: (result: ProbeResolution) => void;
+  /**
+   * Also read the terminal palette (OSC 10 + OSC 4;0..15) in the same write as
+   * the OSC 11 query. Runs on a TTY in every appearance mode; the result lands
+   * in the terminal-palette store. Default false (query bytes unchanged).
+   */
+  readonly probePalette?: boolean;
+  /** Palette window override (tests). Default PALETTE_PROBE_TIMEOUT_MS. */
+  readonly paletteTimeoutMs?: number;
+  /** Optional palette resolution observer (tests / diagnostics). */
+  readonly onPaletteResolve?: (result: PaletteProbeResolution) => void;
 }
 
 /**
@@ -308,10 +341,17 @@ export interface InstallThemeProbeOptions {
  */
 export function installBackgroundThemeProbe(options: InstallThemeProbeOptions): ThemeProbeHandle {
   const pref = resolveConfiguredThemeMode(options.configManager);
+  const palette = options.probePalette === true && options.isTTY ? createPaletteProbe(options) : null;
 
   if (pref === 'dark' || pref === 'light') {
     setActiveThemeMode(pref);
-    return { filterInput: (chunk) => chunk };
+    if (palette === null) return { filterInput: (chunk) => chunk };
+    // Forced mode: no background classification, but the palette batch (which
+    // still carries OSC 11 for the background colour) goes out and its own
+    // filter consumes every reply.
+    writeBatch(options, OSC11_QUERY + PALETTE_QUERIES);
+    palette.startTimeout();
+    return { filterInput: (chunk) => (palette.active ? palette.feed(chunk) : chunk) };
   }
 
   // pref === 'auto'
@@ -322,6 +362,7 @@ export function installBackgroundThemeProbe(options: InstallThemeProbeOptions): 
 
   const probe = new TerminalBackgroundProbe({
     timeoutMs: options.timeoutMs,
+    onReplySpec: palette === null ? undefined : (spec) => palette.noteBackgroundSpec(spec),
     onResolve: (result) => {
       if (result.mode === 'light') {
         setActiveThemeMode('light');
@@ -331,9 +372,37 @@ export function installBackgroundThemeProbe(options: InstallThemeProbeOptions): 
     },
   });
 
-  const query = options.env['TMUX'] ? wrapForTmuxPassthrough(OSC11_QUERY) : OSC11_QUERY;
-  options.writeQuery(query);
-  probe.startTimeout();
+  if (palette === null) {
+    writeBatch(options, OSC11_QUERY);
+    probe.startTimeout();
+    return { filterInput: (chunk) => (probe.active ? probe.feed(chunk) : chunk) };
+  }
 
-  return { filterInput: (chunk) => (probe.active ? probe.feed(chunk) : chunk) };
+  // One write: OSC 11 first (so the background reply arrives first and the
+  // background probe's timing is unchanged), then OSC 10 and OSC 4;0..15.
+  writeBatch(options, OSC11_QUERY + PALETTE_QUERIES);
+  probe.startTimeout();
+  palette.startTimeout();
+  return {
+    filterInput: (chunk) => {
+      const afterBackground = probe.active ? probe.feed(chunk) : chunk;
+      return palette.active ? palette.feed(afterBackground) : afterBackground;
+    },
+  };
+}
+
+/** Write the query batch, wrapped once for tmux passthrough when under tmux. */
+function writeBatch(options: InstallThemeProbeOptions, batch: string): void {
+  options.writeQuery(options.env['TMUX'] ? wrapForTmuxPassthrough(batch) : batch);
+}
+
+/** Palette probe whose result is stored beside the background probe's. */
+function createPaletteProbe(options: InstallThemeProbeOptions): TerminalPaletteProbe {
+  return new TerminalPaletteProbe({
+    timeoutMs: options.paletteTimeoutMs,
+    onResolve: (result) => {
+      setTerminalPalette(result.palette);
+      options.onPaletteResolve?.(result);
+    },
+  });
 }
