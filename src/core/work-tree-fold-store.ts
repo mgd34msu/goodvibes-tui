@@ -2,7 +2,9 @@
  * work-tree-fold-store.ts, the work tree's fold state, kept per session.
  *
  * Which turns are folded, which agent lanes are folded, which beads are open
- * and which opened bodies show everything: kept beside the session file as
+ * and which opened bodies show everything, plus which turns failed or were
+ * cancelled (keyed by their user message's index and fingerprint, so a
+ * resumed header still says so): kept beside the session file as
  * `<stem>.work-tree.json` (the same stem rule the session file uses, see
  * sanitizeSessionName), so reopening a session keeps the view.
  *
@@ -15,6 +17,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sanitizeSessionName } from '@pellux/goodvibes-sdk/platform/sessions';
+import { MAX_TURN_OUTCOMES, type TurnOutcomeRecord } from './work-tree-focus.ts';
 
 const SUFFIX = '.work-tree.json';
 const VERSION = 1;
@@ -44,14 +47,32 @@ export function boundFoldState(entries: Iterable<readonly [string, unknown]>): A
   return out.length > MAX_FOLD_KEYS ? out.slice(out.length - MAX_FOLD_KEYS) : out;
 }
 
-/** Write the session's fold state. Best effort: a failed write never breaks the session. */
-export function saveWorkTreeFolds(sessionsDir: string, sessionId: string, state: Iterable<readonly [string, boolean]>): void {
+/** Keep only well-formed failed/cancelled turn endings, the most recent MAX_TURN_OUTCOMES. */
+export function boundTurnOutcomes(records: Iterable<unknown>): TurnOutcomeRecord[] {
+  const out: TurnOutcomeRecord[] = [];
+  for (const record of records) {
+    if (!record || typeof record !== 'object') continue;
+    const r = record as Record<string, unknown>;
+    if (typeof r.index !== 'number' || !Number.isInteger(r.index) || r.index < 0) continue;
+    if (typeof r.fingerprint !== 'string' || r.fingerprint.length === 0 || r.fingerprint.length > 200) continue;
+    if (r.outcome !== 'failed' && r.outcome !== 'cancelled') continue;
+    out.push({ index: r.index, fingerprint: r.fingerprint, outcome: r.outcome });
+  }
+  return out.length > MAX_TURN_OUTCOMES ? out.slice(out.length - MAX_TURN_OUTCOMES) : out;
+}
+
+/**
+ * Write the session's fold state and its failed/cancelled turn endings.
+ * Best effort: a failed write never breaks the session.
+ */
+export function saveWorkTreeFolds(sessionsDir: string, sessionId: string, state: Iterable<readonly [string, boolean]>, turns: Iterable<TurnOutcomeRecord> = []): void {
   const path = sidecarPath(sessionsDir, sessionId);
   if (!path) return;
   try {
     mkdirSync(sessionsDir, { recursive: true });
     const tmp = `${path}.tmp-${process.pid}`;
-    writeFileSync(tmp, JSON.stringify({ version: VERSION, sessionId, folds: Object.fromEntries(boundFoldState(state)) }));
+    const outcomes = boundTurnOutcomes(turns);
+    writeFileSync(tmp, JSON.stringify({ version: VERSION, sessionId, folds: Object.fromEntries(boundFoldState(state)), ...(outcomes.length > 0 ? { turns: outcomes } : {}) }));
     renameSync(tmp, path);
   } catch {
     // best effort; the view falls back to defaults on the next resume
@@ -68,6 +89,20 @@ export function loadWorkTreeFolds(sessionsDir: string, sessionId: string): Array
     const folds = (parsed as { folds?: unknown }).folds;
     if (!folds || typeof folds !== 'object' || Array.isArray(folds)) return [];
     return boundFoldState(Object.entries(folds as Record<string, unknown>));
+  } catch {
+    return [];
+  }
+}
+
+/** Read the session's saved failed/cancelled turn endings; an absent or unreadable sidecar reads as none. */
+export function loadWorkTreeTurnOutcomes(sessionsDir: string, sessionId: string): TurnOutcomeRecord[] {
+  const path = sidecarPath(sessionsDir, sessionId);
+  if (!path || !existsSync(path)) return [];
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (!parsed || typeof parsed !== 'object') return [];
+    const turns = (parsed as { turns?: unknown }).turns;
+    return Array.isArray(turns) ? boundTurnOutcomes(turns) : [];
   } catch {
     return [];
   }

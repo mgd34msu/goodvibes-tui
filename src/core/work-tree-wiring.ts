@@ -15,9 +15,10 @@ import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import type { UiRuntimeEvents } from '@/runtime/index.ts';
 import type { ConversationManager } from './conversation.ts';
-import { WorkTreeTimingStore, type AgentLaneInfo, type WrfcPhaseInfo } from './work-tree-sources.ts';
-import { loadWorkTreeFolds, saveWorkTreeFolds, sweepOrphanWorkTreeFolds } from './work-tree-fold-store.ts';
+import { WorkTreeTimingStore, userMessageFingerprint, type AgentLaneInfo, type TurnOutcome, type WrfcPhaseInfo } from './work-tree-sources.ts';
+import { loadWorkTreeFolds, loadWorkTreeTurnOutcomes, saveWorkTreeFolds, sweepOrphanWorkTreeFolds } from './work-tree-fold-store.ts';
 import { onSemanticSummaryReady } from '../renderer/lane-graph/semantic-memo.ts';
+import { onSyntaxHighlightReady } from '../renderer/code-block.ts';
 
 type AgentRecord = ReturnType<AgentManager['list']>[number];
 
@@ -54,15 +55,28 @@ export function wireWorkTree(deps: WorkTreeWiringDeps): { readonly timings: Work
   unsubs.push(events.tools.on('TOOL_SUCCEEDED', (ev) => timings.callSettled(ev.callId, ev.durationMs, Date.now())));
   unsubs.push(events.tools.on('TOOL_FAILED', (ev) => timings.callSettled(ev.callId, ev.durationMs, Date.now())));
   unsubs.push(events.tools.on('TOOL_CANCELLED', (ev) => timings.callSettled(ev.callId, undefined, Date.now())));
+  // Everything the session sidecar keeps: fold decisions and failed/cancelled turn endings.
+  const persistView = (): void => saveWorkTreeFolds(deps.sessionsDir, deps.sessionId(), conversation.workTree.foldState(), conversation.workTree.turnOutcomes());
+
   unsubs.push(events.turns.on('TURN_SUBMITTED', () => {
     const snapshot = conversation.getMessageSnapshot();
     for (let i = snapshot.length - 1; i >= 0; i--) {
-      if (snapshot[i]!.role === 'user') { timings.turnStarted(i, Date.now()); break; }
+      if (snapshot[i]!.role === 'user') { timings.turnStarted(i, Date.now(), userMessageFingerprint(snapshot[i])); break; }
     }
   }));
-  for (const end of ['TURN_COMPLETED', 'TURN_ERROR', 'TURN_CANCEL'] as const) {
-    unsubs.push(events.turns.on(end, () => timings.turnEnded(Date.now())));
-  }
+  const endTurn = (outcome: TurnOutcome): void => {
+    const ended = timings.turnEnded(Date.now(), outcome);
+    // The header drops "working" and states a failure on the next build.
+    conversation.workTree.invalidate();
+    if (!ended || ended.timing.fingerprint === undefined) return;
+    if (conversation.workTree.recordTurnOutcome({ index: ended.index, fingerprint: ended.timing.fingerprint, outcome })) persistView();
+  };
+  unsubs.push(events.turns.on('TURN_COMPLETED', (ev) => endTurn(ev.stopReason === 'empty_response' ? 'failed' : 'completed')));
+  unsubs.push(events.turns.on('TURN_ERROR', () => endTurn('failed')));
+  unsubs.push(events.turns.on('TURN_CANCEL', () => endTurn('cancelled')));
+  unsubs.push(events.turns.on('PREFLIGHT_FAIL', () => endTurn('failed')));
+  // A new or resumed transcript: turn timings are keyed by message index and belong to the old one.
+  unsubs.push(conversation.workTree.onReset(() => timings.clear()));
 
   const snapshots = new Map<string, SnapshotMemo>();
   const messagesOf = (record: AgentRecord): readonly ConversationMessageSnapshot[] => {
@@ -137,19 +151,26 @@ export function wireWorkTree(deps: WorkTreeWiringDeps): { readonly timings: Work
       return id ? new Set([id]) : new Set<string>();
     },
     turnActive: deps.turnActive,
+    turnOutcome: (index) => conversation.workTree.turnOutcome(index),
     now: () => Date.now(),
   });
 
   // Fold decisions persist per session, beside the session file.
-  conversation.workTree.onFoldChange(() => saveWorkTreeFolds(deps.sessionsDir, deps.sessionId(), conversation.workTree.foldState()));
+  conversation.workTree.onFoldChange(persistView);
   sweepOrphanWorkTreeFolds(deps.sessionsDir);
   unsubs.push(onSemanticSummaryReady(() => { conversation.workTree.invalidate(); deps.requestRender(); }));
+  // A tree-sitter parse landed: code drawn with the regex placeholder is redrawn with it.
+  unsubs.push(onSyntaxHighlightReady(() => { conversation.workTree.invalidate(); deps.requestRender(); }));
   return { timings, unsubs };
 }
 
-/** Restore a resumed session's fold decisions (called by the resume routine). */
+/**
+ * Restore a resumed session's fold decisions and failed/cancelled turn
+ * endings (called by the resume routine, after the transcript is restored).
+ */
 export function restoreWorkTreeFolds(conversation: ConversationManager, sessionsDir: string, sessionId: string): number {
   const entries = loadWorkTreeFolds(sessionsDir, sessionId);
   conversation.workTree.restoreFoldState(entries);
+  conversation.workTree.restoreTurnOutcomes(loadWorkTreeTurnOutcomes(sessionsDir, sessionId));
   return entries.length;
 }

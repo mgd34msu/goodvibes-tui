@@ -279,6 +279,55 @@ export function wrapText(text: string, width: number): string[] {
   return lines;
 }
 
+/** Columns one tab takes in a drawn body; the same two spaces a diff body uses (changes-modal.ts wrapTokens). */
+export const BODY_TAB_WIDTH = 2;
+
+/** Replace every tab with BODY_TAB_WIDTH spaces, so width math and drawing agree. */
+export function expandTabs(text: string): string {
+  return text.includes('\t') ? text.replace(/\t/g, ' '.repeat(BODY_TAB_WIDTH)) : text;
+}
+
+/**
+ * Wrap one body line (a file line, command output) to `width` cells without
+ * losing its layout: tabs expand to spaces, a line that fits is returned
+ * exactly as it is (leading indentation and inner runs of spaces kept), and a
+ * longer line wraps at spaces with every continuation row indented like the
+ * first. A word wider than the room left is cut hard. Every returned row is
+ * at most `width` cells.
+ */
+export function wrapPreservingIndent(text: string, width: number): string[] {
+  const out: string[] = [];
+  for (const raw of expandTabs(text).split('\n')) {
+    const line = raw.replace(/\s+$/, '');
+    if (getDisplayWidth(line) <= width) { out.push(line); continue; }
+    const indentText = /^ */.exec(line)![0];
+    // Deep indentation leaves no room: continuation rows start at the left edge.
+    const indent = indentText.length <= Math.floor(width / 2) ? indentText : '';
+    let rest = Array.from(line.slice(indentText.length));
+    let prefix = indentText.length <= width - 1 ? indentText : '';
+    while (rest.length > 0) {
+      const avail = Math.max(1, width - prefix.length);
+      // Longest run of `rest` that fits, preferring to break after a space.
+      let cut = 0;
+      let used = 0;
+      let lastSpace = -1;
+      for (let i = 0; i < rest.length; i++) {
+        const w = getDisplayWidth(rest[i]!);
+        if (used + w > avail) break;
+        used += w;
+        cut = i + 1;
+        if (rest[i] === ' ') lastSpace = i + 1;
+      }
+      const at = cut === rest.length ? cut : lastSpace > 0 ? lastSpace : Math.max(1, cut);
+      out.push((prefix + rest.slice(0, at).join('')).replace(/\s+$/, ''));
+      rest = rest.slice(at);
+      while (rest[0] === ' ') rest.shift();
+      prefix = indent;
+    }
+  }
+  return out;
+}
+
 export function interpolateColor(startHex: string, endHex: string, factor: number): string {
   const parse = (hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16);

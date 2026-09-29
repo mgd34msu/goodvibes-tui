@@ -94,6 +94,7 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   // exercises algorithmic edge cases (color-math rounding, threshold
   // boundaries, tokenizer branches) the wrapper's tests don't isolate.
   'src/renderer/lane-graph/semantic-memo.ts#primeSemanticSummary', // seeds the async tree-sitter ◈ summary so golden frames never depend on when it lands; production computes it through semanticSummaryFor
+  'src/renderer/code-block.ts#settleSyntaxHighlighting', // awaits in-flight tree-sitter parses so golden frames capture the settled highlighting whatever ran earlier in the process; production repaints through onSyntaxHighlightReady instead of waiting
   'src/renderer/toast-center.ts#ToastCenter', // constructed by getSharedToastCenter; exported so tests drive expiry with a fake clock and scheduler
   'src/renderer/settings-modal.ts#settingsDocumentation', // the complete per-row documentation the settings modal windows over; tests assert its completeness
   'src/renderer/panel-composite.ts#renderPanel', // wired via buildPanelCompositeData; dedicated cache/dirty-flag test suite

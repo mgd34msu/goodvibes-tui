@@ -20,6 +20,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { appendConversationMessages, type ConversationRenderContext } from '../../core/conversation-rendering.ts';
 import { activeTokens, setActiveThemeMode, setActiveThemeName } from '../../renderer/theme.ts';
 import { primeSemanticSummary } from '../../renderer/lane-graph/semantic-memo.ts';
+import { settleSyntaxHighlighting } from '../../renderer/code-block.ts';
 import { beadBody } from '../../renderer/lane-graph/bead.ts';
 import type { TreeGlyphSetName } from '../../renderer/lane-graph/glyphs.ts';
 import { auditFrame } from '../helpers/frame-audit.ts';
@@ -68,11 +69,23 @@ function render(scene: WorkTreeScene, glyphs: TreeGlyphSetName = 'rounded', widt
   return lines;
 }
 
+/**
+ * A frame drawn once tree-sitter highlighting has settled. The first draw of
+ * a code line uses the regex placeholder and schedules the parse; the settled
+ * draw is what the app shows once the parse lands, and it no longer depends
+ * on whether another test file in this process parsed the same code first.
+ */
+async function renderSettled(draw: () => Line[]): Promise<Line[]> {
+  draw();
+  await settleSyntaxHighlighting();
+  return draw();
+}
+
 describe(`golden-frames : work tree (${THEME})`, () => {
   for (const make of WORK_TREE_SCENES) {
     const name = make().name;
-    test(`work-tree-${name}`, () => {
-      const lines = render(make());
+    test(`work-tree-${name}`, async () => {
+      const lines = await renderSettled(() => render(make()));
       expect(lines.length).toBeGreaterThan(0);
       assertGoldenIn(DIR, `work-tree-${name}`, lines);
       expect(encodeGolden(name, render(make()))).toBe(encodeGolden(name, lines));
@@ -81,14 +94,14 @@ describe(`golden-frames : work tree (${THEME})`, () => {
   }
 
   for (const glyphs of ['square', 'ascii'] as const) {
-    test(`work-tree-single-lane-${glyphs}`, () => {
-      const lines = render(singleLaneScene(), glyphs);
+    test(`work-tree-single-lane-${glyphs}`, async () => {
+      const lines = await renderSettled(() => render(singleLaneScene(), glyphs));
       assertGoldenIn(DIR, `work-tree-single-lane-${glyphs}`, lines);
     });
   }
 
-  test('work-tree-lanes-80: the lane graph at 80 columns', () => {
-    const lines = render(WORK_TREE_SCENES[2]!(), 'rounded', 80);
+  test('work-tree-lanes-80: the lane graph at 80 columns', async () => {
+    const lines = await renderSettled(() => render(WORK_TREE_SCENES[2]!(), 'rounded', 80));
     assertGoldenIn(DIR, 'work-tree-lanes-80', lines);
     expect(lines.every((l) => l.length === 80)).toBe(true);
   });

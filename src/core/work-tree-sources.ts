@@ -21,9 +21,31 @@ export interface CallTiming {
   readonly durationMs?: number | undefined;
 }
 
+/** How a finished turn ended. A completed turn's header says nothing extra; the others say so. */
+export type TurnOutcome = 'completed' | 'failed' | 'cancelled';
+
 export interface TurnTiming {
   readonly startedAt: number;
   readonly endedAt?: number | undefined;
+  /** Set once the turn ended. */
+  readonly outcome?: TurnOutcome | undefined;
+  /**
+   * userMessageFingerprint() of the user message the turn answered, when
+   * known. A record whose fingerprint does not match the message now at its
+   * index (the transcript was compacted, reset or replaced) is not this turn's.
+   */
+  readonly fingerprint?: string | undefined;
+}
+
+/**
+ * A short identity for a user message: its length and opening text. Enough to
+ * tell whether the message at an index is still the one a record was made
+ * for, without hashing whole messages on every build.
+ */
+export function userMessageFingerprint(message: Message | undefined): string | undefined {
+  if (!message || message.role !== 'user') return undefined;
+  const text = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+  return `${text.length}:${text.slice(0, 80)}`;
 }
 
 /** One phase of a WRFC chain: the agent that ran it and what it found. */
@@ -74,6 +96,12 @@ export interface WorkTreeSources {
   readonly waitingCallIds?: (() => ReadonlySet<string>) | undefined;
   /** Whether the main conversation is working on a turn right now. */
   readonly turnActive?: (() => boolean) | undefined;
+  /**
+   * How the turn answering the user message at this index ended, when it is
+   * known from a live turn-end event or the session's saved record. Checked
+   * against the message's fingerprint by the model.
+   */
+  readonly turnOutcome?: ((userMessageIndex: number) => { readonly outcome: TurnOutcome; readonly fingerprint: string } | undefined) | undefined;
   readonly now?: (() => number) | undefined;
 }
 
@@ -89,7 +117,7 @@ const MAX_TURNS = 1000;
  */
 export class WorkTreeTimingStore {
   private readonly calls = new Map<string, { startedAt?: number; durationMs?: number }>();
-  private readonly turns = new Map<number, { startedAt: number; endedAt?: number }>();
+  private readonly turns = new Map<number, { startedAt: number; endedAt?: number; outcome?: TurnOutcome; fingerprint?: string }>();
   private openTurn: number | undefined;
 
   callStarted(callId: string, startedAt: number): void {
@@ -108,17 +136,28 @@ export class WorkTreeTimingStore {
     this.trim(this.calls, MAX_CALLS);
   }
 
-  turnStarted(userMessageIndex: number, startedAt: number): void {
-    this.turns.set(userMessageIndex, { startedAt });
+  turnStarted(userMessageIndex: number, startedAt: number, fingerprint?: string): void {
+    this.turns.delete(userMessageIndex);
+    this.turns.set(userMessageIndex, fingerprint !== undefined ? { startedAt, fingerprint } : { startedAt });
     this.openTurn = userMessageIndex;
     this.trim(this.turns, MAX_TURNS);
   }
 
-  turnEnded(endedAt: number): void {
-    if (this.openTurn === undefined) return;
-    const turn = this.turns.get(this.openTurn);
-    if (turn && turn.endedAt === undefined) turn.endedAt = endedAt;
+  /**
+   * Close the open turn with how it ended. Returns the closed turn's index and
+   * record, or undefined when no turn was open.
+   */
+  turnEnded(endedAt: number, outcome: TurnOutcome = 'completed'): { readonly index: number; readonly timing: TurnTiming } | undefined {
+    if (this.openTurn === undefined) return undefined;
+    const index = this.openTurn;
+    const turn = this.turns.get(index);
     this.openTurn = undefined;
+    if (!turn) return undefined;
+    if (turn.endedAt === undefined) {
+      turn.endedAt = endedAt;
+      turn.outcome = outcome;
+    }
+    return { index, timing: turn };
   }
 
   callTiming(callId: string): CallTiming | undefined {

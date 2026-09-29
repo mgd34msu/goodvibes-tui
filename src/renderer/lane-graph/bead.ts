@@ -338,7 +338,7 @@ function rawSummary(call: ToolCall, status: BeadStatus, content: string | undefi
 
   switch (family) {
     case 'read': {
-      if (!obj) break;
+      if (!obj) return textReadSummary(call, content);
       const summary = (obj.summary && typeof obj.summary === 'object') ? obj.summary as Json : obj;
       const files = num(summary.files_read);
       const lines = num(summary.total_lines);
@@ -347,7 +347,7 @@ function rawSummary(call: ToolCall, status: BeadStatus, content: string | undefi
       break;
     }
     case 'find': {
-      if (!obj) break;
+      if (!obj) return textFindSummary(content);
       const entries: Array<{ file: string }> = [];
       findEntries(obj, entries);
       const count = num(obj.count) ?? entries.length;
@@ -375,7 +375,7 @@ function rawSummary(call: ToolCall, status: BeadStatus, content: string | undefi
       break;
     }
     case 'exec': {
-      if (!obj) break;
+      if (!obj) return textExecSummary(content);
       const commands = execCommands(obj);
       if (commands.length === 0) break;
       if (commands.length > 1) {
@@ -397,8 +397,82 @@ function rawSummary(call: ToolCall, status: BeadStatus, content: string | undefi
       break;
   }
   if (obj) return null;
+  const shaped = shapedTextSummary(call, content);
+  if (shaped) return shaped;
   const first = content.split('\n').find((line) => line.trim().length > 0);
   return first ? { text: first.trim(), tone: 'faint' } : null;
+}
+
+/**
+ * A multi-line text result whose shape says what it is, whatever the tool
+ * (a result whose call is unknown carries no tool name to go by): a unified
+ * diff reads as its line counts, test output as its totals, grep-style lines
+ * as their match count. Anything else keeps its first line.
+ */
+function shapedTextSummary(call: ToolCall, content: string): BeadSummary | null {
+  const lines = textLines(content);
+  if (lines.length < 2) return null;
+  const diff = /^@@ /m.test(content) && /^(\+\+\+|---) /m.test(content) ? editDiff(call, content) : null;
+  if (diff) return { text: countSummary(diffCounts(diff.text)), tone: 'good' };
+  const totals = testTotals(content);
+  if (totals) return { text: totals, tone: /failing/.test(totals) ? 'warn' : 'faint' };
+  if (lines.every((l) => MATCH_LINE.test(l))) return textFindSummary(content);
+  return null;
+}
+
+/** Non-empty lines of a text result (trailing blank lines dropped). */
+function textLines(content: string): string[] {
+  const trimmed = content.replace(/\s+$/, '');
+  return trimmed === '' ? [] : trimmed.split('\n');
+}
+
+/** The paths a read call asked for, from its arguments. */
+function readPaths(call: ToolCall): string[] {
+  const args = call.arguments;
+  const out: string[] = [];
+  if (Array.isArray(args.files)) {
+    for (const f of args.files) {
+      if (typeof f === 'string') out.push(f);
+      else if (f && typeof f === 'object' && typeof (f as Json).path === 'string') out.push((f as Json).path as string);
+    }
+  }
+  if (out.length === 0 && typeof args.path === 'string') out.push(args.path);
+  if (out.length === 0 && typeof args.file === 'string') out.push(args.file);
+  return out;
+}
+
+/**
+ * A read whose result is the file text itself (an imported or older session,
+ * an MCP read) says how much it read, like a structured read does: never the
+ * file's first line.
+ */
+function textReadSummary(call: ToolCall, content: string): BeadSummary {
+  const lines = textLines(content).length;
+  const files = new Set(readPaths(call)).size;
+  if (lines === 0) return { text: 'empty', tone: 'faint' };
+  return { text: files > 1 ? `${plural(files, 'file')} · ${plural(lines, 'line')}` : plural(lines, 'line'), tone: 'faint' };
+}
+
+/** `path:line: text` (grep style) or `path:line:col: text`. */
+const MATCH_LINE = /^(.+?):(\d+)(?::\d+)?[:\s-]/;
+
+/** A find whose result is grep-style text lines: how many matches in how many files, or how many files. */
+function textFindSummary(content: string): BeadSummary {
+  const lines = textLines(content).filter((l) => l.trim().length > 0);
+  if (lines.length === 0 || /^no (matches|results|files)\b/i.test(lines[0]!.trim())) return { text: 'no matches', tone: 'faint' };
+  const matches = lines.map((l) => MATCH_LINE.exec(l)).filter((m): m is RegExpExecArray => m !== null);
+  if (matches.length === 0) return { text: plural(lines.length, 'file'), tone: 'faint' };
+  const files = new Set(matches.map((m) => m[1])).size;
+  const count = plural(matches.length, 'match').replace('matchs', 'matches');
+  return { text: files > 1 ? `${count} in ${files} files` : count, tone: 'faint' };
+}
+
+/** A command whose result is its bare output: test totals when it printed them, otherwise how much it printed. */
+function textExecSummary(content: string): BeadSummary {
+  const totals = testTotals(content);
+  if (totals) return { text: totals, tone: /failing/.test(totals) ? 'warn' : 'faint' };
+  const lines = textLines(content).length;
+  return { text: lines === 0 ? 'no output' : `${plural(lines, 'line')} of output`, tone: 'faint' };
 }
 
 // ---------------------------------------------------------------------------
@@ -543,7 +617,8 @@ function rawBody(call: ToolCall, status: BeadStatus, content: string | undefined
     if (diff) return { kind: 'diff', diff: diff.text, numbered: diff.numbered, path: diff.path };
   }
   if (status === 'cancel') {
-    const partial = content.split('\n').slice(1).join('\n').trim();
+    // Keep the partial output's own indentation: drop only blank lines around it.
+    const partial = content.split('\n').slice(1).join('\n').replace(/^(?:[ \t]*\n)+/, '').replace(/\s+$/, '');
     return partial ? { kind: 'text', lines: partial.split('\n') } : null;
   }
   const obj = parseObject(content);

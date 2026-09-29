@@ -40,7 +40,7 @@ import {
   type CallOutcome,
 } from '../renderer/lane-graph/bead.ts';
 import { SPINE, type LaneId } from '../renderer/lane-graph/layout.ts';
-import type { AgentLaneInfo, WorkTreeSources, WrfcPhaseInfo } from './work-tree-sources.ts';
+import { userMessageFingerprint, type AgentLaneInfo, type TurnOutcome, type TurnTiming, type WorkTreeSources, type WrfcPhaseInfo } from './work-tree-sources.ts';
 
 type Message = ConversationMessageSnapshot;
 type AssistantMessage = Extract<Message, { role: 'assistant' }>;
@@ -642,10 +642,13 @@ export function buildTurnModel(input: BuildTurnInput): TurnModel {
   const turnKey = turnKeyOf(unit.headIndex);
   let userIndex = -1;
   for (let abs = unit.start - 1; abs >= offset; abs--) if (at(abs).role === 'user') { userIndex = abs; break; }
-  const timing = userIndex >= 0 ? sources.turnTiming?.(userIndex) : undefined;
+  const userMessage = userIndex >= 0 ? at(userIndex) : undefined;
+  const timing = turnTimingFor(sources, userIndex, userMessage);
+  const outcome = active ? undefined : turnOutcomeFor(sources, userIndex, userMessage, timing);
   const parts: string[] = [];
   if (model) parts.push(model);
   if (active) parts.push('working');
+  else if (outcome === 'failed' || outcome === 'cancelled') parts.push(outcome);
   if (toolCount > 0) parts.push(plural(toolCount, 'tool'));
   if (ctx.lanes > 0) parts.push(plural(ctx.lanes, 'agent'));
   if (head.reasoningContent || head.reasoningSummary) parts.push('reasoning');
@@ -664,6 +667,30 @@ export function buildTurnModel(input: BuildTurnInput): TurnModel {
     agentCount: ctx.lanes,
     beadKeys: ctx.beadKeys,
   };
+}
+
+/**
+ * The timing record of the turn answering the user message at `userIndex`,
+ * when it is that turn's: a record made for a different message (the
+ * transcript was compacted or replaced since) is ignored.
+ */
+function turnTimingFor(sources: WorkTreeSources, userIndex: number, userMessage: Message | undefined): TurnTiming | undefined {
+  if (userIndex < 0) return undefined;
+  const timing = sources.turnTiming?.(userIndex);
+  if (!timing) return undefined;
+  return timing.fingerprint === undefined || timing.fingerprint === userMessageFingerprint(userMessage) ? timing : undefined;
+}
+
+/**
+ * How a finished turn ended: cancelled when its user message says so, else
+ * the live turn-end record, else the session's saved record for this message.
+ */
+function turnOutcomeFor(sources: WorkTreeSources, userIndex: number, userMessage: Message | undefined, timing: TurnTiming | undefined): TurnOutcome | undefined {
+  if (userMessage?.role === 'user' && userMessage.cancelled) return 'cancelled';
+  if (timing?.outcome) return timing.outcome;
+  if (userIndex < 0) return undefined;
+  const saved = sources.turnOutcome?.(userIndex);
+  return saved && saved.fingerprint === userMessageFingerprint(userMessage) ? saved.outcome : undefined;
 }
 
 /**

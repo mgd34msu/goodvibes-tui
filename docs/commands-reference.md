@@ -540,7 +540,7 @@ GoodVibes ships **160** built-in slash commands across **75** categories. Every 
 
 | Command | Aliases | Usage | Description |
 | --- | --- | --- | --- |
-| `/clear` | `/cls` | None | Clear the conversation display (keeps LLM context) |
+| `/clear` | `/cls` | None | Start a fresh conversation (the current one is saved as its own session) |
 | `/commands` | `/cmds` | None | Browse all commands in a scrollable list |
 | `/compact` | None | None | Summarize conversation to free context window |
 | `/compact-history` | `/compaction-history` | None | Show compaction history for this session |

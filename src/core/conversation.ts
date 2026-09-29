@@ -28,6 +28,7 @@ import type { WorkTreeSources } from './work-tree-sources.ts';
 import { renderStreamingContinuation } from './work-tree-render.ts';
 import { WorkTreeController } from './work-tree-focus.ts';
 import { isWorkTreeFoldKey } from './work-tree-fold-store.ts';
+import { replaceKeepingMessagesWhole } from './compaction-message-restore.ts';
 import { resolveTreeGlyphSet, type TreeGlyphSetName } from '../renderer/lane-graph/glyphs.ts';
 import { probeUnicodeSupport } from '../renderer/term-caps.ts';
 
@@ -147,6 +148,8 @@ export class ConversationManager extends SdkConversationManager {
   private readonly splashGate = new SplashGateState();
   /** Live facts the work tree reads (timings, agent lanes, waiting calls); see work-tree-sources.ts. */
   private workTreeSources: WorkTreeSources = {};
+  /** Turn activity at the last build: a change forces a rebuild (a finished turn's header must drop "working"). */
+  private builtWhileActive = false;
   /** Whether the terminal draws unicode (term-caps.ts); ascii work-tree glyphs when not. */
   private unicodeCapable = probeUnicodeSupport();
   /** Keyboard focus, live repaint and fold state of the work tree (work-tree-focus.ts). */
@@ -356,15 +359,9 @@ export class ConversationManager extends SdkConversationManager {
     this._displayFromMessageIndex = 0; // full reset, show everything on next render
   }
 
-  /**
-   * replaceMessagesForLLM - Replace the conversation's LLM-visible messages with a new set.
-   * Used by small-window compaction to swap in truncated messages without an LLM call.
-   * System messages are always preserved at the front.
-   *
-   * @param newMessages - Replacement ProviderMessage array (user/assistant/tool roles only)
-   */
+  /** Compaction's replace (system messages kept at the front), every kept message whole: compaction-message-restore.ts. */
   public override replaceMessagesForLLM(newMessages: ProviderMessage[]): void {
-    super.replaceMessagesForLLM(newMessages);
+    replaceKeepingMessagesWhole(this, newMessages, (kept) => super.replaceMessagesForLLM(kept), (data) => super.fromJSON(data));
     this.history.clear();
     this.lineCache.clear();
     this.appendedUpTo = 0;
@@ -455,6 +452,7 @@ export class ConversationManager extends SdkConversationManager {
     const width = this._getWidth();
     this.lastRenderedWidth = width;
     this.dirty = false;
+    this.builtWhileActive = this.workTreeSources.turnActive?.() ?? false;
 
     const snapshot = this.getMessageSnapshot();
     // During streaming, the in-progress placeholder (always the last message) is
@@ -515,6 +513,7 @@ export class ConversationManager extends SdkConversationManager {
    */
   public flushHistory(): void {
     const currentWidth = this._getWidth();
+    if ((this.workTreeSources.turnActive?.() ?? false) !== this.builtWhileActive) this.dirty = true;
     if (!this.dirty && currentWidth === this.lastRenderedWidth) return;
     this.rebuildHistory();
   }

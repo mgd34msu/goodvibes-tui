@@ -27,7 +27,7 @@ import { beginModal, finishModal, clipText, scrollCountText, wrapLines, type Kit
 import { drawList, type KitRow } from './surface-kit-list.ts';
 import { button, buttonWidth, panel, type KitPanel } from './surface-kit-parts.ts';
 import { drawTextBlock, splitPanes } from './surface-kit-extra.ts';
-import { highlightCodeLines } from './code-block.ts';
+import { highlightCodeLines, syntaxHighlightGeneration, syntaxHighlightMisses } from './code-block.ts';
 import type { SemanticDiff } from './semantic-diff.ts';
 import { diffRowTints } from './diff-tint.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
@@ -88,14 +88,17 @@ export type DiffRow =
   | { readonly kind: 'line'; readonly hunk: number; readonly line: ChangeLine; readonly first: boolean; readonly text: string; readonly tokens: ReadonlyArray<{ text: string; fg: string; bold?: boolean; italic?: boolean }> | null };
 
 /** Syntax tokens per hunk, remembered until the theme changes. */
-const tokenMemo = new WeakMap<ChangeHunk, { theme: object; lines: ReturnType<typeof highlightCodeLines> }>();
+/** A hunk's tokens; `generation` is set when they were the regex placeholder (a parse was on its way). */
+const tokenMemo = new WeakMap<ChangeHunk, { theme: object; lines: ReturnType<typeof highlightCodeLines>; generation: number | undefined }>();
 
 function hunkTokens(file: ChangeFile, hunk: ChangeHunk): ReturnType<typeof highlightCodeLines> {
   const theme = activeTokens();
   const memo = tokenMemo.get(hunk);
-  if (memo && memo.theme === theme) return memo.lines;
+  // Placeholder tokens are kept only until the hunk's parse lands.
+  if (memo && memo.theme === theme && (memo.generation === undefined || memo.generation === syntaxHighlightGeneration())) return memo.lines;
+  const missesBefore = syntaxHighlightMisses();
   const lines = highlightCodeLines(hunk.lines.map((line) => line.text), languageForPath(file.path));
-  tokenMemo.set(hunk, { theme, lines });
+  tokenMemo.set(hunk, { theme, lines, generation: syntaxHighlightMisses() !== missesBefore ? syntaxHighlightGeneration() : undefined });
   return lines;
 }
 

@@ -9,7 +9,7 @@
 |   │                                                                                                                    |
 |   │           exit code 1                                                                                              |
 |   │           error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.     |
-|   │           src/api/client.ts:31:18                                                                                  |
+|   │             src/api/client.ts:31:18                                                                                |
 |   │                                                                                                                    |
 |   ✓       ▸ edit src/api/client.ts                                                                    +1 −1     0.2s   |
 |   ├─╮       tester verify the fix                                                                                      |
@@ -1310,7 +1310,9 @@
 10 36 bg=#3c2e40
 10 37 fg=#f2767e
 10 37 bg=#3c2e40
+10 38 fg=#f2767e
 10 38 bg=#3c2e40
+10 39 fg=#f2767e
 10 39 bg=#3c2e40
 10 40 bg=#3c2e40
 10 41 bg=#3c2e40

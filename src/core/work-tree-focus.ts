@@ -18,6 +18,17 @@
  */
 
 import type { BlockMeta } from './conversation-types.ts';
+import type { TurnOutcome } from './work-tree-sources.ts';
+
+/** A turn's saved ending: the user message it answered (by index and fingerprint) and how it ended. */
+export interface TurnOutcomeRecord {
+  readonly index: number;
+  readonly fingerprint: string;
+  readonly outcome: TurnOutcome;
+}
+
+/** Most turn endings kept per session. */
+export const MAX_TURN_OUTCOMES = 500;
 
 export type NavBlock = BlockMeta & { readonly workTree: NonNullable<BlockMeta['workTree']> };
 
@@ -135,6 +146,9 @@ export class WorkTreeController {
   private focusId: string | null = null;
   private liveFrame = 0;
   private foldListener: (() => void) | null = null;
+  /** Failed and cancelled turn endings of this session, by user message index. */
+  private readonly outcomes = new Map<number, TurnOutcomeRecord>();
+  private readonly resetListeners = new Set<() => void>();
 
   constructor(private readonly deps: WorkTreeControllerDeps) {}
 
@@ -144,7 +158,56 @@ export class WorkTreeController {
   get frame(): number { return this.liveFrame; }
   get focused(): boolean { return this.focusId !== null; }
 
-  reset(): void { this.focusId = null; }
+  /**
+   * The transcript was reset or replaced wholesale (a new or resumed session):
+   * focus, turn endings and anything keyed by message index belong to the old
+   * transcript and go.
+   */
+  reset(): void {
+    this.focusId = null;
+    this.outcomes.clear();
+    for (const listener of this.resetListeners) listener();
+  }
+
+  /** Be told when the transcript is reset (the timing store keys turns by message index). */
+  onReset(listener: () => void): () => void {
+    this.resetListeners.add(listener);
+    return () => { this.resetListeners.delete(listener); };
+  }
+
+  /**
+   * Record how a turn ended. Only failed and cancelled endings are kept (a
+   * completed turn is the default and says nothing extra). Returns whether the
+   * kept records changed.
+   */
+  recordTurnOutcome(record: TurnOutcomeRecord): boolean {
+    const had = this.outcomes.delete(record.index);
+    if (record.outcome === 'completed') return had;
+    this.outcomes.set(record.index, record);
+    while (this.outcomes.size > MAX_TURN_OUTCOMES) {
+      const oldest = this.outcomes.keys().next();
+      if (oldest.done) break;
+      this.outcomes.delete(oldest.value);
+    }
+    this.deps.markDirty();
+    return true;
+  }
+
+  /** The recorded ending of the turn answering the user message at `index`. */
+  turnOutcome(index: number): TurnOutcomeRecord | undefined {
+    return this.outcomes.get(index);
+  }
+
+  /** Every recorded turn ending, oldest first (the session sidecar keeps them). */
+  turnOutcomes(): TurnOutcomeRecord[] {
+    return [...this.outcomes.values()];
+  }
+
+  /** Restore saved turn endings (a resumed session keeps its failed and cancelled headers). */
+  restoreTurnOutcomes(records: Iterable<TurnOutcomeRecord>): void {
+    for (const record of records) this.recordTurnOutcome(record);
+    this.deps.markDirty();
+  }
 
   /** Something the work tree draws changed outside the transcript (a ◈ summary landed): rebuild. */
   invalidate(): void { this.deps.markDirty(); }

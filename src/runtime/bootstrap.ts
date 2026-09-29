@@ -12,7 +12,8 @@
 import { join } from 'node:path';
 import { Orchestrator, type OrchestratorUserInputOptions } from '@pellux/goodvibes-sdk/platform/core';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
-import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
+import { getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
+import { mainSessionTierSupplement } from './main-session-tier-prompt.ts';
 import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { WorkspaceTrustLevel } from '@pellux/goodvibes-sdk/platform/runtime/operations';
@@ -223,7 +224,8 @@ export async function bootstrapRuntime(
       const currentModel = providerRegistry.getCurrentModel();
       const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
       const tier = getTierForContextWindow(contextWindow);
-      const supplement = getTierPromptSupplement(tier);
+      // The main session is a conversation: never the agent-run completion-report demand.
+      const supplement = mainSessionTierSupplement(tier);
       return joinPromptParts(runtime.systemPrompt, TUI_ORCHESTRATION_GUARDRAILS, supplement);
     },
     hookDispatcher,

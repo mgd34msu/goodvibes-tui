@@ -12,6 +12,7 @@ import {
   toEffortModel,
 } from '../../providers/reasoning-effort-surface.ts';
 import { executeWriteQuit } from './quit-shared.ts';
+import { startFreshConversation, type FreshConversationResult } from './fresh-conversation.ts';
 import { compactConversation, requireKeybindingsManager, requireProviderApi, requireSessionMemoryStore } from './runtime-services.ts';
 import { buildCompactionPreview, buildCompactionAfterNotice, buildPinUsageText, buildPinSuccessText } from '../../renderer/compaction-preview.ts';
 import { buildCompactionHistoryText } from '../../renderer/compaction-history-modal.ts';
@@ -242,9 +243,22 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'clear',
     aliases: ['cls'],
-    description: 'Clear the conversation display (keeps LLM context)',
+    description: 'Start a fresh conversation (the current one is saved as its own session)',
     handler(_args, ctx) {
-      ctx.session.conversationManager.clearDisplay();
+      if (ctx.isGenerating?.()) {
+        ctx.print('A turn is still running. Stop it with Esc or let it finish, then /clear.');
+        return;
+      }
+      let result: FreshConversationResult;
+      try {
+        result = startFreshConversation(ctx);
+      } catch (e) {
+        ctx.print(`Could not save the current conversation, so nothing was cleared: ${summarizeError(e)}`);
+        return;
+      }
+      if (result.savedAs) {
+        ctx.showToast?.({ title: 'Fresh conversation', body: `The previous one is saved as ${result.savedAs}. /session resume ${result.savedAs} returns to it.`, tone: 'info' });
+      }
       ctx.renderRequest();
     },
   });

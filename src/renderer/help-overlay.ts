@@ -157,7 +157,7 @@ function helpGroups(keybindingsManager: KeybindingsManager, commands?: SlashComm
     ['sessions',    'Browse and resume saved sessions'],
     ['save',        'Save the current session'],
     ['compact',     'Compact the conversation history'],
-    ['clear',       'Clear the conversation display (keeps LLM context)'],
+    ['clear',       'Start a fresh conversation (current one saved)'],
     ['keybindings', 'List and customize key bindings'],
     ['panel',       'Open, focus, or manage panels'],
   ];
@@ -209,7 +209,7 @@ function helpGroups(keybindingsManager: KeybindingsManager, commands?: SlashComm
     commandRows.push('  /help\tBrowse & run any command');
     commandRows.push('  /shortcuts\tKeyboard shortcut reference');
     commandRows.push('  /model\tSelect LLM model');
-    commandRows.push('  /clear\tClear the conversation display (keeps LLM context)');
+    commandRows.push('  /clear\tStart a fresh conversation (current one saved)');
   }
 
   return groupsFromRows([...shortcutRows, ...commandRows]);

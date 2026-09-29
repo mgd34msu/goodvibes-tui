@@ -16,7 +16,7 @@
 
 import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { activeTokens } from '../theme.ts';
-import { getDisplayWidth, truncateDisplay, wrapText } from '../../utils/terminal-width.ts';
+import { expandTabs, getDisplayWidth, truncateDisplay, wrapPreservingIndent } from '../../utils/terminal-width.ts';
 import { SurfaceCanvas } from '../surface-kit.ts';
 import { panel, type KitPanel } from '../surface-kit-parts.ts';
 import { buildDiffRows, drawDiffRow, semanticChips, type DiffRow } from '../changes-modal.ts';
@@ -333,11 +333,15 @@ function moreText(n: number, what: string, p: GraphPaint): string {
   return `${p.glyphs.ellipsis} ${n} more${what ? ` ${what}` : ''}`;
 }
 
-/** Text lines wrapped in full to the panel's text width. */
+/**
+ * Text lines wrapped in full to the panel's text width. A body is file text or
+ * command output, so its layout is kept: indentation and inner spacing stay,
+ * tabs become spaces, and wrapped rows keep the line's indent.
+ */
 function wrapAll(lines: ReadonlyArray<{ text: string; fg: string }>, width: number): Array<{ text: string; fg: string }> {
   const out: Array<{ text: string; fg: string }> = [];
   for (const line of lines) {
-    const parts = wrapText(line.text.replace(/\t/g, '  '), Math.max(8, width));
+    const parts = wrapPreservingIndent(line.text, Math.max(8, width));
     for (const part of parts.length > 0 ? parts : ['']) out.push({ text: part, fg: line.fg });
   }
   return out;
@@ -398,7 +402,7 @@ export function paintBody(body: BeadBody, p: GraphPaint, options: BodyPaintOptio
   } else if (body.kind === 'list') {
     rows = body.items.map((item) => {
       const detail = item.detail ? `  ${item.detail}` : '';
-      return { text: truncateDisplay(`${item.text}${detail}`, innerWidth, p.glyphs.ellipsis), fg: t.text };
+      return { text: truncateDisplay(expandTabs(`${item.text}${detail}`), innerWidth, p.glyphs.ellipsis), fg: t.text };
     });
   } else {
     rows = wrapAll(body.lines.map((text) => ({ text, fg: t.text })), innerWidth);

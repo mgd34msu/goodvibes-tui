@@ -49,7 +49,7 @@ import { renderConversationEventLine } from '../../renderer/conversation-surface
 import { UIFactory } from '../../renderer/ui-factory.ts';
 import type { GitHeaderInfo } from '../../renderer/git-status.ts';
 import { renderMarkdown } from '../../renderer/markdown.ts';
-import { renderCodeBlock } from '../../renderer/code-block.ts';
+import { renderCodeBlock, settleSyntaxHighlighting } from '../../renderer/code-block.ts';
 import { renderThinkingBlock } from '../../renderer/thinking.ts';
 import {
   addConversationSplashScreen,
@@ -806,12 +806,19 @@ function describeOverlayGolden(
   describe(`golden-frames : ${groupName}`, () => {
     for (const variant of variants) {
       const surface = `${groupName}-${variant.label}`;
-      test(`${variant.label} size matches committed golden snapshot`, () => {
+      test(`${variant.label} size matches committed golden snapshot`, async () => {
+        // Captured once tree-sitter highlighting settled: the first draw of a
+        // code line is the regex placeholder, and whether its parse already
+        // landed depends on which test files ran before in this process.
+        render(variant.width, variant.height);
+        await settleSyntaxHighlighting();
         const lines = render(variant.width, variant.height);
         expect(lines.length).toBeGreaterThan(0);
         assertGolden(surface, lines);
       });
-      test(`${variant.label} size render is deterministic (two consecutive renders match)`, () => {
+      test(`${variant.label} size render is deterministic (two consecutive renders match)`, async () => {
+        render(variant.width, variant.height);
+        await settleSyntaxHighlighting();
         const a = snapshotEncode(surface, render(variant.width, variant.height));
         const b = snapshotEncode(surface, render(variant.width, variant.height));
         expect(a).toBe(b);

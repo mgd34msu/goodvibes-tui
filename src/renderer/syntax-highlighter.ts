@@ -453,6 +453,12 @@ export class SyntaxHighlighter {
   private service: TreeSitterService;
   private cache: Map<string, HighlightEntry> = new Map();
   private pending: Set<string> = new Set();
+  /** Blocks whose parse cannot succeed (no grammar, parse failed): never rescheduled, always the regex tokens. */
+  private failed: Set<string> = new Set();
+  private inflight: Set<Promise<void>> = new Set();
+  private readonly readyListeners = new Set<() => void>();
+  private _generation = 0;
+  private _misses = 0;
 
   constructor() {
     this.service = new TreeSitterService();
@@ -501,8 +507,11 @@ export class SyntaxHighlighter {
     // Do not schedule background parse while the block is still being streamed.
     // The regex tokenizer serves during streaming (as designed). Schedule parse
     // only when isStreaming=false, i.e., the block has been finalized.
-    if (!isStreaming && !this.pending.has(key)) {
-      this.scheduleParse(code, langId, key);
+    if (!isStreaming && !this.failed.has(key)) {
+      // The caller draws the regex placeholder and a parse result is on its
+      // way: whatever it caches must be redrawn when the result lands.
+      this._misses++;
+      if (!this.pending.has(key)) this.scheduleParse(code, langId, key);
     }
 
     return null; // not ready yet
@@ -518,12 +527,14 @@ export class SyntaxHighlighter {
     // Use a stable virtual path for the parser cache key
     const virtualPath = `__highlight__.${langId}`;
 
-    Promise.resolve().then(async () => {
+    const run = Promise.resolve().then(async () => {
+      let landed = false;
       try {
         // Ensure the grammar is loaded
         const language = await this.service.loadLanguage(langId);
         if (!language) {
           logger.debug('SyntaxHighlighter: grammar not available', { langId });
+          this.markFailed(key);
           return;
         }
 
@@ -531,6 +542,7 @@ export class SyntaxHighlighter {
         const tree = await this.service.parse(virtualPath, code, langId);
         if (!tree) {
           logger.debug('SyntaxHighlighter: parse returned null', { langId });
+          this.markFailed(key);
           return;
         }
 
@@ -546,18 +558,59 @@ export class SyntaxHighlighter {
         }
 
         this.cache.set(key, { roles: highlighted });
+        this._generation++;
+        landed = true;
         logger.debug('SyntaxHighlighter: parsed and cached', { langId, lines: codeLines.length });
       } catch (err) {
         logger.warn('SyntaxHighlighter: parse error', { langId, error: summarizeError(err) });
+        this.markFailed(key);
       } finally {
         this.pending.delete(key);
       }
+      if (landed) for (const listener of this.readyListeners) listener();
     });
+    this.inflight.add(run);
+    void run.finally(() => { this.inflight.delete(run); });
+  }
+
+  private markFailed(key: string): void {
+    if (this.failed.size >= MAX_HIGHLIGHT_CACHE) {
+      const first = this.failed.values().next().value;
+      if (first !== undefined) this.failed.delete(first);
+    }
+    this.failed.add(key);
+  }
+
+  /**
+   * Bumped every time a parse result lands (and when the cache is cleared).
+   * Anything drawn while a parse was on its way (a miss) is stale once this
+   * moves on.
+   */
+  get generation(): number {
+    return this._generation;
+  }
+
+  /** Bumped every time highlight() hands back the placeholder while a parse result is on its way. */
+  get missCount(): number {
+    return this._misses;
+  }
+
+  /** Be told when a parse result lands (repaint what drew the placeholder). */
+  onReady(listener: () => void): () => void {
+    this.readyListeners.add(listener);
+    return () => { this.readyListeners.delete(listener); };
+  }
+
+  /** Resolves once no parse is in flight (tests capture settled frames with it). */
+  async settle(): Promise<void> {
+    while (this.inflight.size > 0) await Promise.all([...this.inflight]);
   }
 
   /** Clear all cached highlights (e.g., on theme change). */
   clearCache(): void {
     this.cache.clear();
+    this.failed.clear();
+    this._generation++;
   }
 
   /** Current cache size (for diagnostics). */

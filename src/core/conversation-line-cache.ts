@@ -44,6 +44,7 @@ import {
 } from './conversation-rendering.ts';
 import { activeTokens } from '../renderer/theme.ts';
 import { semanticSummaryGeneration } from '../renderer/lane-graph/semantic-memo.ts';
+import { syntaxHighlightGeneration, syntaxHighlightMisses } from '../renderer/code-block.ts';
 import type { GutterRow } from '../renderer/lane-graph/layout.ts';
 import { transcriptUnits, turnHasOpenDiff, turnSignature, type TranscriptUnit } from './work-tree-model.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
@@ -78,6 +79,13 @@ interface CacheEntry {
   /** absolute message index → relative line (every message the unit covers). */
   readonly messageLines: ReadonlyMap<number, number>;
   readonly tail: TurnTail | null;
+  /**
+   * Set when the unit drew code with the regex placeholder while its
+   * tree-sitter parse was on its way: the highlighter generation it saw. The
+   * entry is stale once a parse lands (the generation moves on), so the next
+   * build draws the real highlighting instead of keeping the placeholder.
+   */
+  readonly highlightGeneration?: number | undefined;
 }
 
 function sameParts(a: readonly Part[], b: readonly Part[]): boolean {
@@ -212,7 +220,9 @@ export class MessageLineCache {
         continue;
       }
 
-      const entry = this.renderScratch(scratchContext, unit, turnModel, messages, msgIndexOffset, width, key, readKeys, focus, streaming);
+      const missesBefore = syntaxHighlightMisses();
+      const drawn = this.renderScratch(scratchContext, unit, turnModel, messages, msgIndexOffset, width, key, readKeys, focus, streaming);
+      const entry: CacheEntry = syntaxHighlightMisses() !== missesBefore ? { ...drawn, highlightGeneration: syntaxHighlightGeneration() } : drawn;
       this.apply(context, entry, base, messageLineRegistry);
       this.entries.set(id, entry);
       touched.add(id);
@@ -227,6 +237,7 @@ export class MessageLineCache {
 
   private isValid(entry: CacheEntry, key: readonly Part[], focus: string | null, collapseState: Map<string, boolean>): boolean {
     if (!sameParts(entry.key, key)) return false;
+    if (entry.highlightGeneration !== undefined && entry.highlightGeneration !== syntaxHighlightGeneration()) return false;
     const focusHere = focus !== null && entry.focusIds.has(focus) ? focus : null;
     if (focusHere !== entry.focusDrawn) return false;
     for (const [k, value] of entry.collapseDeps) if (collapseState.get(k) !== value) return false;

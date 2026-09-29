@@ -333,6 +333,17 @@ export function highlightCodeLines(codeLines: readonly string[], lang: string): 
 const _sharedHighlighter = new SyntaxHighlighter();
 
 /**
+ * The shared highlighter's state, for anything that caches drawn code: a line
+ * drawn with the regex placeholder (a miss) is stale once the generation moves
+ * on, and onSyntaxHighlightReady says when to repaint.
+ */
+export function syntaxHighlightGeneration(): number { return _sharedHighlighter.generation; }
+export function syntaxHighlightMisses(): number { return _sharedHighlighter.missCount; }
+export function onSyntaxHighlightReady(listener: () => void): () => void { return _sharedHighlighter.onReady(listener); }
+/** Resolves once no parse is in flight: a frame drawn after it no longer depends on timing or on what drew before. */
+export function settleSyntaxHighlighting(): Promise<void> { return _sharedHighlighter.settle(); }
+
+/**
  * renderCodeBlock - Render lines of code with syntax highlighting and line numbers.
  * Returns Line[] for the cell-based pipeline.
  */
