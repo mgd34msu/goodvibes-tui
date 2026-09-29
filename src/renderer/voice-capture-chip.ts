@@ -1,5 +1,5 @@
 /**
- * voice-capture-chip.ts, the live-microphone chip on the composer's inner row.
+ * voice-capture-chip.ts, the live-microphone chip at the left end of the status line.
  *
  * A capture device held open with nothing on screen saying so is the one
  * state a voice feature must never be in, so the chip is never dropped for
@@ -7,7 +7,7 @@
  * delay, latch reason) is in /voice status.
  */
 
-import type { ComposerChip } from './composer.ts';
+import type { StatusChip } from './status-line.ts';
 import type { VoiceCaptureIndicatorState } from '../core/voice-capture-status.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { activeTokens, activeUiTones } from './theme.ts';
@@ -40,7 +40,7 @@ export function voiceCaptureDescription(state: VoiceCaptureIndicatorState): stri
   return parts.join(' · ');
 }
 
-export function voiceCaptureChip(state: VoiceCaptureIndicatorState): ComposerChip {
+export function voiceCaptureChip(state: VoiceCaptureIndicatorState): StatusChip {
   const tones = activeUiTones();
   const marker = state.kind === 'wake-latched' ? GLYPHS.status.blocked : GLYPHS.status.active;
   const fg = state.kind === 'wake-latched' || state.kind === 'wake-restarting' ? tones.chrome.warn : tones.accent.control;

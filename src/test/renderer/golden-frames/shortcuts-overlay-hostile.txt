@@ -4,7 +4,7 @@
 |                            |
 |     ✦ Keyboard    esc      |
 |                            |
-|     ▏Filte   46 shortc     |
+|     ▏Filte   47 shortc     |
 |                            |
 |   ✦ navigation & editing   |
 |     Up /     Recall        |
@@ -13,7 +13,7 @@
 |              Down at       |
 |              bottom        |
 |              focuses       |
-|             230 more ↓     |
+|             244 more ↓     |
 |      ↑↓  scroll            |
 |      type  to filter       |
 |                            |

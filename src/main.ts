@@ -17,6 +17,7 @@ import { handleBrokerApprovalChange, buildFixSessionAffordance, buildFixSessionE
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { requestedEffortLevel } from './providers/reasoning-effort-surface.ts';
+import { wireWorkTree } from './core/work-tree-wiring.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { InputHistory } from './input/input-history.ts';
@@ -53,7 +54,6 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState, reportFatalStartupError } from './cli/tui-startup.ts';
 import { applyConfiguredHitlMode, applyRuntimeConfigValue, applyTerminalRuntimeConfigDefaults } from '@pellux/goodvibes-terminal-shell';
-import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { installVoiceCapture } from './shell/voice-capture-shell.ts';
 import { allowTerminalWrite, installFullScreenTerminalOutputGuard } from '@pellux/goodvibes-terminal-shell/terminal-output-guard';
 import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
@@ -222,6 +222,8 @@ async function main() {
   };
 
   const unsubs: Array<() => void> = [];
+  // The work tree's live facts: call/turn timings, agent lanes, the call a permission prompt holds, fold persistence (work-tree-wiring.ts).
+  unsubs.push(...wireWorkTree({ conversation, events: uiServices.events, agentManager, listChains: () => ctx.services.wrfcController.listChains(), fleetNodes: () => ctx.services.processRegistry.query().nodes, pendingCallId: () => pendingPermission?.callId, turnActive: () => orchestrator.isThinking, sessionsDir: ctx.services.surface.sessionsDir, sessionId: () => runtime.sessionId, requestRender: () => render() }).unsubs);
   let recoveryInterval: ReturnType<typeof setInterval> | null = null;
   let stopSpokenOutputForExit: (() => Promise<void>) | null = null;
   // The optional "used N memories" provenance chip (default OFF), see interaction-seams.ts.
@@ -443,7 +445,7 @@ async function main() {
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
     const activeModel = resolveActiveModelDisplay({ serving: currentModel, configuredRegistryKey: configManager.get('provider.model') as string, configuredLabel: runtime.model, configuredProvider: runtime.provider, failover: failoverState.current() });
-    const headerLines = UIFactory.createHeader(width, activeModel.headerModel, conversation.title || undefined, lastGitInfoRef.value);
+    const headerLines = UIFactory.createHeader(width, activeModel.headerModel, conversation.title || undefined, lastGitInfoRef.value, undefined, activeModel.divergenceNote);
     const managerAgents = agentManager.list().filter((a) => a.status === 'running' || a.status === 'pending');
     const runtimeAgents = agentSnapshot.active;
     const runningAgentSummary = summarizeRunningAgents(managerAgents, runtimeAgents, ctx.services.wrfcController.listChains());
@@ -479,10 +481,9 @@ async function main() {
       usage: { up: orchestrator.usage.input, down: orchestrator.usage.output, cacheRead: orchestrator.usage.cacheRead, cacheWrite: orchestrator.usage.cacheWrite, fleetCostUsd: footerFleetCost(() => ctx.services.processRegistry.query().nodes, runningAgentCount > 0) },
       showExitNotice: input.showExitNotice,
       lastCopyTime: input.lastCopyTime,
-      model: activeModel.footerModel, modelNote: activeModel.divergenceNote,
+      model: activeModel.footerModel, // prices the cost; the header names the model
       workingDir,
       branch: lastGitInfoRef.value?.branch,
-      provider: activeModel.footerProvider,
       contextWindow,
       contextStatusHint,
       retryHint: retryAffordanceHint(retryAffordance),
@@ -497,7 +498,7 @@ async function main() {
       // Always-visible "sleep disabled" chip, topology-aware: the DAEMON's state in adopted-external mode, the in-process manager otherwise (power-chip-source.ts).
       powerKeepAwake: powerChipSource.get().keepAwake,
       // Composer must not read as focused while the process indicator owns keyboard focus.
-      promptFocused: !input.indicatorFocused,
+      promptFocused: !input.indicatorFocused && !conversation.workTree.focused, workTreeFocused: conversation.workTree.focused,
       indicatorFocused: input.indicatorFocused,
       runningAgentProgress: runningAgentSummary.progress,
       composerFlags: composerState.flags,
@@ -521,6 +522,7 @@ async function main() {
 
     // Flush pending renders after updating the width provider and splash posture
     // so the transcript and splash rebuild against the current shell layout.
+    conversation.workTree.tickLive(); // running beads spin and count up
     conversation.getDisplayBlocks();
     if (conversation.consumeSplashTransition()) compositor.requestFullRepaint(); // splash → transcript: repaint the whole viewport once
 
@@ -552,11 +554,6 @@ async function main() {
       // tool preview keeps its own faint row under the transcript.
       const partialToolPreview = (configManager.get('display.showToolPreview') as boolean) ? sessionSnapshot.streamToolPreview : undefined;
       if (partialToolPreview) viewport.push(UIFactory.createToolPreviewRow(conversationWidth, partialToolPreview));
-      // Live tool timer: render the currently executing tool row with ticking elapsed.
-      if (streamMetrics.activeToolName !== undefined && streamMetrics.activeToolStartedAtMs !== undefined) {
-        const liveToolCall = { id: streamMetrics.activeToolCallId ?? 'live', name: streamMetrics.activeToolName, arguments: {} };
-        viewport.push(...renderToolCallBlock(liveToolCall, 'executing', undefined, conversationWidth, undefined, undefined, undefined, streamMetrics.activeToolStartedAtMs));
-      }
     }
 
     viewport.push(...UIFactory.createQueuedMessageList(conversationWidth, orchestrator.listQueuedMessages()));

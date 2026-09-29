@@ -1,310 +1,132 @@
 /**
- * conversation-line-cache.ts, per-message Line[] production cache.
+ * conversation-line-cache.ts, per-unit Line[] production cache.
  *
  * The measured defect (perf baseline 2026-07-03, transcript.build_1k): appending
- * ONE message to an N-message conversation re-rendered all N messages
- * (45.5 ms p50 / 71.4 MB / 695 k objects per rebuild), because
- * ConversationManager.rebuildHistory() clears the buffer and calls
- * appendConversationMessages() over the entire snapshot on every dirty flag,
- * and markDirty() fires on every mutation. The marginal work for one appended
- * message is ~1/1000th of that.
+ * ONE message to an N-message conversation re-rendered all N messages, because
+ * ConversationManager.rebuildHistory() clears the buffer and renders the whole
+ * snapshot on every dirty flag. The marginal work for one appended message is a
+ * tiny fraction of that.
  *
- * This module memoises the per-message render. Each message's rendered output is
- * a PURE function of its complete inputs:
- *   - message identity + content (via a content signature; snapshots are fresh
- *     structuredClone copies each call, so string content compares by value and
- *     array-valued fields, user ContentPart[] and assistant toolCalls, are
- *     serialised; a streaming assistant message mutates its content string in
- *     place, which changes the signature and invalidates the entry)
- *   - render width
- *   - the four display-config values the render reads (line-number mode,
- *     collapse threshold, showThinking, showReasoningSummary)
- *   - the active theme's token table (identity), so a theme or mode change
- *     re-renders every message in the new colours
- *   - the block-registry base at message start (the code-block collapseKey embeds
- *     the GLOBAL block index, `code_${msgIdx}_${blockIdx}`, so a shift in an
- *     earlier message's block count changes this message's keys)
- *   - the absolute message index (embedded in every collapseKey and used for the
- *     system-message kind lookup)
- *   - the system-message kind (drives the error-navigation registry side effect)
- *   - this message's tool-group membership (see conversation-tool-groups.ts):
- *     whether it's folded under a group header, which member owns that header,
- *     and the group's honest tool/line counts, a group growing as new tool
- *     results stream in changes these for every existing member
- *   - the live values of every collapseState key the render READS (recorded via a
- *     proxy during a miss; a collapse toggle flips a recorded value and
- *     invalidates exactly the owning message)
+ * This module memoises the render of each transcript UNIT (see
+ * work-tree-model.ts transcriptUnits): a user message, a standalone system
+ * message, or one assistant turn with its whole work tree. A unit's lines are a
+ * pure function of its complete inputs:
  *
- * Invalidation is by comparison of those complete inputs, the file-preview
- * contentVersion precedent generalised: instead of a single version counter we
- * compare the full input tuple, which is provably complete (a from-scratch
- * rebuild reads nothing else).
+ *   message unit: the message's render-relevant fields, the width, the display
+ *     config the render reads, the theme's token table (identity), the
+ *     system-message kind, and the live value of every collapse key it read.
+ *
+ *   turn unit: the turn's model signature (work-tree-model.ts turnSignature:
+ *     every row's status, text, time, fold and open state, and the content of
+ *     its prose and opened bodies), the width, the display config, the theme,
+ *     the glyph set, the collapse keys the draw read (code blocks, thinking),
+ *     the focused row when it is one of this turn's rows, the spinner frame
+ *     while the turn has something live, and the semantic-summary generation
+ *     while it draws an opened diff.
+ *
+ * The turn MODEL is rebuilt every pass (it is cheap: it reads messages and the
+ * live sources); the DRAW (markdown, lane layout, painting) is what the cache
+ * saves.
  *
  * Correctness contract: a cache-served rebuild is BYTE-IDENTICAL to a cold
- * appendConversationMessages() rebuild. This is guaranteed by construction, a
- * miss renders through the exact same per-message render functions into an
- * isolated scratch context, and the captured lines / block metas / error lines
- * are replayed at the same buffer offsets a cold render would have produced.
+ * appendConversationMessages() rebuild. A miss renders through the same
+ * functions into an isolated scratch context, and the captured lines, block
+ * metas and error lines are replayed at the same buffer offsets.
  */
 
 import { createEmptyLine, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { BlockMeta } from './conversation-types.ts';
-import type { ConversationRenderContext } from './conversation-rendering.ts';
 import {
-  renderConversationAssistantMessage,
-  renderConversationSystemMessage,
-  renderConversationToolCallNode,
-  renderConversationToolMessage,
-  renderConversationUserMessage,
-  collectToolCallOutcomes,
-  isTurnCollapsed,
-  type ToolCallOutcome,
+  buildConversationTurnModel,
+  drawConversationTurn,
+  renderConversationMessageUnit,
+  type ConversationRenderContext,
 } from './conversation-rendering.ts';
-import { trailingBlankAfter } from './conversation-fold.ts';
 import { activeTokens } from '../renderer/theme.ts';
-import {
-  buildRenderPlan,
-  computeAssistantTurns,
-  type AssistantTurnMembership,
-  type RenderNode,
-} from './conversation-turn-structure.ts';
+import { semanticSummaryGeneration } from '../renderer/lane-graph/semantic-memo.ts';
+import type { GutterRow } from '../renderer/lane-graph/layout.ts';
+import { transcriptUnits, turnHasOpenDiff, turnSignature, type TranscriptUnit } from './work-tree-model.ts';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 // SystemMessageKind imported from runtime directly to avoid a cycle, mirroring
 // conversation-rendering.ts's own import.
 import type { SystemMessageKind } from '@/runtime/index.ts';
 
 type Message = ConversationMessageSnapshot;
+type Part = string | number | boolean | undefined | null | object;
 
-/** The display-config values every message render depends on. */
-interface RenderConfig {
-  readonly lineNumberMode: 'all' | 'code' | 'off';
-  readonly collapseThreshold: number;
-  readonly showThinking: boolean;
-  readonly showReasoningSummary: boolean;
-  /** The active theme's token table (identity): a theme or mode change re-renders. */
-  readonly palette: object;
-}
-
-/**
- * Content signature: the render-relevant fields of a message, captured so an
- * unchanged message is recognised without re-rendering. Array-valued fields are
- * pre-serialised to strings so equality is a value comparison.
- */
-interface ContentSig {
-  readonly role: Message['role'];
-  /** String content, or JSON of ContentPart[] for array-valued user content. */
-  readonly content: string;
-  readonly cancelled?: boolean;
-  readonly model?: string;
-  readonly provider?: string;
-  readonly reasoningContent?: string;
-  readonly reasoningSummary?: string;
-  readonly toolCallsJson?: string;
-  readonly callId?: string;
-  readonly toolName?: string;
-}
-
-/** Non-content inputs that key the cache entry. */
-interface KeyMeta {
-  readonly role: Message['role'];
-  readonly width: number;
-  readonly lineNumberMode: 'all' | 'code' | 'off';
-  readonly collapseThreshold: number;
-  readonly showThinking: boolean;
-  readonly showReasoningSummary: boolean;
-  readonly palette: object;
-  readonly blockBase: number;
-  readonly kind: SystemMessageKind | undefined;
-  /**
-   * Per-call completion signature for an assistant message's tool calls (see
-   * pendingToolKeyOf), undefined when the message has none. Each call's id
-   * is paired with whether it has a matching result yet, in call order, so a
-   * SINGLE call finishing invalidates and re-renders that call's glyph from
-   * ◌ to ✓ immediately. A prior aggregate boolean only flipped once EVERY
-   * call in the message had completed, so in a multi-call turn the earlier
-   * calls kept showing ◌ until the last result arrived.
-   */
-  readonly pendingToolKey: string | undefined;
-  /**
-   * Turn membership and tree-structure fields, flattened so a change
-   * invalidates the entry like any other structural input.
-   *
-   * This is what makes connector glyphs safe to recompute rather than cache:
-   * when a sibling arrives, the previously-last row's `connector` flips
-   * `└`→`├`, that value differs from the cached one, and exactly that row
-   * re-renders. Nothing else in the row changes, so the compositor repaints a
-   * single connector cell.
-   */
-  readonly turnKey: string | undefined;
-  readonly turnIsHead: boolean;
-  readonly turnToolCount: number;
-  readonly turnSharedLabel: string | undefined;
-  readonly turnHasReasoning: boolean;
-  /** Row depth and connector, both change when structure around a row changes. */
-  readonly depth: number;
-  readonly connector: string | undefined;
-  /** Ancestor gutter pattern, flattened; a change repaints the row's gutters. */
-  readonly openAncestors: string;
-  /** Whether this row is followed by the blank separator. */
-  readonly trailingBlank: boolean;
-}
-
-/**
- * Per-call completion signature for an assistant message's tool calls, in
- * call order, `id:0` or `id:1` per call, joined. Undefined for a message
- * with no tool calls at all (nothing to key). Comparing this instead of an
- * aggregate boolean lets exactly the calls whose completion status changed
- * invalidate the entry, rather than waiting for every call in the message to
- * complete before any of them re-renders as done.
- */
-function pendingToolKeyOf(m: Message, outcomes: ReadonlyMap<string, ToolCallOutcome>): string | undefined {
-  if (m.role !== 'assistant' || !m.toolCalls || m.toolCalls.length === 0) return undefined;
-  // The OUTCOME, not merely ran/not-ran: a call whose result turns out to be a
-  // failure must repaint its glyph from ◌ to ✗, which a boolean would miss.
-  return m.toolCalls
-    .map((tc) => `${tc.id ?? ''}:${(tc.id !== undefined && outcomes.get(tc.id)) || 'pending'}`)
-    .join('|');
+/** The gutter a streaming continuation of the last turn draws with. */
+export interface TurnTail {
+  readonly gutter: GutterRow;
+  readonly gutterWidth: number;
 }
 
 interface CacheEntry {
-  readonly keyMeta: KeyMeta;
-  readonly contentSig: ContentSig;
-  /** Rendered lines for this message, INCLUDING the trailing blank line. */
-  readonly lines: Line[];
-  /** Block metas with startLine RELATIVE to the message's first line. */
-  readonly blocks: BlockMeta[];
-  /** Error-navigation line offsets, RELATIVE to the message's first line. */
-  readonly errorRelLines: number[];
+  /** Every input the unit's lines depend on, compared element by element. */
+  readonly key: readonly Part[];
   /** [collapseKey, value] pairs the render read; a change invalidates the entry. */
-  readonly collapseDeps: Array<[string, boolean | undefined]>;
-  /** Memoised rebase of blocks/errors at appliedBase (avoids realloc when the
-   *  message's buffer offset is unchanged across rebuilds, the common case). */
-  appliedBase: number;
-  appliedBlocks: BlockMeta[] | null;
-  appliedErrors: number[] | null;
+  readonly collapseDeps: ReadonlyArray<readonly [string, boolean | undefined]>;
+  /** Focusable row ids this unit drew (a focus change re-renders only units that hold it). */
+  readonly focusIds: ReadonlySet<string>;
+  /** The focus id this entry was drawn with, when it is one of its own rows. */
+  readonly focusDrawn: string | null;
+  /** Rendered lines, INCLUDING the trailing blank line. */
+  readonly lines: Line[];
+  /** Block metas with startLine relative to the unit. */
+  readonly blocks: BlockMeta[];
+  /** Error-navigation line offsets relative to the unit. */
+  readonly errorRelLines: number[];
+  /** absolute message index → relative line (every message the unit covers). */
+  readonly messageLines: ReadonlyMap<number, number>;
+  readonly tail: TurnTail | null;
 }
 
-/** Build the content signature for a message. */
-function contentSigOf(m: Message): ContentSig {
-  if (m.role === 'user') {
-    return {
-      role: 'user',
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-      cancelled: m.cancelled,
-    };
-  }
-  if (m.role === 'assistant') {
-    return {
-      role: 'assistant',
-      content: m.content,
-      model: m.model,
-      provider: m.provider,
-      reasoningContent: m.reasoningContent,
-      reasoningSummary: m.reasoningSummary,
-      toolCallsJson: m.toolCalls ? JSON.stringify(m.toolCalls) : undefined,
-    };
-  }
-  if (m.role === 'system') {
-    return { role: 'system', content: m.content };
-  }
-  return { role: 'tool', content: m.content, callId: m.callId, toolName: m.toolName };
+function sameParts(a: readonly Part[], b: readonly Part[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
-/**
- * Compare a stored signature against a message WITHOUT allocating a new
- * signature object on the hot (unchanged string-content) path. Array-valued
- * fields fall back to JSON serialisation (rare).
- */
-function contentUnchanged(sig: ContentSig, m: Message): boolean {
-  if (sig.role !== m.role) return false;
+function messageParts(m: Message): Part[] {
   switch (m.role) {
-    case 'user':
-      return (
-        sig.content === (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)) &&
-        sig.cancelled === m.cancelled
-      );
-    case 'assistant':
-      return (
-        sig.content === m.content &&
-        sig.model === m.model &&
-        sig.provider === m.provider &&
-        sig.reasoningContent === m.reasoningContent &&
-        sig.reasoningSummary === m.reasoningSummary &&
-        sig.toolCallsJson === (m.toolCalls ? JSON.stringify(m.toolCalls) : undefined)
-      );
-    case 'system':
-      return sig.content === m.content;
-    case 'tool':
-      return sig.content === m.content && sig.callId === m.callId && sig.toolName === m.toolName;
-    default:
-      return false;
+    case 'user': return ['user', typeof m.content === 'string' ? m.content : JSON.stringify(m.content), m.cancelled];
+    case 'system': return ['system', m.content];
+    case 'tool': return ['tool', m.content, m.callId, m.toolName];
+    case 'assistant': return ['assistant', m.content];
   }
 }
 
 /**
  * Wrap the real collapseState so reads (.get/.has) are recorded while writes
- * (.set, the auto-collapse default) pass straight through to the real map, so
- * the persistent collapse defaults are established exactly as a cold render
- * would establish them.
+ * (defaults such as a long code block starting collapsed) pass straight through
+ * to the real map, exactly as a cold render would establish them.
  */
-function makeRecordingCollapseState(
-  real: Map<string, boolean>,
-  readKeys: Set<string>,
-): Map<string, boolean> {
+function makeRecordingCollapseState(real: Map<string, boolean>, readKeys: Set<string>): Map<string, boolean> {
   return new Proxy(real, {
-    get(target, prop, receiver) {
+    get(target, prop) {
       if (prop === 'get') {
-        return (key: string): boolean | undefined => {
-          readKeys.add(key);
-          return target.get(key);
-        };
+        return (key: string): boolean | undefined => { readKeys.add(key); return target.get(key); };
       }
       if (prop === 'has') {
-        return (key: string): boolean => {
-          readKeys.add(key);
-          return target.has(key);
-        };
+        return (key: string): boolean => { readKeys.add(key); return target.has(key); };
       }
-      void receiver;
       const value = Reflect.get(target, prop, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
 }
 
-/** Dispatch a single planned row to its render function. */
-function renderOne(
-  ctx: ConversationRenderContext,
-  node: RenderNode,
-  width: number,
-  cfg: RenderConfig,
-): void {
-  if (node.kind === 'toolcall') {
-    renderConversationToolCallNode(ctx, node, width);
-    return;
-  }
-  const message = node.message;
-  if (message.role === 'user') {
-    renderConversationUserMessage(ctx, message, width, node.absIdx);
-  } else if (message.role === 'assistant') {
-    renderConversationAssistantMessage(ctx, message, width, cfg.lineNumberMode, cfg.collapseThreshold, node.absIdx);
-  } else if (message.role === 'system') {
-    renderConversationSystemMessage(ctx, message, width, node.absIdx);
-  } else if (message.role === 'tool') {
-    renderConversationToolMessage(ctx, message, width, node.absIdx, node);
-  }
+function unitId(unit: TranscriptUnit): string {
+  return unit.kind === 'turn' ? `t:${unit.headIndex}` : `m:${unit.index}`;
 }
 
 /**
- * MessageLineCache, per-message Line[] memoisation for ConversationManager.
- *
- * Keyed by absolute message index; each entry validates its COMPLETE input tuple
- * before serving. A rebuild that reuses entries is byte-identical to a cold
- * rebuild; the cache is a pure memoisation with no observable behaviour of its
- * own beyond speed and reduced allocation churn.
+ * MessageLineCache, per-unit Line[] memoisation for ConversationManager.
+ * A rebuild that reuses entries is byte-identical to a cold rebuild.
  */
 export class MessageLineCache {
   private entries: Map<string, CacheEntry> = new Map();
+  private _lastTail: TurnTail | null = null;
+  private _live = false;
 
   /** Drop all cached entries (wholesale message replacement / reset). */
   public clear(): void {
@@ -316,20 +138,23 @@ export class MessageLineCache {
     return this.entries.size;
   }
 
+  /** The gutter under the last rendered unit, when that unit is a turn. */
+  public get lastTail(): TurnTail | null {
+    return this._lastTail;
+  }
+
+  /** Whether the last pass drew anything live (a running bead or lane, a working turn). */
+  public get live(): boolean {
+    return this._live;
+  }
+
   /**
-   * Render `messages` into `context`, reusing cached lines for unchanged
-   * messages. Mirrors appendConversationMessages exactly on a cold cache; a warm
-   * cache replays identical bytes at identical offsets.
+   * Render `messages` into `context`, reusing cached lines for unchanged units.
    *
-   * @param context               the live render context (real history buffer,
-   *                              block/error registries, collapse state, config).
-   * @param messages              the visible message slice to render.
-   * @param width                 render width.
-   * @param messageLineRegistry   absolute-index → first-line map, written here.
    * @param msgIndexOffset        absolute index of messages[0] (post-clearDisplay slice).
    * @param streamingPlaceholderAbsIdx  absolute index of the in-progress streaming
-   *                              placeholder to leave uncached (-1 when not streaming);
-   *                              the incremental streaming path owns its content.
+   *                              placeholder (-1 when not streaming); its prose is drawn
+   *                              by the incremental streaming path.
    */
   public renderInto(
     context: ConversationRenderContext,
@@ -339,230 +164,144 @@ export class MessageLineCache {
     msgIndexOffset: number,
     streamingPlaceholderAbsIdx: number,
   ): void {
-    const cfg: RenderConfig = {
-      lineNumberMode: context.configManager?.get('display.lineNumbers') ?? 'off',
-      collapseThreshold: context.configManager?.get('display.collapseThreshold') ?? 30,
-      showThinking: context.configManager?.get('display.showThinking') ?? false,
-      showReasoningSummary: context.configManager?.get('display.showReasoningSummary') ?? false,
-      palette: activeTokens(),
-    };
-
-    // Tool calls with no matching tool-result message are still pending; the
-    // render context and the cache key both depend on this. (item 2c.)
-    const toolCallOutcomes = collectToolCallOutcomes(messages);
-    const completedToolCallIds = new Set(toolCallOutcomes.keys());
-    const assistantTurns = computeAssistantTurns(messages, msgIndexOffset);
-    // Structural plan: a permutation of the slice (results lifted under their
-    // calls, spawned agents spliced under the call that spawned them), rebuilt
-    // every pass so connectors and nesting always reflect live structure.
-    const plan = buildRenderPlan(messages, msgIndexOffset, {
-      resolveAgentSnapshot: context.resolveAgentSnapshot,
-    });
-    const renderContext: ConversationRenderContext = { ...context, completedToolCallIds, toolCallOutcomes, assistantTurns };
-
+    const config = context.configManager;
+    const common: Part[] = [
+      width,
+      config?.get('display.lineNumbers') ?? 'off',
+      config?.get('display.collapseThreshold') ?? 30,
+      config?.get('display.showThinking') ?? false,
+      config?.get('display.showReasoningSummary') ?? false,
+      activeTokens(),
+      context.treeGlyphSet ?? 'rounded',
+    ];
+    const focus = context.focusId ?? null;
     const touched = new Set<string>();
-    const turnHeaderLines = new Map<string, number>();
+    this._lastTail = null;
+    this._live = false;
 
-    for (let i = 0; i < plan.length; i++) {
-      const node = plan[i]!;
+    for (const unit of transcriptUnits(messages, msgIndexOffset)) {
+      const id = unitId(unit);
       const base = context.history.getLineCount();
-      const blockBase = context.blockRegistry.length;
-      const isRoot = node.scope === '';
-      const turn = assistantTurns.get(node.absIdx);
+      const readKeys = new Set<string>();
+      const scratchCollapse = makeRecordingCollapseState(context.collapseState, readKeys);
+      const scratchContext: ConversationRenderContext = { ...context, collapseState: scratchCollapse };
 
-      if (node.kind === 'message') {
-        if (turn?.isHead) turnHeaderLines.set(turn.turnKey, base);
-        // Nested rows index into their own agent's snapshot and must not write
-        // the root transcript's registry.
-        if (isRoot) {
-          messageLineRegistry[node.absIdx] = turn && isTurnCollapsed(turn, context.collapseState)
-            ? (turnHeaderLines.get(turn.turnKey) ?? base)
-            : base;
-        }
+      // The turn still streaming ends without its blank row: the streamed text continues under its spine.
+      const streaming = unit.kind === 'turn' && streamingPlaceholderAbsIdx >= unit.start && streamingPlaceholderAbsIdx <= unit.end;
+      let key: Part[];
+      let turnModel: ReturnType<typeof buildConversationTurnModel> | undefined;
+      if (unit.kind === 'turn') {
+        turnModel = buildConversationTurnModel(scratchContext, messages, msgIndexOffset, unit, streamingPlaceholderAbsIdx);
+        if (turnModel.live) this._live = true;
+        key = [
+          'turn', ...common, streaming,
+          turnModel.live ? context.frame ?? 0 : null,
+          turnHasOpenDiff(turnModel) ? semanticSummaryGeneration() : null,
+          ...turnSignature(turnModel),
+        ];
+      } else {
+        const message = messages[unit.index - msgIndexOffset]!;
+        const kind: SystemMessageKind | undefined = context.messageKindRegistry.get(unit.index);
+        key = ['message', ...common, unit.index, kind, ...messageParts(message)];
       }
 
-      // Same rule appendConversationMessages uses, from the same function, so a
-      // warm cache and a cold rebuild space rows identically.
-      const trailingBlank = trailingBlankAfter(node, plan[i + 1], renderContext);
-      const uncacheable = isRoot && node.kind === 'message' && node.absIdx === streamingPlaceholderAbsIdx;
-      const kind = isRoot ? context.messageKindRegistry.get(node.absIdx) : undefined;
-      const pendingToolKey = pendingToolKeyOf(node.message, toolCallOutcomes);
-
-      if (!uncacheable) {
-        const existing = this.entries.get(node.id);
-        if (existing && this.isValid(existing, node, width, cfg, blockBase, kind, pendingToolKey, turn, trailingBlank, context.collapseState)) {
-          this.applyEntry(context, existing, base);
-          touched.add(node.id);
-          continue;
-        }
+      const existing = this.entries.get(id);
+      if (existing && this.isValid(existing, key, focus, context.collapseState)) {
+        this.apply(context, existing, base, messageLineRegistry);
+        touched.add(id);
+        continue;
       }
 
-      const entry = this.renderScratch(renderContext, node, width, cfg, blockBase, kind, pendingToolKey, turn, trailingBlank);
-      this.applyEntry(context, entry, base);
-      if (!uncacheable) {
-        this.entries.set(node.id, entry);
-        touched.add(node.id);
-      }
+      const entry = this.renderScratch(scratchContext, unit, turnModel, messages, msgIndexOffset, width, key, readKeys, focus, streaming);
+      this.apply(context, entry, base, messageLineRegistry);
+      this.entries.set(id, entry);
+      touched.add(id);
     }
 
-    // Mark-and-sweep: a full rebuild plans every currently-visible row, so any
-    // entry not touched this pass is gone (off-screen, or a row whose structure
-    // no longer exists) and is dropped to bound memory to the visible set.
+    // Mark-and-sweep: a full rebuild plans every visible unit, so an entry not
+    // touched this pass is gone and is dropped to bound memory.
     if (this.entries.size > touched.size) {
-      for (const key of this.entries.keys()) {
-        if (!touched.has(key)) this.entries.delete(key);
-      }
+      for (const id of this.entries.keys()) if (!touched.has(id)) this.entries.delete(id);
     }
   }
 
-  /** Validate a cached entry against the row's current complete inputs. */
-  private isValid(
-    entry: CacheEntry,
-    node: RenderNode,
-    width: number,
-    cfg: RenderConfig,
-    blockBase: number,
-    kind: SystemMessageKind | undefined,
-    pendingToolKey: string | undefined,
-    turn: AssistantTurnMembership | undefined,
-    trailingBlank: boolean,
-    collapseState: Map<string, boolean>,
-  ): boolean {
-    const k = entry.keyMeta;
-    if (
-      k.role !== node.message.role ||
-      k.width !== width ||
-      k.lineNumberMode !== cfg.lineNumberMode ||
-      k.collapseThreshold !== cfg.collapseThreshold ||
-      k.showThinking !== cfg.showThinking ||
-      k.showReasoningSummary !== cfg.showReasoningSummary ||
-      k.palette !== cfg.palette ||
-      k.blockBase !== blockBase ||
-      k.kind !== kind ||
-      k.pendingToolKey !== pendingToolKey ||
-      k.turnKey !== turn?.turnKey ||
-      k.turnIsHead !== (turn?.isHead ?? false) ||
-      k.turnToolCount !== (turn?.toolCallCount ?? 0) ||
-      k.turnSharedLabel !== turn?.sharedToolLabel ||
-      k.turnHasReasoning !== (turn?.hasReasoning ?? false) ||
-      k.depth !== node.depth ||
-      k.connector !== node.connector ||
-      k.openAncestors !== node.openAncestorDepths.join(',') ||
-      k.trailingBlank !== trailingBlank
-    ) {
-      return false;
-    }
-    if (!contentUnchanged(entry.contentSig, node.message)) return false;
-    for (const [key, value] of entry.collapseDeps) {
-      if (collapseState.get(key) !== value) return false;
-    }
+  private isValid(entry: CacheEntry, key: readonly Part[], focus: string | null, collapseState: Map<string, boolean>): boolean {
+    if (!sameParts(entry.key, key)) return false;
+    const focusHere = focus !== null && entry.focusIds.has(focus) ? focus : null;
+    if (focusHere !== entry.focusDrawn) return false;
+    for (const [k, value] of entry.collapseDeps) if (collapseState.get(k) !== value) return false;
     return true;
   }
 
-  /**
-   * Render a single planned row into an isolated scratch context, capturing its
-   * lines, block metas (row-relative), error-line offsets (row-relative), and
-   * the collapse-state reads it depends on. Collapse-default WRITES pass
-   * through to the real collapseState so persistent defaults match a cold render.
-   */
   private renderScratch(
     context: ConversationRenderContext,
-    node: RenderNode,
+    unit: TranscriptUnit,
+    turnModel: ReturnType<typeof buildConversationTurnModel> | undefined,
+    messages: readonly Message[],
+    offset: number,
     width: number,
-    cfg: RenderConfig,
-    blockBase: number,
-    kind: SystemMessageKind | undefined,
-    pendingToolKey: string | undefined,
-    turn: AssistantTurnMembership | undefined,
-    trailingBlank: boolean,
+    key: Part[],
+    readKeys: Set<string>,
+    focus: string | null,
+    streaming: boolean,
   ): CacheEntry {
-    const scratchLines: Line[] = [];
-    const scratchHistory = {
-      addLine: (line: Line): void => { scratchLines.push(line); },
-      addLines: (lines: Line[]): void => { for (const line of lines) scratchLines.push(line); },
-      getLineCount: (): number => scratchLines.length,
-    };
-    const scratchBlocks: BlockMeta[] = new Array(blockBase);
-    const scratchErrors: number[] = [];
-    const readKeys = new Set<string>();
-    const recordingCollapse = makeRecordingCollapseState(context.collapseState, readKeys);
+    const lines: Line[] = [];
+    const blocks: BlockMeta[] = [];
+    const errors: number[] = [];
+    const messageLines = new Map<number, number>();
+    let focusIds: ReadonlySet<string> = new Set();
+    let tail: TurnTail | null = null;
 
-    const scratchCtx: ConversationRenderContext = {
-      history: scratchHistory,
-      blockRegistry: scratchBlocks,
-      collapseState: recordingCollapse,
-      errorLineRegistry: scratchErrors,
-      messageKindRegistry: context.messageKindRegistry,
-      configManager: context.configManager,
-      splashOptions: context.splashOptions,
-      completedToolCallIds: context.completedToolCallIds,
-      toolCallOutcomes: context.toolCallOutcomes,
-      assistantTurns: context.assistantTurns,
-      resolveAgentSnapshot: context.resolveAgentSnapshot,
-    };
-
-    renderOne(scratchCtx, node, width, cfg);
-    // A row that rendered nothing (hidden by a collapsed turn) gets no
-    // separator either; otherwise the blank lands only after the last row of a
-    // top-level unit, so a turn's subtree reads as one block.
-    if (scratchLines.length > 0 && trailingBlank) {
-      scratchLines.push(createEmptyLine(width));
+    if (unit.kind === 'turn' && turnModel) {
+      const render = drawConversationTurn(context, turnModel, width);
+      lines.push(...render.lines);
+      blocks.push(...render.blocks);
+      errors.push(...render.errorLines);
+      for (const [index, line] of render.messageLines) messageLines.set(index, line);
+      for (let index = unit.start; index <= unit.end; index++) if (!messageLines.has(index)) messageLines.set(index, 0);
+      focusIds = render.focusIds;
+      tail = render.tail;
+    } else if (unit.kind === 'message') {
+      const scratch: ConversationRenderContext = {
+        ...context,
+        history: {
+          addLine: (line: Line): void => { lines.push(line); },
+          addLines: (more: Line[]): void => { for (const line of more) lines.push(line); },
+          getLineCount: (): number => lines.length,
+        },
+        blockRegistry: blocks,
+        errorLineRegistry: errors,
+      };
+      renderConversationMessageUnit(scratch, messages[unit.index - offset]!, width, unit.index);
+      messageLines.set(unit.index, 0);
     }
+    if (lines.length > 0 && !streaming) lines.push(createEmptyLine(width));
 
-    const collapseDeps: Array<[string, boolean | undefined]> = [];
-    for (const key of readKeys) collapseDeps.push([key, context.collapseState.get(key)]);
-
+    const collapseDeps: Array<readonly [string, boolean | undefined]> = [];
+    for (const k of readKeys) collapseDeps.push([k, context.collapseState.get(k)]);
     return {
-      keyMeta: {
-        role: node.message.role,
-        width,
-        lineNumberMode: cfg.lineNumberMode,
-        collapseThreshold: cfg.collapseThreshold,
-        showThinking: cfg.showThinking,
-        showReasoningSummary: cfg.showReasoningSummary,
-        palette: cfg.palette,
-        blockBase,
-        kind,
-        pendingToolKey,
-        turnKey: turn?.turnKey,
-        turnIsHead: turn?.isHead ?? false,
-        turnToolCount: turn?.toolCallCount ?? 0,
-        turnSharedLabel: turn?.sharedToolLabel,
-        turnHasReasoning: turn?.hasReasoning ?? false,
-        depth: node.depth,
-        connector: node.connector,
-        openAncestors: node.openAncestorDepths.join(','),
-        trailingBlank,
-      },
-      contentSig: contentSigOf(node.message),
-      lines: scratchLines,
-      blocks: scratchBlocks.slice(blockBase),
-      errorRelLines: scratchErrors,
+      key,
       collapseDeps,
-      appliedBase: -1,
-      appliedBlocks: null,
-      appliedErrors: null,
+      focusIds,
+      focusDrawn: focus !== null && focusIds.has(focus) ? focus : null,
+      lines,
+      blocks,
+      errorRelLines: errors,
+      messageLines,
+      tail,
     };
   }
 
   /**
    * Replay an entry into the live context at buffer offset `base`. Line objects
-   * are shared (never mutated post-production, the compositor reads them into a
-   * separate back-buffer). Block/error rebasing is memoised per base so an
-   * unchanged message pays zero allocation across rebuilds.
+   * are shared (never mutated after production).
    */
-  private applyEntry(context: ConversationRenderContext, entry: CacheEntry, base: number): void {
+  private apply(context: ConversationRenderContext, entry: CacheEntry, base: number, messageLineRegistry: number[]): void {
     context.history.addLines(entry.lines);
-
-    if (entry.appliedBase !== base || entry.appliedBlocks === null || entry.appliedErrors === null) {
-      entry.appliedBlocks = entry.blocks.map((b) => ({ ...b, startLine: b.startLine + base }));
-      entry.appliedErrors = entry.errorRelLines.map((e) => e + base);
-      entry.appliedBase = base;
-    }
-
     const registry = context.blockRegistry;
-    for (const block of entry.appliedBlocks) registry.push(block);
-    const errors = context.errorLineRegistry;
-    for (const line of entry.appliedErrors) errors.push(line);
+    for (const block of entry.blocks) registry.push({ ...block, blockIndex: registry.length, startLine: block.startLine + base });
+    for (const line of entry.errorRelLines) context.errorLineRegistry.push(line + base);
+    for (const [index, line] of entry.messageLines) messageLineRegistry[index] = base + line;
+    this._lastTail = entry.tail;
   }
 }

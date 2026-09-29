@@ -2,7 +2,12 @@ import { type Line, createEmptyLine, createStyledCell } from '@pellux/goodvibes-
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { GLYPHS } from './ui-primitives.ts';
-import { foldPreviewText, treeBranchCol, treeContentCol } from '@pellux/goodvibes-terminal-shell';
+import { foldPreviewText } from '@pellux/goodvibes-terminal-shell';
+
+/** Column of a transcript event row's marker (the ● of a flush row). */
+const MARKER_COL = LAYOUT.LEFT_MARGIN - 1;
+/** Column where the row's segment run begins (segments carry their own leading blank). */
+const CONTENT_COL = MARKER_COL + 2;
 import { activeTokens } from './theme.ts';
 
 export interface ConversationSurfacePalette {
@@ -104,18 +109,11 @@ export function renderConversationFragment(
   content: string,
   width: number,
   palette: ConversationFragmentPalette,
-  indentCols = 0,
 ): Line[] {
-  // A tree fragment is a continuation of the row above it, so it starts at that
-  // row's content column, which puts its ` ▸ ` prefix glyph in exactly the same
-  // column as the parent row's own ` ▸ N lines ` badge. A flush fragment (a user
-  // message ghost box) keeps the box margin it has always used.
-  const indent = Math.max(0, indentCols);
-  const margin = indent > 0 ? treeContentCol(indent) : LAYOUT.USER_BOX_MARGIN;
+  // A fragment (a user message ghost box) keeps the box margin it has always used.
+  const margin = LAYOUT.USER_BOX_MARGIN;
   const prefixWidth = getDisplayWidth(palette.prefix);
-  // The indent is charged to the content budget rather than allowed to push the
-  // fragment past the right edge, a narrow terminal shrinks the preview text
-  // instead of silently truncating its tail.
+  // A narrow terminal shrinks the preview text instead of silently truncating its tail.
   const maxContentWidth = Math.max(1, width - margin - LAYOUT.USER_BOX_MARGIN - prefixWidth - 2);
   const wrapped = wrapText(content, maxContentWidth);
   const contentWidth = wrapped.length > 0 ? Math.max(...wrapped.map((line) => getDisplayWidth(line))) : 0;
@@ -194,19 +192,18 @@ export function renderConversationFoldedRow(
   tone: ConversationEventTone,
   details: readonly ConversationStatusSegment[],
   preview: string,
-  indentCols = 0,
 ): Line {
   // What is left of the row after the marker, the label and the badges.
   const usedCols = (tone.label ? getDisplayWidth(` ${tone.label} `) : 0)
     + details.reduce((sum, segment) => sum + getDisplayWidth(segment.text), 0);
-  const availCols = width - LAYOUT.RIGHT_MARGIN - treeContentCol(Math.max(0, indentCols)) - usedCols - 1;
+  const availCols = width - LAYOUT.RIGHT_MARGIN - CONTENT_COL - usedCols - 1;
   // Whether a preview renders at all, and its flattening, are the policy's call
   // (foldPreviewText returns null for "no preview"). Only the TRUNCATION is
   // ours: display width is a product-local rule the policy deliberately leaves
   // to the caller, and it must truncate, never wrap.
   const trimmed = foldPreviewText(preview, availCols);
   if (trimmed === null) {
-    return renderConversationEventLine(width, tone, details, indentCols);
+    return renderConversationEventLine(width, tone, details);
   }
   const text = getDisplayWidth(trimmed) > availCols
     ? `${trimmed.slice(0, Math.max(1, availCols - 1))}…`
@@ -215,7 +212,6 @@ export function renderConversationFoldedRow(
     width,
     tone,
     [...details, { text: `${text} `, fg: activeTokens().textFaint }],
-    indentCols,
   );
 }
 
@@ -227,23 +223,11 @@ function renderConversationStatusLine(
     readonly markerFg?: string;
     readonly markerBg?: string;
     readonly bodyBg?: string;
-    /**
-     * Tree-branch indent in columns (see conversation-tree.ts). Shifts the
-     * marker and content columns together, so a branch row keeps the same
-     * marker→content relationship a flush row has. Callers pass an indent
-     * already clamped by treeIndentCols(), so this never eats the content
-     * budget below the guaranteed minimum.
-     */
-    readonly indentCols?: number;
   } = {},
 ): Line {
   const line = createEmptyLine(width);
-  const indent = Math.max(0, options.indentCols ?? 0);
-  // Both columns come from conversation-tree.ts so a flush row and a branch row
-  // sit on one grid: the marker where its depth's glyph belongs, the segment run
-  // two columns further right.
-  const markerCol = treeBranchCol(indent);
-  const startCol = treeContentCol(indent);
+  const markerCol = MARKER_COL;
+  const startCol = CONTENT_COL;
   const endCol = Math.max(startCol, width - LAYOUT.RIGHT_MARGIN);
   const marker = options.marker ?? '▌';
   const markerWidth = getDisplayWidth(marker);
@@ -278,12 +262,9 @@ export function renderConversationEventLine(
   width: number,
   tone: ConversationEventTone,
   details: readonly ConversationStatusSegment[] = [],
-  indentCols = 0,
 ): Line {
-  // An empty label is legitimate on a branch row: the tree already says what
-  // the row is (a result hanging under its call), so repeating "tool result"
-  // on every one of them is exactly the boilerplate this layout removes. The
-  // row then leads with its own first informative detail segment.
+  // An empty label is legitimate: the row then leads with its own first
+  // informative detail segment.
   const labelSegments = tone.label
     ? [{ text: ` ${tone.label} `, fg: tone.labelFg, bold: true }]
     : [];
@@ -299,7 +280,6 @@ export function renderConversationEventLine(
     {
       marker: tone.marker,
       markerFg: tone.markerFg,
-      indentCols,
     },
   );
 }

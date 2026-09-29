@@ -18,6 +18,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
+import { transcriptUnits } from '../../core/work-tree-model.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 
@@ -318,13 +319,15 @@ describe('cache-vs-cold equivalence', () => {
     // A call row is a tree branch (it has a connector) that names its target
     // file; all three calls here share the tool label 'Read', so it is hoisted
     // to the turn header once and each row leads with its own path instead.
+    // Count bead rows: the bead in the gutter is the call's status (✓ done,
+    // ◐ still running while the turn works).
     const countGlyphs = (): { done: number; pending: number } => {
-      const callRows = cm.getDisplayBlocks()
+      const beadRows = cm.getDisplayBlocks()
         .map((l) => l.map((c) => c.char).join(''))
-        .filter((t) => /[├└]/.test(t) && /\.ts/.test(t));
+        .filter((t) => /\.ts/.test(t));
       return {
-        done: callRows.filter((t) => t.includes('✓')).length,
-        pending: callRows.filter((t) => t.includes('◌')).length,
+        done: beadRows.filter((t) => t[3] === '✓').length,
+        pending: beadRows.filter((t) => '◐◓◑◒'.includes(t[3] ?? ' ')).length,
       };
     };
 
@@ -394,8 +397,8 @@ describe('cache-vs-cold equivalence', () => {
   test('cache is bounded to the visible set via mark-and-sweep', () => {
     const cm = new ConversationManager(() => 100);
     cm.fromJSON({ messages: buildMixed(200) as never[] });
-    cm.getDisplayBlocks(); // warm, one entry per visible message
-    expect(cm.getLineCacheSize()).toBe(200);
+    cm.getDisplayBlocks(); // warm, one entry per visible unit (a message, or a whole turn)
+    expect(cm.getLineCacheSize()).toBe(transcriptUnits(buildMixed(200)).length);
 
     // clearDisplay hides all current messages; the next rebuild renders only the
     // newly-added message, so the 200 now-hidden entries are swept.

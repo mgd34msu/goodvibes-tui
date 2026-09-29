@@ -70,6 +70,21 @@ export function probeTermCaps(stdout: NodeJS.WriteStream): TermColorCaps {
   return { capability, syncedOutput };
 }
 
+/**
+ * Whether the terminal can draw unicode (box drawing, beads, triangles), read
+ * from the environment: TERM=dumb cannot, and a locale naming a charset other
+ * than UTF-8 (including C and POSIX) cannot. No locale variables at all counts
+ * as capable, which is what modern terminal emulators report in practice.
+ * The conversation work tree draws ascii on a terminal this reports as limited.
+ */
+export function probeUnicodeSupport(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  if ((env['TERM'] ?? '') === 'dumb') return false;
+  const locale = env['LC_ALL'] || env['LC_CTYPE'] || env['LANG'] || '';
+  if (locale === '') return true;
+  if (locale === 'C' || locale === 'POSIX') return false;
+  return /utf-?8/i.test(locale);
+}
+
 // ---------------------------------------------------------------------------
 // Color parsing helpers
 // ---------------------------------------------------------------------------

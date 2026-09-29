@@ -10,14 +10,6 @@ import { activeUiTones } from './theme.ts';
  */
 export { TRANSCRIPT_LAYOUT as LAYOUT } from '@pellux/goodvibes-terminal-shell';
 
-export const TOOL_STATUS = {
-  SUCCESS_ICON: GLYPHS.status.success,
-  SPINNER_FRAMES,
-  FAIL_ICON: GLYPHS.status.failure,
-  PENDING_ICON: GLYPHS.status.pending,
-  TOOL_NAME_PAD: 8,
-} as const;
-
 // `color` is a getter so it always reads the active theme.
 export const BORDERS = {
   THINKING: { char: '▌', get color(): string { return activeUiTones().state.reasoning; } },

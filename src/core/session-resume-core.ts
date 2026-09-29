@@ -30,6 +30,7 @@ import type { SessionManager, SessionMeta } from '@pellux/goodvibes-sdk/platform
 import type { SessionSurface } from '@/runtime/index.ts';
 import type { ConversationManager } from './conversation.ts';
 import { restoreTurnAnchors } from '@pellux/goodvibes-sdk/platform/rewind';
+import { restoreWorkTreeFolds } from './work-tree-wiring.ts';
 import { replayJournalForSession, type ReplayIntoConversationResult } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 
 export interface SessionResumeRuntime {
@@ -84,6 +85,8 @@ export async function resumeSessionCore(sessionId: string, deps: SessionResumeDe
     title: meta.title,
     titleSource: meta.titleSource,
   });
+  // The work tree's folds (turns, lanes, open beads) come back with the session.
+  restoreWorkTreeFolds(deps.conversation, deps.surface.sessionsDir, sessionId);
   deps.conversation.rebuildHistory();
   deps.runtime.sessionId = sessionId;
 

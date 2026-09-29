@@ -34,6 +34,7 @@ import {
 } from './handler-feed-routes.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import { getViewportBottomLine } from '../renderer/conversation-layout.ts';
+import { handleWorkTreeToken } from './handler-work-tree-route.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
 import { handleCommandModeToken } from './handler-command-route.ts';
 import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
@@ -268,6 +269,20 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     context.cursorPos = modalRoute.cursorPos;
     context.nextImageId = modalRoute.nextImageId;
     if (modalRoute.handled) {
+      continue;
+    }
+
+    // The keyboard inside the work tree (Alt+Up enters, Esc leaves; see handler-work-tree-route.ts).
+    if (handleWorkTreeToken({
+      conversationManager: context.conversationManager,
+      enterMatch: token.type === 'key' && keybindings.matches('focus-work-tree', token),
+      anchorLine: getViewportBottomLine(scrollTop, viewportHeight, lineCount),
+      scrollTop: context.getScrollTop(),
+      viewportHeight,
+      scroll: context.scroll,
+      requestRender: context.requestRender,
+      onCopied: () => { /* the copy receipt is the transcript line handleBlockCopy logs */ },
+    }, token)) {
       continue;
     }
 

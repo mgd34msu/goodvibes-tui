@@ -22,12 +22,14 @@ import {
   conversationTextToLines,
   logConversationText,
   logConversationToolResult,
-  renderConversationAssistantMessage,
-  renderConversationSystemMessage,
-  renderConversationToolMessage,
-  renderConversationUserMessage,
 } from './conversation-rendering.ts';
 import { renderMarkdown } from '../renderer/markdown.ts';
+import type { WorkTreeSources } from './work-tree-sources.ts';
+import { renderStreamingContinuation } from './work-tree-render.ts';
+import { WorkTreeController } from './work-tree-focus.ts';
+import { isWorkTreeFoldKey } from './work-tree-fold-store.ts';
+import { resolveTreeGlyphSet, type TreeGlyphSetName } from '../renderer/lane-graph/glyphs.ts';
+import { probeUnicodeSupport } from '../renderer/term-caps.ts';
 
 /**
  * ConversationManager - TUI subclass of the SDK's ConversationManager.
@@ -62,36 +64,7 @@ type Message = ConversationMessageSnapshot;
 import type { OrchestratorUsageTotals } from '@pellux/goodvibes-sdk/platform/core';
 export type { OrchestratorUsageTotals };
 
-/**
- * sumConversationUsage - Fold every assistant message's per-turn usage into
- * running totals, plus the *last* assistant message's own input-token figure
- * (context-window occupancy, not a running sum).
- *
- * TUI-side counterpart to SDK Orchestrator.usage: after a session resume
- * replays historical messages into a freshly-constructed Orchestrator (whose
- * `usage` starts at all zeros, bootstrap.ts always constructs a fresh
- * instance, see), this lets the caller hydrate the footer's token
- * counters from messages that already carry real usage data instead of
- * waiting for the first new turn to populate them.
- */
-export function sumConversationUsage(
-  messages: readonly ConversationMessageSnapshot[],
-): { usage: OrchestratorUsageTotals; lastInputTokens: number } {
-  const usage: OrchestratorUsageTotals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-  let lastInputTokens = 0;
-  for (const message of messages) {
-    if (message.role !== 'assistant' || !message.usage) continue;
-    usage.input += message.usage.inputTokens;
-    usage.output += message.usage.outputTokens;
-    usage.cacheRead += message.usage.cacheReadTokens ?? 0;
-    usage.cacheWrite += message.usage.cacheWriteTokens ?? 0;
-    // Context-window occupancy tracks the most recent turn only, not a sum.
-    lastInputTokens = message.usage.inputTokens
-      + (message.usage.cacheReadTokens ?? 0)
-      + (message.usage.cacheWriteTokens ?? 0);
-  }
-  return { usage, lastInputTokens };
-}
+export { sumConversationUsage } from './conversation-usage.ts';
 
 export class ConversationManager extends SdkConversationManager {
   public history = new InfiniteBuffer();
@@ -172,6 +145,18 @@ export class ConversationManager extends SdkConversationManager {
   public splashOptions: SplashOptions = {};
   /** Run-sticky dismissal + the splash→transcript edge (conversation-splash-state.ts). */
   private readonly splashGate = new SplashGateState();
+  /** Live facts the work tree reads (timings, agent lanes, waiting calls); see work-tree-sources.ts. */
+  private workTreeSources: WorkTreeSources = {};
+  /** Whether the terminal draws unicode (term-caps.ts); ascii work-tree glyphs when not. */
+  private unicodeCapable = probeUnicodeSupport();
+  /** Keyboard focus, live repaint and fold state of the work tree (work-tree-focus.ts). */
+  public readonly workTree: WorkTreeController = new WorkTreeController({
+    blocks: () => { this.flushHistory(); return this.blockRegistry; },
+    collapseState: () => this.collapseState,
+    markDirty: () => this.markDirty(),
+    noteUserTouch: (key) => this.searchExpansion.noteUserTouch(key),
+    drewLive: () => this.lineCache.live,
+  });
 
   constructor(
     getWidth: () => number = () => process.stdout.columns || 80,
@@ -295,6 +280,10 @@ export class ConversationManager extends SdkConversationManager {
     this.markDirty();
     // Record the line where the streaming block starts so updates can be incremental.
     // Reset the render throttle so the first delta always renders immediately.
+    // The rebuild already treats the placeholder as streaming (its turn ends
+    // without a blank row, the text continues under its spine), the same as a
+    // rebuild later in the stream does.
+    this.streamingStartLine = 0;
     this.flushHistory();
     this.streamingStartLine = this.history.getLineCount();
     this._streamWidth = this._getWidth();
@@ -324,8 +313,7 @@ export class ConversationManager extends SdkConversationManager {
         this._lastStreamRenderMs = now;
         const width = this._getWidth();
         this.history.truncateToLine(this.streamingStartLine);
-        const rendered = renderMarkdown(content, width, { isStreaming: true });
-        this.history.addLines(rendered);
+        this.history.addLines(this.streamingLines(content, width));
       }
     }
   }
@@ -364,6 +352,7 @@ export class ConversationManager extends SdkConversationManager {
     this.messageKindRegistry = new Map();
     this.userReceiptIndices.clear();
     this.streamingStartLine = -1;
+    this.workTree.reset();
     this._displayFromMessageIndex = 0; // full reset, show everything on next render
   }
 
@@ -515,7 +504,7 @@ export class ConversationManager extends SdkConversationManager {
       this._lastStreamRenderMs = 0;
       const streamingContent = lastMsg?.content;
       if (typeof streamingContent === 'string' && streamingContent.length > 0) {
-        this.history.addLines(renderMarkdown(streamingContent, width, { isStreaming: true }));
+        this.history.addLines(this.streamingLines(streamingContent, width));
       }
     }
   }
@@ -543,29 +532,23 @@ export class ConversationManager extends SdkConversationManager {
       messageKindRegistry: this.messageKindRegistry as ReadonlyMap<number, SystemMessageKind>,
       configManager: this._configManager,
       splashOptions: this.splashOptions,
+      workTreeSources: this.workTreeSources,
+      treeGlyphSet: this.treeGlyphSet(),
+      focusId: this.workTree.focus,
+      frame: this.workTree.frame,
     };
   }
 
-  private renderUserMessage(message: Extract<Message, { role: 'user' }>, width: number): void {
-    renderConversationUserMessage(this.renderingContext(), message, width);
+  /** The work tree's glyph set: display.treeGlyphs, ascii on a terminal without unicode. */
+  private treeGlyphSet(): TreeGlyphSetName {
+    return resolveTreeGlyphSet(this._configManager?.get('display.treeGlyphs'), this.unicodeCapable);
   }
 
-  private renderAssistantMessage(
-    message: Extract<Message, { role: 'assistant' }>,
-    width: number,
-    lineNumberMode: 'all' | 'code' | 'off',
-    collapseThreshold: number,
-    msgIdx: number,
-  ): void {
-    renderConversationAssistantMessage(this.renderingContext(), message, width, lineNumberMode, collapseThreshold, msgIdx);
-  }
-
-  private renderSystemMessage(message: Extract<Message, { role: 'system' }>, width: number, msgIdx: number): void {
-    renderConversationSystemMessage(this.renderingContext(), message, width, msgIdx);
-  }
-
-  private renderToolMessage(message: Extract<Message, { role: 'tool' }>, width: number, msgIdx: number): void {
-    renderConversationToolMessage(this.renderingContext(), message, width, msgIdx);
+  /** Streaming text: under the spine of the turn it belongs to when there is one, else full width. */
+  private streamingLines(content: string, width: number): Line[] {
+    const tail = this.lineCache.lastTail;
+    if (!tail) return renderMarkdown(content, width, { isStreaming: true });
+    return renderStreamingContinuation(content, width, tail, this.treeGlyphSet());
   }
 
   /**
@@ -592,6 +575,14 @@ export class ConversationManager extends SdkConversationManager {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // Work tree (see work-tree-model.ts / work-tree-focus.ts)
+  // -------------------------------------------------------------------------
+
+  /** Live facts the work tree draws: timings, agent lanes, the call a prompt is holding. */
+  public setWorkTreeSources(sources: WorkTreeSources): void { this.workTreeSources = sources; this.markDirty(); }
+  /** Override the unicode probe (tests, and a terminal the caller knows better). */
+  public setUnicodeCapable(capable: boolean): void { this.unicodeCapable = capable; this.markDirty(); }
   /** Find the nearest block to a given line index, optionally filtered by type. */
   public findNearestBlock(lineIndex: number, typeFilter?: string): BlockMeta | null {
     let nearest: BlockMeta | null = null;
@@ -616,7 +607,13 @@ export class ConversationManager extends SdkConversationManager {
   public isCollapsed(blockIndex: number): boolean {
     const block = this.blockRegistry[blockIndex];
     if (!block) return false;
-    return this.collapseState.get(block.collapseKey) ?? false;
+    return this.collapsedNow(block);
+  }
+
+  /** Current collapse of a block: an unset bead key is a closed bead; everything else defaults open. */
+  private collapsedNow(block: BlockMeta): boolean {
+    const stored = this.collapseState.get(block.collapseKey);
+    return block.workTree?.kind === 'bead' ? stored !== false : stored ?? false;
   }
 
   /**
@@ -648,10 +645,11 @@ export class ConversationManager extends SdkConversationManager {
   public toggleCollapseAtLine(lineIndex: number): number {
     const nearest = this.findNearestBlock(lineIndex);
     if (!nearest) return -1;
-    const current = this.collapseState.get(nearest.collapseKey) ?? false;
+    const current = this.collapsedNow(nearest);
     this.collapseState.set(nearest.collapseKey, !current);
     this.searchExpansion.noteUserTouch(nearest.collapseKey);
     this.markDirty();
+    if (isWorkTreeFoldKey(nearest.collapseKey)) this.workTree.notifyFoldChange();
     return nearest.blockIndex;
   }
 

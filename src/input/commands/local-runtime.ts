@@ -55,8 +55,8 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
       // state, needing a second pass. '/collapse tool' needs no matching step:
       // collapsing the turn hides every result regardless of its own key.
       if (!collapsed && block.type === 'assistant_turn' && block.groupMemberIndexes) {
-        for (const memberIdx of block.groupMemberIndexes) {
-          const memberKey = `msg_${memberIdx}`;
+        for (const [k, memberIdx] of block.groupMemberIndexes.entries()) {
+          const memberKey = block.groupMemberKeys?.[k] ?? `msg_${memberIdx}`;
           ctx.session.conversationManager.setCollapsed(memberKey, false);
           // An explicit /expand is a deliberate user action on this key, same
           // as Tab/Ctrl+Y/Ctrl+B, exempts it from search's close-time

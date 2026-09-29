@@ -5,10 +5,14 @@
  *           (the theme's gradient, never the protected splash constant)
  *   then    the version (faint) and the session title (muted)
  *   right   the branch with a warning-colored dirty dot (ahead/behind counts
- *           muted), 3 columns, then the serving model ending at width-2
+ *           muted), 3 columns, then the serving model ending at width-2,
+ *           followed by the failover marker in the warning color while the
+ *           serving backend is not the configured one
  *
- * No rule row under it. The provider and the failover marker live on the
- * composer's inner row, next to the model the user is typing to.
+ * No rule row under it. The header is the one place for session identity:
+ * title, branch, model. On a narrow row the marker falls back to its short
+ * form, then is dropped whole (a half-cut marker reads worse than none); the
+ * branch goes before the marker does, the title before either.
  */
 
 import { type Line, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
@@ -53,6 +57,8 @@ function branchSegments(gitInfo: GitHeaderInfo): Seg[] {
  * @param title   - Optional session title, truncated to fit.
  * @param gitInfo - Optional branch/dirty/ahead-behind.
  * @param version - Defaults to the live build VERSION; tests pin a fixture.
+ * @param modelNote - The failover marker (core/active-model-identity.ts), set
+ *                    only while serving differs from the configured model.
  */
 export function renderHeaderLine(
   width: number,
@@ -60,6 +66,7 @@ export function renderHeaderLine(
   title?: string,
   gitInfo?: GitHeaderInfo,
   version: string = VERSION,
+  modelNote?: string,
 ): Line[] {
   const t = activeTokens();
   const line = createEmptyLine(width);
@@ -67,11 +74,20 @@ export function renderHeaderLine(
   const end = width - 1; // exclusive: the model ends at width-2
 
   // Right side first, so the title knows how much room it has.
-  const modelW = getDisplayWidth(model);
+  const leftMin = BRAND_X + BRAND.length + 1 + getDisplayWidth(version);
+  const fits = (w: number): boolean => leftMin + GAP + w <= end;
+  let note = '';
+  if (modelNote) {
+    const full = ` · ${modelNote}`;
+    const short = ' · divergent';
+    const baseW = getDisplayWidth(model);
+    if (fits(baseW + getDisplayWidth(full))) note = full;
+    else if (fits(baseW + getDisplayWidth(short))) note = short;
+  }
+  const modelW = getDisplayWidth(model) + getDisplayWidth(note);
   const branch = gitInfo ? branchSegments(gitInfo) : [];
   const branchW = branch.reduce((s, seg) => s + getDisplayWidth(seg.text), 0);
-  const leftMin = BRAND_X + BRAND.length + 1 + getDisplayWidth(version);
-  const showBranch = branchW > 0 && leftMin + GAP + branchW + GAP + modelW <= end;
+  const showBranch = branchW > 0 && fits(branchW + GAP + modelW);
   const rightW = modelW + (showBranch ? branchW + GAP : 0);
   const rightX = Math.max(leftMin + GAP, end - rightW);
 
@@ -91,6 +107,7 @@ export function renderHeaderLine(
     for (const seg of branch) rx = put(line, rx, end, seg);
     rx += GAP;
   }
-  put(line, rx, end, { text: model, fg: t.text });
+  rx = put(line, rx, end, { text: model, fg: t.text });
+  if (note) put(line, rx, end, { text: note, fg: t.warning });
   return [line];
 }

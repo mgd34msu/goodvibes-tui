@@ -4,28 +4,28 @@
 |                                                                                                    |
 |           ✦ Keyboard shortcuts  customize with /keybindings                         esc            |
 |                                                                                                    |
-|           ▏Filter shortcuts                                                 46 shortcuts           |
+|           ▏Filter shortcuts                                                 47 shortcuts           |
 |                                                                                                    |
 |         ✦ navigation & editing                   ✦ actions                                         |
-|           Up / Down       Recall input history;    Ctrl+W          Delete word backward            |
-|                           Down at bottom           Ctrl+A          Apply nearest diff /            |
-|                           focuses the process                      move to line start              |
-|                           indicator                Ctrl+E          Navigate to next                |
-|           PageUp /        Scroll by full page                      error / move to line            |
-|           PageDn                                                   end                             |
-|           Home / End      Jump to start / end      Alt+K           Kill to end of line             |
-|                           of line                  Alt+U           Clear the entire                |
-|           n / N (search)  Next / previous match                    prompt (Alt+U;                  |
-|           Mouse wheel     Scroll the                               kill-to-start owns              |
-|                           conversation (or the                     Ctrl+U)                         |
-|                           open modal)              Ctrl+Z          Undo last prompt edit           |
-|           Enter           Submit message           Ctrl+Shift+Z    Redo last undone edit           |
-|                           (composer empty: open    Ctrl+V          Paste from clipboard            |
-|                           the block-actions                        (image priority)                |
-|                           menu)                    Alt+B           Move cursor to start            |
-|           Shift+Enter     Insert newline                           of previous word                |
+|           Up / Down       Recall input history;    Ctrl+E          Navigate to next                |
+|                           Down at bottom                           error / move to line            |
+|                           focuses the process                      end                             |
+|                           indicator                Alt+K           Kill to end of line             |
+|           PageUp /        Scroll by full page      Alt+U           Clear the entire                |
+|           PageDn                                                   prompt (Alt+U;                  |
+|           Home / End      Jump to start / end                      kill-to-start owns              |
+|                           of line                                  Ctrl+U)                         |
+|           n / N (search)  Next / previous match    Ctrl+Z          Undo last prompt edit           |
+|           Mouse wheel     Scroll the               Ctrl+Shift+Z    Redo last undone edit           |
+|                           conversation (or the     Ctrl+V          Paste from clipboard            |
+|                           open modal)                              (image priority)                |
+|           Enter           Submit message           Alt+B           Move cursor to start            |
+|                           (composer empty: open                    of previous word                |
+|                           the block-actions                        (Alt+B)                         |
+|                           menu)                    Alt+F           Move cursor to end of           |
+|           Shift+Enter     Insert newline                           next word (Alt+F)               |
 |                                                                                                    |
-|            ↑↓  scroll    type  to filter                                       39 more ↓           |
+|            ↑↓  scroll    type  to filter                                       42 more ↓           |
 |                                                                                                    |
 |       ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀       |
 |                                                                                                    |
@@ -1431,13 +1431,9 @@
 8 82 bg=#232438
 8 83 fg=#8e8ba3
 8 83 bg=#232438
-8 84 fg=#8e8ba3
 8 84 bg=#232438
-8 85 fg=#8e8ba3
 8 85 bg=#232438
-8 86 fg=#8e8ba3
 8 86 bg=#232438
-8 87 fg=#8e8ba3
 8 87 bg=#232438
 8 88 bg=#232438
 8 89 bg=#232438
@@ -1531,24 +1527,12 @@
 9 49 bg=#232438
 9 50 bg=#232438
 9 51 bg=#232438
-9 52 fg=#e4e2ee
 9 52 bg=#232438
-9 52 bold=1
-9 53 fg=#e4e2ee
 9 53 bg=#232438
-9 53 bold=1
-9 54 fg=#e4e2ee
 9 54 bg=#232438
-9 54 bold=1
-9 55 fg=#e4e2ee
 9 55 bg=#232438
-9 55 bold=1
-9 56 fg=#e4e2ee
 9 56 bg=#232438
-9 56 bold=1
-9 57 fg=#e4e2ee
 9 57 bg=#232438
-9 57 bold=1
 9 58 bg=#232438
 9 59 bg=#232438
 9 60 bg=#232438
@@ -1718,35 +1702,20 @@
 10 69 bg=#232438
 10 70 fg=#8e8ba3
 10 70 bg=#232438
-10 71 fg=#8e8ba3
 10 71 bg=#232438
-10 72 fg=#8e8ba3
 10 72 bg=#232438
-10 73 fg=#8e8ba3
 10 73 bg=#232438
-10 74 fg=#8e8ba3
 10 74 bg=#232438
-10 75 fg=#8e8ba3
 10 75 bg=#232438
-10 76 fg=#8e8ba3
 10 76 bg=#232438
-10 77 fg=#8e8ba3
 10 77 bg=#232438
-10 78 fg=#8e8ba3
 10 78 bg=#232438
-10 79 fg=#8e8ba3
 10 79 bg=#232438
-10 80 fg=#8e8ba3
 10 80 bg=#232438
-10 81 fg=#8e8ba3
 10 81 bg=#232438
-10 82 fg=#8e8ba3
 10 82 bg=#232438
-10 83 fg=#8e8ba3
 10 83 bg=#232438
-10 84 fg=#8e8ba3
 10 84 bg=#232438
-10 85 fg=#8e8ba3
 10 85 bg=#232438
 10 86 bg=#232438
 10 87 bg=#232438
@@ -1852,9 +1821,7 @@
 11 56 fg=#e4e2ee
 11 56 bg=#232438
 11 56 bold=1
-11 57 fg=#e4e2ee
 11 57 bg=#232438
-11 57 bold=1
 11 58 bg=#232438
 11 59 bg=#232438
 11 60 bg=#232438
@@ -1897,8 +1864,11 @@
 11 82 bg=#232438
 11 83 fg=#8e8ba3
 11 83 bg=#232438
+11 84 fg=#8e8ba3
 11 84 bg=#232438
+11 85 fg=#8e8ba3
 11 85 bg=#232438
+11 86 fg=#8e8ba3
 11 86 bg=#232438
 11 87 bg=#232438
 11 88 bg=#232438
@@ -2014,11 +1984,21 @@
 12 49 bg=#232438
 12 50 bg=#232438
 12 51 bg=#232438
+12 52 fg=#e4e2ee
 12 52 bg=#232438
+12 52 bold=1
+12 53 fg=#e4e2ee
 12 53 bg=#232438
+12 53 bold=1
+12 54 fg=#e4e2ee
 12 54 bg=#232438
+12 54 bold=1
+12 55 fg=#e4e2ee
 12 55 bg=#232438
+12 55 bold=1
+12 56 fg=#e4e2ee
 12 56 bg=#232438
+12 56 bold=1
 12 57 bg=#232438
 12 58 bg=#232438
 12 59 bg=#232438
@@ -2062,13 +2042,9 @@
 12 82 bg=#232438
 12 83 fg=#8e8ba3
 12 83 bg=#232438
-12 84 fg=#8e8ba3
 12 84 bg=#232438
-12 85 fg=#8e8ba3
 12 85 bg=#232438
-12 86 fg=#8e8ba3
 12 86 bg=#232438
-12 87 fg=#8e8ba3
 12 87 bg=#232438
 12 88 bg=#232438
 12 89 bg=#232438
@@ -2182,16 +2158,27 @@
 13 69 bg=#232438
 13 70 fg=#8e8ba3
 13 70 bg=#232438
+13 71 fg=#8e8ba3
 13 71 bg=#232438
+13 72 fg=#8e8ba3
 13 72 bg=#232438
+13 73 fg=#8e8ba3
 13 73 bg=#232438
+13 74 fg=#8e8ba3
 13 74 bg=#232438
+13 75 fg=#8e8ba3
 13 75 bg=#232438
+13 76 fg=#8e8ba3
 13 76 bg=#232438
+13 77 fg=#8e8ba3
 13 77 bg=#232438
+13 78 fg=#8e8ba3
 13 78 bg=#232438
+13 79 fg=#8e8ba3
 13 79 bg=#232438
+13 80 fg=#8e8ba3
 13 80 bg=#232438
+13 81 fg=#8e8ba3
 13 81 bg=#232438
 13 82 bg=#232438
 13 83 bg=#232438
@@ -2316,21 +2303,11 @@
 14 49 bg=#232438
 14 50 bg=#232438
 14 51 bg=#232438
-14 52 fg=#e4e2ee
 14 52 bg=#232438
-14 52 bold=1
-14 53 fg=#e4e2ee
 14 53 bg=#232438
-14 53 bold=1
-14 54 fg=#e4e2ee
 14 54 bg=#232438
-14 54 bold=1
-14 55 fg=#e4e2ee
 14 55 bg=#232438
-14 55 bold=1
-14 56 fg=#e4e2ee
 14 56 bg=#232438
-14 56 bold=1
 14 57 bg=#232438
 14 58 bg=#232438
 14 59 bg=#232438
@@ -2378,7 +2355,6 @@
 14 84 bg=#232438
 14 85 fg=#8e8ba3
 14 85 bg=#232438
-14 86 fg=#8e8ba3
 14 86 bg=#232438
 14 87 bg=#232438
 14 88 bg=#232438
@@ -2466,21 +2442,11 @@
 15 49 bg=#232438
 15 50 bg=#232438
 15 51 bg=#232438
-15 52 fg=#e4e2ee
 15 52 bg=#232438
-15 52 bold=1
-15 53 fg=#e4e2ee
 15 53 bg=#232438
-15 53 bold=1
-15 54 fg=#e4e2ee
 15 54 bg=#232438
-15 54 bold=1
-15 55 fg=#e4e2ee
 15 55 bg=#232438
-15 55 bold=1
-15 56 fg=#e4e2ee
 15 56 bg=#232438
-15 56 bold=1
 15 57 bg=#232438
 15 58 bg=#232438
 15 59 bg=#232438
@@ -2506,23 +2472,14 @@
 15 73 bg=#232438
 15 74 fg=#8e8ba3
 15 74 bg=#232438
-15 75 fg=#8e8ba3
 15 75 bg=#232438
-15 76 fg=#8e8ba3
 15 76 bg=#232438
-15 77 fg=#8e8ba3
 15 77 bg=#232438
-15 78 fg=#8e8ba3
 15 78 bg=#232438
-15 79 fg=#8e8ba3
 15 79 bg=#232438
-15 80 fg=#8e8ba3
 15 80 bg=#232438
-15 81 fg=#8e8ba3
 15 81 bg=#232438
-15 82 fg=#8e8ba3
 15 82 bg=#232438
-15 83 fg=#8e8ba3
 15 83 bg=#232438
 15 84 bg=#232438
 15 85 bg=#232438
@@ -2655,12 +2612,24 @@
 16 49 bg=#232438
 16 50 bg=#232438
 16 51 bg=#232438
+16 52 fg=#e4e2ee
 16 52 bg=#232438
+16 52 bold=1
+16 53 fg=#e4e2ee
 16 53 bg=#232438
+16 53 bold=1
+16 54 fg=#e4e2ee
 16 54 bg=#232438
+16 54 bold=1
+16 55 fg=#e4e2ee
 16 55 bg=#232438
+16 55 bold=1
+16 56 fg=#e4e2ee
 16 56 bg=#232438
+16 56 bold=1
+16 57 fg=#e4e2ee
 16 57 bg=#232438
+16 57 bold=1
 16 58 bg=#232438
 16 59 bg=#232438
 16 60 bg=#232438
@@ -2699,12 +2668,19 @@
 16 80 bg=#232438
 16 81 fg=#8e8ba3
 16 81 bg=#232438
+16 82 fg=#8e8ba3
 16 82 bg=#232438
+16 83 fg=#8e8ba3
 16 83 bg=#232438
+16 84 fg=#8e8ba3
 16 84 bg=#232438
+16 85 fg=#8e8ba3
 16 85 bg=#232438
+16 86 fg=#8e8ba3
 16 86 bg=#232438
+16 87 fg=#8e8ba3
 16 87 bg=#232438
+16 88 fg=#8e8ba3
 16 88 bg=#232438
 16 89 bg=#232438
 16 90 bg=#232438
@@ -2815,18 +2791,42 @@
 17 49 bg=#232438
 17 50 bg=#232438
 17 51 bg=#232438
+17 52 fg=#e4e2ee
 17 52 bg=#232438
+17 52 bold=1
+17 53 fg=#e4e2ee
 17 53 bg=#232438
+17 53 bold=1
+17 54 fg=#e4e2ee
 17 54 bg=#232438
+17 54 bold=1
+17 55 fg=#e4e2ee
 17 55 bg=#232438
+17 55 bold=1
+17 56 fg=#e4e2ee
 17 56 bg=#232438
+17 56 bold=1
+17 57 fg=#e4e2ee
 17 57 bg=#232438
+17 57 bold=1
+17 58 fg=#e4e2ee
 17 58 bg=#232438
+17 58 bold=1
+17 59 fg=#e4e2ee
 17 59 bg=#232438
+17 59 bold=1
+17 60 fg=#e4e2ee
 17 60 bg=#232438
+17 60 bold=1
+17 61 fg=#e4e2ee
 17 61 bg=#232438
+17 61 bold=1
+17 62 fg=#e4e2ee
 17 62 bg=#232438
+17 62 bold=1
+17 63 fg=#e4e2ee
 17 63 bg=#232438
+17 63 bold=1
 17 64 bg=#232438
 17 65 bg=#232438
 17 66 bg=#232438
@@ -2867,8 +2867,11 @@
 17 84 bg=#232438
 17 85 fg=#8e8ba3
 17 85 bg=#232438
+17 86 fg=#8e8ba3
 17 86 bg=#232438
+17 87 fg=#8e8ba3
 17 87 bg=#232438
+17 88 fg=#8e8ba3
 17 88 bg=#232438
 17 89 bg=#232438
 17 90 bg=#232438
@@ -2967,12 +2970,24 @@
 18 49 bg=#232438
 18 50 bg=#232438
 18 51 bg=#232438
+18 52 fg=#e4e2ee
 18 52 bg=#232438
+18 52 bold=1
+18 53 fg=#e4e2ee
 18 53 bg=#232438
+18 53 bold=1
+18 54 fg=#e4e2ee
 18 54 bg=#232438
+18 54 bold=1
+18 55 fg=#e4e2ee
 18 55 bg=#232438
+18 55 bold=1
+18 56 fg=#e4e2ee
 18 56 bg=#232438
+18 56 bold=1
+18 57 fg=#e4e2ee
 18 57 bg=#232438
+18 57 bold=1
 18 58 bg=#232438
 18 59 bg=#232438
 18 60 bg=#232438
@@ -2997,18 +3012,31 @@
 18 73 bg=#232438
 18 74 fg=#8e8ba3
 18 74 bg=#232438
+18 75 fg=#8e8ba3
 18 75 bg=#232438
+18 76 fg=#8e8ba3
 18 76 bg=#232438
+18 77 fg=#8e8ba3
 18 77 bg=#232438
+18 78 fg=#8e8ba3
 18 78 bg=#232438
+18 79 fg=#8e8ba3
 18 79 bg=#232438
+18 80 fg=#8e8ba3
 18 80 bg=#232438
+18 81 fg=#8e8ba3
 18 81 bg=#232438
+18 82 fg=#8e8ba3
 18 82 bg=#232438
+18 83 fg=#8e8ba3
 18 83 bg=#232438
+18 84 fg=#8e8ba3
 18 84 bg=#232438
+18 85 fg=#8e8ba3
 18 85 bg=#232438
+18 86 fg=#8e8ba3
 18 86 bg=#232438
+18 87 fg=#8e8ba3
 18 87 bg=#232438
 18 88 bg=#232438
 18 89 bg=#232438
@@ -3099,24 +3127,12 @@
 19 49 bg=#232438
 19 50 bg=#232438
 19 51 bg=#232438
-19 52 fg=#e4e2ee
 19 52 bg=#232438
-19 52 bold=1
-19 53 fg=#e4e2ee
 19 53 bg=#232438
-19 53 bold=1
-19 54 fg=#e4e2ee
 19 54 bg=#232438
-19 54 bold=1
-19 55 fg=#e4e2ee
 19 55 bg=#232438
-19 55 bold=1
-19 56 fg=#e4e2ee
 19 56 bg=#232438
-19 56 bold=1
-19 57 fg=#e4e2ee
 19 57 bg=#232438
-19 57 bold=1
 19 58 bg=#232438
 19 59 bg=#232438
 19 60 bg=#232438
@@ -3159,15 +3175,10 @@
 19 82 bg=#232438
 19 83 fg=#8e8ba3
 19 83 bg=#232438
-19 84 fg=#8e8ba3
 19 84 bg=#232438
-19 85 fg=#8e8ba3
 19 85 bg=#232438
-19 86 fg=#8e8ba3
 19 86 bg=#232438
-19 87 fg=#8e8ba3
 19 87 bg=#232438
-19 88 fg=#8e8ba3
 19 88 bg=#232438
 19 89 bg=#232438
 19 90 bg=#232438
@@ -3285,27 +3296,13 @@
 20 56 fg=#e4e2ee
 20 56 bg=#232438
 20 56 bold=1
-20 57 fg=#e4e2ee
 20 57 bg=#232438
-20 57 bold=1
-20 58 fg=#e4e2ee
 20 58 bg=#232438
-20 58 bold=1
-20 59 fg=#e4e2ee
 20 59 bg=#232438
-20 59 bold=1
-20 60 fg=#e4e2ee
 20 60 bg=#232438
-20 60 bold=1
-20 61 fg=#e4e2ee
 20 61 bg=#232438
-20 61 bold=1
-20 62 fg=#e4e2ee
 20 62 bg=#232438
-20 62 bold=1
-20 63 fg=#e4e2ee
 20 63 bg=#232438
-20 63 bold=1
 20 64 bg=#232438
 20 65 bg=#232438
 20 66 bg=#232438
@@ -3350,7 +3347,6 @@
 20 86 bg=#232438
 20 87 fg=#8e8ba3
 20 87 bg=#232438
-20 88 fg=#8e8ba3
 20 88 bg=#232438
 20 89 bg=#232438
 20 90 bg=#232438
@@ -3450,24 +3446,12 @@
 21 49 bg=#232438
 21 50 bg=#232438
 21 51 bg=#232438
-21 52 fg=#e4e2ee
 21 52 bg=#232438
-21 52 bold=1
-21 53 fg=#e4e2ee
 21 53 bg=#232438
-21 53 bold=1
-21 54 fg=#e4e2ee
 21 54 bg=#232438
-21 54 bold=1
-21 55 fg=#e4e2ee
 21 55 bg=#232438
-21 55 bold=1
-21 56 fg=#e4e2ee
 21 56 bg=#232438
-21 56 bold=1
-21 57 fg=#e4e2ee
 21 57 bg=#232438
-21 57 bold=1
 21 58 bg=#232438
 21 59 bg=#232438
 21 60 bg=#232438
@@ -3510,13 +3494,9 @@
 21 82 bg=#232438
 21 83 fg=#8e8ba3
 21 83 bg=#232438
-21 84 fg=#8e8ba3
 21 84 bg=#232438
-21 85 fg=#8e8ba3
 21 85 bg=#232438
-21 86 fg=#8e8ba3
 21 86 bg=#232438
-21 87 fg=#8e8ba3
 21 87 bg=#232438
 21 88 bg=#232438
 21 89 bg=#232438
@@ -3643,23 +3623,14 @@
 22 73 bg=#232438
 22 74 fg=#8e8ba3
 22 74 bg=#232438
-22 75 fg=#8e8ba3
 22 75 bg=#232438
-22 76 fg=#8e8ba3
 22 76 bg=#232438
-22 77 fg=#8e8ba3
 22 77 bg=#232438
-22 78 fg=#8e8ba3
 22 78 bg=#232438
-22 79 fg=#8e8ba3
 22 79 bg=#232438
-22 80 fg=#8e8ba3
 22 80 bg=#232438
-22 81 fg=#8e8ba3
 22 81 bg=#232438
-22 82 fg=#8e8ba3
 22 82 bg=#232438
-22 83 fg=#8e8ba3
 22 83 bg=#232438
 22 84 bg=#232438
 22 85 bg=#232438
@@ -3814,6 +3785,7 @@
 23 86 bg=#232438
 23 87 fg=#8e8ba3
 23 87 bg=#232438
+23 88 fg=#8e8ba3
 23 88 bg=#232438
 23 89 bg=#232438
 23 90 bg=#232438
@@ -3976,6 +3948,7 @@
 24 82 bg=#232438
 24 83 fg=#8e8ba3
 24 83 bg=#232438
+24 84 fg=#8e8ba3
 24 84 bg=#232438
 24 85 bg=#232438
 24 86 bg=#232438

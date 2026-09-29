@@ -57,7 +57,8 @@ export type KeyAction =
   | 'cancel-tool-call'
   | 'toggle-keep-awake'
   | 'toggle-memory-provenance'
-  | 'voice-input';
+  | 'voice-input'
+  | 'focus-work-tree';
 
 /** Human-readable description for each action (used in /keybindings display). */
 export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
@@ -92,6 +93,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   // state, there is no release event to watch, so this is two discrete presses,
   // and the description says so instead of implying a hold that cannot exist.
   'voice-input':           'Voice input: press to start recording, press again to stop and transcribe into the composer',
+  'focus-work-tree':       'Move the keyboard onto the conversation work tree (arrows move and fold, Enter opens, y copies, Esc returns)',
 };
 
 /** Default key bindings for all actions. */
@@ -157,6 +159,8 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   // is paste and stays paste). Two presses rather than a hold: see the action's
   // description, a terminal has no key-release event to hold against.
   'voice-input':           [{ key: 'v', alt: true }],
+  // Alt+Up and Ctrl+Up: into the work tree from the composer (plain Up keeps input history).
+  'focus-work-tree':       [{ key: 'up', alt: true }, { key: 'up', ctrl: true }],
 };
 
 /** Resolved overrides type: each key can be a single combo or array. */

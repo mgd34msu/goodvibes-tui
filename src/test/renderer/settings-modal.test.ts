@@ -126,8 +126,8 @@ describe('renderSettingsModal', () => {
   test('category rail shows the active category count right-aligned', () => {
     const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
-    // 9 = the SDK's 9 display.* CONFIG_SCHEMA keys (display.themeMode included).
-    expect(texts).toMatch(/Display +9/);
+    // 10 = the SDK's 10 display.* CONFIG_SCHEMA keys (display.themeMode and display.treeGlyphs included).
+    expect(texts).toMatch(/Display +10/);
   });
 
   test('category rail is grouped and opens with category focus', () => {
@@ -141,7 +141,7 @@ describe('renderSettingsModal', () => {
     const interfaceIndex = lineToString(interfaceLine!).indexOf('interface');
     expect(interfaceLine![interfaceIndex]?.bold).toBe(true);
     // The focused category is the selected (gradient, bold, dark text) row.
-    const displayLine = lines.find(line => /Display +9/.test(lineToString(line)))!;
+    const displayLine = lines.find(line => /Display +10/.test(lineToString(line)))!;
     const displayCell = displayLine[lineToString(displayLine).indexOf('Display')]!;
     expect(displayCell.bold).toBe(true);
     expect(displayCell.fg).toBe(activeTokens().selectedListItemText);

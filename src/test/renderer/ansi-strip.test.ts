@@ -3,7 +3,7 @@
  *
  * Covers:
  * - stripDangerousAnsi() unit: all dangerous ANSI categories stripped, SGR preserved
- * - renderToolCallBlock() integration: tool arg / error / summary fields are sanitized
+ * - beadRow() integration: tool arg / error / summary fields are sanitized
  *
  * Finding status: PARTIAL
  * The writeStyledText() loop in tool-call.ts incidentally drops ESC (\x1b, display
@@ -13,8 +13,15 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { stripDangerousAnsi } from '../../renderer/ansi-sanitize.ts';
-import { renderToolCallBlock } from '../../renderer/tool-call.ts';
-import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
+import { logConversationToolResult } from '../../core/conversation-rendering.ts';
+
+/** One bead row for a finished call, drawn the way the work tree draws it. */
+function beadRow(call: ToolCall, status: 'done' | 'error', summary: string | undefined, width: number, durationMs = 0, errorMsg?: string): Line[] {
+  const lines: Line[] = [];
+  logConversationToolResult({ history: { addLine: (l) => { lines.push(l); }, addLines: (ls) => { lines.push(...ls); }, getLineCount: () => lines.length } }, width, call, status, summary ?? '', durationMs, errorMsg);
+  return lines;
+}
+import type { Line, ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { lineToString } from '../setup.ts';
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -169,9 +176,9 @@ describe('stripDangerousAnsi', () => {
   });
 });
 
-// ─── renderToolCallBlock integration tests ────────────────────────────────────
+// ─── bead row integration tests ────────────────────────────────────
 
-describe('renderToolCallBlock ANSI sanitization', () => {
+describe('bead row ANSI sanitization', () => {
   /**
    * Collect printable cell text from rendered lines, excluding NUL padding.
    * Escape sequences should never appear in rendered output.
@@ -200,7 +207,7 @@ describe('renderToolCallBlock ANSI sanitization', () => {
       name: 'read_file',
       arguments: { path: '/tmp/\x1b[2Amalicious' },
     };
-    const lines = renderToolCallBlock(toolCall, 'done', undefined, 80);
+    const lines = beadRow(toolCall, 'done', undefined, 80);
     const text = collectText(lines);
     assertNoEscapes(text);
     // The printable payload still renders (the path without the escape)
@@ -214,7 +221,7 @@ describe('renderToolCallBlock ANSI sanitization', () => {
       name: 'web_search',
       arguments: { query: 'normal\x1b]0;evil\x07query' },
     };
-    const lines = renderToolCallBlock(toolCall, 'done', undefined, 80);
+    const lines = beadRow(toolCall, 'done', undefined, 80);
     const text = collectText(lines);
     assertNoEscapes(text);
     expect(text).toContain('normal');
@@ -227,7 +234,7 @@ describe('renderToolCallBlock ANSI sanitization', () => {
       name: 'exec',
       arguments: { cmd: 'ls' },
     };
-    const lines = renderToolCallBlock(toolCall, 'error', undefined, 80, undefined, 'failed\x07beep');
+    const lines = beadRow(toolCall, 'error', undefined, 80, undefined, 'failed\x07beep');
     const text = collectText(lines);
     assertNoEscapes(text);
     expect(text).toContain('failed');
@@ -239,7 +246,7 @@ describe('renderToolCallBlock ANSI sanitization', () => {
       name: 'exec',
       arguments: { cmd: 'ls' },
     };
-    const lines = renderToolCallBlock(toolCall, 'done', '3 files\x1b[?1049h', 80, 100);
+    const lines = beadRow(toolCall, 'done', '3 files\x1b[?1049h', 80, 100);
     const text = collectText(lines);
     assertNoEscapes(text);
     expect(text).toContain('3 files');
@@ -251,7 +258,7 @@ describe('renderToolCallBlock ANSI sanitization', () => {
       name: 'exec',
       arguments: { cmd: 'echo\x1b[?25l hello' },
     };
-    const lines = renderToolCallBlock(toolCall, 'done', undefined, 80);
+    const lines = beadRow(toolCall, 'done', undefined, 80);
     const text = collectText(lines);
     assertNoEscapes(text);
     expect(text).toContain('echo');

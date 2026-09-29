@@ -5,8 +5,8 @@ import { voiceCaptureRowVisible, type VoiceCaptureIndicatorState } from '../core
 import { activeTokens, activeUiTones } from './theme.ts';
 import { permissionModeLabel } from '../core/permission-mode.ts';
 import { SLEEP_DISABLED_CHIP } from '../core/power-status.ts';
-import { renderComposer, COMPOSER_FIXED_ROWS, type ComposerChip } from './composer.ts';
-import { renderStatusLine, type StatusBusyState } from './status-line.ts';
+import { renderComposer, COMPOSER_FIXED_ROWS } from './composer.ts';
+import { renderStatusLine, type StatusBusyState, type StatusChip } from './status-line.ts';
 import { voiceCaptureChip } from './voice-capture-chip.ts';
 import { tagFooterLine } from './footer-targets.ts';
 
@@ -15,16 +15,25 @@ import { tagFooterLine } from './footer-targets.ts';
  * (retry affordance, context pressure, the scriptable status line) when they
  * have something to say, then the composer, then the one-row status line.
  *
- * At rest that is 6 rows (composer 5 + status 1). Token totals, the per-turn
- * history, tool count, notification mode, the session spine and the web
- * surface address live in the Usage modal and /status, not on the main screen.
- * What stays always visible is safety: the auto-approve warning, the live
- * microphone, the sleep-disabled chip, the failover marker (composer inner
- * row) and the compaction-pressure hint (a hint row above the composer).
+ * At rest that is 4 rows (composer 3 + status 1); with the header, the
+ * resting chrome is 5 rows. The composer holds only input. Token totals, the
+ * per-turn history, tool count, notification mode, the session spine and the
+ * web surface address live in the Usage modal and /status, not on the main
+ * screen. What stays always visible is safety: the approval mode and the
+ * auto-approve warning, the live microphone and the sleep-disabled chip (the
+ * left end of the status line), the failover marker (the header, after the
+ * model) and the compaction-pressure hint (a hint row above the composer).
  */
+
+/** The work tree's keys, shown on the status line while the keyboard is in it. */
+const WORK_TREE_KEYS: ReadonlyArray<readonly [string, string]> = [
+  ['↑↓', 'move between beads'], ['←→', 'fold / unfold'], ['enter', 'open'], ['y', 'copy'], ['esc', 'back to typing'],
+];
 
 export interface ShellFooterBuildOptions {
   readonly width: number;
+  /** The keyboard is in the conversation work tree: the status line shows its keys. */
+  readonly workTreeFocused?: boolean;
   readonly promptText: string;
   readonly promptLineCount: number;
   readonly promptCursorPos?: number;
@@ -32,17 +41,11 @@ export interface ShellFooterBuildOptions {
   readonly usage: { up: number; down: number; cacheRead?: number; cacheWrite?: number; fleetCostUsd?: number | null };
   readonly showExitNotice: boolean;
   readonly lastCopyTime: number;
+  /** The model the session cost is priced against; not drawn (the header names the model). */
   readonly model?: string;
-  /**
-   * Divergence marker shown after the model while the serving backend is not
-   * the user's configured selection (core/active-model-identity.ts), e.g.
-   * "failover from abacusai:route-llm". Absent/empty in the normal case.
-   */
-  readonly modelNote?: string;
   readonly workingDir?: string;
   /** The current branch (and dirty marker), shown beside the directory at rest. */
   readonly branch?: string;
-  readonly provider?: string;
   readonly contextWindow?: number;
   readonly compactThreshold?: number;
   readonly dangerMode?: boolean;
@@ -56,8 +59,8 @@ export interface ShellFooterBuildOptions {
   readonly composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote';
   /**
    * Current session permission mode (config value: 'prompt' | 'allow-all' |
-   * 'custom' | 'plan' | 'accept-edits'). Names the composer's mode and colors
-   * its bar. Cycled by Shift+Tab and toggled by /plan.
+   * 'custom' | 'plan' | 'accept-edits'). Named by the status line's mode chip
+   * and colors the composer's bar. Cycled by Shift+Tab and toggled by /plan.
    */
   readonly permissionMode?: string;
   /** Passive context pressure hint from buildContextStatusHint, a row above the composer. */
@@ -118,19 +121,36 @@ export function estimateShellFooterHeight(promptLineCount: number): number {
   return COMPOSER_FIXED_ROWS + Math.max(1, promptLineCount) + STATUS_ROWS;
 }
 
-/** The composer's mode label and bar color. */
-function composerModeStyle(permissionMode: string | undefined, shell: boolean): { label: string; color: string } {
+/** The composer's bar color: the session mode, or shell while a shell command is typed. */
+function composerBarColor(permissionMode: string | undefined, shell: boolean): string {
   const t = activeTokens();
-  if (shell) return { label: 'shell', color: t.accent };
+  if (shell) return t.accent;
   switch (permissionMode) {
-    case 'plan': return { label: 'plan', color: t.info };
+    case 'plan': return t.info;
     case 'accept-edits':
     case 'allow-all':
     case 'custom':
-      return { label: permissionModeLabel(permissionMode), color: t.warning };
+      return t.warning;
     default:
-      return { label: permissionModeLabel(permissionMode), color: t.brand };
+      return t.brand;
   }
+}
+
+/**
+ * The status line's mode chip: the approval mode (muted; plan in the info
+ * color), or "! auto-approve" in the error color while everything is
+ * auto-approved. While the warning shows, only plan keeps its name beside it
+ * (a read-only posture still worth knowing); "normal" or "auto" next to it
+ * would only repeat or contradict it.
+ */
+function modeChips(permissionMode: string | undefined, dangerMode: boolean): StatusChip[] {
+  const t = activeTokens();
+  const chips: StatusChip[] = [];
+  if (!dangerMode || permissionMode === 'plan') {
+    chips.push({ text: permissionModeLabel(permissionMode), fg: permissionMode === 'plan' ? t.info : t.textMuted, bold: permissionMode === 'plan', keep: true });
+  }
+  if (dangerMode) chips.push({ text: '! auto-approve', fg: t.error, bold: true, keep: true });
+  return chips;
 }
 
 /** Format a USD amount with a precision that suits its magnitude. */
@@ -169,14 +189,6 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
   if (options.scriptableStatusLine) lines.push(UIFactory.stringToLine(`   ${options.scriptableStatusLine}`, options.width, { fg: t.textMuted }));
 
   const focused = options.promptFocused ?? !options.indicatorFocused;
-  const mode = composerModeStyle(options.permissionMode, options.composerPendingRisk === 'shell');
-  const chips: ComposerChip[] = [];
-  if (options.dangerMode) chips.push({ text: '! auto-approve', fg: t.error, bold: true, keep: true });
-  const voice = options.voiceCapture ?? null;
-  if (voice && voiceCaptureRowVisible(voice)) chips.push(voiceCaptureChip(voice));
-  if (options.powerKeepAwake) chips.push({ text: SLEEP_DISABLED_CHIP, fg: t.warning, bold: true, keep: true });
-  // The chips are listed right to left in priority; draw them left to right.
-  chips.reverse();
   lines.push(...renderComposer({
     width: options.width,
     promptText: options.promptText,
@@ -184,26 +196,32 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
     focused,
     unfocusedHint: 'Esc returns to the composer',
     argsHint: options.commandArgsHint,
-    modeLabel: mode.label,
-    modeColor: mode.color,
-    model: options.model,
-    provider: options.provider,
-    modelNote: options.modelNote,
-    // An orchestration request leaves this terminal: its flag carries the remote color.
-    flags: (options.composerFlags ?? []).filter((f) => f !== 'shell').map((f) => (
-      f === 'orchestration' && options.composerPendingRisk === 'remote' ? { text: f, fg: activeUiTones().chrome.remote } : f
-    )),
-    chips,
+    modeColor: composerBarColor(options.permissionMode, options.composerPendingRisk === 'shell'),
   }));
+
+  // The left end of the status line: mode, auto-approve, microphone and
+  // sleep are kept at any width; the composer flags are dropped first.
+  const chips: StatusChip[] = modeChips(options.permissionMode, options.dangerMode === true);
+  const voice = options.voiceCapture ?? null;
+  if (voice && voiceCaptureRowVisible(voice)) chips.push(voiceCaptureChip(voice));
+  if (options.powerKeepAwake) chips.push({ text: SLEEP_DISABLED_CHIP, fg: t.warning, bold: true, keep: true });
+  for (const flag of options.composerFlags ?? []) {
+    if (flag === 'shell') continue; // the bar's accent color says shell
+    // An orchestration request leaves this terminal: its flag carries the remote color.
+    const remote = flag === 'orchestration' && options.composerPendingRisk === 'remote';
+    chips.push({ text: flag, fg: remote ? activeUiTones().chrome.remote : t.textFaint, bold: remote });
+  }
 
   const copied = Date.now() - options.lastCopyTime < 2000;
   // A click anywhere on the status line (the context bar, the cost) opens Usage.
   lines.push(tagFooterLine(renderStatusLine({
     width: options.width,
+    chips,
     notice: options.showExitNotice
       ? { text: 'Press Ctrl+C again to exit', tone: 'error' }
       : copied ? { text: 'Copied', tone: 'info' } : null,
     busy: options.busy ?? null,
+    keys: options.workTreeFocused ? WORK_TREE_KEYS : null,
     directory: displayDirectory(options.workingDir),
     branch: options.branch,
     background: {

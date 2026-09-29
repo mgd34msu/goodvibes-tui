@@ -93,12 +93,12 @@ describe('ConversationManager: collapse state', () => {
     expect(result).toBe(-1);
   });
 
-  test('short tool results are not auto-collapsed', () => {
+  test('short tool results start closed too: a bead shows no result rows until it is opened', () => {
     cm.addUserMessage('run something');
     cm.addToolResults([{ callId: 'c2', success: true, output: 'short result' }]);
     cm.getDisplayBlocks();
 
-    expect(cm.isCollapsed(0)).toBe(false);
+    expect(cm.isCollapsed(0)).toBe(true);
   });
 });
 

@@ -146,7 +146,7 @@ export class SearchManager {
           // attempt to reveal a header-corpus hit, since there is no single
           // member to isolate it to.
           const headerHits = countOccurrences(block.rawContent.toLowerCase(), lowerQuery);
-          const allKeys = [block.collapseKey, ...block.groupMemberIndexes.map((idx) => `msg_${idx}`)];
+          const allKeys = [block.collapseKey, ...block.groupMemberIndexes.map((idx, k) => block.groupMemberKeys?.[k] ?? `msg_${idx}`)];
           for (let i = 0; i < headerHits; i++) {
             hiddenMatches.push({
               line: block.startLine, col: 0, length: query.length,
@@ -159,10 +159,10 @@ export class SearchManager {
             // whole message array and search() runs on every keystroke, so a
             // per-member read would stall typing outright.
             const snapshot = conversationManager.getMessageSnapshot();
-            for (const memberIdx of block.groupMemberIndexes) {
+            for (const [k, memberIdx] of block.groupMemberIndexes.entries()) {
               const content = snapshot[memberIdx]?.content;
               if (typeof content !== 'string') continue;
-              const memberKey = `msg_${memberIdx}`;
+              const memberKey = block.groupMemberKeys?.[k] ?? `msg_${memberIdx}`;
               const memberHits = countOccurrences(content.toLowerCase(), lowerQuery);
               for (let i = 0; i < memberHits; i++) {
                 hiddenMatches.push({

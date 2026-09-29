@@ -16,7 +16,7 @@ const PRICED_MODEL = 'claude-opus-4-6'; // real catalog pricing
 function footerText(usage: { up: number; down: number; fleetCostUsd?: number | null }): string {
   return linesToText(buildShellFooter({
     width: W, promptText: 'prompt', promptLineCount: 1, usage, showExitNotice: false, lastCopyTime: 0,
-    model: PRICED_MODEL, workingDir: '/proj', provider: 'anthropic', contextWindow: 0,
+    model: PRICED_MODEL, workingDir: '/proj', contextWindow: 0,
     runningAgentCount: 0, runningProcessCount: 0, indicatorFocused: false,
   }).lines).join('\n');
 }

@@ -75,9 +75,12 @@ export interface ChangesModalView {
   readonly scrollOwner: object;
 }
 
-const GUTTER = 5;
+/** Width of the line-number gutter inside a diff panel. */
+const DIFF_GUTTER = 5;
+const GUTTER = DIFF_GUTTER;
 
-type DiffRow =
+/** One drawn row of a diff: a file header, a hunk separator, or a (wrapped) code line. */
+export type DiffRow =
   | { readonly kind: 'file'; readonly text: string }
   | { readonly kind: 'sep'; readonly hunk: number; readonly text: string }
   | { readonly kind: 'line'; readonly hunk: number; readonly line: ChangeLine; readonly first: boolean; readonly text: string; readonly tokens: ReadonlyArray<{ text: string; fg: string; bold?: boolean; italic?: boolean }> | null };
@@ -118,12 +121,21 @@ function wrapTokens(tokens: ReadonlyArray<{ text: string; fg: string; bold?: boo
 }
 
 function buildRows(view: ChangesModalView, codeWidth: number): { rows: DiffRow[]; hunkStarts: number[] } {
+  return buildDiffRows(view.diffFiles, codeWidth, view.fileHeaders);
+}
+
+/**
+ * The rows a diff draws as, code wrapped to `codeWidth` under its own gutter.
+ * Shared with the conversation work tree, which draws an opened edit with the
+ * same rows (lane-graph/paint.ts).
+ */
+export function buildDiffRows(diffFiles: readonly ChangeFile[], codeWidth: number, fileHeaders: boolean): { rows: DiffRow[]; hunkStarts: number[] } {
   const rows: DiffRow[] = [];
   const hunkStarts: number[] = [];
   let hunkNo = 0;
-  const total = view.diffFiles.reduce((n, f) => n + f.hunks.length, 0);
-  for (const file of view.diffFiles) {
-    if (view.fileHeaders) rows.push({ kind: 'file', text: `${file.path}  +${file.added} −${file.removed}` });
+  const total = diffFiles.reduce((n, f) => n + f.hunks.length, 0);
+  for (const file of diffFiles) {
+    if (fileHeaders) rows.push({ kind: 'file', text: `${file.path}  +${file.added} −${file.removed}` });
     if (file.headerOnly) {
       rows.push({ kind: 'file', text: file.headerLines.some((l) => l.startsWith('Binary')) ? 'binary file, no line changes to show' : 'no line changes (mode or rename only)' });
       continue;
@@ -146,7 +158,13 @@ function buildRows(view: ChangesModalView, codeWidth: number): { rows: DiffRow[]
   return { rows, hunkStarts };
 }
 
-function drawDiffRow(canvas: SurfaceCanvas, p: KitPanel, y: number, row: DiffRow, selectedHunk: number): void {
+/**
+ * Draw one diff row inside panel `p`: the change tint across the row, a
+ * separate tint on the line-number gutter, the number, the sign and the
+ * syntax-colored code. `lineNumbers: false` leaves the numbers out (a diff
+ * whose line numbers are not known).
+ */
+export function drawDiffRow(canvas: SurfaceCanvas, p: KitPanel, y: number, row: DiffRow, selectedHunk: number, options: { readonly lineNumbers?: boolean } = {}): void {
   const t = activeTokens();
   if (row.kind === 'file') {
     canvas.put(p.l, y, clipText(row.text, p.r - p.l + 1), { fg: t.text, bold: true, bg: p.bg });
@@ -170,7 +188,7 @@ function drawDiffRow(canvas: SurfaceCanvas, p: KitPanel, y: number, row: DiffRow
   }
   if (row.first) {
     const n = line.kind === 'del' ? line.oldNo : line.newNo;
-    if (n !== null) canvas.right(gutterEnd, y, String(n).slice(-GUTTER), { fg: t.diffLineNumber });
+    if (n !== null && options.lineNumbers !== false) canvas.right(gutterEnd, y, String(n).slice(-GUTTER), { fg: t.diffLineNumber });
     const sign = line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' ';
     canvas.put(gutterEnd + 2, y, sign, { fg: line.kind === 'add' ? tones.add : line.kind === 'del' ? tones.del : t.textFaint });
   }
@@ -178,7 +196,8 @@ function drawDiffRow(canvas: SurfaceCanvas, p: KitPanel, y: number, row: DiffRow
   for (const token of row.tokens ?? []) x = canvas.put(x, y, token.text, { fg: token.fg, bold: token.bold, italic: token.italic });
 }
 
-function semanticChips(diff: SemanticDiff): Array<{ text: string; fg: string }> {
+/** The ◈ summary's chips ("~ fn withRetry", "+ import x"), colored by kind. */
+export function semanticChips(diff: SemanticDiff): Array<{ text: string; fg: string }> {
   const t = activeTokens();
   const chips: Array<{ text: string; fg: string }> = [];
   for (const s of diff.symbols) {

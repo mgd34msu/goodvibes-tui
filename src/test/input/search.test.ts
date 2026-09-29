@@ -443,6 +443,12 @@ describe('SearchManager', () => {
       return { cm, hitMemberIdx: group!.groupMemberIndexes![1] };
     }
 
+    /** The collapse key that reveals a result: its bead (paired in the turn block's lists). */
+    function keyOf(cm: ConversationManager, resultIdx: number): string {
+      const turn = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn')!;
+      return turn.groupMemberKeys![turn.groupMemberIndexes!.indexOf(resultIdx)]!;
+    }
+
     test('the turn is collapsed and its own rawContent is only the summary line', () => {
       const { cm } = buildFoldedToolGroup();
       const group = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
@@ -468,7 +474,7 @@ describe('SearchManager', () => {
 
       expect(sm.matches.length).toBeGreaterThan(0);
       expect(cm.isCollapsed(group!.blockIndex)).toBe(true);
-      expect(cm.getBlockRegistry().some((b) => b.collapseKey.startsWith('msg_'))).toBe(false);
+      expect(cm.getBlockRegistry().some((b) => b.collapseKey.startsWith('bead_'))).toBe(false);
     });
 
     test('revealCurrentMatch() expands the turn AND the hit result (and only that result), landing on the needle line', () => {
@@ -488,14 +494,14 @@ describe('SearchManager', () => {
       expect(cm.isCollapsed(groupAfter!.blockIndex)).toBe(false);
       // The hit member now has a block of its own, and it is expanded, the
       // header alone would have left its content invisible.
-      const member = registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`);
+      const member = registry.find((b) => b.collapseKey === keyOf(cm, hitMemberIdx));
       expect(member).toBeDefined();
       expect(cm.isCollapsed(member!.blockIndex)).toBe(false);
       // Its sibling member (no hit inside it) is left exactly as it was,
       // "exactly that block" expands, not every member indiscriminately. It
       // still has its own (collapsed-by-default) BlockMeta now that the
       // group itself has unfolded.
-      const otherMember = registry.find((b) => b.collapseKey === `msg_${otherMemberIdx}`);
+      const otherMember = registry.find((b) => b.collapseKey === keyOf(cm, otherMemberIdx));
       expect(otherMember).toBeDefined();
       expect(cm.isCollapsed(otherMember!.blockIndex)).toBe(true);
       // The landed line is the real one.
@@ -514,7 +520,7 @@ describe('SearchManager', () => {
 
       let registry = cm.getBlockRegistry();
       expect(cm.isCollapsed(registry.find((b) => b.type === 'assistant_turn')!.blockIndex)).toBe(false);
-      expect(cm.isCollapsed(registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`)!.blockIndex)).toBe(false);
+      expect(cm.isCollapsed(registry.find((b) => b.collapseKey === keyOf(cm, hitMemberIdx))!.blockIndex)).toBe(false);
 
       sm.close(cm);
       cm.getDisplayBlocks();
@@ -525,7 +531,7 @@ describe('SearchManager', () => {
       expect(cm.isCollapsed(groupAfter!.blockIndex)).toBe(true);
       // The member no longer materializes its own BlockMeta, folded again
       // right along with its group, exactly as it was before search opened.
-      expect(registry.some((b) => b.collapseKey === `msg_${hitMemberIdx}`)).toBe(false);
+      expect(registry.some((b) => b.collapseKey === keyOf(cm, hitMemberIdx))).toBe(false);
     });
 
     test('a needle present nowhere finds nothing and expands nothing', () => {
@@ -539,7 +545,7 @@ describe('SearchManager', () => {
       const registry = cm.getBlockRegistry();
       expect(cm.isCollapsed(group!.blockIndex)).toBe(true);
       // No member materialized, the fold is untouched.
-      expect(registry.some((b) => b.collapseKey.startsWith('msg_'))).toBe(false);
+      expect(registry.some((b) => b.collapseKey.startsWith('bead_'))).toBe(false);
     });
 
     test('a turn whose results are already expanded still matches, and search never touches its collapse state', () => {
@@ -547,7 +553,7 @@ describe('SearchManager', () => {
       const group = cm.getBlockRegistry().find((b) => b.type === 'assistant_turn');
       cm.setCollapsed(group!.collapseKey, false);
       for (const memberIdx of group!.groupMemberIndexes!) {
-        cm.setCollapsed(`msg_${memberIdx}`, false);
+        cm.setCollapsed(keyOf(cm, memberIdx), false);
       }
       cm.getDisplayBlocks();
 
@@ -559,7 +565,7 @@ describe('SearchManager', () => {
       expect(sm.matches.length).toBeGreaterThan(0);
       const registry = cm.getBlockRegistry();
       expect(cm.isCollapsed(registry.find((b) => b.type === 'assistant_turn')!.blockIndex)).toBe(false);
-      expect(cm.isCollapsed(registry.find((b) => b.collapseKey === `msg_${hitMemberIdx}`)!.blockIndex)).toBe(false);
+      expect(cm.isCollapsed(registry.find((b) => b.collapseKey === keyOf(cm, hitMemberIdx))!.blockIndex)).toBe(false);
     });
 
     test('result indexes that outlived their messages are skipped, not thrown on', () => {

@@ -53,10 +53,7 @@ import { renderCodeBlock } from '../../renderer/code-block.ts';
 import { renderThinkingBlock } from '../../renderer/thinking.ts';
 import {
   addConversationSplashScreen,
-  renderConversationAssistantMessage,
-  renderConversationToolMessage,
 } from '../../core/conversation-rendering.ts';
-import type { AssistantTurnMembership } from '../../core/conversation-turn-structure.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
 import { renderHelpOverlay, renderShortcutsOverlay } from '../../renderer/help-overlay.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
@@ -346,7 +343,6 @@ function renderShellFooterSurface(): Line[] {
     model: 'claude-opus-4',
     workingDir: '/workspace/my-project',
     branch: 'main',
-    provider: 'anthropic',
     contextWindow: 0,
     runningAgentCount: 0,
     runningProcessCount: 0,
@@ -372,7 +368,6 @@ function renderContextMeterSurface(): Line[] {
     model: 'claude-opus-4',
     workingDir: '/workspace/my-project',
     branch: 'main',
-    provider: 'anthropic',
     contextWindow: 100_000,
     compactThreshold: 0.80,
     lastInputTokens: 60_000,
@@ -643,236 +638,10 @@ describe('golden-frames : splash (constraint 4)', () => {
 });
 
 // ─── 6. Conversation transcript scenes ─────────────────────────────────────
-
-/**
- * Minimal fake ConversationRenderContext-shaped object for calling the real
- * renderConversationToolMessage/renderConversationUserMessage functions
- * directly. Only the fields those two functions actually read are needed.
- */
-function makeToolRenderContext(
-  collapseState: Map<string, boolean> = new Map(),
-  assistantTurns?: ReadonlyMap<number, AssistantTurnMembership>,
-): {
-  context: unknown;
-  lines: Line[];
-} {
-  const lines: Line[] = [];
-  const context = {
-    history: {
-      addLine: (l: Line) => { lines.push(l); },
-      addLines: (ls: Line[]) => { lines.push(...ls); },
-      getLineCount: () => lines.length,
-    },
-    blockRegistry: [],
-    collapseState,
-    errorLineRegistry: [],
-    messageKindRegistry: new Map(),
-    configManager: null,
-    splashOptions: {},
-    assistantTurns,
-  };
-  return { context, lines };
-}
-
-const PLAIN_TOOL_RESULT = {
-  role: 'tool' as const,
-  callId: 'call-golden-plain-01',
-  toolName: 'read',
-  content: 'File contents:\n  1  export const x = 1;\n  2  export const y = 2;',
-};
-
-// Deliberately > 200 chars so the default isShort-based auto-expand does not
-// kick in, this exercises the real default-collapsed path.
-const DIFF_TOOL_RESULT_CONTENT = [
-  '--- a/src/example.ts',
-  '+++ b/src/example.ts',
-  '@@ -1,5 +1,6 @@',
-  ' export function add(a: number, b: number): number {',
-  '-  return a + b;',
-  '+  // Guard against non-finite inputs before summing.',
-  '+  return Number.isFinite(a) && Number.isFinite(b) ? a + b : NaN;',
-  ' }',
-  ' ',
-  '-export const VERSION = 1;',
-  '+export const VERSION = 2;',
-  '+export const BUILD = "golden-fixture";',
-].join('\n');
-
-const DIFF_TOOL_RESULT = {
-  role: 'tool' as const,
-  callId: 'call-golden-diff-01',
-  toolName: 'apply_patch',
-  content: DIFF_TOOL_RESULT_CONTENT,
-};
-
-function renderToolResultPlainSurface(): Line[] {
-  const { context, lines } = makeToolRenderContext();
-  renderConversationToolMessage(context as never, PLAIN_TOOL_RESULT, NORMAL_W, 0);
-  return lines;
-}
-
-function renderToolResultDiffCollapsedSurface(): Line[] {
-  // Fresh collapseState: renderConversationToolMessage defaults long content
-  // to collapsed on first render (isShort ? false : true).
-  const { context, lines } = makeToolRenderContext(new Map());
-  renderConversationToolMessage(context as never, DIFF_TOOL_RESULT, NORMAL_W, 0);
-  return lines;
-}
-
-function renderToolResultDiffExpandedSurface(): Line[] {
-  // collapseKey is `msg_${msgIdx}`, pre-seed it to false (expanded).
-  const collapseState = new Map<string, boolean>([['msg_0', false]]);
-  const { context, lines } = makeToolRenderContext(collapseState);
-  renderConversationToolMessage(context as never, DIFF_TOOL_RESULT, NORMAL_W, 0);
-  return lines;
-}
-
-describe('golden-frames : conversation: tool result (plain)', () => {
-  test('matches committed golden snapshot', () => {
-    const lines = renderToolResultPlainSurface();
-    expect(lines.length).toBeGreaterThan(0);
-    assertGolden('tool-result-plain', lines);
-  });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('tool-result-plain', renderToolResultPlainSurface());
-    const b = snapshotEncode('tool-result-plain', renderToolResultPlainSurface());
-    expect(a).toBe(b);
-  });
-});
-
-describe('golden-frames : conversation: tool result (diff, collapsed)', () => {
-  test('matches committed golden snapshot', () => {
-    const lines = renderToolResultDiffCollapsedSurface();
-    expect(lines.length).toBeGreaterThan(0);
-    assertGolden('tool-result-diff-collapsed', lines);
-  });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('tool-result-diff-collapsed', renderToolResultDiffCollapsedSurface());
-    const b = snapshotEncode('tool-result-diff-collapsed', renderToolResultDiffCollapsedSurface());
-    expect(a).toBe(b);
-  });
-});
-
-describe('golden-frames : conversation: tool result (diff, expanded)', () => {
-  test('matches committed golden snapshot', () => {
-    const lines = renderToolResultDiffExpandedSurface();
-    expect(lines.length).toBeGreaterThan(0);
-    assertGolden('tool-result-diff-expanded', lines);
-  });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('tool-result-diff-expanded', renderToolResultDiffExpandedSurface());
-    const b = snapshotEncode('tool-result-diff-expanded', renderToolResultDiffExpandedSurface());
-    expect(a).toBe(b);
-  });
-});
-
-// Folded tool-result group, a run of >=2 consecutive tool-result messages
-// sharing one assistant turn, consolidated under one collapsible header (see
-// conversation-turn-structure.ts). Both messages are rendered through the real
-// renderConversationToolMessage, with a hand-built membership map standing in
-// for what computeAssistantTurnMembership would have produced for this pair.
-const GROUP_TOOL_RESULT_A = {
-  role: 'tool' as const,
-  callId: 'call-golden-group-01',
-  toolName: 'read',
-  content: 'File contents:\n  1  export const x = 1;',
-};
-const GROUP_TOOL_RESULT_B = {
-  role: 'tool' as const,
-  callId: 'call-golden-group-02',
-  toolName: 'write',
-  content: 'Wrote 3 lines to output.ts',
-};
-// Both results belong to one assistant turn. Unlike the retired folded-group
-// model, turns default to EXPANDED, collapsing must never hide prose, so the
-// collapsed surface below sets the turn key explicitly rather than relying on
-// a default.
-const TURN_MEMBER = {
-  turnKey: 'turn_0',
-  headIdx: 0,
-  isHead: false,
-  toolCallCount: 2,
-  sharedToolLabel: undefined,
-  hasReasoning: false,
-  memberIndexes: [0],
-  resultIndexes: [0, 1],
-} as const;
-const GROUP_MEMBERSHIP = new Map<number, AssistantTurnMembership>([
-  [0, { ...TURN_MEMBER }],
-  [1, { ...TURN_MEMBER }],
-]);
-
-/** The assistant message that owns the turn, it renders the header the
- *  collapsed surface is actually about. */
-const TURN_HEAD_MESSAGE = {
-  role: 'assistant' as const,
-  content: '',
-  model: 'test-model',
-  provider: 'testprov',
-  toolCalls: [
-    { id: 'call-a', name: 'read', arguments: {} },
-    { id: 'call-b', name: 'write', arguments: {} },
-  ],
-};
-const TURN_HEAD_MEMBERSHIP = new Map<number, AssistantTurnMembership>([
-  [0, { ...TURN_MEMBER, isHead: true }],
-]);
-
-function renderToolGroupCollapsedSurface(): Line[] {
-  // A collapsed turn is header-only: the header states what is hidden, and no
-  // result row renders. Rendering the head here (not just the results) is what
-  // makes this golden capture the surface a user actually sees.
-  const collapseState = new Map<string, boolean>([['turn_0', true]]);
-  const { context, lines } = makeToolRenderContext(collapseState, TURN_HEAD_MEMBERSHIP);
-  renderConversationAssistantMessage(context as never, TURN_HEAD_MESSAGE as never, NORMAL_W, 'off', 30, 0);
-  const withResults = makeToolRenderContext(collapseState, GROUP_MEMBERSHIP);
-  renderConversationToolMessage(withResults.context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
-  renderConversationToolMessage(withResults.context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
-  lines.push(...withResults.lines);
-  return lines;
-}
-
-function renderToolGroupExpandedSurface(): Line[] {
-  const collapseState = new Map<string, boolean>([['turn_0', false]]);
-  const { context, lines } = makeToolRenderContext(collapseState, GROUP_MEMBERSHIP);
-  renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
-  renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
-  return lines;
-}
-
-describe('golden-frames : conversation: assistant turn (collapsed)', () => {
-  test('matches committed golden snapshot', () => {
-    const lines = renderToolGroupCollapsedSurface();
-    expect(lines.length).toBeGreaterThan(0);
-    assertGolden('tool-group-collapsed', lines);
-  });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('tool-group-collapsed', renderToolGroupCollapsedSurface());
-    const b = snapshotEncode('tool-group-collapsed', renderToolGroupCollapsedSurface());
-    expect(a).toBe(b);
-  });
-  test('a collapsed turn hides every result row it owns', () => {
-    const { context, lines } = makeToolRenderContext(new Map([['turn_0', true]]), GROUP_MEMBERSHIP);
-    renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_A, NORMAL_W, 0);
-    renderConversationToolMessage(context as never, GROUP_TOOL_RESULT_B, NORMAL_W, 1);
-    // Neither result emits anything: the turn header (rendered by the
-    // assistant message, not here) is the whole visible representation.
-    expect(lines.length).toBe(0);
-  });
-});
-
-describe('golden-frames : conversation: assistant turn (expanded)', () => {
-  test('matches committed golden snapshot', () => {
-    const lines = renderToolGroupExpandedSurface();
-    expect(lines.length).toBeGreaterThan(0);
-    assertGolden('tool-group-expanded', lines);
-  });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('tool-group-expanded', renderToolGroupExpandedSurface());
-    const b = snapshotEncode('tool-group-expanded', renderToolGroupExpandedSurface());
-    expect(a).toBe(b);
-  });
-});
+//
+// Tool calls, their results and agent lanes render as the lane-graph work
+// tree; its scenes (single lane, opened beads, lanes, nesting, states, folded
+// lanes, every glyph set) are golden-framed in golden-frames-work-tree.test.ts.
 
 // Fenced code block, regex-fallback tokenizer path. 'yaml' is recognized by
 // code-block.ts's own detectLanguage() (drives the regex tokenizer) but is
@@ -1631,7 +1400,6 @@ function renderShellFooterBusySurface(): Line[] {
     model: 'claude-opus-4',
     workingDir: '/workspace/my-project',
     branch: 'main',
-    provider: 'anthropic',
     contextWindow: 100_000,
     compactThreshold: 0.8,
     lastInputTokens: 70_000,
@@ -1675,7 +1443,6 @@ function renderShellFooterVoiceSurface(indicator: 'statusline' | 'banner'): Line
     model: 'claude-opus-4',
     workingDir: '/workspace/my-project',
     branch: 'main',
-    provider: 'anthropic',
     contextWindow: 0,
     runningAgentCount: 0,
     runningProcessCount: 0,
@@ -1964,15 +1731,14 @@ function renderChromeHeaderFooterSurface(): Line[] {
     model: 'claude-opus-4',
     workingDir: '/workspace/my-project',
     branch: 'main',
-    provider: 'anthropic',
     contextWindow: 100_000,
     compactThreshold: 0.80,
-    dangerMode: true,              // the auto-approve chip, error color
+    dangerMode: true,              // the status line's auto-approve chip, error color
     lastInputTokens: 60_000,
     runningAgentCount: 0,
     runningProcessCount: 0,
     indicatorFocused: false,
-    permissionMode: 'plan',        // info-colored bar
+    permissionMode: 'plan',        // info-colored bar and mode chip
     composerPendingRisk: 'approval-wait',
   }).lines;
   return [...header, ...footer];
@@ -2302,7 +2068,6 @@ function baseFooter(width: number, overrides: Partial<Parameters<typeof buildShe
     model: 'claude-opus-4',
     workingDir: '/workspace/goodvibes-tui',
     branch: 'main',
-    provider: 'anthropic',
     contextWindow: 1_000_000,
     compactThreshold: 0.8,
     lastInputTokens: 340_000,
@@ -2361,7 +2126,7 @@ describe('golden-frames : the main screen', () => {
       if (want.trim()) expect(text).toContain(want);
     }
     // Centered: the blank rows above and below the splash differ by at most one.
-    const body = text.slice(1, 30 - 6);
+    const body = text.slice(1, 30 - 4);
     const first = body.findIndex((r) => r.trim() !== '');
     let last = body.length - 1;
     while (last > first && body[last]!.trim() === '') last--;
@@ -2374,8 +2139,8 @@ describe('golden-frames : the main screen', () => {
     assertGolden('base-screen-80x24', renderBaseScreenSurface(80, 24));
   });
 
-  test('chrome at rest is 7 rows: header 1, composer 5, status line 1', () => {
+  test('chrome at rest is 5 rows: header 1, composer 3, status line 1', () => {
     expect(UIFactory.createHeader(120, 'claude-opus-4')).toHaveLength(1);
-    expect(baseFooter(120)).toHaveLength(6);
+    expect(baseFooter(120)).toHaveLength(4);
   });
 });

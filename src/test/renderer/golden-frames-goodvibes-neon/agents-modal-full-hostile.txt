@@ -7,8 +7,8 @@
 |     agent ·                |
 |     executing-tool         |
 |                            |
-|         expected           |
-|        rows next.          |
+|            expected        |
+|            rows next.      |
 |                            |
 |                            |
 |      s  steer              |

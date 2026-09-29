@@ -21,7 +21,14 @@
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
-import { renderToolCallBlock } from '../../renderer/tool-call.ts';
+import { logConversationToolResult } from '../../core/conversation-rendering.ts';
+
+/** One bead row for a finished call, drawn the way the work tree draws it. */
+function beadRow(call: ToolCall, status: 'done' | 'error', summary: string | undefined, width: number, durationMs = 0, errorMsg?: string): Line[] {
+  const lines: Line[] = [];
+  logConversationToolResult({ history: { addLine: (l) => { lines.push(l); }, addLines: (ls) => { lines.push(...ls); }, getLineCount: () => lines.length } }, width, call, status, summary ?? '', durationMs, errorMsg);
+  return lines;
+}
 import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { renderSystemMessage } from '../../renderer/system-message.ts';
 import { renderThinkingBlock } from '../../renderer/thinking.ts';
@@ -61,8 +68,8 @@ describe('tool-call status glyph flips with themeMode', () => {
   const errorCall: ToolCall = { id: 'c2', name: 'write', arguments: { path: 'src/y.ts' } };
 
   test('done ✓ uses chrome.good: #22c55e dark, #15803d light', () => {
-    const dark = fgSet(renderToolCallBlock(doneCall, 'done', '3 lines', W, 1_500));
-    const light = fgSet(underLight(() => renderToolCallBlock(doneCall, 'done', '3 lines', W, 1_500)));
+    const dark = fgSet(beadRow(doneCall, 'done', '3 lines', W, 1_500));
+    const light = fgSet(underLight(() => beadRow(doneCall, 'done', '3 lines', W, 1_500)));
     expect(dark.has('#22c55e')).toBe(true);
     expect(dark.has('#15803d')).toBe(false);
     expect(light.has('#15803d')).toBe(true);
@@ -70,8 +77,8 @@ describe('tool-call status glyph flips with themeMode', () => {
   });
 
   test('error ✕ + error suffix use chrome.bad: #ef4444 dark, #dc2626 light', () => {
-    const dark = fgSet(renderToolCallBlock(errorCall, 'error', undefined, W, undefined, 'permission denied'));
-    const light = fgSet(underLight(() => renderToolCallBlock(errorCall, 'error', undefined, W, undefined, 'permission denied')));
+    const dark = fgSet(beadRow(errorCall, 'error', undefined, W, undefined, 'permission denied'));
+    const light = fgSet(underLight(() => beadRow(errorCall, 'error', undefined, W, undefined, 'permission denied')));
     expect(dark.has('#ef4444')).toBe(true);
     expect(dark.has('#dc2626')).toBe(false);
     expect(light.has('#dc2626')).toBe(true);
@@ -79,8 +86,8 @@ describe('tool-call status glyph flips with themeMode', () => {
   });
 
   test('dark render is byte-identical across renders (dark-path proof)', () => {
-    const a = renderToolCallBlock(doneCall, 'done', '3 lines', W, 1_500);
-    const b = renderToolCallBlock(doneCall, 'done', '3 lines', W, 1_500);
+    const a = beadRow(doneCall, 'done', '3 lines', W, 1_500);
+    const b = beadRow(doneCall, 'done', '3 lines', W, 1_500);
     expect(fgSet(a)).toEqual(fgSet(b));
   });
 });
@@ -89,7 +96,7 @@ describe('tool-call status glyph flips with themeMode', () => {
 describe('composer remote flag flips with themeMode', () => {
   const footer = (): Line[] => buildShellFooter({
     width: W, promptText: 'Ask me anything', promptLineCount: 1, usage: { up: 1024, down: 512 }, showExitNotice: false, lastCopyTime: 0,
-    model: 'claude-opus-4', provider: 'anthropic', workingDir: '/workspace/my-project', contextWindow: 100_000, compactThreshold: 0.8,
+    model: 'claude-opus-4', workingDir: '/workspace/my-project', contextWindow: 100_000, compactThreshold: 0.8,
     lastInputTokens: 60_000, runningAgentCount: 0, runningProcessCount: 0, indicatorFocused: false,
     composerFlags: ['orchestration'], composerPendingRisk: 'remote', permissionMode: 'plan',
   }).lines;

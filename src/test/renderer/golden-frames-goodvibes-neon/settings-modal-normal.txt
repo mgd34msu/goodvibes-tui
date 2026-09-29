@@ -7,7 +7,7 @@
 |           ▏Search all settings                                                   display           |
 |                                                                                                    |
 |         ✦ interface                                                                                |
-|           Display          9      stream                                          true             |
+|           Display         10      stream                                          true             |
 |           UI               4                                                                       |
 |           Behavior        23      display.stream · default true · boolean · source                 |
 |           Notifications   14      default                                                          |
@@ -25,7 +25,7 @@
 |           engines)                themeMode                                       auto             |
 |                    43 more ↓                                                                       |
 |                                                                                                    |
-|            ↑↓  category    →  settings    tab  pane                             4 more ↓           |
+|            ↑↓  category    →  settings    tab  pane                             5 more ↓           |
 |                                                                                                    |
 |       ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀       |
 |                                                                                                    |
@@ -1250,6 +1250,7 @@
 8 24 bg=#9549ff
 8 25 bg=#9e3dff
 8 26 bg=#a831ff
+8 27 fg=#0f172a
 8 27 bg=#b224ff
 8 28 fg=#0f172a
 8 28 bg=#bc18ff

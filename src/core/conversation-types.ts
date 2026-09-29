@@ -47,4 +47,33 @@ export type BlockMeta = Omit<SdkBlockMeta, 'type'> & {
    * standalone tool results with no recorded name.
    */
   toolName?: string;
+  /**
+   * The collapse key that reveals each entry of groupMemberIndexes (same
+   * order): the bead body the result sits behind (work-tree-model.ts
+   * beadKeyOf). /expand opens them in the same pass that unfolds the turn,
+   * and search reveals a hit by opening exactly its bead.
+   */
+  groupMemberKeys?: readonly string[];
+  /**
+   * The work-tree row this block is, when it is one: 'turn' (a turn header),
+   * 'bead' (a tool call) or 'lane' (an agent lane's spawn or folded row). The
+   * keyboard moves between these rows (see ConversationManager focus methods).
+   */
+  workTree?: {
+    readonly kind: 'turn' | 'bead' | 'lane';
+    /** Focus identity, stable across rebuilds. */
+    readonly id: string;
+    /** The bead has a body to open (then ▸ shows). */
+    readonly hasBody: boolean;
+    /** The body is open. */
+    readonly open: boolean;
+    /** The body shows its first rows only ("… N more"). */
+    readonly capped: boolean;
+    /** Collapse key of the body's "… N more" (bead only). */
+    readonly moreKey?: string;
+    /** Whether the lane has finished (lane only). */
+    readonly finished?: boolean;
+    /** The lane this row sits on (bead rows inside an agent lane carry that lane's collapse key). */
+    readonly laneKey?: string;
+  };
 };

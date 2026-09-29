@@ -41,10 +41,11 @@ export class UIFactory {
    * The header row, see header-line.ts. `model` is the SERVING backend
    * resolved by core/active-model-identity.ts. `version` defaults to the live
    * build VERSION; tests pass a pinned fixture so golden snapshots don't break
-   * on every release bump.
+   * on every release bump. `modelNote` is the failover marker drawn after the
+   * model while serving differs from the configured selection.
    */
-  public static createHeader(width: number, model: string, title?: string, gitInfo?: GitHeaderInfo, version: string = VERSION): Line[] {
-    return renderHeaderLine(width, model, title, gitInfo, version);
+  public static createHeader(width: number, model: string, title?: string, gitInfo?: GitHeaderInfo, version: string = VERSION, modelNote?: string): Line[] {
+    return renderHeaderLine(width, model, title, gitInfo, version, modelNote);
   }
 
   /**

@@ -3,7 +3,6 @@ import {
   appendConversationMessages,
   type ConversationRenderContext,
 } from '../../core/conversation-rendering.ts';
-import { renderToolCallBlock } from '../../renderer/tool-call.ts';
 import { createCancelToolCall, type ToolCancelOrchestrator } from '../../core/turn-cancellation.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
@@ -41,63 +40,43 @@ const renderMessages = (messages: unknown[], width = 80): string => {
   return lines.map(lineToString).join('\n');
 };
 
-const blockText = (width: number): string =>
-  renderToolCallBlock({ id: 'c1', name: 'exec', arguments: { command: 'sleep 100' } }, 'cancelled', undefined, width)
-    .map(lineToString)
-    .join('\n');
+// A cancelled call, as the transcript holds it: the call, then the SDK's
+// structured cancelled result with whatever partial output the tool produced.
+const cancelledTurn = (partial: string): unknown[] => [
+  { role: 'user', content: 'run it' },
+  { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'exec', arguments: { command: 'sleep 100' } }] },
+  { role: 'tool', callId: 'c1', content: `Error: cancelled by user\n${partial}`, toolName: 'exec' },
+];
 
-describe('renderToolCallBlock cancelled status (STEP 2a)', () => {
-  test('renders the cancelled marker and blocked glyph at 80 columns', () => {
-    const text = blockText(80);
-    expect(text).toContain('cancelled');
-    expect(text).toContain('⊘'); // GLYPHS.status.blocked
-    expect(text).not.toContain('✓');
+describe('a cancelled call in the work tree (STEP 2a)', () => {
+  test('renders as a hollow ○ bead, struck through, with "cancelled" on its row, at 80 and 60 columns', () => {
+    for (const width of [80, 60]) {
+      const { context, lines } = makeContext();
+      appendConversationMessages(context, cancelledTurn('partial') as never, width, []);
+      const row = lines.find((l) => lineToString(l).includes('sleep 100'))!;
+      const text = lineToString(row);
+      expect(text).toContain('○');
+      expect(text).toContain('cancelled');
+      expect(text).not.toContain('✓');
+      expect(row.find((c) => c.char === 's')!.strikethrough).toBe(true);
+    }
   });
 
-  test('renders the cancelled marker and blocked glyph at 60 columns (concise, no clipping)', () => {
-    const text = blockText(60);
-    expect(text).toContain('cancelled');
-    expect(text).toContain('⊘');
-  });
-});
-
-describe('structural cancelled tool-result render (STEP 2a)', () => {
-  test('a cancelled result renders as a "cancelled" block with the partial output preserved', () => {
-    // The SDK settles a cancelled call as a tool result whose content leads
-    // with "Error: cancelled by user"; any partial output follows.
-    const toolResult = {
-      role: 'tool',
-      callId: 'c1',
-      content: 'Error: cancelled by user\npartial-output-line-kept',
-      toolName: 'exec',
-    };
-    const text = renderMessages([toolResult]);
-    expect(text).toContain('cancelled');
-    expect(text).toContain('⊘');
-    // Not mislabelled as a plain "tool result".
-    expect(text).not.toContain('tool result');
-  });
-
-  test('the partial output is reachable (expanded content carries the preserved bytes)', () => {
-    const toolResult = {
-      role: 'tool',
-      callId: 'c1',
-      content: 'Error: cancelled by user\nSENTINELPARTIAL1234',
-      toolName: 'exec',
-    };
+  test('the partial output is reachable in the bead\'s body', () => {
     const { context, lines } = makeContext();
-    // Force-expand so the full content renders (long content defaults collapsed).
-    context.collapseState.set('msg_0', false);
-    appendConversationMessages(context, [toolResult] as never, 80, []);
-    const text = lines.map(lineToString).join('\n');
-    expect(text).toContain('SENTINELPARTIAL1234');
+    context.collapseState.set('bead_c:1:0', false);
+    appendConversationMessages(context, cancelledTurn('SENTINELPARTIAL1234') as never, 80, []);
+    expect(lines.map(lineToString).join('\n')).toContain('SENTINELPARTIAL1234');
   });
 
-  test('a normal (non-cancelled) tool result still renders as "tool result"', () => {
-    const toolResult = { role: 'tool', callId: 'c1', content: 'ok', toolName: 'read' };
-    const text = renderMessages([toolResult]);
-    expect(text).toContain('tool result');
-    expect(text).not.toContain('⊘');
+  test('a normal result is a ✓ bead, not a cancelled one', () => {
+    const text = renderMessages([
+      { role: 'user', content: 'read it' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'read', arguments: { path: 'a.ts' } }] },
+      { role: 'tool', callId: 'c1', content: 'ok', toolName: 'read' },
+    ]);
+    expect(text).toContain('✓');
+    expect(text).not.toContain('○');
   });
 });
 

@@ -1,7 +1,13 @@
 /**
  * status-line.ts, the one row directly under the composer.
  *
- * Left side, one of (first match wins):
+ * Left end: the chips that must always be visible, never dropped for lack of
+ * room: the approval mode (muted, plan in the info color), or "! auto-approve"
+ * in the error color while everything is auto-approved; "sleep disabled"; the
+ * live microphone. Optional chips after them (attachments, orchestration) are
+ * dropped first when the row is short. 2 columns between chips.
+ *
+ * Then, one of (first match wins):
  *   - a notice the user must see now (the "press Ctrl+C again" exit guard, a
  *     copy receipt);
  *   - a running turn: the spinner (brand gradient on the glyph only), the
@@ -19,7 +25,8 @@
  * then the bar narrows from 16 cells toward 6, then the "used / total" label
  * goes, then the word "context"; the bar is dropped only when even the bare
  * 6 cells and percent do not fit. From the warning level up the left side
- * yields room for that bare bar, so a filling window is never hidden.
+ * yields room for that bare bar, so a filling window is never hidden. The
+ * kept chips at the left end are never dropped.
  */
 
 import { type Line, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types';
@@ -41,6 +48,19 @@ const DIRECTORY_MIN_WIDTH = 100;
 const GAP = 3;
 /** Left edge of the status line (the fill column of the composer above). */
 const LEFT_X = 3;
+/** Columns between the chips at the left end. */
+const CHIP_GAP = 2;
+
+/** A chip at the left end of the status line. */
+export interface StatusChip {
+  readonly text: string;
+  readonly fg: string;
+  readonly bold?: boolean;
+  /** A filled chip (the wake indicator's banner prominence); no fill otherwise. */
+  readonly bg?: string;
+  /** Never dropped for lack of room (the mode, auto-approve, microphone, sleep). */
+  readonly keep?: boolean;
+}
 
 export interface StatusBusyState {
   /** The spinner glyph for this frame. */
@@ -77,6 +97,8 @@ export interface StatusContextState {
 
 export interface StatusLineOptions {
   readonly width: number;
+  /** Chips at the left end, drawn left to right; see the file header. */
+  readonly chips?: readonly StatusChip[];
   readonly notice?: { readonly text: string; readonly tone: 'error' | 'info' } | null;
   readonly busy?: StatusBusyState | null;
   readonly directory?: string;
@@ -85,6 +107,11 @@ export interface StatusLineOptions {
   /** Formatted cost text ("$0.246", "you $0.25 · fleet $0.47"); omitted when unknown. */
   readonly cost?: string | null;
   readonly context?: StatusContextState | null;
+  /**
+   * Keys of the view the keyboard is in, shown in place of the busy phrase
+   * or directory (the conversation work tree: move, fold, open, copy, back).
+   */
+  readonly keys?: readonly KitHint[] | null;
 }
 
 interface Piece {
@@ -197,17 +224,26 @@ function backgroundSummary(bg: StatusBackgroundState): string {
   return parts.join(' · ');
 }
 
-/** Draw the left side; returns the column where it really ends. */
-function drawLeft(line: Line, options: StatusLineOptions, maxX: number): number {
+/** Draw the left side from `startX`; returns the column where it really ends. */
+function drawLeft(line: Line, options: StatusLineOptions, startX: number, maxX: number, withDirectory: boolean): number {
   const t = activeTokens();
   const width = options.width;
   if (options.notice) {
-    return putText(line, LEFT_X, maxX, { text: options.notice.text, fg: options.notice.tone === 'error' ? t.error : t.info, bold: true });
+    return putText(line, startX, maxX, { text: options.notice.text, fg: options.notice.tone === 'error' ? t.error : t.info, bold: true });
+  }
+  if (options.keys && options.keys.length > 0) {
+    // As many whole keys as fit, in order.
+    const keys: KitHint[] = [];
+    for (const key of options.keys) {
+      if (keycapHintsWidth([...keys, key]) > maxX - startX) break;
+      keys.push(key);
+    }
+    return keys.length > 0 ? paintKeycapHints(line, startX, maxX, keys, { fg: t.textFaint }) : startX;
   }
   if (options.busy) {
     const b = options.busy;
     const glyphFg = interpolateColor(t.brand, t.brandEnd, ((Math.sin(b.frame / 6) + 1) / 2));
-    let x = putText(line, LEFT_X, maxX, { text: b.spinner, fg: glyphFg, bold: true });
+    let x = putText(line, startX, maxX, { text: b.spinner, fg: glyphFg, bold: true });
     x += 1;
     const tail: string[] = [];
     if (b.elapsedMs !== undefined) tail.push(formatElapsed(b.elapsedMs));
@@ -217,15 +253,18 @@ function drawLeft(line: Line, options: StatusLineOptions, maxX: number): number 
     const hintsW = keycapHintsWidth(hints) + GAP;
     const tailText = tail.length > 0 ? ` · ${tail.join(' · ')}` : '';
     const room = Math.max(0, maxX - x - hintsW);
-    const phrase = truncateDisplay(b.phrase, Math.max(0, room - getDisplayWidth(tailText)));
+    // The phrase stays whole as long as it can: the timers go before it is
+    // cut, and its trailing dots go before a letter does.
+    const bare = b.phrase.replace(/(\.\.\.|…)$/, '');
+    const phrase = getDisplayWidth(b.phrase) > room && getDisplayWidth(bare) <= room ? bare : truncateDisplay(b.phrase, room);
     x = putText(line, x, maxX, { text: phrase, fg: t.textMuted });
     if (getDisplayWidth(tailText) <= maxX - x - hintsW) x = putText(line, x, maxX, { text: tailText, fg: t.textFaint });
     if (x + hintsW <= maxX) x = paintKeycapHints(line, x + GAP, maxX, hints, { fg: t.textFaint });
     return x;
   }
-  let x = LEFT_X;
+  let x = startX;
   const place: Piece[] = [];
-  if (options.directory && width >= DIRECTORY_MIN_WIDTH) place.push({ text: options.directory, fg: t.textFaint });
+  if (withDirectory && options.directory && width >= DIRECTORY_MIN_WIDTH) place.push({ text: options.directory, fg: t.textFaint });
   if (options.branch) place.push({ text: options.branch, fg: t.textFaint });
   if (place.length > 0) {
     const joined = place.map((p) => p.text).join(' · ');
@@ -250,8 +289,37 @@ function drawLeft(line: Line, options: StatusLineOptions, maxX: number): number 
   return x;
 }
 
+/**
+ * Draw the left-end chips; returns the column after the last one (LEFT_X when
+ * none). Optional chips that would run past `maxX` are dropped, last first; a
+ * kept chip is always drawn, up to the row's right edge.
+ */
+function drawChips(line: Line, chips: readonly StatusChip[], maxX: number, rightEdge: number): number {
+  const shown = [...chips];
+  const width = (list: readonly StatusChip[]): number => list.reduce((s, c, i) => s + (i > 0 ? CHIP_GAP : 0) + getDisplayWidth(c.text), 0);
+  while (shown.length > 0 && LEFT_X + width(shown) > maxX) {
+    const idx = shown.map((c) => c.keep === true).lastIndexOf(false);
+    if (idx < 0) break;
+    shown.splice(idx, 1);
+  }
+  let x = LEFT_X;
+  shown.forEach((chip, i) => {
+    if (i > 0) x += CHIP_GAP;
+    x = putText(line, x, rightEdge, { text: chip.text, fg: chip.fg, bold: chip.bold, bg: chip.bg });
+  });
+  return x;
+}
+
 /** Render the status line. */
 export function renderStatusLine(options: StatusLineOptions): Line {
+  // The directory is the first thing to go: when it would cost the cost or the
+  // full context bar their room, the row is laid out again without it.
+  const withDirectory = layoutStatusLine(options, true);
+  if (withDirectory.fullFit || !options.directory) return withDirectory.line;
+  return layoutStatusLine(options, false).line;
+}
+
+function layoutStatusLine(options: StatusLineOptions, withDirectory: boolean): { line: Line; fullFit: boolean } {
   const t = activeTokens();
   const width = options.width;
   const line = createEmptyLine(width);
@@ -269,23 +337,32 @@ export function renderStatusLine(options: StatusLineOptions): Line {
 
   // The left side is drawn first so the right side knows where it really ends.
   // It may use everything left of the menu keycap (and the reserve).
-  const leftEnd = drawLeft(line, options, Math.max(LEFT_X, rightEdge - menuW - GAP - reserve));
+  const leftMax = Math.max(LEFT_X, rightEdge - menuW - GAP - reserve);
+  const chipsEnd = drawChips(line, options.chips ?? [], leftMax, rightEdge);
+  const leftStart = chipsEnd > LEFT_X ? chipsEnd + GAP : LEFT_X;
+  const drawn = drawLeft(line, options, leftStart, Math.max(leftStart, leftMax), withDirectory);
+  const leftEnd = drawn > leftStart ? drawn : chipsEnd;
+
+  const cost = options.cost ?? null;
+  const costW = cost ? getDisplayWidth(cost) : 0;
+  const full: ContextBarForm = { cells: CONTEXT_BAR_CELLS, word: true, label: true };
+  const fullRightW = menuW
+    + (ctx ? GAP + contextBarWidth(ctx, full) : 0)
+    + (cost ? GAP + costW : 0);
+  const fullFit = leftEnd + GAP + fullRightW <= rightEdge;
 
   let rx = rightEdge;
   if (rx - menuW >= leftEnd + GAP) {
     paintKeycapHints(line, rx - menuW, rx, menu, { fg: t.textFaint });
     rx -= menuW + GAP;
   } else {
-    return line;
+    return { line, fullFit };
   }
 
-  const cost = options.cost ?? null;
-  const costW = cost ? getDisplayWidth(cost) : 0;
   const room = rx - leftEnd - GAP;
   let form: ContextBarForm | null = null;
   let showCost = false;
   if (ctx) {
-    const full: ContextBarForm = { cells: CONTEXT_BAR_CELLS, word: true, label: true };
     if (cost && contextBarWidth(ctx, full) + GAP + costW <= room) { form = full; showCost = true; }
     else form = fitContextForm(ctx, room);
   } else if (cost && costW <= room) {
@@ -297,5 +374,5 @@ export function renderStatusLine(options: StatusLineOptions): Line {
     rx -= w + GAP;
   }
   if (showCost && cost) putText(line, rx - costW, rx, { text: cost, fg: t.textMuted });
-  return line;
+  return { line, fullFit };
 }

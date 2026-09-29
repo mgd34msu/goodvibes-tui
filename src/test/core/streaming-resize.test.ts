@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { ConversationManager } from '../../core/conversation';
-import { renderMarkdown } from '../../renderer/markdown.ts';
+import { renderStreamingContinuation } from '../../core/work-tree-render.ts';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,8 @@ import { createTestConfigManager } from '../helpers/test-managers.ts';
 //
 // These tests assert the streaming block re-anchors to the correct
 // content-start line so the tail of the buffer is EXACTLY the streamed content
-// re-rendered at the new width, no stale offset, no leaked preceding lines.
+// re-rendered at the new width (under its turn's spine), no stale offset, no
+// leaked preceding lines.
 // ---------------------------------------------------------------------------
 
 // A long single-line message wraps to a DIFFERENT number of lines at width 80
@@ -41,6 +42,22 @@ const STREAM_B =
 const WIDE = 80;
 const NARROW = 40;
 
+/**
+ * The streamed text as the transcript draws it: at its turn's text column
+ * (9). These transcripts carry no model and no live source, so the streaming
+ * turn has nothing for a header to say and draws no spine; a live turn's
+ * header says "working" and the spine's │ runs beside the text.
+ */
+function streamed(content: string, width: number): ReturnType<typeof renderStreamingContinuation> {
+  return renderStreamingContinuation(content, width, { gutter: [], gutterWidth: 6 }, 'rounded');
+}
+
+function manager(getWidth: () => number): ConversationManager {
+  const cm = new ConversationManager(getWidth, createTestConfigManager());
+  cm.setUnicodeCapable(true);
+  return cm;
+}
+
 /** Read the private streamingStartLine for assertions. */
 function startLine(cm: ConversationManager): number {
   return (cm as unknown as { streamingStartLine: number }).streamingStartLine;
@@ -49,7 +66,7 @@ function startLine(cm: ConversationManager): number {
 describe('ConversationManager: terminal resize mid-stream', () => {
   test('re-anchors streamingStartLine when width changes between deltas', () => {
     let width = WIDE;
-    const cm = new ConversationManager(() => width, createTestConfigManager());
+    const cm = manager(() => width);
 
     cm.addUserMessage(LONG_USER);
     cm.startStreamingBlock();
@@ -63,7 +80,7 @@ describe('ConversationManager: terminal resize mid-stream', () => {
 
     const buffer = cm.getDisplayBlocks();
     const anchor = startLine(cm);
-    const expectedTail = renderMarkdown(STREAM_A, NARROW, { isStreaming: true });
+    const expectedTail = streamed(STREAM_A, NARROW);
 
     // The streamed content occupies exactly the tail of the buffer, starting at
     // the re-anchored streamingStartLine. If the anchor were stale, this slice
@@ -75,7 +92,7 @@ describe('ConversationManager: terminal resize mid-stream', () => {
 
   test('a render-triggered rebuild during stream re-anchors, and later deltas land correctly', () => {
     let width = WIDE;
-    const cm = new ConversationManager(() => width, createTestConfigManager());
+    const cm = manager(() => width);
 
     cm.addUserMessage(LONG_USER);
     cm.startStreamingBlock();
@@ -91,14 +108,14 @@ describe('ConversationManager: terminal resize mid-stream', () => {
     expect(anchorAfterRebuild).toBeGreaterThan(0);
     expect(anchorAfterRebuild).toBe(
       cm.getDisplayBlocks().length -
-        renderMarkdown(STREAM_A, NARROW, { isStreaming: true }).length,
+        streamed(STREAM_A, NARROW).length,
     );
 
     // A subsequent delta (more content) must land at the re-anchored offset.
     cm.updateStreamingBlock(STREAM_B);
     const buffer = cm.getDisplayBlocks();
     const anchor = startLine(cm);
-    const expectedTail = renderMarkdown(STREAM_B, NARROW, { isStreaming: true });
+    const expectedTail = streamed(STREAM_B, NARROW);
 
     expect(anchor).toBe(buffer.length - expectedTail.length);
     expect(buffer.slice(anchor)).toEqual(expectedTail);
@@ -109,7 +126,7 @@ describe('ConversationManager: terminal resize mid-stream', () => {
     // truth. A transcript that started wide and resized to narrow mid-stream
     // must converge to the identical buffer once re-anchoring is correct.
     let width = WIDE;
-    const resized = new ConversationManager(() => width, createTestConfigManager());
+    const resized = manager(() => width);
     resized.addUserMessage(LONG_USER);
     resized.startStreamingBlock();
     resized.updateStreamingBlock(STREAM_A);
@@ -117,7 +134,7 @@ describe('ConversationManager: terminal resize mid-stream', () => {
     width = NARROW;
     resized.updateStreamingBlock(STREAM_A);
 
-    const native = new ConversationManager(() => NARROW, createTestConfigManager());
+    const native = manager(() => NARROW);
     native.addUserMessage(LONG_USER);
     native.startStreamingBlock();
     native.updateStreamingBlock(STREAM_A);

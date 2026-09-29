@@ -10,7 +10,8 @@
 
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import type { BlockMeta } from './conversation-types.ts';
-import type { AssistantTurnMembership } from './conversation-turn-structure.ts';
+import type { WorkTreeSources } from './work-tree-sources.ts';
+import type { TreeGlyphSetName } from '../renderer/lane-graph/glyphs.ts';
 import type { SplashOptions } from '../utils/splash-lines.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
@@ -92,31 +93,16 @@ export interface ConversationRenderContext {
    */
   readonly toolCallOutcomes?: ReadonlyMap<string, ToolCallOutcome>;
   /**
-   * Which assistant messages share one `● assistant` header, and what that
-   * header must say (see conversation-turn-structure.ts). Keyed by absolute
-   * index for every assistant message in a run AND every tool-result message
-   * the run's calls produced, so a collapsed turn can hide its results too.
-   * A message absent from this map (or an undefined map) renders standalone,
-   * exactly as it did before turn merging.
+   * Live facts the work tree draws that the transcript does not carry: call
+   * and turn timings, spawned agents' lanes, the call a permission prompt is
+   * holding. Undefined draws the work tree without them (no times, no agent
+   * lanes).
    */
-  readonly assistantTurns?: ReadonlyMap<number, AssistantTurnMembership>;
-  /**
-   * Live snapshot reader for a spawned agent's own conversation, used to
-   * splice that agent's rows in beneath the call that spawned it (see
-   * conversation-turn-structure.ts). Undefined disables nesting entirely and
-   * the transcript renders exactly as it would without subagents.
-   */
-  readonly resolveAgentSnapshot?: (agentId: string) => readonly Message[] | null;
-}
-
-/**
- * Whether a turn's branches are hidden. Turns default to EXPANDED (unlike
- * every other collapsible block here, which defaults to collapsed): a turn
- * collapsed by default would hide the activity the transcript exists to show.
- */
-export function isTurnCollapsed(
-  turn: AssistantTurnMembership | undefined,
-  collapseState: ReadonlyMap<string, boolean>,
-): boolean {
-  return turn !== undefined && (collapseState.get(turn.turnKey) ?? false);
+  readonly workTreeSources?: WorkTreeSources;
+  /** Glyph set for the work tree (display.treeGlyphs, ascii on a limited terminal). */
+  readonly treeGlyphSet?: TreeGlyphSetName;
+  /** Focused work-tree row id while the keyboard is in the work tree. */
+  readonly focusId?: string | null;
+  /** Spinner frame for running beads. */
+  readonly frame?: number;
 }

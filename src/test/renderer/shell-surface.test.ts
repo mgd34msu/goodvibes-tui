@@ -17,7 +17,6 @@ function footer(overrides: Partial<ShellFooterBuildOptions> = {}): ReturnType<ty
     model: 'gpt-test',
     workingDir: '/tmp/demo',
     branch: 'main',
-    provider: 'openai',
     contextWindow: 0,
     runningAgentCount: 0,
     runningProcessCount: 0,
@@ -29,9 +28,9 @@ function footer(overrides: Partial<ShellFooterBuildOptions> = {}): ReturnType<ty
 const text = (result: ReturnType<typeof buildShellFooter>): string => result.lines.map(lineToString).join('\n');
 
 describe('shell surface: the composer', () => {
-  test('at rest the footer is the 5-row composer plus the status line', () => {
+  test('at rest the footer is the 3-row composer plus the status line', () => {
     const result = footer();
-    expect(result.height).toBe(6);
+    expect(result.height).toBe(4);
     expect(result.height).toBe(estimateShellFooterHeight(1));
   });
 
@@ -45,7 +44,7 @@ describe('shell surface: the composer', () => {
 
   test('the bar runs every composer row at column 2 against a full-width element fill', () => {
     const result = footer({ width: 80 });
-    const composer = result.lines.slice(0, 5);
+    const composer = result.lines.slice(0, 3);
     for (const row of composer) {
       expect(row[2]!.char).toBe('┃');
       expect(row[3]!.bg).toBe(activeTokens().backgroundElement);
@@ -70,9 +69,13 @@ describe('shell surface: the composer', () => {
     expect(lineToString(result.lines[1]!)).not.toContain('█');
   });
 
-  test('the inner row names the mode, model and provider', () => {
-    const row = lineToString(footer({ permissionMode: 'plan' }).lines[3]!);
-    expect(row).toContain('plan · gpt-test openai');
+  test('the composer holds only input: no mode, model, provider or warning inside it', () => {
+    const result = footer({ permissionMode: 'plan', dangerMode: true, powerKeepAwake: true, width: 120 });
+    const composer = result.lines.slice(0, 3).map(lineToString).join('\n');
+    expect(composer).toContain('hello');
+    for (const word of ['plan', 'gpt-test', 'openai', 'auto-approve', 'sleep disabled']) expect(composer).not.toContain(word);
+    expect(lineToString(result.lines[0]!).trim()).toBe('┃');
+    expect(lineToString(result.lines[2]!).trim()).toBe('┃');
   });
 
   test('the mode colors the bar: normal brand, plan info, auto-approving modes warning, shell accent', () => {
@@ -83,12 +86,6 @@ describe('shell surface: the composer', () => {
     expect(footer({ permissionMode: 'allow-all' }).lines[0]![2]!.fg).toBe(t.warning);
     const shell = footer({ permissionMode: 'prompt', composerPendingRisk: 'shell', promptText: '!ls' });
     expect(shell.lines[0]![2]!.fg).toBe(t.accent);
-    expect(lineToString(shell.lines[3]!)).toContain('shell ·');
-  });
-
-  test('the failover marker follows the model on the inner row', () => {
-    const row = lineToString(footer({ modelNote: 'failover from abacusai:route-llm', width: 120 }).lines[3]!);
-    expect(row).toContain('gpt-test openai · failover from abacusai:route-llm');
   });
 
   test('a command argument hint trails the cursor, clamped with an ellipsis', () => {
@@ -101,23 +98,54 @@ describe('shell surface: the composer', () => {
 });
 
 describe('shell surface: always-visible safety', () => {
-  test('auto-approve shows in the error color on the composer inner row', () => {
-    const result = footer({ dangerMode: true });
-    const row = result.lines[3]!;
-    expect(lineToString(row)).toContain('! auto-approve');
-    const bang = lineToString(row).indexOf('! auto-approve');
-    expect(row[bang]!.fg).toBe(activeTokens().error);
-    // Right-aligned inside the fill, 2 columns in from its edge (width-3).
-    expect(lineToString(row).trimEnd().length).toBe(100 - 4);
+  const statusRow = (result: ReturnType<typeof buildShellFooter>) => result.lines[result.lines.length - 1]!;
+
+  test('the mode chip opens the status line: muted, plan in the info color', () => {
+    const t = activeTokens();
+    const normal = statusRow(footer({ permissionMode: 'prompt', width: 120 }));
+    expect(lineToString(normal).slice(3)).toMatch(/^normal {3}\/tmp\/demo · main/);
+    expect(normal[3]!.fg).toBe(t.textMuted);
+    const plan = statusRow(footer({ permissionMode: 'plan', width: 120 }));
+    expect(lineToString(plan).slice(3, 7)).toBe('plan');
+    expect(plan[3]!.fg).toBe(t.info);
   });
 
-  test('no auto-approve chip when it is off', () => {
+  test('auto-approve takes the mode chip in the error color', () => {
+    const row = statusRow(footer({ permissionMode: 'allow-all', dangerMode: true }));
+    expect(lineToString(row).slice(3)).toMatch(/^! auto-approve/);
+    expect(row[3]!.fg).toBe(activeTokens().error);
+    expect(lineToString(row)).not.toMatch(/\bauto {2}!/);
+  });
+
+  test('plan keeps its name beside the auto-approve warning; normal does not contradict it', () => {
+    expect(lineToString(statusRow(footer({ permissionMode: 'plan', dangerMode: true })))).toContain('plan  ! auto-approve');
+    const normal = lineToString(statusRow(footer({ permissionMode: 'prompt', dangerMode: true })));
+    expect(normal.slice(3)).toMatch(/^! auto-approve/);
+    expect(normal).not.toContain('normal');
+  });
+
+  test('no auto-approve warning when it is off', () => {
     expect(text(footer())).not.toContain('auto-approve');
   });
 
-  test.each([60, 80, 120])('the sleep-disabled chip survives %i columns', (width) => {
-    expect(text(footer({ width, powerKeepAwake: true, dangerMode: true }))).toContain('sleep disabled');
+  test('a running turn follows the mode chip', () => {
+    const row = lineToString(statusRow(footer({ width: 120, dangerMode: true, permissionMode: 'allow-all', busy: { spinner: '◐', frame: 0, phrase: 'Thinking...', elapsedMs: 3_000 } })));
+    expect(row).toMatch(/! auto-approve {3}◐ Thinking\.\.\. · 3s/);
+  });
+
+  test.each([60, 80, 120])('the mode chip, auto-approve and sleep-disabled survive %i columns', (width) => {
+    const row = lineToString(statusRow(footer({ width, permissionMode: 'plan', powerKeepAwake: true, dangerMode: true, contextWindow: 200_000, lastInputTokens: 150_000, usage: { up: 1, down: 1, fleetCostUsd: 1 } })));
+    expect(row).toContain('plan');
+    expect(row).toContain('! auto-approve');
+    expect(row).toContain('sleep disabled');
     expect(text(footer({ width, powerKeepAwake: false }))).not.toContain('sleep disabled');
+  });
+
+  test('composer flags ride after the safety chips and are the first to go on a short row', () => {
+    expect(lineToString(statusRow(footer({ width: 120, composerFlags: ['attachments'] })))).toContain('normal  attachments');
+    const narrow = lineToString(statusRow(footer({ width: 50, dangerMode: true, powerKeepAwake: true, composerFlags: ['attachments'] })));
+    expect(narrow).toContain('sleep disabled');
+    expect(narrow).not.toContain('attachments');
   });
 });
 
@@ -133,10 +161,10 @@ describe('shell surface: the live microphone chip', () => {
     expect(text(withVoice(null))).not.toContain('mic');
   });
 
-  test('a listening wake detector shows on the inner row without changing the footer height', () => {
+  test('a listening wake detector shows on the status line without changing the footer height', () => {
     const result = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' });
     expect(lineToString(result.lines[3]!)).toContain('mic listening');
-    expect(result.height).toBe(6);
+    expect(result.height).toBe(4);
   });
 
   test('voice.wake.indicator off suppresses the wake chip', () => {
@@ -150,8 +178,7 @@ describe('shell surface: the live microphone chip', () => {
   test('banner prominence fills the chip, statusline prominence does not', () => {
     const banner = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'banner' }).lines[3]!;
     const plain = withVoice({ kind: 'wake-listening', deviceLabel: 'parecord', indicator: 'statusline' }).lines[3]!;
-    const fill = activeTokens().backgroundElement;
-    const filled = (row: typeof banner) => row.filter((c) => c.bg !== '' && c.bg !== fill).length;
+    const filled = (row: typeof banner) => row.filter((c) => c.bg !== '').length;
     expect(filled(banner)).toBeGreaterThan(filled(plain));
   });
 
@@ -228,7 +255,7 @@ describe('shell surface: the status line', () => {
 describe('shell surface: hint rows above the composer', () => {
   test('the retry affordance, the context pressure hint and the scriptable line stack above the composer', () => {
     const result = footer({ retryHint: 'r retry', contextStatusHint: 'context 82%: compaction soon', scriptableStatusLine: 'custom line' });
-    expect(result.height).toBe(9);
+    expect(result.height).toBe(7);
     expect(lineToString(result.lines[0]!)).toContain('r retry');
     expect(lineToString(result.lines[1]!)).toContain('compaction soon');
     expect(lineToString(result.lines[2]!)).toContain('custom line');

@@ -12,7 +12,7 @@
 |       display.stream       |
 |       · default true       |
 |                            |
-|               8 more ↓     |
+|               9 more ↓     |
 |      ↑↓  category          |
 |      →  settings           |
 |      tab  pane             |
