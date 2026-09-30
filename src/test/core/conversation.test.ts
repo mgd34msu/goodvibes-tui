@@ -216,6 +216,31 @@ describe('ConversationManager', () => {
       expect(frame).not.toContain('Ctrl+P panels');
     });
 
+    test('the first slash command\'s output survives the dismissal it causes (live defect: /context window printed nothing)', () => {
+      const c = new ConversationManager(() => 120);
+      c.getDisplayBlocks(); // the splash is on screen
+
+      // The command route: dismiss, then the command logs its display-only
+      // output in the same tick, then the next frame renders.
+      c.dismissSplash();
+      c.log('Context window for Free Models Router: 200,000 tokens');
+
+      const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame).toContain('Context window for Free Models Router: 200,000 tokens');
+      expect(frame).not.toContain('██████╗');
+      expect(c.consumeSplashTransition()).toBe(true);
+    });
+
+    test('dismissing when the splash is not on screen leaves logged lines alone', () => {
+      const c = new ConversationManager(() => 120);
+      c.addUserMessage('resumed work');
+      c.getDisplayBlocks();
+      c.log('resume notice');
+      c.dismissSplash();
+      const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame).toContain('resume notice');
+    });
+
     test('the splash stays gone for the rest of the run, including when the panel posture toggles', () => {
       const c = new ConversationManager(() => 120);
       c.getDisplayBlocks();

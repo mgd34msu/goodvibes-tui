@@ -5,7 +5,7 @@
  * Covers the parser (1-4 digit channels, rgba, # forms, garbage), the stream
  * filter (BEL and ST terminators, interleaved keystrokes, replies split across
  * chunks, partial and missing replies, garbage bodies), the window/timeout, and
- * installBackgroundThemeProbe's single batched write (plain and tmux) with the
+ * installBackgroundThemeProbe's single batched write (plain, and unwrapped under tmux) with the
  * result landing in the terminal-palette store.
  */
 
@@ -14,7 +14,6 @@ import {
   DEFAULT_PROBE_TIMEOUT_MS,
   installBackgroundThemeProbe,
   OSC11_QUERY,
-  wrapForTmuxPassthrough,
 } from '../../renderer/terminal-bg-probe.ts';
 import {
   PALETTE_PROBE_TIMEOUT_MS,
@@ -295,25 +294,32 @@ describe('installBackgroundThemeProbe: palette batching', () => {
   test('auto + TTY: one write carrying OSC 11, OSC 10 and OSC 4;0..15', () => {
     const writes: string[] = [];
     installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: {}, probePalette: true,
+      configManager: fakeConfig('auto'), isTTY: true, probePalette: true,
       writeQuery: (b) => writes.push(b), requestRepaint: () => {},
     });
     expect(writes).toEqual([OSC11_QUERY + PALETTE_QUERIES]);
   });
 
-  test('tmux: the whole batch is wrapped once, like the background query', () => {
-    const writes: string[] = [];
-    installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: { TMUX: '/tmp/tmux-1000/default,1,0' },
-      probePalette: true, writeQuery: (b) => writes.push(b), requestRepaint: () => {},
-    });
-    expect(writes).toEqual([wrapForTmuxPassthrough(OSC11_QUERY + PALETTE_QUERIES)]);
+  test('tmux: the batch goes out unwrapped (tmux answers OSC 10/11/4 itself)', () => {
+    const saved = process.env['TMUX'];
+    process.env['TMUX'] = '/tmp/tmux-1000/default,1,0';
+    try {
+      const writes: string[] = [];
+      installBackgroundThemeProbe({
+        configManager: fakeConfig('auto'), isTTY: true,
+        probePalette: true, writeQuery: (b) => writes.push(b), requestRepaint: () => {},
+      });
+      expect(writes).toEqual([OSC11_QUERY + PALETTE_QUERIES]);
+    } finally {
+      if (saved === undefined) delete process.env['TMUX'];
+      else process.env['TMUX'] = saved;
+    }
   });
 
   test('without probePalette the write is the OSC 11 query alone (unchanged)', () => {
     const writes: string[] = [];
     installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: {},
+      configManager: fakeConfig('auto'), isTTY: true, 
       writeQuery: (b) => writes.push(b), requestRepaint: () => {},
     });
     expect(writes).toEqual([OSC11_QUERY]);
@@ -325,7 +331,7 @@ describe('installBackgroundThemeProbe: palette batching', () => {
     const notified: TerminalPalette[] = [];
     onTerminalPalette((p) => notified.push(p));
     const handle = installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: {}, probePalette: true,
+      configManager: fakeConfig('auto'), isTTY: true, probePalette: true,
       timeoutMs: 1_000, paletteTimeoutMs: 1_000,
       writeQuery: () => {}, requestRepaint: () => { repaints++; },
       onPaletteResolve: (r) => paletteResults.push(r),
@@ -348,7 +354,7 @@ describe('installBackgroundThemeProbe: palette batching', () => {
 
   test('auto: replies split across chunks through both filters leak nothing', () => {
     const handle = installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: {}, probePalette: true,
+      configManager: fakeConfig('auto'), isTTY: true, probePalette: true,
       timeoutMs: 1_000, paletteTimeoutMs: 1_000,
       writeQuery: () => {}, requestRepaint: () => {},
     });
@@ -362,7 +368,7 @@ describe('installBackgroundThemeProbe: palette batching', () => {
   test('auto: background times out first, late OSC 11 still consumed by the palette filter', async () => {
     const paletteResults: PaletteProbeResolution[] = [];
     const handle = installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: {}, probePalette: true,
+      configManager: fakeConfig('auto'), isTTY: true, probePalette: true,
       timeoutMs: 5, paletteTimeoutMs: 1_000,
       writeQuery: () => {}, requestRepaint: () => {},
       onPaletteResolve: (r) => paletteResults.push(r),
@@ -376,7 +382,7 @@ describe('installBackgroundThemeProbe: palette batching', () => {
   test('forced light + TTY: palette batch still goes out and is collected', () => {
     const writes: string[] = [];
     const handle = installBackgroundThemeProbe({
-      configManager: fakeConfig('light'), isTTY: true, env: {}, probePalette: true,
+      configManager: fakeConfig('light'), isTTY: true, probePalette: true,
       paletteTimeoutMs: 1_000,
       writeQuery: (b) => writes.push(b), requestRepaint: () => {},
     });
@@ -389,7 +395,7 @@ describe('installBackgroundThemeProbe: palette batching', () => {
   test('non-TTY: no write, no palette, filter is a passthrough', () => {
     const writes: string[] = [];
     const handle = installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: false, env: {}, probePalette: true,
+      configManager: fakeConfig('auto'), isTTY: false, probePalette: true,
       writeQuery: (b) => writes.push(b), requestRepaint: () => {},
     });
     expect(writes).toEqual([]);
@@ -400,7 +406,7 @@ describe('installBackgroundThemeProbe: palette batching', () => {
   test('no replies: palette window closes and stores an all-undefined palette', async () => {
     const paletteResults: PaletteProbeResolution[] = [];
     installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: {}, probePalette: true,
+      configManager: fakeConfig('auto'), isTTY: true, probePalette: true,
       timeoutMs: 5, paletteTimeoutMs: 15,
       writeQuery: () => {}, requestRepaint: () => {},
       onPaletteResolve: (r) => paletteResults.push(r),

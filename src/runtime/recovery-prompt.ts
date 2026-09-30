@@ -111,6 +111,19 @@ export interface RecoveryPromptDeps {
    * session has the newest snapshot".
    */
   readonly targetSessionId?: string;
+  /**
+   * Keys typed before the offer appeared must not answer it. Called right
+   * before the first modal opens (arm) and once the whole flow is over
+   * (settled), so the shell can hold typeahead out of the modal and replay it
+   * into the composer afterwards (runtime/startup-typeahead-gate.ts).
+   */
+  readonly typeahead?: RecoveryTypeaheadHooks;
+}
+
+/** See RecoveryPromptDeps.typeahead. */
+export interface RecoveryTypeaheadHooks {
+  readonly onModalShown: () => void;
+  readonly onFlowSettled: () => void;
 }
 
 // ─── Honest fact formatting ─────────────────────────────────────────────────
@@ -284,6 +297,7 @@ function findOfferableSnapshot(deps: RecoveryPromptDeps): RecoveryFileInfo | nul
  * a failure anywhere in here must not take a boot down.
  */
 export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<RecoveryPromptOutcome> {
+  let shown = false;
   try {
     // Housekeeping first: recovery time is when the removal ledger gets its
     // bounds actually applied to disk and says what it discarded. Without this
@@ -308,6 +322,8 @@ export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<R
     const bytes = deps.snapshotBytes ? deps.snapshotBytes(info.sessionId) : defaultSnapshotBytes(deps.surface, info.sessionId);
     const facts = describeRecoverySnapshot(info, { nowMs, bytes });
 
+    deps.typeahead?.onModalShown();
+    shown = true;
     const answer = await ask(open, RECOVERY_OFFER_TITLE, buildRecoveryOfferItems(facts));
 
     if (answer === 'resume') {
@@ -359,28 +375,28 @@ export async function offerRecoverySnapshot(deps: RecoveryPromptDeps): Promise<R
     // Best-effort by construction: a recovery offer that fails must leave the
     // snapshot untouched and the boot unharmed.
     return 'none';
+  } finally {
+    if (shown) deps.typeahead?.onFlowSettled();
   }
 }
 
 // ─── Startup wiring ─────────────────────────────────────────────────────────
 
 /**
- * Raise the recovery offer once the shell is up.
+ * Raise the recovery offer at startup, BEFORE the shell's first frame.
  *
- * Deliberately fire-and-forget and deliberately AFTER the first render: the
- * modal is drawn by the render loop, so asking before a frame exists would
- * mean a question nobody can see, and awaiting it would hold the terminal
- * blank while the user was expected to answer. Scheduled on a macrotask so
- * the caller's own initial render has completed first.
+ * The modal is opened synchronously (offerRecoverySnapshot runs synchronously
+ * up to the modal), so the first frame the user ever sees already has the
+ * question on it: the composer is never live underneath a question that is
+ * about to appear. It used to be raised on a macrotask after the first frame,
+ * which on a busy boot came seconds after the composer was drawn and took the
+ * keys typed into it (the search row got the text, Enter resumed). Keys typed
+ * before the frame was painted are the typeahead gate's job
+ * (deps.typeahead, startup-typeahead-gate.ts).
  *
- * Every failure mode here ends with the snapshot untouched: `offerRecoverySnapshot`
- * swallows its own errors, and this wrapper adds a catch for the scheduling
- * boundary.
+ * Fire-and-forget: nothing awaits the answer, and every failure mode ends with
+ * the snapshot untouched (offerRecoverySnapshot swallows its own errors).
  */
-export function scheduleRecoveryOffer(deps: RecoveryPromptDeps): void {
-  setTimeout(() => {
-    void offerRecoverySnapshot(deps).catch(() => {
-      // Best-effort: a failed offer must never take the shell down.
-    });
-  }, 0).unref?.();
+export function startRecoveryOffer(deps: RecoveryPromptDeps): Promise<RecoveryPromptOutcome> {
+  return offerRecoverySnapshot(deps);
 }

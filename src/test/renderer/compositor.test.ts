@@ -253,6 +253,9 @@ describe('Compositor modal layers', () => {
     const width = 20;
     const height = 6;
     const viewport = Array.from({ length: height - 2 }, () => makeLine(width, 'v'));
+    // Words on the layer's row: 'vv' (0-1), the one the layer cuts (3-13), 'vvvvv' (15-19).
+    viewport[1]![2] = createStyledCell(' ');
+    viewport[1]![14] = createStyledCell(' ');
     const panelBg = activeTokens().backgroundPanel;
     const layerLine = Array.from({ length: 6 }, () => createStyledCell('m', { fg: activeTokens().text, bg: panelBg }));
     compositor.composite({
@@ -270,7 +273,14 @@ describe('Compositor modal layers', () => {
     // Inside the layer: its own cells, undimmed.
     expect(buffer.getCell(5, 2)!.char).toBe('m');
     expect(buffer.getCell(5, 2)!.bg).toBe(panelBg);
-    expect(buffer.getCell(11, 2)!.char).toBe('v');
+    // A word the layer's edge cut in half is blanked out to its space (no
+    // fragment touches the fill edge); whole words further out stay.
+    expect(buffer.getCell(3, 2)!.char).toBe(' ');
+    expect(buffer.getCell(4, 2)!.char).toBe(' ');
+    expect(buffer.getCell(11, 2)!.char).toBe(' ');
+    expect(buffer.getCell(13, 2)!.char).toBe(' ');
+    expect(buffer.getCell(1, 2)!.char).toBe('v');
+    expect(buffer.getCell(15, 2)!.char).toBe('v');
   });
 
   test('the selection highlight still applies, and dims along with the rest under a modal', () => {

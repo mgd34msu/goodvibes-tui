@@ -9,17 +9,17 @@
 |         ✦ running                                                                                  |
 |         ◐ [Agent] Long-running     2m00s · $0.030    [Agent] Long-running build fix                |
 |           build fix  Bash:                           agent · claude-sonnet-4-6 ·                   |
-|           Running▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄                  |
+|                  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄                  |
 |                                                                                                    |
 |                      ✦ Stop [Agent] Long-running build fix?              esc      state            |
-|                                                                                  m00s              |
-|                      This stops agent steer-01 and everything it started. It     kens              |
+|                                                                                                    |
+|                      This stops agent steer-01 and everything it started. It                       |
 |                      cannot be resumed.                                                            |
-|                      Press ctrl+x again to stop it; Esc keeps it running.        d                 |
+|                      Press ctrl+x again to stop it; Esc keeps it running.                          |
 |                                                                                                    |
 |                                                               Cancel    Stop                       |
-|                                                                                  irst.             |
-|                  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀he                |
+|                                                                                                    |
+|                  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                  |
 |                                                      elapsed column is stable. Updating            |
 |                                                      the expected rows next.                       |
 |                                                                                                    |

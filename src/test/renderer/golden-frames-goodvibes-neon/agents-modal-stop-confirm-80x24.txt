@@ -6,11 +6,11 @@
 |                                                                                |
 |     ▏Type / to filter agents                                       1 shown     |
 |                                                                                |
-|   ✦ run▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄        |
-|   ◐ [Ag                                                                ix      |
-|     Lon    ✦ Stop [Agent] Long-running build fix?              esc             |
-|     fix                                                                        |
-|     bui    This stops agent steer-01 and everything it started. It             |
+|   ✦    ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄        |
+|   ◐                                                                            |
+|            ✦ Stop [Agent] Long-running build fix?              esc             |
+|                                                                                |
+|            This stops agent steer-01 and everything it started. It             |
 |            cannot be resumed.                                                  |
 |            Press ctrl+x again to stop it; Esc keeps it running.                |
 |                                                                                |

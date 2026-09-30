@@ -143,6 +143,13 @@ export interface TerminalPaletteProbeOptions {
   readonly onResolve: (result: PaletteProbeResolution) => void;
   /** Window in ms (default PALETTE_PROBE_TIMEOUT_MS). */
   readonly timeoutMs?: number;
+  /**
+   * Receives a key held at the window's close that never became a reply: a
+   * lone ESC (Esc) or ESC ] (Alt+]). Without it they are dropped, which is
+   * tolerable for the startup window only; a retry round can open while the
+   * user is typing.
+   */
+  readonly onFlush?: (bytes: string) => void;
 }
 
 /** Total replies expected: background + foreground + 16 ANSI slots. */
@@ -166,10 +173,12 @@ export class TerminalPaletteProbe {
   private foregroundAnswered = false;
   private readonly ansiAnswered = new Array<boolean>(TERMINAL_PALETTE_ANSI_SLOTS).fill(false);
   private readonly onResolve: (result: PaletteProbeResolution) => void;
+  private readonly onFlush: ((bytes: string) => void) | undefined;
   private readonly timeoutMs: number;
 
   constructor(options: TerminalPaletteProbeOptions) {
     this.onResolve = options.onResolve;
+    this.onFlush = options.onFlush;
     this.timeoutMs = options.timeoutMs ?? PALETTE_PROBE_TIMEOUT_MS;
   }
 
@@ -262,12 +271,52 @@ export class TerminalPaletteProbe {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    // Held bytes are an unfinished reply fragment: discard, never flush.
+    // A held reply fragment is discarded, never flushed into the composer.
+    // The two holds that are real keys (Esc, Alt+]) are handed on.
+    const held = this.buffer;
     this.buffer = '';
+    if (held === '\x1b' || held === '\x1b]') this.onFlush?.(held);
     this.onResolve({
       palette: { ...this.palette, ansi: [...this.palette.ansi] },
       reason,
       replies: this.replyCount(),
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Late replies (outside any collection window)
+// ---------------------------------------------------------------------------
+
+/** One reply found by sweepPaletteReplies. */
+export interface PaletteReply {
+  readonly slot: 'background' | 'foreground' | number;
+  /** `#rrggbb`, or undefined when the body did not parse. */
+  readonly hex: string | undefined;
+}
+
+/**
+ * Remove complete OSC 4 / 10 / 11 replies from a chunk that arrived outside a
+ * collection window (a reply slower than the window, over ssh or a busy
+ * multiplexer). Unlike the probe's own filter this never holds bytes back: a
+ * reply split across chunks passes through, so a lone Esc key is never
+ * delayed. Replies are complete in one read in practice.
+ */
+export function sweepPaletteReplies(chunk: string): { readonly out: string; readonly replies: PaletteReply[] } {
+  if (!chunk.includes('\x1b]')) return { out: chunk, replies: [] };
+  const replies: PaletteReply[] = [];
+  let rest = chunk;
+  let out = '';
+  for (;;) {
+    const m = REPLY_INTRODUCER.exec(rest);
+    if (m === null) break;
+    const term = findTerminator(rest, m.index + m[0].length);
+    if (term === null) break;
+    const hex = parseOscColorToHex(rest.slice(m.index + m[0].length, term.start)) ?? undefined;
+    const slot = m[1] !== undefined ? Number(m[1]) : m[2] === '10' ? 'foreground' : 'background';
+    if (typeof slot !== 'number' || slot < TERMINAL_PALETTE_ANSI_SLOTS) replies.push({ slot, hex });
+    out += rest.slice(0, m.index);
+    rest = rest.slice(term.end);
+  }
+  return { out: out + rest, replies };
 }

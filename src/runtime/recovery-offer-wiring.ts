@@ -27,7 +27,7 @@
  *     numbers on screen describe the conversation actually in memory.
  */
 import { applyRecoverySnapshot, confirmRecoveryRestore } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import type { RecoveryPromptDeps } from './recovery-prompt.ts';
+import type { RecoveryPromptDeps, RecoveryTypeaheadHooks } from './recovery-prompt.ts';
 import type { ConversationManager, ConversationMessageSnapshot } from '../core/conversation.ts';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { SessionSurface } from '@/runtime/index.ts';
@@ -44,6 +44,8 @@ export interface RecoveryOfferWiringInput {
   readonly writeLastSessionPointer: (sessionId: string) => void;
   readonly receipt: (line: string) => void;
   readonly render: () => void;
+  /** Holds typeahead out of the offer modal (see RecoveryPromptDeps.typeahead). */
+  readonly typeahead?: RecoveryTypeaheadHooks;
 }
 
 export function buildRecoveryOfferWiring(input: RecoveryOfferWiringInput): RecoveryPromptDeps {
@@ -54,6 +56,7 @@ export function buildRecoveryOfferWiring(input: RecoveryOfferWiringInput): Recov
     get openSelection() { return input.commandContext.openSelection; },
     receipt: input.receipt,
     render: input.render,
+    ...(input.typeahead ? { typeahead: input.typeahead } : {}),
     applySnapshot: ({ sessionId }) => {
       const persist = (messages: ConversationMessageSnapshot[]): void => {
         input.sessionManager.save(sessionId, messages as never[], {

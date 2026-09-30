@@ -726,7 +726,8 @@ export class ConversationManager extends SdkConversationManager {
   }
 
   /** Retire the splash for the run, any submission does it (SplashGateState). */
-  public dismissSplash(): void { if (this.splashGate.dismiss()) this.markDirty(); }
+  /** Retire the splash; rebuilt now (not marked dirty) so a command's output logged in the same tick survives the next frame. */
+  public dismissSplash(): void { if (this.splashGate.dismiss() && this.splashGate.showing) this.rebuildHistory(); }
 
   /** True while the conversation area is showing the splash (the shell centers it). */
   public isSplashShowing(): boolean { return this.splashGate.showing; }

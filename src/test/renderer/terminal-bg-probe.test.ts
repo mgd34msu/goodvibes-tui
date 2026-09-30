@@ -5,8 +5,8 @@
  * against scripted byte streams (the exact hazards scoped): BEL vs ST
  * terminators, rgb: 4-digit / 2-digit / # colour variants, replies split across
  * chunks, replies interleaved with keystrokes (keystrokes MUST survive to the
- * tokenizer, the reply MUST be consumed), timeout → dark, tmux passthrough
- * wrapping, and garbage → dark. Also the config forcing paths via
+ * tokenizer, the reply MUST be consumed), timeout → dark, the query written
+ * unwrapped under tmux, and garbage → dark. Also the config forcing paths via
  * installBackgroundThemeProbe.
  */
 
@@ -20,7 +20,6 @@ import {
   parseColorSpec,
   type ProbeResolution,
   TerminalBackgroundProbe,
-  wrapForTmuxPassthrough,
 } from '../../renderer/terminal-bg-probe.ts';
 import { activeTheme, resolveTheme, setActiveThemeMode } from '../../renderer/theme.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -204,20 +203,12 @@ describe('TerminalBackgroundProbe.feed', () => {
 });
 
 // ---------------------------------------------------------------------------
-// tmux passthrough + query bytes
+// query bytes
 // ---------------------------------------------------------------------------
 
-describe('tmux passthrough + query', () => {
+describe('query bytes', () => {
   test('OSC11_QUERY is the ST-terminated background query', () => {
     expect(OSC11_QUERY).toBe('\x1b]11;?\x1b\\');
-  });
-
-  test('wrapForTmuxPassthrough wraps in the DCS envelope with ESC doubled', () => {
-    const wrapped = wrapForTmuxPassthrough(OSC11_QUERY);
-    // Envelope: ESC P tmux ; <payload, every ESC doubled> ESC \
-    expect(wrapped.startsWith('\x1bPtmux;')).toBe(true);
-    expect(wrapped.endsWith('\x1b\\')).toBe(true);
-    expect(wrapped).toBe('\x1bPtmux;\x1b\x1b]11;?\x1b\x1b\\\x1b\\');
   });
 
   test('DEFAULT_PROBE_TIMEOUT_MS is a small startup window', () => {
@@ -245,7 +236,7 @@ describe('installBackgroundThemeProbe: forcing paths', () => {
   test("forced 'dark' applies dark, writes no query, filter is passthrough", () => {
     let wrote = '';
     const handle = installBackgroundThemeProbe({
-      configManager: fakeConfig('dark'), isTTY: true, env: {},
+      configManager: fakeConfig('dark'), isTTY: true, 
       writeQuery: (b) => { wrote += b; }, requestRepaint: () => {},
     });
     expect(isMode('dark')).toBe(true);
@@ -256,7 +247,7 @@ describe('installBackgroundThemeProbe: forcing paths', () => {
   test("forced 'light' applies light before first paint, no query", () => {
     let wrote = '';
     installBackgroundThemeProbe({
-      configManager: fakeConfig('light'), isTTY: true, env: {},
+      configManager: fakeConfig('light'), isTTY: true, 
       writeQuery: (b) => { wrote += b; }, requestRepaint: () => {},
     });
     expect(isMode('light')).toBe(true);
@@ -266,7 +257,7 @@ describe('installBackgroundThemeProbe: forcing paths', () => {
   test('auto + non-TTY stays dark and never queries', () => {
     let wrote = '';
     installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: false, env: {},
+      configManager: fakeConfig('auto'), isTTY: false, 
       writeQuery: (b) => { wrote += b; }, requestRepaint: () => {},
     });
     expect(isMode('dark')).toBe(true);
@@ -276,7 +267,7 @@ describe('installBackgroundThemeProbe: forcing paths', () => {
   test('unset config defaults to auto (queries on a TTY)', () => {
     let wrote = '';
     installBackgroundThemeProbe({
-      configManager: fakeConfig(undefined), isTTY: true, env: {},
+      configManager: fakeConfig(undefined), isTTY: true, 
       writeQuery: (b) => { wrote += b; }, requestRepaint: () => {},
     });
     expect(wrote).toBe(OSC11_QUERY);
@@ -289,7 +280,7 @@ describe('installBackgroundThemeProbe: auto probe flow', () => {
     let repaints = 0;
     const resolutions: ProbeResolution[] = [];
     const handle = installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: {}, timeoutMs: 1_000,
+      configManager: fakeConfig('auto'), isTTY: true, timeoutMs: 1_000,
       writeQuery: (b) => { wrote += b; }, requestRepaint: () => { repaints++; },
       onResolve: (r) => resolutions.push(r),
     });
@@ -305,7 +296,7 @@ describe('installBackgroundThemeProbe: auto probe flow', () => {
   test('auto + TTY: a dark reply stays dark and does NOT repaint', () => {
     let repaints = 0;
     const handle = installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: {}, timeoutMs: 1_000,
+      configManager: fakeConfig('auto'), isTTY: true, timeoutMs: 1_000,
       writeQuery: () => {}, requestRepaint: () => { repaints++; },
     });
     handle.filterInput(`\x1b]11;rgb:0000/0000/0000${ST}`);
@@ -313,12 +304,20 @@ describe('installBackgroundThemeProbe: auto probe flow', () => {
     expect(repaints).toBe(0);
   });
 
-  test('auto + TTY under tmux wraps the query in the passthrough envelope', () => {
-    let wrote = '';
-    installBackgroundThemeProbe({
-      configManager: fakeConfig('auto'), isTTY: true, env: { TMUX: '/tmp/tmux-1000/default,123,0' },
-      writeQuery: (b) => { wrote += b; }, requestRepaint: () => {},
-    });
-    expect(wrote).toBe(wrapForTmuxPassthrough(OSC11_QUERY));
+  test('auto + TTY under tmux writes the query as it is (tmux answers it; a passthrough envelope is dropped)', () => {
+    const saved = process.env['TMUX'];
+    process.env['TMUX'] = '/tmp/tmux-1000/default,123,0';
+    try {
+      let wrote = '';
+      installBackgroundThemeProbe({
+        configManager: fakeConfig('auto'), isTTY: true,
+        writeQuery: (b) => { wrote += b; }, requestRepaint: () => {},
+      });
+      expect(wrote).toBe(OSC11_QUERY);
+      expect(wrote).not.toContain('\x1bPtmux;');
+    } finally {
+      if (saved === undefined) delete process.env['TMUX'];
+      else process.env['TMUX'] = saved;
+    }
   });
 });

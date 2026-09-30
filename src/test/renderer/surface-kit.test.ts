@@ -283,6 +283,38 @@ describe('dim pass and stamp-over', () => {
     expect(screen[0]![4]!.char).toBe('m');
   });
 
+  test('no fragment of backdrop text shows beside a modal (live defect: a stray \'/\' at column 8 beside the recovery modal)', () => {
+    setActiveThemeMode('dark');
+    // The splash's working-directory line overhung the recovery modal by two
+    // cells on the left and one on the right; a whole word further out stays.
+    const text = 'ok /tmp/demo-proj-ab ok';
+    const screen = [createEmptyLine(text.length)];
+    for (let x = 0; x < text.length; x++) screen[0]![x] = createStyledCell(text[x]!, { fg: activeTokens().text });
+    const fill = Array.from({ length: 14 }, () => createStyledCell(' ', { bg: activeTokens().backgroundPanel }));
+    composeLayers(grid(screen, text.length), [{ x: 5, y: 0, lines: [fill], dim: true }]); // columns 5..18
+    const row = screen[0]!.map((cell) => cell.char).join('');
+    expect(row).toBe('ok' + ' '.repeat(19) + 'ok'); // '/t' and 'b' are gone, both 'ok's stay
+    // Only glyphs go: the cleared cells keep the dimmed backdrop's colours.
+    expect(screen[0]![3]!.bg).toBe(screen[0]![0]!.bg);
+    expect(screen[0]![5]!.bg).toBe(activeTokens().backgroundPanel);
+  });
+
+  test('a cut wide glyph goes whole, never half of it', () => {
+    const screen = [createEmptyLine(10)];
+    screen[0]![6] = createStyledCell('界', {});
+    screen[0]![7] = { ...createStyledCell(' '), char: '' };
+    composeLayers(grid(screen, 10), [{ x: 2, y: 0, lines: [Array.from({ length: 4 }, () => createStyledCell('m', { bg: activeTokens().backgroundPanel }))], dim: true }]);
+    expect(screen[0]![6]!.char).toBe(' ');
+    expect(screen[0]![7]!.char).toBe(' ');
+  });
+
+  test('a layer that does not dim leaves its neighbours alone', () => {
+    const screen = [createEmptyLine(10)];
+    screen[0]![1] = createStyledCell('/', {});
+    composeLayers(grid(screen, 10), [{ x: 2, y: 0, lines: [[createStyledCell('t', { bg: activeTokens().backgroundPanel })]], dim: false }]);
+    expect(screen[0]![1]!.char).toBe('/');
+  });
+
   test('a layer that does not dim (a toast) is stamped as it is', () => {
     const screen = [createEmptyLine(10)];
     composeLayers(grid(screen, 10), [{ x: 0, y: 0, lines: [[createStyledCell('t', { fg: activeTokens().warning, bg: activeTokens().backgroundPanel })]], dim: false }]);

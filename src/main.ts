@@ -45,7 +45,8 @@ import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from
 import { createSessionContinuityHintsBuilder } from './runtime/session-continuity-hints.ts';
 import { readLastSessionPointer } from '@/runtime/index.ts';
 import { startRecoveryAutosave } from './runtime/recovery-autosave.ts';
-import { scheduleRecoveryOffer } from './runtime/recovery-prompt.ts';
+import { startRecoveryOffer } from './runtime/recovery-prompt.ts';
+import { createStartupTypeaheadGate } from './runtime/startup-typeahead-gate.ts';
 import { buildRecoveryOfferWiring } from './runtime/recovery-offer-wiring.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
 import { handleErrorAffordanceKey } from './shell/recovery-input-helpers.ts';
@@ -168,6 +169,7 @@ async function main() {
   // Callable before the scheduler exists; see deferred-render.ts for why.
   const deferredRender = createDeferredRender();
   const render = deferredRender.render;
+  const typeahead = createStartupTypeaheadGate(); // keys typed before a startup modal appeared never answer it
 
   let pendingPermission: PendingPermissionState | null = null;
   // One-key jump/attach to a spawned CI fix-session: the affordance ARMS the id; the next 'j' runs the resume so the user never retypes it.
@@ -621,7 +623,7 @@ async function main() {
         viewportStartY: shellHeaderLines.length,
       } : undefined,
       layers: buildConversationLayers({ ...overlayContext, screenWidth: width, screenHeight: height, headerRows: shellHeaderLines.length, footerRows: shellFooterLines.length, permission: pendingPermission ? PermissionPromptUI.renderPromptModal(width, height, pendingPermission, pendingPermission, approvalBroker) : null }),
-    });
+    }); typeahead.framePainted(); // a startup modal counts as seen from its first painted frame
   };
   const renderScheduler = createRenderScheduler(renderNow, undefined, () => lifecycle.isTerminalRestored()); // coalescer; no frames after terminal restore
   deferredRender.set(() => renderScheduler.schedule()); // from here on, render() actually schedules
@@ -738,18 +740,16 @@ async function main() {
   // --- Terminal setup ---
   stdin.setRawMode(true); stdin.resume(); stdin.setEncoding('utf8');
   allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE + FOCUS_ENABLE));
-  // forced dark/light applies before first paint; auto (TTY only) fires the
-  // OSC 11 probe and repaints once if light wins. probePalette adds OSC 10 + OSC 4;0..15 to the
-  // same write (stored via terminal-palette.ts, nothing renders from it). filterInput strips replies from stdin.
-  // Transcript lines are cached per message: a theme or mode change marks them stale so the next paint re-renders them in the new colours.
-  registerThemeRefresh(() => conversation.clearLineCache());
-  const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), env: process.env, writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); }, probePalette: true });
+  // forced dark/light applies before first paint; auto (TTY only) repaints once if the OSC 11 probe says light. probePalette adds OSC 10 + OSC 4;0..15
+  // and retries until the terminal answers (terminal-palette-reader.ts); the `system` theme re-themes when it arrives. filterInput strips replies from stdin.
+  registerThemeRefresh(() => conversation.clearLineCache()); // theme/mode change: cached transcript lines re-render in the new colours
+  const themeProbe = installBackgroundThemeProbe({ configManager, isTTY: Boolean(stdout.isTTY), writeQuery: (b) => allowTerminalWrite(() => stdout.write(b)), requestRepaint: () => { compositor.resetDiff(); render(); }, probePalette: true, forwardInput: (b) => routeInput(b), subscribeResize: (l) => { stdout.on('resize', l); } });
 
   // continueRecovery lets --continue/bare --resume check the target session for a live crash snapshot newer than its store before resuming (see tui-startup.ts).
-  applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, surface: ctx.services.surface, render, continueRecovery: { sessionManager: ctx.services.sessionManager, runtime, conversation, writeLastSessionPointer, receipt: (line) => systemMessageRouter.userReceipt(line) } });
+  const typeaheadHooks = { onModalShown: () => typeahead.arm(), onFlowSettled: () => { const held = typeahead.release(); if (held.length > 0) routeInput(held); } };
+  applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, surface: ctx.services.surface, render, continueRecovery: { sessionManager: ctx.services.sessionManager, runtime, conversation, writeLastSessionPointer, receipt: (line) => systemMessageRouter.userReceipt(line), typeahead: typeaheadHooks } });
 
-  stdin.on('data', (raw: string) => {
-    const data = themeProbe.filterInput(raw); if (data.length === 0) return;
+  const routeInput = (data: string): void => {
     const blocking = handleBlockingShellInput({
       data, pendingPermission, render,
       abortTurn: () => orchestrator.abort(),
@@ -772,7 +772,8 @@ async function main() {
     }
 
     input.feed(data);
-  });
+  };
+  stdin.on('data', (raw: string) => { const data = typeahead.filter(themeProbe.filterInput(raw)); if (data.length > 0) routeInput(data); });
   process.on('SIGINT', sigintHandler); process.on('unhandledRejection', unhandledRejectionHandler); stdout.on('resize', resizeHandler);
 
   // State restores happen ONLY when the user explicitly asks, a CLI flag
@@ -781,16 +782,13 @@ async function main() {
   // deliberately no unconditional auto-restore here: a bare launch never
   // loads a saved conversation on its own (owner ruling).
 
-  // Initial render
-  conversation.rebuildHistory();
-  render();
-
-  // Crash-recovery snapshot: asked, never assumed. Scheduled after the first
-  // frame so the question is drawn rather than posed at a blank terminal.
-  scheduleRecoveryOffer(buildRecoveryOfferWiring({
+  // Crash-recovery snapshot: asked, never assumed, and opened before the first frame so the composer is never live under it;
+  // keys typed before it was painted are held and replayed into the composer once it is answered (startup-typeahead-gate.ts).
+  void startRecoveryOffer(buildRecoveryOfferWiring({
     surface: ctx.services.surface, sessionManager: ctx.services.sessionManager, runtime, conversation, commandContext,
-    writeLastSessionPointer, receipt: (line) => systemMessageRouter.userReceipt(line), render,
+    writeLastSessionPointer, receipt: (line) => systemMessageRouter.userReceipt(line), render, typeahead: typeaheadHooks,
   }));
+  conversation.rebuildHistory(); render(); // initial render
 
   // Auto-save to recovery file every 60s + multi-instance liveness-marker
   // refresh, see runtime/recovery-autosave.ts.

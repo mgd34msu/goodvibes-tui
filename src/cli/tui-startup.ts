@@ -7,7 +7,7 @@ import { startOnboardingFastPath } from '../runtime/onboarding/fast-path.ts';
 import { checkRecoveryForSession, readLastSessionPointer, type SessionSurface } from '@/runtime/index.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { writeFatalLine } from '@pellux/goodvibes-sdk/platform/daemon';
-import { offerRecoverySnapshot } from '../runtime/recovery-prompt.ts';
+import { offerRecoverySnapshot, type RecoveryTypeaheadHooks } from '../runtime/recovery-prompt.ts';
 import { buildRecoveryOfferWiring } from '../runtime/recovery-offer-wiring.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
@@ -34,6 +34,8 @@ export interface TuiStartupRecoveryDeps {
   readonly conversation: ConversationManager;
   readonly writeLastSessionPointer: (sessionId: string) => void;
   readonly receipt: (line: string) => void;
+  /** Holds typeahead out of the offer modal (see RecoveryPromptDeps.typeahead). */
+  readonly typeahead?: RecoveryTypeaheadHooks;
 }
 
 /**
@@ -59,11 +61,12 @@ export interface TuiStartupRecoveryDeps {
  *     plain store resume, after the follow-up Keep/Remove question the
  *     established flow always asks on decline.
  *
- * The modal itself is deferred to the next macrotask, mirroring
- * `scheduleRecoveryOffer`'s own reasoning: `applyInitialTuiCliState` runs
- * before the shell's first render, so asking a question here synchronously
- * would draw it at a blank terminal. The synchronous `checkRecoveryForSession`
- * probe above needs no such deferral, only opening the modal does.
+ * The modal opens synchronously, before the shell's first frame, like the
+ * general boot offer (startRecoveryOffer in runtime/recovery-prompt.ts): the
+ * first frame already carries the question, so the composer is never live
+ * underneath it, and keys typed before it was painted are held out of it by
+ * the typeahead gate (recovery.typeahead). This runs before the general
+ * offer, so it still asks first.
  */
 async function resumeNamedSessionWithRecoveryCheck(options: {
   readonly sessionId: string;
@@ -88,39 +91,31 @@ async function resumeNamedSessionWithRecoveryCheck(options: {
     return;
   }
 
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const deps = buildRecoveryOfferWiring({
-            surface,
-            sessionManager: recovery.sessionManager,
-            runtime: recovery.runtime,
-            conversation: recovery.conversation,
-            commandContext,
-            writeLastSessionPointer: recovery.writeLastSessionPointer,
-            receipt: recovery.receipt,
-            render,
-          });
-          const outcome = await offerRecoverySnapshot({ ...deps, targetSessionId: sessionId });
-          if (outcome !== 'resumed') {
-            await plainResume();
-          }
-        } catch {
-          // Best-effort by construction (mirrors offerRecoverySnapshot's own
-          // guarantee): a failure here must fall back to the plain resume
-          // rather than leave the boot with nothing resumed at all.
-          await plainResume().catch(() => {
-            // A failing plain resume here is no worse than the pre-existing
-            // behavior when session resume itself fails.
-          });
-        } finally {
-          resolve();
-        }
-      })();
-    }, 0);
-    timer.unref?.();
-  });
+  try {
+    const deps = buildRecoveryOfferWiring({
+      surface,
+      sessionManager: recovery.sessionManager,
+      runtime: recovery.runtime,
+      conversation: recovery.conversation,
+      commandContext,
+      writeLastSessionPointer: recovery.writeLastSessionPointer,
+      receipt: recovery.receipt,
+      render,
+      ...(recovery.typeahead ? { typeahead: recovery.typeahead } : {}),
+    });
+    const outcome = await offerRecoverySnapshot({ ...deps, targetSessionId: sessionId });
+    if (outcome !== 'resumed') {
+      await plainResume();
+    }
+  } catch {
+    // Best-effort by construction (mirrors offerRecoverySnapshot's own
+    // guarantee): a failure here must fall back to the plain resume rather
+    // than leave the boot with nothing resumed at all.
+    await plainResume().catch(() => {
+      // A failing plain resume here is no worse than the pre-existing
+      // behavior when session resume itself fails.
+    });
+  }
 }
 
 /**
