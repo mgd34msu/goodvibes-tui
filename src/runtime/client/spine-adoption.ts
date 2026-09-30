@@ -29,7 +29,7 @@
  *   - `sessions.inputs.list` / `sessions.inputs.deliver`, the inbound steer
  *     path, so a message another surface queued for THIS session lands in the
  *     turn machinery here and is acknowledged on the wire.
- *   - `sessions.list`, the cross-surface union the panels read, interval-
+ *   - `sessions.list`, the cross-surface union the modals read, interval-
  *     refreshed and served synchronously.
  *   - the memory spine's wire transport, folded into the same handler by the
  *     SDK, this module's own `syncMemorySpineToHostStatus` call is retired;

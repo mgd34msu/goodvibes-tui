@@ -55,10 +55,9 @@ export class GitStatusProvider {
   }
 
   /**
-   * Start a lightweight live-repo-state poll. Mirrors DiffPanel's principle of
-   * never trusting a cached "is this a repo" flag (see diff-panel.ts
-   * showGitDiff/showFileDiffs/showStagedDiff, all gated on a fresh
-   * GitService.isGitRepo() check) but amortizes the cost for the header: the
+   * Start a lightweight live-repo-state poll. Follows the Changes modal's principle of
+   * never trusting a cached "is this a repo" flag (its git diff actions are
+   * all gated on a fresh GitService.isGitRepo() check) but amortizes the cost for the header: the
    * cheap synchronous isGitRepo() spawn runs every tick; the heavier async
    * status()+branch() fetch (this.refresh()) only runs when that boolean
    * actually flips, e.g. an external `git init`, or `.git` removed.

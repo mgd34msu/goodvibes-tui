@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
 import { noticeParts, publishNotice } from '../../core/notices.ts';
-import { PanelNotificationFeed } from '../../panels/notifications-feed.ts';
+import { NotificationFeed } from '../../views/notifications-feed.ts';
 import { bridgeNotificationFeedToToasts, ToastCenter } from '../../renderer/toast-center.ts';
 import { renderToasts } from '../../renderer/surface-kit-parts.ts';
 import { renderNotificationsModal } from '../../renderer/notifications-modal.ts';
@@ -21,7 +21,7 @@ const flat = (s: string): string => s.replace(/\s+/g, ' ');
 
 function wired() {
   const conversation = new ConversationManager(() => 100);
-  const feed = new PanelNotificationFeed();
+  const feed = new NotificationFeed();
   const toasts = new ToastCenter(() => 0, () => {});
   bridgeNotificationFeedToToasts(feed, toasts);
   conversation.setNoticeSink((content, { restored }) => publishNotice(feed, content, { restored, now: () => 1_000 }));
@@ -38,11 +38,15 @@ describe('system notices become toasts and history entries', () => {
 
     const entries = feed.list();
     expect(entries).toHaveLength(2);
-    expect(entries[1]!.title).toBe(FAILED);
-    expect(entries[1]!.level).toBe('critical');
+    // An agent or chain event line is kept under the event's plain title, its full text in the body.
+    expect(entries[1]!.title).toBe('Agent failed');
+    expect(entries[1]!.body).toBe(FAILED.replace('[Agents] ✗ ', ''));
+    expect(entries[1]!.level).toBe('warning');
     expect(entries[1]!.subject).toBe('agents');
-    expect(toasts.visible().map((t) => t.title)).toEqual([entries[0]!.title, FAILED]);
-    expect(toasts.visible()[1]!.tone).toBe('error');
+    expect(entries[0]!.title).toBe('Review chain failed');
+    expect(entries[0]!.body).toContain('(setFixWorkstreamRunner was never called)');
+    expect(toasts.visible().map((t) => t.title)).toEqual(['Review chain failed', 'Agent failed']);
+    expect(toasts.visible()[1]!.tone).toBe('warning');
 
     const frame = text(conversation.getDisplayBlocks());
     expect(frame).toContain('Starting a reviewer.');
@@ -87,10 +91,21 @@ describe('notices show their full text, wrapped', () => {
   });
 
   test('the history modal shows the whole notice', () => {
-    const feed = new PanelNotificationFeed();
+    const feed = new NotificationFeed();
     publishNotice(feed, FAILED, { now: () => Date.now() });
     const layer = renderNotificationsModal({ entries: feed.list(), selectedIndex: 0, unread: 1, isUnread: () => true, status: null, now: Date.now() }, 120, 40);
     expect(flat(text(layer.lines))).toContain('(setFixWorkstreamRunner was never called)');
+  });
+});
+
+describe('a multi-line body in the history', () => {
+  test('its lines stay apart in the row, never run together', () => {
+    const feed = new NotificationFeed();
+    publishNotice(feed, "[WRFC] \u2713 Chain wrfc-4e27484 PASSED \u2014 all gates clear\nyour repository's commit hooks refused the chain's commit", { now: () => Date.now() });
+    const layer = renderNotificationsModal({ entries: feed.list(), selectedIndex: 0, unread: 1, isUnread: () => true, status: null, now: Date.now() }, 160, 40);
+    const shown = flat(text(layer.lines));
+    expect(shown).toContain('all gates clear \u00b7 your repository');
+    expect(shown).not.toContain('clearyour');
   });
 });
 
@@ -170,7 +185,7 @@ describe('an agent view still draws its own agent\'s system messages', () => {
 
 describe('history counts say what they count', () => {
   test('a collapsed group of mixed kinds is titled by its group, with a per-kind breakdown', () => {
-    const feed = new PanelNotificationFeed();
+    const feed = new NotificationFeed();
     const decision = { target: 'panel_only' as const, reasonCode: 'batch_window_collapsed' as const, batchKey: 'agents:info' };
     const note = (title: string, i: number) => ({ id: `n${i}`, domain: 'agents', level: 'info' as const, title, timestamp: i });
     for (let i = 0; i < 5; i++) feed.record(note('Agent stream delta', i), decision);
@@ -182,7 +197,7 @@ describe('history counts say what they count', () => {
   });
 
   test('a collapsed group of one kind keeps that kind as its title', () => {
-    const feed = new PanelNotificationFeed();
+    const feed = new NotificationFeed();
     const decision = { target: 'panel_only' as const, reasonCode: 'burst_collapsed' as const, batchKey: 'security:warning' };
     for (let i = 0; i < 3; i++) feed.record({ id: `s${i}`, domain: 'security', level: 'warning', title: 'Permission denied', timestamp: i }, decision);
     expect(feed.list()[0]!.title).toBe('Permission denied');

@@ -218,7 +218,7 @@ bun run dev
 
 The compiled binary is the TUI entrypoint. With `daemon.enabled` on (the default) it adopts a running standalone GoodVibes daemon over loopback, and when a daemon is installed as a service but stopped, it starts that service once and waits for it to come online. It never embeds or constructs a daemon of its own. The control plane, HTTP listener (`danger.httpListener`), and web surface are all hosted by the daemon; the TUI configures them and reports their bindings.
 
-Tests live under `src/test/`, mirroring the source tree, and cover contract, security, release-gate, runtime, renderer, panel, integration, and anti-regression cases. Several gates run alongside them in CI: byte-exact golden renderer frames, performance budgets for startup and frame composition and line production (`scripts/perf-baseline.json`), and architecture rules for import cycles, layer boundaries, source-file size, and unused renderer exports (`scripts/check-architecture.ts`).
+Tests live under `src/test/`, mirroring the source tree, and cover contract, security, release-gate, runtime, renderer, view, integration, and anti-regression cases. Several gates run alongside them in CI: byte-exact golden renderer frames, performance budgets for startup and frame composition and line production (`scripts/perf-baseline.json`), and architecture rules for import cycles, layer boundaries, source-file size, and unused renderer exports (`scripts/check-architecture.ts`).
 
 Some decisions worth knowing before you read the source:
 
@@ -233,13 +233,13 @@ Some decisions worth knowing before you read the source:
 
 The TUI consumes the published `@pellux/goodvibes-sdk` platform layer for shared contracts, daemon routes, and transports, and keeps the terminal UI, host wiring, and product composition here. The dependency is pinned in `package.json`. Reference consumers of those surfaces live under [`examples/`](examples/reference-operator-client/README.md).
 
-Source layout, in brief:
+Source layout, in brief (the layer rules and the operator API bridge are in [docs/architecture.md](docs/architecture.md)):
 
 ```text
 src/
 ├── main.ts, core/          terminal entrypoint, orchestrator, conversation and transcript state
 ├── renderer/               raw ANSI compositor, overlays, modals, fullscreen workspaces
-├── panels/                 modal surfaces, the fleet read model and acts behind Agents, view wiring
+├── views/                  modal surfaces, the fleet read model and acts behind Agents, view wiring
 ├── input/                  slash commands, keybindings, composer, pickers, settings modals
 ├── runtime/                bootstrap wiring, typed store, service composition, session recovery
 ├── shell/                  shell-level modal openers, blocking input, retry affordances

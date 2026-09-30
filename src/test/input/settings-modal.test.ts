@@ -119,7 +119,7 @@ describe('SettingsModal', () => {
     expect(modal.active).toBe(true);
     expect(modal.categoryIndex).toBe(0);
     expect(modal.selectedIndex).toBe(0);
-    expect(modal.focusPane).toBe('categories');
+    expect(modal.focusRegion).toBe('categories');
     expect(modal.editingMode).toBe(false);
   });
 

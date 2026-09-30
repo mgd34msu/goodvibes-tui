@@ -224,7 +224,7 @@ export function resolveUiTones(mode: ThemeMode): Readonly<UiToneTokens> {
 // Active theme runtime.
 //
 // Theme name and mode are session state. Transcript tokens are read live per
-// render (activeTheme()). Chrome palettes (DEFAULT_PANEL_PALETTE,
+// render (activeTheme()). Chrome palettes (DEFAULT_VIEW_PALETTE,
 // DEFAULT_OVERLAY_PALETTE, FULLSCREEN_PALETTE, DEFAULT_STYLE, MODAL_TONES and
 // every extendPalette result) are module-level objects read by reference at
 // hundreds of call sites, so each owner registers an in-place rebuild via

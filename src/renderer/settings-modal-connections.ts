@@ -33,7 +33,7 @@ export function connectionRows(modal: SettingsModal, selectable: boolean): KitRo
 }
 
 /**
- * The detail pane for one connection: the state, what it means, and every next
+ * The detail for one connection: the state, what it means, and every next
  * step verbatim. The next steps are the daemon's requirements, so they are
  * listed in full rather than summarized, a truncated instruction is a wrong
  * instruction.

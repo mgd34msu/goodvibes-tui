@@ -8,7 +8,7 @@
  *  - adopted-online union (deduped, local wins),
  *  - adopted-offline degrades to local-only rows + an honest offline note with
  *    NO phantom wire rows and a `stale` flag,
- *  - a panel-consumer stand-in renders exactly what a panel would.
+ *  - a modal-consumer stand-in renders exactly what a modal would.
  */
 import { describe, expect, test } from 'bun:test';
 import type { SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane';
@@ -384,10 +384,10 @@ describe('SessionUnionCache: honest cross-surface read facade', () => {
     });
   });
 
-  test('panel-consumer stand-in: renders union rows online, and local rows + offline note when down', async () => {
-    // A minimal render exactly as a control-plane panel would: read the sync
+  test('modal-consumer stand-in: renders union rows online, and local rows + offline note when down', async () => {
+    // A minimal render exactly as a control-plane modal would: read the sync
     // listSessions() surface + the crossSurfaceView note off the facade type.
-    function renderPanel(facade: SessionReadFacade): { ids: string[]; note: string | null } {
+    function renderSessionList(facade: SessionReadFacade): { ids: string[]; note: string | null } {
       return { ids: facade.listSessions().map((r) => r.id).sort(), note: facade.crossSurfaceView.offlineNote };
     }
     const local = localReader([record('local-1')]);
@@ -395,10 +395,10 @@ describe('SessionUnionCache: honest cross-surface read facade', () => {
     const cache = new SessionUnionCache({ local, scheduler: noopScheduler, log: silent });
     cache.activate(wire.reader);
     await cache.refresh();
-    expect(renderPanel(cache)).toEqual({ ids: ['local-1', 'wire-1'], note: null });
+    expect(renderSessionList(cache)).toEqual({ ids: ['local-1', 'wire-1'], note: null });
 
     wire.set({ reject: true });
     await cache.refresh();
-    expect(renderPanel(cache)).toEqual({ ids: ['local-1'], note: 'cross-surface view offline' });
+    expect(renderSessionList(cache)).toEqual({ ids: ['local-1'], note: 'cross-surface view offline' });
   });
 });

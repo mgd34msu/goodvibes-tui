@@ -1,6 +1,6 @@
 /**
  * renderNotificationsModal, everything the notification feed collected,
- * newest first (replaces the Notifications pane).
+ * newest first (replaces the Notifications view).
  *
  *   ✦ Notifications  3 unread                                         esc
  *
@@ -21,14 +21,14 @@ import { activeTokens } from './theme.ts';
 import { beginModal, finishModal, scrollCountText, type SurfaceLayer } from './surface-kit.ts';
 import { drawList, type KitRow } from './surface-kit-list.ts';
 import { drawTextBlock } from './surface-kit-extra.ts';
-import type { PanelFeedEntry } from '../panels/notifications-feed.ts';
+import type { NotificationFeedEntry } from '../views/notifications-feed.ts';
 
 /** What the renderer reads from the modal. */
 export interface NotificationsModalView {
-  readonly entries: readonly PanelFeedEntry[];
+  readonly entries: readonly NotificationFeedEntry[];
   readonly selectedIndex: number;
   readonly unread: number;
-  readonly isUnread: (entry: PanelFeedEntry) => boolean;
+  readonly isUnread: (entry: NotificationFeedEntry) => boolean;
   /** A one-line result of the last action, or null. */
   readonly status: string | null;
   /** Clock for the Today/Earlier split (tests pass a fixed value). */
@@ -49,13 +49,20 @@ function whenText(ts: number, now: number): string {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
-function dot(entry: PanelFeedEntry, unread: boolean): { mark: string; fg: string } {
+function dot(entry: NotificationFeedEntry, unread: boolean): { mark: string; fg: string } {
   const t = activeTokens();
   const fg = entry.level === 'critical' ? t.error
     : entry.level === 'warning' ? t.warning
       : entry.level === 'debug' ? t.textFaint
         : t.info;
   return { mark: unread || entry.level === 'critical' || entry.level === 'warning' ? '●' : '○', fg };
+}
+
+/** A body's lines as one row description: a list row keeps no line breaks, so lines are joined with a visible separator, never run together. */
+export function bodyLine(body: string | undefined): string | undefined {
+  if (body === undefined) return undefined;
+  const lines = body.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
+  return lines.length > 0 ? lines.join(' \u00b7 ') : undefined;
 }
 
 /** Rows in display order, with the entry index each item row stands for (-1 for headers). */
@@ -75,7 +82,7 @@ function notificationRows(view: NotificationsModalView): { rows: KitRow[]; entry
     const count = entry.collapsedCount > 1 ? `×${entry.collapsedCount} · ` : '';
     rows.push({
       label: entry.title,
-      desc: entry.body,
+      desc: bodyLine(entry.body),
       right: `${count}${whenText(entry.timestamp, view.now)}`,
       mark,
       markFg: fg,

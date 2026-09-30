@@ -36,19 +36,19 @@ import { formatUsd } from '../renderer/usage-modal.ts';
 import {
   fleetAttentionText, fleetNodeAttention, fleetStallMarker, isBlockedOnUserNode, isRunningProcessState, isTerminalProcessState,
   type FleetReadModel, type FleetTreeRow,
-} from '../panels/fleet-read-model.ts';
-import type { FleetActs } from '../panels/fleet-acts.ts';
-import type { FleetSpawn } from '../panels/fleet-spawn.ts';
+} from '../views/fleet-read-model.ts';
+import type { FleetActs } from '../views/fleet-acts.ts';
+import type { FleetSpawn } from '../views/fleet-spawn.ts';
 import {
   activeFleetTab, attachFleetTab, EMPTY_FLEET_TABS_STATE, isAttachableFleetKind, stepFleetTab, type FleetTab, type FleetTabsState,
-} from '../panels/fleet-tabs.ts';
-import { liveSteerableLabels, reconcileSteerBadges, steerBadgeGlyph, steerRefusalMessage } from '../panels/fleet-steer.ts';
-import { FleetStopTracker, fleetKillConfirmArgs, fleetStateDisplay, toggleFleetPause } from '../panels/fleet-stop.ts';
-import { formatFleetCost, renderFleetDetailLines } from '../panels/fleet-panel-format.ts';
-import { hasFleetCost } from '../panels/fleet-read-model.ts';
-import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from '../panels/fleet-transcript.ts';
-import { isObservedExternalNode } from '../panels/fleet-observed-render.ts';
-import type { HostedSessionFeed } from '../panels/hosted-session-feed.ts';
+} from '../views/fleet-session-tabs.ts';
+import { liveSteerableLabels, reconcileSteerBadges, steerBadgeGlyph, steerRefusalMessage } from '../views/fleet-steer.ts';
+import { FleetStopTracker, fleetKillConfirmArgs, fleetStateDisplay, toggleFleetPause } from '../views/fleet-stop.ts';
+import { formatFleetCost, renderFleetDetailLines } from '../views/fleet-format.ts';
+import { hasFleetCost } from '../views/fleet-read-model.ts';
+import { parseAgentLedger, renderFleetAgentTranscript, renderFleetChainSummary, renderFleetLedgerFallback, renderFleetTranscriptLoading } from '../views/fleet-transcript.ts';
+import { isObservedExternalNode } from '../views/fleet-observed-render.ts';
+import type { HostedSessionFeed } from '../views/hosted-session-feed.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { isTextBackspace } from './delete-key-policy.ts';
 import type { ConfirmOptions } from './confirm-dialog.ts';
@@ -687,7 +687,7 @@ export class AgentsModal implements SurfaceModal {
   }
 }
 
-/** The files a candidate diff touches, for the picker's side panel. */
+/** The files a candidate diff touches, for the picker's side column. */
 function diffSide(diff: string): AgentsText[] {
   const files = diff.split('\n').filter((line) => line.startsWith('diff --git ')).map((line) => line.replace(/^diff --git a\/.+? b\//, ''));
   const added = diff.split('\n').filter((line) => line.startsWith('+') && !line.startsWith('+++')).length;

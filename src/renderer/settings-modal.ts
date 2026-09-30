@@ -5,7 +5,7 @@
  *
  *   ▏Search all settings                                       display
  *
- *   ✦ interface          ┌ element panel ─────────────────────────────┐
+ *   ✦ interface          ┌ element inset ─────────────────────────────┐
  *     Display        9     ◇ Theme                        goodvibes
  *     UI             4       Color palette for the whole interface…
  *   ✦ ai routing             display.theme · default goodvibes · …
@@ -42,7 +42,7 @@ import {
   type SurfaceLayer,
 } from './surface-kit.ts';
 import { drawRow, drawScrollingList, measureRow, rememberStart, rememberedStart, type KitRow } from './surface-kit-list.ts';
-import { panel, type KitPanel } from './surface-kit-parts.ts';
+import { inset, type KitInset } from './surface-kit-parts.ts';
 
 // ---------------------------------------------------------------------------
 // Rows
@@ -104,7 +104,7 @@ function categoryOf(entry: SettingEntry): string {
 
 /** The rows of the right-hand list for the current view, and which one is selected. */
 function listRows(modal: SettingsModal, width: number): { rows: KitRow[]; selected: number } {
-  const focused = modal.searchFocused || (modal.focusPane ?? 'settings') === 'settings';
+  const focused = modal.searchFocused || (modal.focusRegion ?? 'settings') === 'settings';
   const clampIndex = (n: number): number => Math.max(0, Math.min(modal.selectedIndex, n - 1));
   if (modal.searchFocused) {
     const results = modal.searchResults;
@@ -163,7 +163,7 @@ function listRows(modal: SettingsModal, width: number): { rows: KitRow[]; select
 }
 
 function categoryRows(modal: SettingsModal): KitRow[] {
-  const focused = !modal.searchFocused && modal.focusPane === 'categories';
+  const focused = !modal.searchFocused && modal.focusRegion === 'categories';
   const rows: KitRow[] = [];
   for (const group of SETTINGS_CATEGORY_GROUPS) {
     const categories = group.categories.filter((category) => SETTINGS_CATEGORIES.includes(category));
@@ -252,10 +252,10 @@ function windowDoc(modal: SettingsModal, lines: DocLine[], budget: number): DocL
 }
 
 // ---------------------------------------------------------------------------
-// Right pane
+// Right side: the settings column
 // ---------------------------------------------------------------------------
 
-function drawSettingsPane(f: ModalFrame, modal: SettingsModal, p: KitPanel): { above: number; below: number } {
+function drawSettingsColumn(f: ModalFrame, modal: SettingsModal, p: KitInset): { above: number; below: number } {
   const t = activeTokens();
   const sx = p.x + 4;
   const sr = p.x + p.w - 5;
@@ -330,7 +330,7 @@ function settingsHints(modal: SettingsModal): KitHint[] {
   if (modal.subscriptionLogoutConfirmationTarget) return [['⏎', 'sign out'], ['esc', 'cancel']];
   if (modal.editingMode) return [['⏎', 'save'], ['esc', 'cancel edit']];
   if (modal.searchFocused) return [['↑↓', 'move'], ['⏎', 'change'], ['⌫', 'edit search'], ['ctrl+r', 'reset']];
-  if (modal.focusPane === 'categories') return [['↑↓', 'category'], ['→', 'settings'], ['tab', 'pane']];
+  if (modal.focusRegion === 'categories') return [['↑↓', 'category'], ['→', 'settings'], ['tab', 'pane']];
   const enter: KitHint = modal.currentCategory === 'mcp' ? ['⏎', 'edit trust']
     : modal.currentCategory === 'subscriptions' ? ['⏎', 'review or sign out']
     : ['⏎', 'change'];
@@ -342,7 +342,7 @@ function settingsHints(modal: SettingsModal): KitHint[] {
 // ---------------------------------------------------------------------------
 
 /** Below this many text columns the category list folds into the breadcrumb (←→ still switch). */
-const MIN_TWO_PANE_WIDTH = 56;
+const MIN_LIST_DETAIL_WIDTH = 56;
 
 export function renderSettingsModal(modal: SettingsModal, screenWidth: number, screenHeight = 24): SurfaceLayer {
   const selectedEntry = !modal.searchFocused && modal.currentCategory !== 'mcp' && modal.currentCategory !== 'subscriptions' && modal.currentCategory !== 'connections'
@@ -360,16 +360,16 @@ export function renderSettingsModal(modal: SettingsModal, screenWidth: number, s
 
   const body = f.top + 2;
   const inner = f.r - f.l + 1;
-  let panelX = 2;
+  let detailX = 2;
   // Search spans every category, so the category list steps aside for it.
-  if (inner >= MIN_TWO_PANE_WIDTH && !modal.searchFocused) {
+  if (inner >= MIN_LIST_DETAIL_WIDTH && !modal.searchFocused) {
     const catW = Math.max(18, Math.min(26, Math.round(inner * 0.22)));
     const x1 = f.l + catW - 1;
     drawScrollingList(f.canvas, { rows: categoryRows(modal), top: body, bottom: f.bottom, x0: f.l, x1, scrollKey: { owner: modal, name: 'categories' } });
-    panelX = x1 + 3;
+    detailX = x1 + 3;
   }
-  const p = panel(f.canvas, panelX, body, f.r + 2 - panelX + 1, f.bottom - body + 1);
-  const hidden = drawSettingsPane(f, modal, p);
+  const p = inset(f.canvas, detailX, body, f.r + 2 - detailX + 1, f.bottom - body + 1);
+  const hidden = drawSettingsColumn(f, modal, p);
   f.hintRight = scrollCountText(hidden.above, hidden.below);
   return finishModal(f);
 }

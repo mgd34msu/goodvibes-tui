@@ -351,8 +351,8 @@ export function drawList(canvas: SurfaceCanvas, options: KitListOptions): KitLis
 }
 
 /**
- * drawList for a pane that has no hint row of its own: when rows are hidden,
- * the pane's last row carries the muted scroll count ("3 more ↑ · 12 more ↓").
+ * drawList for a list that has no hint row of its own: when rows are hidden,
+ * the list's last row carries the muted scroll count ("3 more ↑ · 12 more ↓").
  */
 export function drawScrollingList(canvas: SurfaceCanvas, options: KitListOptions): KitListResult {
   const scratch = new SurfaceCanvas(canvas.width, canvas.height);

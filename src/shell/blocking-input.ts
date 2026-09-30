@@ -233,7 +233,7 @@ export function handleBlockingShellInput(
       }
     }
 
-    // Mouse, panel-navigation and other escape sequences, plus a bare Esc,
+    // Mouse, view-navigation and other escape sequences, plus a bare Esc,
     // are not card answers. Pass them through to the normal input
     // handler so the transcript stays scrollable and Esc only drops focus. The
     // request stays pending (answer it with y/n or a remember tier when ready);

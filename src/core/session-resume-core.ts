@@ -2,22 +2,22 @@
  * session-resume-core.ts, the ONE resume routine both resume seams call.
  *
  * Two independent call sites used to duplicate (and diverge from) this
- * sequence: `/session resume` (session-workflow.ts) and the panel/session-
- * browser resume (bootstrap-hook-bridge.ts's `createResumeSessionHandler`).
+ * sequence: `/session resume` (session-workflow.ts) and the session-browser
+ * resume (bootstrap-hook-bridge.ts's `createResumeSessionHandler`).
  * Divergences found by audit:
- *   - the panel seam skipped `restoreTurnAnchors` (message-anchored /rewind
- *     silently had no anchors after a panel resume)
- *   - the panel seam skipped `conversation.resetAll()` before `fromJSON()`
- *   - the panel seam skipped the `selectModel` reselection fallback (it set
- *     `runtime.model` straight from the saved meta, never re-resolving
+ *   - the session-browser seam skipped `restoreTurnAnchors` (message-anchored
+ *     /rewind silently had no anchors after a session-browser resume)
+ *   - the session-browser seam skipped `conversation.resetAll()` before
+ *     `fromJSON()`
+ *   - the session-browser seam skipped the `selectModel` reselection fallback
+ *     (it set `runtime.model` straight from the saved meta, never re-resolving
  *     through the live provider registry)
- *   - the panel seam duplicated the panel-reopen loop WITHOUT the
- *     modal-redirect skip, so a MIGRATE-TO-MODAL id could pop a modal
- *     mid-resume
+ *   - the session-browser seam reopened saved views without the modal
+ *     redirect, so a saved view id could pop a modal mid-resume (saved views
+ *     are no longer reopened at all)
  *
- * Both seams now call this module so those four behaviors (plus the
- * panel-reopen-cap honesty note) are guaranteed identical by construction,
- * not by copy-paste discipline between two files.
+ * Both seams now call this module so those behaviors are guaranteed
+ * identical by construction, not by copy-paste discipline between two files.
  *
  * Callers own everything ABOVE and AROUND this core sequence: printing or
  * logging the outcome in their own idiom (`ctx.print` vs `conversation.log`),
@@ -72,9 +72,11 @@ export interface SessionResumeOutcome {
  * restore rewind anchors, replay any post-snapshot journal records, hydrate
  * footer usage and reselect the model.
  *
- * Sessions saved while the TUI still had side panes carry
- * `returnContext.openPanels`; it is read as part of the saved return context
- * and otherwise ignored (there are no panes to reopen).
+ * Sessions saved by an older TUI can carry a legacy pane list in their
+ * return context (`returnContext.openPanels` plus an "Open panels: ..."
+ * line). The SDK's session loader (`loadedReturnContext`) drops both, so
+ * `meta.returnContext` here never has them, and the journal-replay rewrite
+ * below writes the session back without them.
  */
 export async function resumeSessionCore(sessionId: string, deps: SessionResumeDeps): Promise<SessionResumeOutcome> {
   const { meta, messages } = deps.sessionManager.load(sessionId);

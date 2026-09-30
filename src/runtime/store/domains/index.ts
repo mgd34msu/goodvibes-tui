@@ -37,14 +37,6 @@ export type {
 export { createInitialOverlaysState } from '@/runtime/index.ts';
 
 export type {
-  PanelId,
-  PanelPosition,
-  PanelState,
-  PanelDomainState,
-} from './panels.ts';
-export { createInitialPanelsState } from './panels.ts';
-
-export type {
   PermissionMode,
   PermissionDecisionMachineState,
   PermissionDecisionOutcome,

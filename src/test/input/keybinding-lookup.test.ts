@@ -45,7 +45,7 @@ describe('KeybindingsManager.lookup()', () => {
     expect(km.lookup({})).toBeNull();
   });
 
-  it('the old pane chords resolve to nothing now (Ctrl+PageUp/PageDown, Ctrl+], Ctrl+[ )', () => {
+  it('the old view chords resolve to nothing now (Ctrl+PageUp/PageDown, Ctrl+], Ctrl+[ )', () => {
     const km = makeKm();
     expect(km.lookup({ logicalName: 'pageup', ctrl: true })).toBeNull();
     expect(km.lookup({ logicalName: 'pagedown', ctrl: true })).toBeNull();

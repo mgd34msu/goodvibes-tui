@@ -38,13 +38,13 @@ fills this gap with a per-session append-only NDJSON file that records durable c
    `--continue`, `--resume`, and `--fork` route through (see [CLI flags](cli-flags.md)); and
    (b) `bootstrap-hook-bridge.ts`'s `createResumeSessionHandler`, used both for the automatic
    startup recovery modal (see "The startup recovery modal" in
-   [getting-started.md](getting-started.md)) and for in-TUI panel resume.
+   [getting-started.md](getting-started.md)) and for resuming from the in-TUI session browser.
    It calls `replayJournal(journalPath, snapshotTimestamp)` to find records that post-date
    the loaded snapshot, applies the final record's messages to the live conversation (each
    record carries the full snapshot, so the last record is authoritative), writes a fresh
    snapshot via the SessionManager, and calls `journal.rotate()`. Only the `session-workflow.ts`
    seam prints the replay notice to the conversation (`[Recovery] Replayed N journal record(s):
-   restored turns since last snapshot.`); the startup-modal and panel-resume seam replays
+   restored turns since last snapshot.`); the startup-modal and session-browser seam replays
    silently. When the journal tail was quarantined as corrupt, `session-workflow.ts` also prints
    one of two follow-up lines. When no record could be replayed, it prints a "journal tail was
    corrupt or unrecognised, proceeding with snapshot only" notice. When at least one record did
@@ -135,7 +135,7 @@ quarantined rather than partially trusted or crashed on (the same convention as 
 
 A SIGKILL at any moment loses **at most the in-flight append** (one partial JSON line), never a
 full conversation turn. `--continue`/`--resume`/`--fork`, `/session resume`,
-the startup recovery modal, and in-TUI panel resume are every resume path, and each routes
+the startup recovery modal, and the in-TUI session browser are every resume path, and each routes
 through `resumeSessionCore`, which calls `replayJournalForSession`, so the gap is closed on
 whichever path the user takes.
 

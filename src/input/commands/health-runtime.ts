@@ -47,7 +47,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       const readModels = requireReadModels(ctx);
 
       if (sub === 'open' || sub === 'panel' || sub === 'provider') {
-        ctx.openModal?.('providers-modal'); // provider-health panel -> config modal
+        ctx.openModal?.('providers-modal'); // provider-health view -> config modal
         return;
       }
 
@@ -304,7 +304,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       if (sub === 'maintenance') {
         const session = readModels.session.getSnapshot();
         const providerRegistry = ctx.provider.providerRegistry;
-        // Resolve the context window the same way the Tokens panel does so the
+        // Resolve the context window the same way the Usage modal does so the
         // maintenance usage %/remaining agree across every diagnostics surface.
         const contextWindow = providerRegistry.getKnownContextWindowForModel(
           providerRegistry.getCurrentModel(),
@@ -457,7 +457,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       const llmMessages = typeof ctx.session.conversationManager.getMessagesForLLM === 'function'
         ? ctx.session.conversationManager.getMessagesForLLM()
         : [];
-      // Resolve the context window the same way the Tokens panel does so the
+      // Resolve the context window the same way the Usage modal does so the
       // maintenance usage %/remaining agree across every diagnostics surface.
       const contextWindow = providerRegistry.getKnownContextWindowForModel(
         providerRegistry.getCurrentModel(),

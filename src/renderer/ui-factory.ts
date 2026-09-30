@@ -49,7 +49,7 @@ export class UIFactory {
   }
 
   /**
-   * createMessageBar, a sent user message: a full-width panel fill with the
+   * createMessageBar, a sent user message: a full-width surface fill with the
    * secondary bar (user-message.ts). A cancelled message passes its own fill,
    * error bar and strikethrough.
    */

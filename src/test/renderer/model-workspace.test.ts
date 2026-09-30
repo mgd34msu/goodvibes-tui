@@ -97,7 +97,7 @@ describe('renderModelWorkspace', () => {
     for (const line of lines) expect(line).toHaveLength(W);
   });
 
-  test('renders the five targets as tabs, the model list and the selected model in the detail panel', () => {
+  test('renders the five targets as tabs, the model list and the selected model in the detail inset', () => {
     const text = linesToText(frameFromLayer(renderModelWorkspace(makePicker(), W, H), W, H)).join('\n');
 
     expect(text).toContain('✦ Models');
@@ -107,7 +107,7 @@ describe('renderModelWorkspace', () => {
     expect(text).toContain('▏Search models');
     expect(text).toContain('GPT Test');
     expect(text).toContain('Claude Test');
-    // Detail panel: the selected model's key and facts.
+    // Detail inset: the selected model's key and facts.
     expect(text).toContain('openai:gpt-test');
     expect(text).toContain('configured');
     expect(text).toContain(' ⏎  use for Main Chat');
@@ -191,10 +191,10 @@ describe('renderModelWorkspace', () => {
 
   // Owner design rule: descriptive text is shown in full, wrap or scroll,
   // never clipped. The selected model's key and facts must survive at 80x24,
-  // and at 60 columns (no room for the detail panel) the selected row itself
+  // and at 60 columns (no room for the detail inset) the selected row itself
   // names the full key.
   describe('the selected model is never silently dropped, at 80x24 and 60-col narrow heights', () => {
-    test('normal (80x24): the detail panel carries the key, provider and status', () => {
+    test('normal (80x24): the detail inset carries the key, provider and status', () => {
       const picker = makePicker();
       const selected = picker.getSelected()!;
       const text = linesToText(frameFromLayer(renderModelWorkspace(picker, 80, 24), 80, 24)).join('\n');
@@ -218,7 +218,7 @@ describe('renderModelWorkspace', () => {
       expect(text).toContain(' tab  next target');
       expect(text).toContain(' ctrl+f  pin');
       expect(text.replace(/\s+/g, ' ')).toContain('ctrl+t price · ctrl+k capability · ctrl+a available · ctrl+b benchmark sort · ctrl+g group');
-      // Without room for the detail panel, they move into the hint row.
+      // Without room for the detail inset, they move into the hint row.
       const narrow = linesToText(frameFromLayer(renderModelWorkspace(makePicker(), 60, 30), 60, 30)).join('\n');
       expect(narrow).toContain(' ctrl+t  price');
     });

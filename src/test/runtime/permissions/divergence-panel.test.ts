@@ -31,7 +31,7 @@ function makeDashboard(sim?: PermissionSimulator) {
   return new DivergenceDashboard(sim ?? makeSimulator(), 'warn-on-divergence');
 }
 
-function makePanel(dash?: DivergenceDashboard) {
+function makeDivergence(dash?: DivergenceDashboard) {
   return new DivergencePanel(dash ?? makeDashboard());
 }
 
@@ -39,38 +39,38 @@ function makePanel(dash?: DivergenceDashboard) {
 
 describe('DivergencePanel: subscribe / notify', () => {
   it('calls subscriber when recordTrendEntry is invoked', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb = mock(() => {});
-    panel.subscribe(cb);
-    panel.recordTrendEntry();
+    divergence.subscribe(cb);
+    divergence.recordTrendEntry();
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
   it('calls multiple subscribers on each recordTrendEntry', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb1 = mock(() => {});
     const cb2 = mock(() => {});
-    panel.subscribe(cb1);
-    panel.subscribe(cb2);
-    panel.recordTrendEntry();
+    divergence.subscribe(cb1);
+    divergence.subscribe(cb2);
+    divergence.recordTrendEntry();
     expect(cb1).toHaveBeenCalledTimes(1);
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
   it('calls subscriber on each subsequent recordTrendEntry call', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb = mock(() => {});
-    panel.subscribe(cb);
-    panel.recordTrendEntry();
-    panel.recordTrendEntry();
-    panel.recordTrendEntry();
+    divergence.subscribe(cb);
+    divergence.recordTrendEntry();
+    divergence.recordTrendEntry();
+    divergence.recordTrendEntry();
     expect(cb).toHaveBeenCalledTimes(3);
   });
 
   it('does not call subscriber before any recordTrendEntry', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb = mock(() => {});
-    panel.subscribe(cb);
+    divergence.subscribe(cb);
     expect(cb).not.toHaveBeenCalled();
   });
 });
@@ -79,30 +79,30 @@ describe('DivergencePanel: subscribe / notify', () => {
 
 describe('DivergencePanel: unsubscribe', () => {
   it('unsubscribe removes the listener', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb = mock(() => {});
-    const unsub = panel.subscribe(cb);
+    const unsub = divergence.subscribe(cb);
     unsub();
-    panel.recordTrendEntry();
+    divergence.recordTrendEntry();
     expect(cb).not.toHaveBeenCalled();
   });
 
   it('unsubscribe of one does not affect other subscribers', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb1 = mock(() => {});
     const cb2 = mock(() => {});
-    const unsub1 = panel.subscribe(cb1);
-    panel.subscribe(cb2);
+    const unsub1 = divergence.subscribe(cb1);
+    divergence.subscribe(cb2);
     unsub1();
-    panel.recordTrendEntry();
+    divergence.recordTrendEntry();
     expect(cb1).not.toHaveBeenCalled();
     expect(cb2).toHaveBeenCalledTimes(1);
   });
 
   it('calling unsubscribe twice is safe', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb = mock(() => {});
-    const unsub = panel.subscribe(cb);
+    const unsub = divergence.subscribe(cb);
     unsub();
     expect(() => unsub()).not.toThrow();
   });
@@ -112,51 +112,51 @@ describe('DivergencePanel: unsubscribe', () => {
 
 describe('DivergencePanel: dispose', () => {
   it('dispose() clears all subscribers', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb1 = mock(() => {});
     const cb2 = mock(() => {});
-    panel.subscribe(cb1);
-    panel.subscribe(cb2);
-    panel.dispose();
-    panel.recordTrendEntry();
+    divergence.subscribe(cb1);
+    divergence.subscribe(cb2);
+    divergence.dispose();
+    divergence.recordTrendEntry();
     expect(cb1).not.toHaveBeenCalled();
     expect(cb2).not.toHaveBeenCalled();
   });
 
   it('dispose() is safe to call when no subscribers are registered', () => {
-    const panel = makePanel();
-    expect(() => panel.dispose()).not.toThrow();
+    const divergence = makeDivergence();
+    expect(() => divergence.dispose()).not.toThrow();
   });
 
   it('dispose() is safe to call multiple times', () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb = mock(() => {});
-    panel.subscribe(cb);
-    panel.dispose();
-    expect(() => panel.dispose()).not.toThrow();
+    divergence.subscribe(cb);
+    divergence.dispose();
+    expect(() => divergence.dispose()).not.toThrow();
   });
 });
 
 // ── error handling in _notify ─────────────────────────────────────────────────
 
 describe('DivergencePanel: subscriber error handling', () => {
-  it('a throwing subscriber does not crash the panel', async () => {
-    const panel = makePanel();
-    panel.subscribe(() => {
+  it('a throwing subscriber does not crash the divergence', async () => {
+    const divergence = makeDivergence();
+    divergence.subscribe(() => {
       throw new Error('subscriber failure');
     });
-    expect(() => panel.recordTrendEntry()).not.toThrow();
+    expect(() => divergence.recordTrendEntry()).not.toThrow();
     await flushMicrotasks();
   });
 
   it('subsequent subscribers are still called when an earlier one throws', async () => {
-    const panel = makePanel();
+    const divergence = makeDivergence();
     const cb = mock(() => {});
-    panel.subscribe(() => {
+    divergence.subscribe(() => {
       throw new Error('boom');
     });
-    panel.subscribe(cb);
-    panel.recordTrendEntry();
+    divergence.subscribe(cb);
+    divergence.recordTrendEntry();
     await flushMicrotasks();
     expect(cb).toHaveBeenCalledTimes(1);
   });
@@ -171,9 +171,9 @@ describe('DivergencePanel: getSnapshot() bufferLimit', () => {
     for (let i = 0; i < 5; i++) {
       dash.recordTrendEntry();
     }
-    // Panel with bufferLimit of 3 should only expose 3 entries
-    const panel = new DivergencePanel(dash, { bufferLimit: 3 });
-    const snap = panel.getSnapshot();
+    // DivergencePanel with bufferLimit of 3 should only expose 3 entries
+    const divergence = new DivergencePanel(dash, { bufferLimit: 3 });
+    const snap = divergence.getSnapshot();
     expect(snap.trend).toHaveLength(3);
   });
 
@@ -181,16 +181,16 @@ describe('DivergencePanel: getSnapshot() bufferLimit', () => {
     const dash = makeDashboard();
     dash.recordTrendEntry();
     dash.recordTrendEntry();
-    const panel = new DivergencePanel(dash, { bufferLimit: 10 });
-    const snap = panel.getSnapshot();
+    const divergence = new DivergencePanel(dash, { bufferLimit: 10 });
+    const snap = divergence.getSnapshot();
     expect(snap.trend).toHaveLength(2);
   });
 
   it('getSnapshot() includes all other dashboard snapshot fields', () => {
     const dash = makeDashboard();
     dash.recordTrendEntry();
-    const panel = makePanel(dash);
-    const snap = panel.getSnapshot();
+    const divergence = makeDivergence(dash);
+    const snap = divergence.getSnapshot();
     expect(snap.report).toBeDefined();
     expect(snap.mode).toBeDefined();
     expect(snap.gate).toBeDefined();
@@ -206,10 +206,10 @@ describe('DivergencePanel: getSnapshot() bufferLimit', () => {
       dash.recordTrendEntry();
     }
     // With bufferLimit 3, we should get the last 3 (most recent)
-    const panel = new DivergencePanel(dash, { bufferLimit: 3 });
+    const divergence = new DivergencePanel(dash, { bufferLimit: 3 });
     const snapFull = dash.getSnapshot();
-    const snapPanel = panel.getSnapshot();
-    // Panel trend should be the last 3 of the full trend
-    expect(snapPanel.trend).toEqual(snapFull.trend.slice(-3));
+    const snapBuffered = divergence.getSnapshot();
+    // Buffered trend should be the last 3 of the full trend
+    expect(snapBuffered.trend).toEqual(snapFull.trend.slice(-3));
   });
 });

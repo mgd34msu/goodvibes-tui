@@ -3,6 +3,7 @@ import {
   checkSelectedIndexReads,
   countSelectedIndexReads,
   isSelectedIndexRuleTarget,
+  SELECTED_INDEX_EXEMPT,
   SELECTED_INDEX_TOKEN,
 } from '../../../scripts/selected-index-rule.ts';
 
@@ -27,36 +28,38 @@ describe('countSelectedIndexReads', () => {
 });
 
 describe('isSelectedIndexRuleTarget', () => {
-  test('targets src/panels files', () => {
-    expect(isSelectedIndexRuleTarget('src/panels/git-panel.ts')).toBe(true);
-    expect(isSelectedIndexRuleTarget('src/panels/marketplace-panel.ts')).toBe(true);
+  test('targets src/views files', () => {
+    expect(isSelectedIndexRuleTarget('src/views/git-view.ts')).toBe(true);
+    expect(isSelectedIndexRuleTarget('src/views/marketplace-view.ts')).toBe(true);
   });
 
-  test('exempts the base-class files that own list navigation', () => {
-    expect(isSelectedIndexRuleTarget('src/panels/scrollable-list-panel.ts')).toBe(false);
-    expect(isSelectedIndexRuleTarget('src/panels/expandable-list-panel.ts')).toBe(false);
+  test('exempts every file in the exempt list, and the list is empty today', () => {
+    expect(SELECTED_INDEX_EXEMPT.size).toBe(0);
+    for (const exempt of SELECTED_INDEX_EXEMPT) {
+      expect(isSelectedIndexRuleTarget(exempt)).toBe(false);
+    }
   });
 
-  test('does not target files outside src/panels', () => {
+  test('does not target files outside src/views', () => {
     expect(isSelectedIndexRuleTarget('src/runtime/bootstrap.ts')).toBe(false);
     expect(isSelectedIndexRuleTarget('src/renderer/ui-factory.ts')).toBe(false);
   });
 });
 
 describe('checkSelectedIndexReads', () => {
-  test('passes a panel file that reads through getSelectedItem()', () => {
+  test('passes a view file that reads through getSelectedItem()', () => {
     const violations = checkSelectedIndexReads([
-      { relPath: 'src/panels/example-panel.ts', text: 'const s = this.getSelectedItem();' },
+      { relPath: 'src/views/example-view.ts', text: 'const s = this.getSelectedItem();' },
     ]);
     expect(violations).toEqual([]);
   });
 
-  test('fails a panel file that indexes a raw array by the cursor', () => {
+  test('fails a view file that indexes a raw array by the cursor', () => {
     const violations = checkSelectedIndexReads([
-      { relPath: 'src/panels/example-panel.ts', text: 'const s = this.rows[this.selectedIndex];' },
+      { relPath: 'src/views/example-view.ts', text: 'const s = this.rows[this.selectedIndex];' },
     ]);
     expect(violations).toHaveLength(1);
-    expect(violations[0]).toContain('src/panels/example-panel.ts');
+    expect(violations[0]).toContain('src/views/example-view.ts');
     expect(violations[0]).toContain('no-raw-selectedindex-read');
     expect(violations[0]).toContain('getSelectedItem()');
   });
@@ -64,7 +67,7 @@ describe('checkSelectedIndexReads', () => {
   test('reports the occurrence count', () => {
     const violations = checkSelectedIndexReads([
       {
-        relPath: 'src/panels/example-panel.ts',
+        relPath: 'src/views/example-view.ts',
         text: 'const a = items[this.selectedIndex]; const b = items[this.selectedIndex];',
       },
     ]);
@@ -72,15 +75,7 @@ describe('checkSelectedIndexReads', () => {
     expect(violations[0]).toContain('(2)');
   });
 
-  test('ignores the exempt base-class files even with raw reads', () => {
-    const violations = checkSelectedIndexReads([
-      { relPath: 'src/panels/scrollable-list-panel.ts', text: 'const item = items[this.selectedIndex];' },
-      { relPath: 'src/panels/expandable-list-panel.ts', text: 'const item = items[this.selectedIndex];' },
-    ]);
-    expect(violations).toEqual([]);
-  });
-
-  test('ignores files outside src/panels', () => {
+  test('ignores files outside src/views', () => {
     const violations = checkSelectedIndexReads([
       { relPath: 'src/runtime/bootstrap.ts', text: 'const s = rows[this.selectedIndex];' },
     ]);

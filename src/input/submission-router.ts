@@ -11,7 +11,7 @@ export interface SubmissionRouterInput {
 // 'plan' composer intent/label. The /plan mode-toggle is a plain slash command.
 const PLAN_COMMANDS = new Set(['project-plan', 'planning']);
 const REVIEW_COMMANDS = new Set(['review']);
-const PANEL_COMMANDS = new Set(['panel']);
+const LEGACY_PANEL_COMMANDS = new Set(['panel']);
 const ORCHESTRATION_COMMANDS = new Set([
   'wrfc',
   'orchestration',
@@ -48,8 +48,8 @@ export function routeSubmissionIntent(input: SubmissionRouterInput): SubmissionI
     if (REVIEW_COMMANDS.has(commandName)) {
       return { kind: 'review', label: 'review', commandName, hasAttachments };
     }
-    if (PANEL_COMMANDS.has(commandName)) {
-      return { kind: 'panel-action', label: 'open view', commandName, hasAttachments };
+    if (LEGACY_PANEL_COMMANDS.has(commandName)) {
+      return { kind: 'view-action', label: 'open view', commandName, hasAttachments };
     }
     if (ORCHESTRATION_COMMANDS.has(commandName)) {
       return { kind: 'orchestration', label: 'orchestration', commandName, hasAttachments };

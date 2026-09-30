@@ -46,12 +46,12 @@ import {
   createTasksClient,
 } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { createFleetUnionReadModel } from '../../runtime/client/fleet-union.ts';
-import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
+import { buildFleetSnapshot, createStaticFleetReadModel } from '../../views/fleet-read-model.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { createHostedSessionsClient, terminalHostedClientId } from '../../runtime/client/hosted-sessions.ts';
 import { watchHostedSession } from '../../runtime/client/hosted-session-stream.ts';
 import { createTerminalApprovalUpdateSubscriber } from '../../runtime/client/approval-updates.ts';
-import { HostedSessionFeed } from '../../panels/hosted-session-feed.ts';
+import { HostedSessionFeed } from '../../views/hosted-session-feed.ts';
 import { leaveHostedSessionOnExit } from '../../runtime/client/hosted-exit.ts';
 
 /** A port well clear of the daemon's default 3421 and of anything an install uses. */
@@ -613,7 +613,7 @@ if (!binary) {
         expect(String((refusal as Error | null)?.message ?? '')).toContain('absolute');
       });
 
-      test('a turn driven by sessions.steer calls a real model, and its output arrives on the stream this panel renders from', async () => {
+      test('a turn driven by sessions.steer calls a real model, and its output arrives on the stream this modal renders from', async () => {
         stubNextReply = { content: 'the hosted session answered over the wire' };
         const callsBefore = stubCalls;
         const client = createHostedSessionsClient(verbs);
@@ -636,7 +636,7 @@ if (!binary) {
 
         expect(await waitFor(() => stubCalls > callsBefore), daemonLog.join('').slice(-2000)).toBe(true);
         // The turn's text reached this process over SSE, folded into the rows
-        // the Hosted Session panel draws.
+        // the Hosted Session modal draws.
         expect(await waitFor(() => feed.getState().rows.some(
           (row) => row.kind === 'assistant' && row.text.includes('answered over the wire'),
         )), daemonLog.join('').slice(-2000)).toBe(true);

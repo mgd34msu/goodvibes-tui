@@ -38,7 +38,7 @@ import { handleRecallFilesApply, handleRecallFilesReview, handleRecallFilesSync 
  * now registered here as a real alias of `/recall`, the word means the same
  * durable Project Memory Substrate on both surfaces. The modal that exists
  * for this data, the Project Memory Substrate, is still `memory-modal.ts`,
- * owned by THIS command, confirmed by the panel-id redirect
+ * owned by THIS command, confirmed by the view-id redirect
  * `registerModalRedirect('memory', 'memory-modal')` in builtin-modals.ts.
  */
 function printRecallUsage(context: CommandContext): void {

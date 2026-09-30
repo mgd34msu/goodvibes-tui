@@ -148,7 +148,7 @@ describe('Slash-command grammar lint', () => {
   });
 
   test('argsHint is not an empty string (omit the field instead)', () => {
-    // argsHint presence is optional for complex subcommand surfaces (many panel-launchers
+    // argsHint presence is optional for complex subcommand surfaces (many view-launchers
     // document their subcommands in usage but don't surface an inline hint).
     // When argsHint IS present, it must not be empty, omit the field instead.
     const violations: string[] = [];
@@ -167,7 +167,7 @@ describe('Slash-command grammar lint', () => {
   test('argsHint is present for simple single-arg commands (those with usage of the form "<arg>" or "[arg]")', () => {
     // Enforce argsHint only for commands whose usage string is a simple single placeholder
     // (e.g. "<model-id>", "[name]", "<text>"). Complex subcommand usage strings are exempt
-    // because many panel-launcher commands intentionally list subcommands in usage as
+    // because many view-launcher commands intentionally list subcommands in usage as
     // documentation but do not surface an inline hint.
     const SIMPLE_USAGE_RE = /^[<\[][^|>\]]+[>\]]$|^[<\[][^|>\]]+[>\]]\s+[<\[][^|>\]]+[>\]]$/;
     const violations: string[] = [];

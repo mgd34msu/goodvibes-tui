@@ -9,14 +9,14 @@
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { ModalSurfaceRegistry } from '../../panels/modal-surface-registry.ts';
+import { ModalSurfaceRegistry } from '../../views/modal-surface-registry.ts';
 import { UsageTracker } from '../../runtime/usage-tracker.ts';
-import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
-import { FleetActs } from '../../panels/fleet-acts.ts';
-import { FleetSpawn } from '../../panels/fleet-spawn.ts';
-import type { ShellViews } from '../../panels/builtin-views.ts';
+import { buildFleetSnapshot, createStaticFleetReadModel } from '../../views/fleet-read-model.ts';
+import { FleetActs } from '../../views/fleet-acts.ts';
+import { FleetSpawn } from '../../views/fleet-spawn.ts';
+import type { ShellViews } from '../../views/builtin-views.ts';
 import type { FleetActionCallbacks } from '../../input/agents-modal.ts';
-import { createViewPanelAdapter, type ViewPanelAdapter } from '../../panels/view-panel-adapter.ts';
+import { createViewPanelAdapter, type ViewPanelAdapter } from '../../views/view-panel-adapter.ts';
 import type { TurnEvent, AgentEvent, UiEventFeed } from '@/runtime/index.ts';
 
 /** An event feed that never fires. */
@@ -33,7 +33,7 @@ export interface TestShellViewsOptions {
   readonly localUserAuthManager?: Partial<UserAuthManager>;
 }
 
-export function makeTestShellViews(options: TestShellViewsOptions): { views: ShellViews; viewPanels: ViewPanelAdapter } {
+export function makeTestShellViews(options: TestShellViewsOptions): { views: ShellViews; viewPanelAdapter: ViewPanelAdapter } {
   const readModel = createStaticFleetReadModel(buildFleetSnapshot(options.nodes ?? [], 1_700_000_000_000));
   const unavailable = { available: false as const, reason: 'no daemon in this test' };
   const acts = new FleetActs({
@@ -78,5 +78,5 @@ export function makeTestShellViews(options: TestShellViewsOptions): { views: She
     bridge: { diffSurface: null, openMaskedEntry: null },
     dispose: () => usage.dispose(),
   };
-  return { views, viewPanels: createViewPanelAdapter() };
+  return { views, viewPanelAdapter: createViewPanelAdapter() };
 }

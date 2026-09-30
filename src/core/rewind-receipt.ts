@@ -10,7 +10,7 @@
  *
  * The `[Rewind]` prefix is one of the FORCE_CONVERSATION_PREFIXES the
  * system-message router always surfaces inline (see core/system-message-router.ts),
- * so the receipt cannot be routed into a panel and vanish.
+ * so the receipt cannot be routed away from the transcript and vanish.
  */
 
 /** The subset of the SDK's RewindReceipt this formatter renders. */

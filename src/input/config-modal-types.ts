@@ -91,8 +91,8 @@ export interface ConfigModalActionContext {
   /** Print a line to the conversation transcript. */
   readonly print: (message: string) => void;
   /**
-   * Execute a slash command, the same seam panels used via
-   * `PanelIntegrationContext.executeCommand`. This is how a migrated action
+   * Execute a slash command, the seam a migrated action
+   * uses to reach its existing command. This is how a migrated action
    * preserves parity: the mutation still runs through its existing, tested
    * command (e.g. `/settings-sync resolve`, `/local-auth delete-user`).
    */
@@ -163,7 +163,7 @@ export interface ConfigModalAction {
 /**
  * A named config-modal surface. Pure seam, the host knows nothing about the
  * surface's data. Built once (closing over its read-models) and registered on
- * PanelManager via `registerModalSurface`; opened by name from a panel-id
+ * the panel manager via `registerModalSurface`; opened by name from a view-id
  * redirect hit or `ctx.openModal(name)`.
  */
 export interface ConfigModalSurface {

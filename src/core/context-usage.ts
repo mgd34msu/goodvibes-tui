@@ -1,7 +1,7 @@
 /**
  * Shared context-window usage computation.
  *
- * Centralises the tokens/contextWindow ratio so all panels, auto-compact,
+ * Centralises the tokens/contextWindow ratio so all views, auto-compact,
  * and session-maintenance read from one formula rather than six diverging
  * hand-rolled copies.
  *

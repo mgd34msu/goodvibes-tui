@@ -77,8 +77,8 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Alias for /incident open',
     handler(_args, ctx) {
-      if (ctx.openIncidentPanel) {
-        ctx.openIncidentPanel();
+      if (ctx.openIncidentView) {
+        ctx.openIncidentView();
         return;
       }
       ctx.print('The Agents view is not available in this runtime.');

@@ -39,7 +39,7 @@ import type { UiRuntimeServices } from './ui-services.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { ensureBootModelResolvable } from './provider-fallback.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
-import type { ShellViews } from '../panels/builtin-views.ts';
+import type { ShellViews } from '../views/builtin-views.ts';
 import { announceResumeState } from './resume-notice.ts';
 import { announceInstallHealth } from './install-self-check-startup.ts';
 import { buildSharedOrchestratorCoreServices, refreshMemoryRecallSnapshot } from './orchestrator-core-services.ts';
@@ -123,7 +123,7 @@ export type BootstrapContext = RuntimeContext & {
    * @remarks
    * Route operational messages through this rather than calling
    * conversation.addSystemMessage() directly so routing-target config
-   * (panel/conversation/both) and the forced-inline critical prefixes stay
+   * (target 'panel' / 'conversation' / 'both') and the forced-inline critical prefixes stay
    * centralized in one place.
    */
   systemMessageRouter: SystemMessageRouter;
@@ -146,7 +146,7 @@ export type BootstrapContext = RuntimeContext & {
  *   4. Runtime bus subscriptions (WRFC, subagent, hook bridge)
  *   5. Providers, webhooks, PermissionManager, HookDispatcher
  *   6. Orchestrator + AcpManager
- *   7. MCP auto-connect + workspace/panel manager
+ *   7. MCP auto-connect + workspace/view manager
  *   8. Command registry + plugin init + CommandContext
  *   9. Input handler wiring
  *  10. Input history, splash options
@@ -546,7 +546,7 @@ export async function bootstrapRuntime(
     label: 'external-services',
     run: async () => {
       // Register the persistent companion-pairing token as the daemon's shared
-      // bearer, so tokens scanned from the /qrcode panel's QR actually
+      // bearer, so tokens scanned from the /qrcode modal's QR actually
       // authenticate against the daemon this surface adopts.
       const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
       const companionTokenRecord = resolveDaemonCompanionToken(daemonHomeDir, GOODVIBES_TUI_SURFACE_ROOT);
@@ -757,7 +757,7 @@ export async function bootstrapRuntime(
   // task manager exist unconditionally so pre-gate tasks stay visible. ───────
   ctx.commandContext.ops.acpManager = acpManager;
   if (opsControlPlane) {
-    ctx.commandContext.openOpsPanel = () => {
+    ctx.commandContext.openOpsView = () => {
       ctx.commandContext.openView?.('ops-control');
     };
   }

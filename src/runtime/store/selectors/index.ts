@@ -13,7 +13,6 @@ import type { SessionDomainState } from '@/runtime/index.ts';
 import type { ModelDomainState } from '@/runtime/index.ts';
 import type { ConversationDomainState, TurnState } from '@/runtime/index.ts';
 import type { OverlayDomainState, OverlayId } from '@/runtime/index.ts';
-import type { PanelDomainState, PanelState } from '../domains/panels.ts';
 import type { PermissionDomainState, PermissionMode } from '@/runtime/index.ts';
 import type { TaskDomainState, RuntimeTask, TaskKind } from '@/runtime/index.ts';
 import type { AgentDomainState, RuntimeAgent } from '@/runtime/index.ts';
@@ -51,11 +50,6 @@ export function selectConversation(state: RuntimeState): ConversationDomainState
 /** Select the full overlays domain slice. */
 export function selectOverlays(state: RuntimeState): OverlayDomainState {
   return state.overlays;
-}
-
-/** Select the full panels domain slice. Casts from Record<string,unknown> to PanelDomainState. */
-export function selectPanels(state: RuntimeState): PanelDomainState {
-  return state.panels as unknown as PanelDomainState;
 }
 
 /** Select the full permissions domain slice. */
@@ -267,28 +261,6 @@ export function selectSystemHealth(state: RuntimeState): CompositeSystemHealth {
  */
 export function selectPermissionMode(state: RuntimeState): PermissionMode {
   return state.permissions.mode;
-}
-
-/**
- * Returns all panels that are currently open.
- */
-export function selectActivePanels(state: RuntimeState): PanelState[] {
-  const result: PanelState[] = [];
-  const panelDomain = state.panels as unknown as PanelDomainState;
-  for (const panel of panelDomain.panels.values()) {
-    if (panel.open) {
-      result.push(panel);
-    }
-  }
-  return result;
-}
-
-/**
- * Returns the panel currently holding focus.
- */
-export function selectFocusedPanel(state: RuntimeState): PanelState | undefined {
-  const panelDomain = state.panels as unknown as PanelDomainState;
-  return panelDomain.panels.get(panelDomain.focusedPanelId);
 }
 
 /**

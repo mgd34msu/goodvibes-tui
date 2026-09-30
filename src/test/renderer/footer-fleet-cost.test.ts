@@ -7,7 +7,7 @@
 import { describe, test, expect } from 'bun:test';
 import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { linesToText } from '../setup.ts';
-import { fleetLeafCostTotal } from '../../panels/fleet-read-model.ts';
+import { fleetLeafCostTotal } from '../../views/fleet-read-model.ts';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 
 const W = 140;

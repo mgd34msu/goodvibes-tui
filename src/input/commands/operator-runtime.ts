@@ -2,14 +2,14 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { ToolContractVerifier } from '@/runtime/index.ts';
 import type { ReplaySnapshotInput } from '@/runtime/index.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-import { registerOperatorPanelCommand } from './operator-panel-runtime.ts';
+import { registerLegacyPanelCommand } from './legacy-panel-command.ts';
 import { requireOpsApi, requireProfileManager, requireReplayEngine } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core';
 import { handleContextWindowSubcommand } from './context-window.ts';
 
 export function registerOperatorRuntimeCommands(registry: CommandRegistry): void {
-  registerOperatorPanelCommand(registry);
+  registerLegacyPanelCommand(registry);
 
   registry.register({
     name: 'settings',
@@ -189,7 +189,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
       if (sub === 'view' || sub === undefined) {
         // The flag-wired opener when the control plane is on, else the
         // Agents view, which holds the live operations content either way.
-        if (ctx.openOpsPanel) ctx.openOpsPanel();
+        if (ctx.openOpsView) ctx.openOpsView();
         else if (!ctx.openView?.('ops-control')) ctx.print('The Agents view is not available in this shell.');
         return;
       }
@@ -308,7 +308,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
     handler(args, ctx) {
       const sub = args[0];
       if (sub === undefined || sub === 'view') {
-        if (ctx.openForensicsPanel) ctx.openForensicsPanel();
+        if (ctx.openForensicsView) ctx.openForensicsView();
         else ctx.print('The Agents view is not available.');
         return;
       }

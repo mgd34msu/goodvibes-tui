@@ -3,8 +3,8 @@ import { openModelPickerNow, type ModelPickerOpenDeps } from '../input/model-pic
 import { getProviderIdFromModel } from '@pellux/goodvibes-sdk/platform/providers';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
-import type { ShellViews } from '../panels/builtin-views.ts';
-import type { ViewPanelAdapter } from '../panels/view-panel-adapter.ts';
+import type { ShellViews } from '../views/builtin-views.ts';
+import type { ViewPanelAdapter } from '../views/view-panel-adapter.ts';
 import { wireViewOpeners } from './view-openers.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { MutableRuntimeState } from '@/runtime/index.ts';
@@ -18,7 +18,7 @@ import type { EmbeddingProviderPickerEntry, ModelPickerTargetInfo } from '../inp
 import { CommandPalette, buildPaletteEntries } from '../input/command-palette.ts';
 import { confirmThrough } from '../input/confirm-dialog.ts';
 import { bridgeNotificationFeedToToasts, getSharedToastCenter } from '../renderer/toast-center.ts';
-import { getSharedNotificationFeed } from '../panels/notifications-feed.ts';
+import { getSharedNotificationFeed } from '../views/notifications-feed.ts';
 import { categorizeBuiltinCommands } from '../input/commands.ts';
 import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
 import { setActiveThemeMode, setActiveThemeName } from '../renderer/theme.ts';
@@ -35,7 +35,7 @@ type WireShellUiOpenersOptions = {
   /** The read models and config-modal surfaces behind the built-in modals. */
   views: ShellViews;
   /** The operator API's panels.list / panels.open, answered by the modal views. */
-  viewPanels: ViewPanelAdapter;
+  viewPanelAdapter: ViewPanelAdapter;
   configManager: ConfigManager;
   providerRegistry: ProviderRegistry;
   runtime: MutableRuntimeState;
@@ -133,7 +133,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     commandContext,
     input,
     views,
-    viewPanels,
+    viewPanelAdapter,
     configManager,
     providerRegistry,
     runtime,
@@ -437,7 +437,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   // The stack name is the stable 'config' slot (one config modal at a time,
   // opening another swaps the surface), so Esc close/return and the modal-stack
   // machinery need only the single 'config' case (handler-ui-state.ts).
-  // Some panel-id redirects (and migrated front-doors) resolve to a NATIVE
+  // Some legacy view-name redirects (and migrated front-doors) resolve to a NATIVE
   // modal that is not a ConfigModalSurface, e.g. `sessions` -> `sessionPicker`,
   // where 'sessionPicker' is the real session-picker modal opened by
   // commandContext.openSessionPicker below, NOT a registered config surface.
@@ -529,5 +529,5 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
-  wireViewOpeners({ commandContext, input, views, viewPanels, render });
+  wireViewOpeners({ commandContext, input, views, viewPanelAdapter, render });
 }

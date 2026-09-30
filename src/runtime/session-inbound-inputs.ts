@@ -214,7 +214,7 @@ export class SessionInboundInputPoller {
 }
 
 /** Format the operator-facing narration for an inbound steer, e.g.
- * "steer received from webui (Alice): resize the panel". */
+ * "steer received from webui (Alice): resize the sidebar". */
 export function narrateInboundSteer(steer: InboundSteer): string {
   const surface = steer.surfaceKind ?? steer.surfaceId ?? 'another surface';
   const who = steer.displayName ? ` (${steer.displayName})` : '';

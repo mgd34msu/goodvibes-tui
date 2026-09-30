@@ -16,7 +16,7 @@ import {
   renderHostedRecordLine,
   renderHostedStatus,
 } from '../../input/commands/hosted-runtime.ts';
-import { HostedSessionFeed } from '../../panels/hosted-session-feed.ts';
+import { HostedSessionFeed } from '../../views/hosted-session-feed.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerHostedRuntimeCommands } from '../../input/commands/hosted-runtime.ts';
 import type { HostedSessionRecord } from '@pellux/goodvibes-sdk/platform/hosted-sessions';

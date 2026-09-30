@@ -13,7 +13,7 @@ export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap' | 'embed
  */
 export type ModelPickerTarget = 'main' | 'helper' | 'tool' | 'tts' | 'embeddings';
 
-export type ModelPickerFocusPane = 'targets' | 'items';
+export type ModelPickerFocusRegion = 'targets' | 'items';
 
 export interface ModelPickerTargetInfo {
   readonly target: ModelPickerTarget;

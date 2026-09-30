@@ -5,7 +5,7 @@
  *
  * The silent startup auto-restore that used to live here
  * (autoRestoreRecoverySession, plus its createPersistRecoverySnapshot /
- * createReopenRecoveryPanels factories) has been removed: state restores
+ * createReopenRecoveryViews factories) has been removed: state restores
  * happen ONLY when the user explicitly asks (a CLI flag, a slash command, or
  * a prompt), never automatically at bare launch (owner ruling). A live
  * recovery snapshot is now surfaced, never applied, by the boot resume

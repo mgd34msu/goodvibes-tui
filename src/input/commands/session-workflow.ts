@@ -5,7 +5,7 @@ import { type SessionMeta } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationTitleSource } from '../../core/conversation';
 import type { SessionReturnContextSummary } from '@/runtime/index.ts';
-import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
+import { formatReturnContextForDisplay, getReturnContextMode, loadedReturnContext, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import { requireProviderApi, requireSessionManager, requireSurface } from './runtime-services.ts';
 import { resumeSessionCore } from '../../core/session-resume-core.ts';
 import { checkSessionLiveness } from '@pellux/goodvibes-sdk/platform/runtime/operations';
@@ -269,8 +269,9 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       }
       const returnContextMode = getReturnContextMode(ctx.platform.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {
-        // A session saved while the TUI had side panes lists them; there are none to reopen now.
-        for (const line of formatReturnContextForDisplay({ ...meta.returnContext, openPanels: undefined })) {
+        // The SDK's session loader already dropped any legacy open-view list from a
+        // session saved by an older TUI, so the loaded return context is shown as-is.
+        for (const line of formatReturnContextForDisplay(meta.returnContext)) {
           ctx.print(`  ${line}`);
         }
         if ((meta.returnContext.remoteRunners?.length ?? 0) > 0) {
@@ -306,7 +307,9 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
           provider: ctx.session.runtime.provider,
       timestamp: Date.now(),
       titleSource: exportData.titleSource,
-      returnContext: exportData.returnContext,
+      // Same shape a session file is read back in: a legacy open-view list
+      // (from an older session file) is never written again.
+      returnContext: loadedReturnContext(exportData.returnContext),
       // The operator asked for this fork by name; it is not turn machinery.
       saveSource: 'user',
     };
@@ -332,7 +335,9 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
           provider: ctx.session.runtime.provider,
       timestamp: Date.now(),
       titleSource: exportData.titleSource,
-      returnContext: exportData.returnContext,
+      // Same shape a session file is read back in: a legacy open-view list
+      // (from an older session file) is never written again.
+      returnContext: loadedReturnContext(exportData.returnContext),
       // The one unambiguous "keep this" act in the app. Marked so the
       // session-conversations retention sweep never expires it, unlike the
       // automatic per-turn snapshot (turn-event-wiring.ts, saveSource 'auto').

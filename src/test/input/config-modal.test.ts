@@ -8,10 +8,10 @@ import type {
 } from '../../input/config-modal-types.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
 import type { SurfaceLayer } from '../../renderer/surface-kit.ts';
-import { ModalSurfaceRegistry } from '../../panels/modal-surface-registry.ts';
+import { ModalSurfaceRegistry } from '../../views/modal-surface-registry.ts';
 import { handleConfigModalToken } from '../../input/handler-modal-routes.ts';
-import { memoryModalGoldenSurface } from '../../panels/modals/memory-modal.ts';
-import { marketplaceModalGoldenSurface } from '../../panels/modals/marketplace-modal.ts';
+import { memoryModalGoldenSurface } from '../../views/modals/memory-modal.ts';
+import { marketplaceModalGoldenSurface } from '../../views/modals/marketplace-modal.ts';
 
 // A mutable fake surface so tests can drive live-value and structural changes.
 function makeSurface(opts: {

@@ -1,5 +1,4 @@
 export const DOMAINS = [
-  'panels',
   'ui-perf',
 ] as const;
 

@@ -4,7 +4,7 @@
  *
  * Two pieces of state, kept out of ConversationManager (core/conversation.ts,
  * already at its line-count gate) and out of `suppressSplash`, which is a
- * per-frame posture the panel workspace sets both ways on every render:
+ * per-frame posture the modal layer sets both ways on every render:
  *
  *   - `dismissed`, sticky for the run. Owner rule: the splash yields to ANY
  *     submission, a chat message or a slash command alike. A slash command

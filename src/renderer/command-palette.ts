@@ -13,7 +13,7 @@
  *
  *   ↑↓ move   ⏎ run   tab fill composer                   120 more ↓
  *
- * The preview pane shows what the selected command will do before it runs:
+ * The preview shows what the selected command will do before it runs:
  * its full description, usage, aliases, category and what Enter will do.
  */
 
@@ -21,7 +21,7 @@ import type { PaletteEntry, PaletteView } from '../input/command-palette-types.t
 import { activeTokens } from './theme.ts';
 import { beginModal, finishModal, scrollCountText, searchRow, type SurfaceLayer } from './surface-kit.ts';
 import { drawList, type KitRow } from './surface-kit-list.ts';
-import { panel, panelLines, type KitPanel } from './surface-kit-parts.ts';
+import { inset, insetLines, type KitInset } from './surface-kit-parts.ts';
 
 function rowsFor(palette: PaletteView): KitRow[] {
   const selected = palette.getSelected();
@@ -42,15 +42,15 @@ function rowsFor(palette: PaletteView): KitRow[] {
   return rows;
 }
 
-function drawPreview(palette: PaletteView, entry: PaletteEntry | null, canvas: Parameters<typeof panelLines>[0], p: KitPanel): void {
+function drawPreview(palette: PaletteView, entry: PaletteEntry | null, canvas: Parameters<typeof insetLines>[0], p: KitInset): void {
   const t = activeTokens();
   if (!entry) {
-    panelLines(canvas, p, p.l, p.top, [{ text: 'Type to search every command; old pane names such as fleet or git find their new homes.', style: { fg: t.textMuted } }]);
+    insetLines(canvas, p, p.l, p.top, [{ text: 'Type to search every command; old view names such as fleet or git find their new homes.', style: { fg: t.textMuted } }]);
     return;
   }
   const blank = { text: '', style: {} };
   const live = palette.describe(entry.id);
-  panelLines(canvas, p, p.l, p.top, [
+  insetLines(canvas, p, p.l, p.top, [
     { text: entry.title, style: { fg: t.text, bold: true } },
     { text: `/${entry.id}${entry.argsHint ? ` ${entry.argsHint}` : ''}`, style: { fg: t.brand } },
     ...(live ? [{ text: live, style: { fg: t.textMuted } }] : []),
@@ -80,12 +80,12 @@ export function renderCommandPalette(palette: PaletteView, screenWidth: number, 
 
   const body = f.top + 2;
   const inner = f.r - f.l + 1;
-  // A preview pane when there is room for it; below that the list takes the width.
-  const twoPane = inner >= 70;
-  const x1 = twoPane ? f.l + Math.floor(inner * 0.55) - 1 : f.r;
+  // A preview when there is room for it; below that the list takes the width.
+  const sideBySide = inner >= 70;
+  const x1 = sideBySide ? f.l + Math.floor(inner * 0.55) - 1 : f.r;
   const result = drawList(f.canvas, { rows: rowsFor(palette), top: body, bottom: f.bottom, x0: f.l, x1, scrollKey: { owner: palette, name: 'list' } });
-  if (twoPane) {
-    const p = panel(f.canvas, x1 + 3, body, f.r + 2 - (x1 + 3) + 1, f.bottom - body + 1);
+  if (sideBySide) {
+    const p = inset(f.canvas, x1 + 3, body, f.r + 2 - (x1 + 3) + 1, f.bottom - body + 1);
     drawPreview(palette, palette.getSelected(), f.canvas, p);
   }
   f.hintRight = scrollCountText(result.above, result.below);

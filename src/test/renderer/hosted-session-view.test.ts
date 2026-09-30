@@ -17,7 +17,7 @@ import {
   MAX_HOSTED_ROWS,
   getSharedHostedSessionFeed,
   resetSharedHostedSessionFeed,
-} from '../../panels/hosted-session-feed.ts';
+} from '../../views/hosted-session-feed.ts';
 import { hostedBody, hostedHeaderTexts } from '../../input/agents-modal-text.ts';
 import type { HostedSessionRecord } from '@pellux/goodvibes-sdk/platform/hosted-sessions';
 import type { HostedSessionStreamEvent } from '../../runtime/client/hosted-session-stream.ts';

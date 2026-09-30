@@ -314,11 +314,11 @@ describe('ConversationManager', () => {
       expect(c.getDisplayOnlyCount()).toBe(0);
     });
 
-    test('the splash stays gone for the rest of the run, including when the panel posture toggles', () => {
+    test('the splash stays gone for the rest of the run, including when the modal posture toggles', () => {
       const c = new ConversationManager(() => 120);
       c.getDisplayBlocks();
       c.dismissSplash();
-      c.setSplashSuppressed(true);  // panel workspace opened
+      c.setSplashSuppressed(true);  // modal opened
       c.setSplashSuppressed(false); // …and closed again, the per-frame posture is back to "allowed"
       const frame = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
       expect(frame).not.toContain('██████╗');

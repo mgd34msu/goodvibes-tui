@@ -31,18 +31,18 @@
  *   2. The window is one the provider vouched for, not the fallback constant.
  *      A model whose real window happens to equal the fallback is
  *      indistinguishable from "not resolved yet", and in that ambiguity
- *      staying quiet is the honest choice, the Tokens panel and /context
+ *      staying quiet is the honest choice, the Usage modal and /context
  *      still show the real numbers either way.
  * Neither guard touches 'compacting', which reports work that is provably
  * running rather than a prediction about headroom.
  */
 
 import { DEFAULT_CONTEXT_WINDOW } from '@pellux/goodvibes-sdk/platform/providers';
-import type { PanelSessionMaintenanceLevel } from '../panels/session-maintenance.ts';
+import type { ViewSessionMaintenanceLevel } from '../views/session-maintenance.ts';
 
 interface ContextStatusHintOptions {
   /** Maintenance level from evaluateSessionMaintenance. */
-  readonly level: PanelSessionMaintenanceLevel;
+  readonly level: ViewSessionMaintenanceLevel;
   /** Whether auto-compaction is active (threshold > 0 in config). */
   readonly autoCompactEnabled: boolean;
   /** Current usage percent 0–100. */
@@ -104,7 +104,7 @@ function buildContextStatusHint(options: ContextStatusHintOptions): string | nul
  */
 export function resolveContextStatusHint(input: {
   readonly evaluate: (args: { readonly currentTokens: number; readonly contextWindow: number }) => {
-    readonly level: PanelSessionMaintenanceLevel;
+    readonly level: ViewSessionMaintenanceLevel;
     readonly autoCompactEnabled: boolean;
     readonly usagePct: number;
   };

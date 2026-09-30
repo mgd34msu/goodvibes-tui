@@ -118,12 +118,12 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     expect(violations).toHaveLength(0);
   });
 
-  test('known panel-local repaint files do not emit render:request', () => {
+  test('known view-local repaint files do not emit render:request', () => {
     const violations: string[] = [];
-    // (the purge): debug-panel.ts was DELETE-disposition and no longer
+    // (the purge): the debug view file was DELETE-disposition and no longer
     // exists, removed from this list (a deleted file trivially can't emit
     // render:request).
-    // (config-modal migration, same wave): provider-health-panel.ts was
+    // (config-modal migration, same wave): the provider-health view file was
     // migrated to a config-modal surface and deleted, removed from this
     // list for the same reason.
     const restrictedFiles: string[] = [];
@@ -143,7 +143,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     if (violations.length > 0) {
       throw new Error(
         [
-          'GC-ARCH-004 violation: panel-local repaint paths reintroduced render:request.',
+          'GC-ARCH-004 violation: view-local repaint paths reintroduced render:request.',
           'Use injected requestRender() callbacks instead.',
           '',
           'Violations:',
@@ -155,16 +155,16 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     expect(violations).toHaveLength(0);
   });
 
-  test('typed turn-consumer panels do not subscribe to legacy turn bus events', () => {
+  test('typed turn-consumer views do not subscribe to legacy turn bus events', () => {
     const violations: string[] = [];
-    // (the purge): thinking-panel.ts and debug-panel.ts were
+    // (the purge): the thinking and debug view files were
     // DELETE-disposition and no longer exist, removed from this list (a
     // deleted file trivially can't subscribe to anything).
-    // (config-modal migration, same wave): provider-health-panel.ts was
+    // (config-modal migration, same wave): the provider-health view file was
     // migrated to a config-modal surface and deleted, removed from this
     // list for the same reason.
     const restrictedFiles = [
-      // The token-budget and cost-tracker panes were replaced by the Usage
+      // The token-budget and cost-tracker views were replaced by the Usage
       // modal; its always-on data source, usage-tracker.ts, inherits the ban.
       'src/runtime/usage-tracker.ts',
       'src/main.ts',
@@ -185,8 +185,8 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     if (violations.length > 0) {
       throw new Error(
         [
-          'GC-ARCH-004 violation: typed turn-consumer panels reintroduced legacy turn bus subscriptions.',
-          'Use RuntimeEventBus turn events for these panels instead.',
+          'GC-ARCH-004 violation: typed turn-consumer views reintroduced legacy turn bus subscriptions.',
+          'Use RuntimeEventBus turn events for these views instead.',
           '',
           'Violations:',
           ...violations.map((v) => `  - ${v}`),
@@ -199,11 +199,11 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('typed agent-consumer files do not subscribe to legacy subagent bus events', () => {
     const violations: string[] = [];
-    // (the purge): agent-inspector-panel.ts ('inspector') was
+    // (the purge): the agent-inspector view file ('inspector') was
     // RETIRE-INTO-FLEET and no longer exists, removed from this list.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      // Successor of the cost-tracker pane's per-agent cost ledger.
+      // Successor of the old cost-tracker view's per-agent cost ledger.
       'src/runtime/usage-tracker.ts',
     ];
 
@@ -236,7 +236,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('WRFC typed-consumer files do not subscribe to legacy wrfc bus events', () => {
     const violations: string[] = [];
-    // (the purge): wrfc-panel.ts was RETIRE-INTO-FLEET and no longer
+    // (the purge): the WRFC view file was RETIRE-INTO-FLEET and no longer
     // exists, removed from this list.
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
@@ -271,9 +271,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('provider and planner typed-consumer files do not subscribe to legacy provider/planner bus events', () => {
     const violations: string[] = [];
-    // (the purge): ops-strategy-panel.ts ('ops') was RETIRE-INTO-FLEET
+    // (the purge): the ops-strategy view file ('ops') was RETIRE-INTO-FLEET
     // and no longer exists, removed from this list.
-    // (config-modal migration, same wave): provider-health-panel.ts was
+    // (config-modal migration, same wave): the provider-health view file was
     // migrated to a config-modal surface and deleted, removed from this
     // list for the same reason.
     const restrictedFiles = [
@@ -316,7 +316,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('tool typed-consumer files do not subscribe to legacy tool bus events', () => {
     const violations: string[] = [];
-    // (the purge): tool-inspector-panel.ts ('tools') was
+    // (the purge): the tool-inspector view file ('tools') was
     // DELETE-disposition and no longer exists, removed from this list.
     const restrictedFiles = [
       'src/main.ts',
@@ -461,9 +461,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const currentTuiSurfaces = [
       'src/runtime/services.ts',
       'src/input/commands/runtime-services.ts',
-      // panels/builtin/operations.ts (the pane registrations) was replaced
+      // The old operations registrations were replaced
       // by the built-in views and the Agents modal.
-      'src/panels/builtin-views.ts',
+      'src/views/builtin-views.ts',
       'src/input/agents-modal.ts',
     ];
 
@@ -499,9 +499,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const removedLocalController = join(projectRoot, 'src/agents/wrfc-controller.ts');
     expect(existsSync(removedLocalController)).toBe(false);
 
-    // panels/builtin/agent.ts (the agent pane registrations) was replaced by
+    // The old agent registrations were replaced by
     // the built-in views and the Agents modal; they inherit the ban.
-    const relPaths = ['src/panels/builtin-views.ts', 'src/input/agents-modal.ts', 'src/shell/view-openers.ts'];
+    const relPaths = ['src/views/builtin-views.ts', 'src/input/agents-modal.ts', 'src/shell/view-openers.ts'];
     const violations: string[] = [];
     const legacyTokens = [
       "from '../core/event-bus.ts'",

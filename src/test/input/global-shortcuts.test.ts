@@ -70,7 +70,7 @@ describe('handleGlobalShortcutToken', () => {
     expect(state.commandContext?.openAgents).toHaveBeenCalledTimes(1);
   });
 
-  test('the old pane chords (Ctrl+X, Ctrl+G, Alt+digit, Ctrl+PageUp) are not bound any more and fall through', () => {
+  test('the old view chords (Ctrl+X, Ctrl+G, Alt+digit, Ctrl+PageUp) are not bound any more and fall through', () => {
     const state = buildState();
     expect(handleGlobalShortcutToken(state, key('x', { ctrl: true }), 24)).toBe(false);
     expect(handleGlobalShortcutToken(state, key('g', { ctrl: true }), 24)).toBe(false);

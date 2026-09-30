@@ -26,8 +26,8 @@ describe('countHexLiterals', () => {
 });
 
 describe('isHexLiteralBanTarget', () => {
-  test('targets src/panels and src/renderer files', () => {
-    expect(isHexLiteralBanTarget('src/panels/git-panel.ts')).toBe(true);
+  test('targets src/views and src/renderer files', () => {
+    expect(isHexLiteralBanTarget('src/views/git-view.ts')).toBe(true);
     expect(isHexLiteralBanTarget('src/renderer/ui-factory.ts')).toBe(true);
   });
 
@@ -37,7 +37,7 @@ describe('isHexLiteralBanTarget', () => {
     expect(isHexLiteralBanTarget('src/renderer/syntax-highlighter.ts')).toBe(true);
   });
 
-  test('does not target files outside panels/renderer', () => {
+  test('does not target files outside views/renderer', () => {
     expect(isHexLiteralBanTarget('src/runtime/bootstrap.ts')).toBe(false);
     expect(isHexLiteralBanTarget('src/core/context-usage.ts')).toBe(false);
   });
@@ -46,34 +46,34 @@ describe('isHexLiteralBanTarget', () => {
 describe('checkHexLiteralRatchet', () => {
   test('passes a file whose count matches its baseline', () => {
     const violations = checkHexLiteralRatchet(
-      [{ relPath: 'src/panels/example-panel.ts', text: "fg: '#38bdf8'" }],
-      { 'src/panels/example-panel.ts': 1 },
+      [{ relPath: 'src/views/example-view.ts', text: "fg: '#38bdf8'" }],
+      { 'src/views/example-view.ts': 1 },
     );
     expect(violations).toEqual([]);
   });
 
   test('passes a file whose count shrank below its baseline', () => {
     const violations = checkHexLiteralRatchet(
-      [{ relPath: 'src/panels/example-panel.ts', text: 'fg: UI_TONES.state.info' }],
-      { 'src/panels/example-panel.ts': 3 },
+      [{ relPath: 'src/views/example-view.ts', text: 'fg: UI_TONES.state.info' }],
+      { 'src/views/example-view.ts': 3 },
     );
     expect(violations).toEqual([]);
   });
 
   test('fails a file whose count grew past its baseline', () => {
     const violations = checkHexLiteralRatchet(
-      [{ relPath: 'src/panels/example-panel.ts', text: "fg: '#38bdf8', bg: '#0f172a'" }],
-      { 'src/panels/example-panel.ts': 1 },
+      [{ relPath: 'src/views/example-view.ts', text: "fg: '#38bdf8', bg: '#0f172a'" }],
+      { 'src/views/example-view.ts': 1 },
     );
     expect(violations).toHaveLength(1);
-    expect(violations[0]).toContain('src/panels/example-panel.ts');
+    expect(violations[0]).toContain('src/views/example-view.ts');
     expect(violations[0]).toContain('2 > baseline 1');
     expect(violations[0]).toContain('no-raw-hex-literal-growth');
   });
 
   test('holds files absent from the baseline to zero', () => {
     const violations = checkHexLiteralRatchet(
-      [{ relPath: 'src/panels/brand-new-panel.ts', text: "fg: '#38bdf8'" }],
+      [{ relPath: 'src/views/brand-new-view.ts', text: "fg: '#38bdf8'" }],
       {},
     );
     expect(violations).toHaveLength(1);
@@ -88,7 +88,7 @@ describe('checkHexLiteralRatchet', () => {
     expect(violations).toHaveLength(1);
   });
 
-  test('ignores files outside src/panels and src/renderer', () => {
+  test('ignores files outside src/views and src/renderer', () => {
     const violations = checkHexLiteralRatchet(
       [{ relPath: 'src/runtime/bootstrap.ts', text: "fg: '#38bdf8'" }],
       {},

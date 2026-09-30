@@ -7,7 +7,7 @@ import {
   wireRuntimeNotificationBridge,
   personFacingEvent,
 } from '../../runtime/notification-dispatch.ts';
-import { PanelNotificationFeed } from '../../panels/notifications-feed.ts';
+import { NotificationFeed } from '../../views/notifications-feed.ts';
 import { configGetStub } from '../helpers/config-manager-stub.ts';
 
 // Nothing persisted: every key reads back undefined, so the dispatcher falls
@@ -16,7 +16,7 @@ const fakeConfig = { get: configGetStub() };
 
 describe('notification dispatch: the panel_only producer', () => {
   test('a panel_only decision lands in the feed as a live item', () => {
-    const feed = new PanelNotificationFeed();
+    const feed = new NotificationFeed();
     const dispatcher = createNotificationDispatcher(fakeConfig, feed);
     // Minimal verbosity keeps info notifications at the panel_only target.
     dispatcher.router.setDomainVerbosity('agents', 'minimal');
@@ -36,8 +36,8 @@ describe('notification dispatch: the panel_only producer', () => {
     expect(items[0]!.domain).toBe('agents');
   });
 
-  test('a real runtime event flows through the bus bridge into the panel feed', async () => {
-    const feed = new PanelNotificationFeed();
+  test('a real runtime event flows through the bus bridge into the notification feed', async () => {
+    const feed = new NotificationFeed();
     const dispatcher = createNotificationDispatcher(fakeConfig, feed);
     dispatcher.router.setDomainVerbosity('agents', 'minimal');
     const bus = new RuntimeEventBus();
@@ -59,7 +59,7 @@ describe('notification dispatch: the panel_only producer', () => {
   });
 
   test('internal events never enter the history; the person-facing ones keep plain names', async () => {
-    const feed = new PanelNotificationFeed();
+    const feed = new NotificationFeed();
     const dispatcher = createNotificationDispatcher(fakeConfig, feed);
     dispatcher.router.setDomainVerbosity('agents', 'minimal');
     dispatcher.router.setDomainVerbosity('workflows', 'minimal');
@@ -97,12 +97,12 @@ describe('notification dispatch: the panel_only producer', () => {
 });
 
 /**
- * The other half of the notification split: panel-feed notices are this
+ * The other half of the notification split: notification-feed notices are this
  * surface's, and channel machinery is not.
  *
  * The tests above build the whole panel_only path out of a config stub and a
  * bare event bus, no delivery router, no channel registry, no secrets
- * manager. That is the proof the panel feed needs no daemon furniture, and it
+ * manager. That is the proof the notification feed needs no daemon furniture, and it
  * is why the second delivery router this composition used to build was so easy
  * to miss: nothing here ever wanted it.
  */

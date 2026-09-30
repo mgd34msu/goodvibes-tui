@@ -1,7 +1,7 @@
 /**
  * agents-modal-text.ts, the plain-text pieces the Agents modal shows: the
  * hosted session's header facts and rows, and a compact live tail of an
- * agent's conversation for the side panel.
+ * agent's conversation for the side column.
  *
  * Every hosted fact is a field of the daemon's own record; nothing is derived
  * here. The tail shows what an agent said and did most recently: its words,
@@ -10,7 +10,7 @@
 
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import { createEmptyLine, type Line } from '@pellux/goodvibes-sdk/platform/types';
-import type { HostedSessionFeedState, HostedSessionRow } from '../panels/hosted-session-feed.ts';
+import type { HostedSessionFeedState, HostedSessionRow } from '../views/hosted-session-feed.ts';
 import type { AgentsText } from '../renderer/agents-modal.ts';
 import { activeTokens } from '../renderer/theme.ts';
 import { wrapText, getDisplayWidth } from '../utils/terminal-width.ts';

@@ -263,11 +263,11 @@ export function getSettingLabel(entry: SettingEntry): string {
 export function describeUiRouting(value: string): string {
   switch (value) {
     case 'panel':
-      return 'render in panels only';
+      return 'render inline in conversation (older setting value)';
     case 'conversation':
       return 'render inline in conversation';
     case 'both':
-      return 'render in both conversation and panels';
+      return 'render inline in conversation';
     default:
       return value;
   }

@@ -1,7 +1,7 @@
 /**
- * fleet-union.test.ts, the Fleet panel shows everything running.
+ * fleet-union.test.ts, the Agents modal shows everything running.
  *
- * The failure this guards is not a crash. It is a panel that shows half the
+ * The failure this guards is not a crash. It is a modal that shows half the
  * fleet and looks complete: this terminal's own agents present, the daemon's
  * scheduled work and observed agents silently absent, with nothing on screen
  * saying so. That is strictly worse than showing nothing, because a user reads
@@ -13,7 +13,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { createFleetUnionReadModel } from '../../runtime/client/fleet-union.ts';
-import { createStaticFleetReadModel, buildFleetSnapshot } from '../../panels/fleet-read-model.ts';
+import { createStaticFleetReadModel, buildFleetSnapshot } from '../../views/fleet-read-model.ts';
 import type { ProcessNode } from '@pellux/goodvibes-sdk/platform/runtime/fleet';
 
 // 'thinking' is one of the states the read model counts as actively working
@@ -49,7 +49,7 @@ function verbs(answer: (() => unknown) | { unavailable: string }) {
 
 const settle = (): Promise<void> => new Promise((resolve) => { setTimeout(resolve, 10); });
 
-describe('the Fleet panel reads local rows union the daemon\'s', () => {
+describe('the Agents modal reads local rows union the daemon\'s', () => {
   test('with no daemon configured the local view IS the fleet, unchanged', async () => {
     const union = createFleetUnionReadModel({
       local: localModel([node('a1', 'local agent')]),

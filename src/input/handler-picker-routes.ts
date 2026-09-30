@@ -71,7 +71,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
       if (state.modelPicker.mode === 'contextCap') state.modelPicker.deleteContextCapChar();
       else if (state.modelPicker.canFocusSearch()) state.modelPicker.deleteChar();
     } else if (token.logicalName === 'enter') {
-      if (state.modelPicker.focusPane === 'targets') {
+      if (state.modelPicker.focusRegion === 'targets') {
         state.modelPicker.focusItems();
         state.requestRender();
         return true;

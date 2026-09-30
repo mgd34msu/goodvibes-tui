@@ -149,7 +149,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
         // Discard is a real destructive act, not a metadata flip: route it
         // through the worktrees.discard operator verb (preservation commit,
         // git worktree removal, honest receipt), the SAME behavior as the
-        // Fleet panel's D key. Typing the verb with an explicit path is the
+        // Agents modal's D key. Typing the verb with an explicit path is the
         // confirmation.
         const path = args[1];
         if (!path) {

@@ -208,7 +208,7 @@ async function main(): Promise<void> {
 
   let lineCases: LineBenchCase[];
   try {
-    process.stdout.write('Measuring line-production bench (transcript, panels, markdown, code, overlay)... ');
+    process.stdout.write('Measuring line-production bench (transcript, views, markdown, code, overlay)... ');
     lineCases = await runLineBenches();
     console.log(`${lineCases.length} builders measured`);
   } catch (err) {

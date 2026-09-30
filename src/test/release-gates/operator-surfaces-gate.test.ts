@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
-import { ModalSurfaceRegistry } from '../../panels/modal-surface-registry.ts';
-import { registerBuiltinModals } from '../../panels/builtin-modals.ts';
-import { resolveBuiltinViewDeps } from '../../panels/view-deps.ts';
+import { ModalSurfaceRegistry } from '../../views/modal-surface-registry.ts';
+import { registerBuiltinModals } from '../../views/builtin-modals.ts';
+import { resolveBuiltinViewDeps } from '../../views/view-deps.ts';
 import { resolveViewName } from '../../input/views.ts';
 import { RuntimeEventBus } from '@/runtime/index.ts';
 import { ForensicsRegistry } from '@/runtime/index.ts';
@@ -189,7 +189,7 @@ describe('operator surfaces gate', () => {
     };
   }
 
-  test('every retired pane name still resolves: config modals by redirect, the rest to Agents, Usage or Changes', () => {
+  test('every retired view name still resolves: config modals by redirect, the rest to Agents, Usage or Changes', () => {
     const registry = new ModalSurfaceRegistry();
     const uiServices = createUiRuntimeServices(runtimeServices);
     registerBuiltinModals(registry, resolveBuiltinViewDeps({
@@ -230,7 +230,7 @@ describe('operator surfaces gate', () => {
     expect(resolveViewName('notifications', redirect)?.kind).toBe('notifications');
 
     // Deleted outright, with nothing to resolve to.
-    expect(resolveViewName('panel-list', redirect)).toBeNull();
+    expect(resolveViewName('view-list', redirect)).toBeNull();
     expect(resolveViewName('eval', redirect)).toBeNull();
   });
 
@@ -258,7 +258,7 @@ describe('operator surfaces gate', () => {
     expect(registry.get('session')).toBeDefined();
   });
 
-  test('policy command opens the policy panel when no subcommand is supplied', async () => {
+  test('policy command opens the policy modal when no subcommand is supplied', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const policy = registry.get('policy');
@@ -266,7 +266,7 @@ describe('operator surfaces gate', () => {
 
     let opened = false;
     await policy!.handler([], makeCommandContext('sess-operator-surfaces', {
-      openPolicyPanel: () => {
+      openPolicyView: () => {
         opened = true;
       },
       extensions: {
@@ -277,15 +277,15 @@ describe('operator surfaces gate', () => {
     expect(opened).toBe(true);
   });
 
-  test('hooks command opens the hooks panel when no filter is supplied', async () => {
+  test('hooks command opens the hooks modal when no filter is supplied', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const hooks = registry.get('hooks');
     expect(hooks).toBeDefined();
 
     let opened = false;
-    await hooks!.handler([], makeCommandContext('sess-hooks-panel', {
-      openHooksPanel: () => {
+    await hooks!.handler([], makeCommandContext('sess-hooks-view', {
+      openHooksView: () => {
         opened = true;
       },
     }));
@@ -293,15 +293,15 @@ describe('operator surfaces gate', () => {
     expect(opened).toBe(true);
   });
 
-  test('communication command opens the communication panel', async () => {
+  test('communication command opens the communication view', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const communication = registry.get('communication');
     expect(communication).toBeDefined();
 
     let opened = false;
-    await communication!.handler([], makeCommandContext('sess-communication-panel', {
-      openCommunicationPanel: () => {
+    await communication!.handler([], makeCommandContext('sess-communication-view', {
+      openCommunicationView: () => {
         opened = true;
       },
     }));
@@ -315,10 +315,10 @@ describe('operator surfaces gate', () => {
     const subscription = registry.get('subscription');
     expect(subscription).toBeDefined();
 
-    // the subscription panel migrated to a config-modal surface, the bare
-    // command now opens it via ctx.openModal, not ctx.openSubscriptionPanel.
+    // the subscription view migrated to a config-modal surface, the bare
+    // command now opens it via ctx.openModal, not ctx.openSubscriptionView.
     let openedModal: string | null = null;
-    await subscription!.handler([], makeCommandContext('sess-subscription-panel', {
+    await subscription!.handler([], makeCommandContext('sess-subscription-view', {
       openModal: (name: string) => {
         openedModal = name;
       },
@@ -327,15 +327,15 @@ describe('operator surfaces gate', () => {
     expect(openedModal as string | null).toBe('subscription-modal');
   });
 
-  test('security command opens the security panel', async () => {
+  test('security command opens the security modal', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const security = registry.get('security');
     expect(security).toBeDefined();
 
     let opened = false;
-    await security!.handler([], makeCommandContext('sess-security-panel', {
-      openSecurityPanel: () => {
+    await security!.handler([], makeCommandContext('sess-security-view', {
+      openSecurityView: () => {
         opened = true;
       },
     }));
@@ -343,15 +343,15 @@ describe('operator surfaces gate', () => {
     expect(opened).toBe(true);
   });
 
-  test('knowledge command opens the knowledge panel', async () => {
+  test('knowledge command opens the knowledge modal', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const knowledge = registry.get('knowledge');
     expect(knowledge).toBeDefined();
 
     let opened = false;
-    await knowledge!.handler([], makeCommandContext('sess-knowledge-panel', {
-      openKnowledgePanel: () => {
+    await knowledge!.handler([], makeCommandContext('sess-knowledge-view', {
+      openKnowledgeView: () => {
         opened = true;
       },
     }));
@@ -359,7 +359,7 @@ describe('operator surfaces gate', () => {
     expect(opened).toBe(true);
   });
 
-  test('project-memory open subcommand calls openMemoryPanel, not openKnowledgePanel', async () => {
+  test('project-memory open subcommand calls openMemoryView, not openKnowledgeView', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const pmem = registry.get('project-memory');
@@ -367,11 +367,11 @@ describe('operator surfaces gate', () => {
 
     let memoryOpened = false;
     let knowledgeOpened = false;
-    await pmem!.handler(['open'], makeCommandContext('sess-pmem-panel', {
-      openMemoryPanel: () => {
+    await pmem!.handler(['open'], makeCommandContext('sess-pmem-view', {
+      openMemoryView: () => {
         memoryOpened = true;
       },
-      openKnowledgePanel: () => {
+      openKnowledgeView: () => {
         knowledgeOpened = true;
       },
     }));
@@ -380,15 +380,15 @@ describe('operator surfaces gate', () => {
     expect(knowledgeOpened).toBe(false);
   });
 
-  test('project-memory alias pmem open subcommand calls openMemoryPanel', async () => {
+  test('project-memory alias pmem open subcommand calls openMemoryView', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const pmem = registry.get('pmem');
     expect(pmem).toBeDefined();
 
     let memoryOpened = false;
-    await pmem!.handler(['open'], makeCommandContext('sess-pmem-alias-panel', {
-      openMemoryPanel: () => {
+    await pmem!.handler(['open'], makeCommandContext('sess-pmem-alias-view', {
+      openMemoryView: () => {
         memoryOpened = true;
       },
     }));
@@ -402,10 +402,10 @@ describe('operator surfaces gate', () => {
     const remote = registry.get('remote');
     expect(remote).toBeDefined();
 
-    // the remote panel migrated to a config-modal surface, the bare
-    // command now opens it via ctx.openModal, not ctx.openRemotePanel.
+    // the remote view migrated to a config-modal surface, the bare
+    // command now opens it via ctx.openModal, not ctx.openRemoteView.
     let openedModal: string | null = null;
-    await remote!.handler([], makeCommandContext('sess-remote-panel', {
+    await remote!.handler([], makeCommandContext('sess-remote-view', {
       openModal: (name: string) => {
         openedModal = name;
       },
@@ -414,15 +414,15 @@ describe('operator surfaces gate', () => {
     expect(openedModal as string | null).toBe('remote-modal');
   });
 
-  test('cockpit command opens the cockpit panel', async () => {
+  test('cockpit command opens the cockpit view', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const cockpit = registry.get('cockpit');
     expect(cockpit).toBeDefined();
 
     let opened = false;
-    await cockpit!.handler([], makeCommandContext('sess-cockpit-panel', {
-      openCockpitPanel: () => {
+    await cockpit!.handler([], makeCommandContext('sess-cockpit-view', {
+      openCockpitView: () => {
         opened = true;
       },
     }));
@@ -430,15 +430,15 @@ describe('operator surfaces gate', () => {
     expect(opened).toBe(true);
   });
 
-  test('incident command opens the incident review panel', async () => {
+  test('incident command opens the incident review view', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const incident = registry.get('incident');
     expect(incident).toBeDefined();
 
     let opened = false;
-    await incident!.handler([], makeCommandContext('sess-incident-panel', {
-      openIncidentPanel: () => {
+    await incident!.handler([], makeCommandContext('sess-incident-view', {
+      openIncidentView: () => {
         opened = true;
       },
     }));
@@ -446,15 +446,15 @@ describe('operator surfaces gate', () => {
     expect(opened).toBe(true);
   });
 
-  test('orchestration command opens the orchestration panel when no subcommand is supplied', async () => {
+  test('orchestration command opens the orchestration view when no subcommand is supplied', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const orchestration = registry.get('orchestration');
     expect(orchestration).toBeDefined();
 
     let opened = false;
-    await orchestration!.handler([], makeCommandContext('sess-orchestration-panel', {
-      openOrchestrationPanel: () => {
+    await orchestration!.handler([], makeCommandContext('sess-orchestration-view', {
+      openOrchestrationView: () => {
         opened = true;
       },
     }));

@@ -74,19 +74,19 @@ const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
     custom: 'Use the explicit host value in the related host setting.',
   },
   'ui.systemMessages': {
-    panel: 'Show system messages in panels only.',
+    panel: 'Kept for older settings files: shows system messages inline in the transcript, same as conversation.',
     conversation: 'Show system messages inline in the transcript.',
-    both: 'Show system messages in both panels and the transcript.',
+    both: 'Shows system messages inline in the transcript, same as conversation.',
   },
   'ui.operationalMessages': {
-    panel: 'Show operational messages in panels only.',
+    panel: 'Kept for older settings files: shows operational messages inline in the transcript, same as conversation.',
     conversation: 'Show operational messages inline in the transcript.',
-    both: 'Show operational messages in both panels and the transcript.',
+    both: 'Shows operational messages inline in the transcript, same as conversation.',
   },
   'ui.wrfcMessages': {
-    panel: 'Show WRFC messages in panels only.',
+    panel: 'Kept for older settings files: shows WRFC messages inline in the transcript, same as conversation.',
     conversation: 'Show WRFC messages inline in the transcript.',
-    both: 'Show WRFC messages in both panels and the transcript.',
+    both: 'Shows WRFC messages inline in the transcript, same as conversation.',
   },
   'surfaces.telegram.mode': {
     webhook: 'Receive Telegram updates through webhook delivery.',

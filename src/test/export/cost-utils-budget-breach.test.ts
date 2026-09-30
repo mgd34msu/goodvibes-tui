@@ -1,7 +1,7 @@
 /**
  * Tests for computeBudgetBreach / readBudgetAlertUsd (src/export/cost-utils.ts).
  *
- * These are the pure predicate and config-reader CostTrackerPanel's render-time
+ * These are the pure predicate and config-reader the usage modal's render-time
  * "OVER BUDGET" flag and the background budget-breach notifier both share, so
  * they agree on exactly one definition of "over budget" and one source of
  * truth for the configured threshold.
@@ -64,7 +64,7 @@ describe('readBudgetAlertUsd', () => {
  * readBudgetAlertUsd persistence across a real ConfigManager restart.
  *
  * budgetAlertUsd is a "synthetic" key: it was never registered in the SDK's
- * CONFIG_SCHEMA (cost-tracker-panel.ts writes it via configAccess.set with a
+ * CONFIG_SCHEMA (the usage modal writes it via configAccess.set with a
  * plain string key, bypassing schema validation entirely). That raises a
  * real question the pure-predicate tests above can't answer: does a value
  * written through the *actual* SDK ConfigManager survive being reloaded from

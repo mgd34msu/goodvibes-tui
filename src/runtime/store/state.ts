@@ -10,7 +10,6 @@ import type { SessionDomainState } from '@/runtime/index.ts';
 import type { ModelDomainState } from '@/runtime/index.ts';
 import type { ConversationDomainState } from '@/runtime/index.ts';
 import type { OverlayDomainState } from '@/runtime/index.ts';
-import type { PanelDomainState } from './domains/panels.ts';
 import type { PermissionDomainState } from '@/runtime/index.ts';
 import type { TaskDomainState } from '@/runtime/index.ts';
 import type { AgentDomainState } from '@/runtime/index.ts';
@@ -41,7 +40,6 @@ import { createInitialSessionState } from '@/runtime/index.ts';
 import { createInitialModelState } from '@/runtime/index.ts';
 import { createInitialConversationState } from '@/runtime/index.ts';
 import { createInitialOverlaysState } from '@/runtime/index.ts';
-import { createInitialPanelsState } from './domains/panels.ts';
 import { createInitialPermissionsState } from '@/runtime/index.ts';
 import { createInitialTasksState } from '@/runtime/index.ts';
 import { createInitialAgentsState } from '@/runtime/index.ts';
@@ -76,11 +74,6 @@ export interface RuntimeState {
   model: ModelDomainState;
   conversation: ConversationDomainState;
   overlays: OverlayDomainState;
-  /**
-   * TUI panel state. Typed as Record<string,unknown> for SDK RuntimeState
-   * compatibility. Use selectPanels() which casts to PanelDomainState.
-   */
-  panels: Record<string, unknown>;
   permissions: PermissionDomainState;
   tasks: TaskDomainState;
   agents: AgentDomainState;
@@ -118,7 +111,6 @@ export function createInitialRuntimeState(): RuntimeState {
     model: createInitialModelState(),
     conversation: createInitialConversationState(),
     overlays: createInitialOverlaysState(),
-    panels: createInitialPanelsState() as unknown as Record<string, unknown>,
     permissions: createInitialPermissionsState(),
     tasks: createInitialTasksState(),
     agents: createInitialAgentsState(),

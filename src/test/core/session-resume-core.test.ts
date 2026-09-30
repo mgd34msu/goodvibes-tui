@@ -10,19 +10,21 @@
  *   3. The selectModel reselection fallback (raw id on failure) is honored
  *      when provided, and skipped cleanly when omitted.
  *   4. A session saved while the TUI still had side panes carries
- *      returnContext.openPanels; it loads, and nothing is reopened.
+ *      returnContext.openPanels; it loads, and the loaded return context
+ *      no longer carries the pane list.
  *
  * Also proves parity: two independent "seam-shaped" calls against the same
  * saved session produce the identical outcome.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { ConversationManager } from '../../core/conversation.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { resumeSessionCore } from '../../core/session-resume-core.ts';
 import { clearTurnAnchors, getTurnAnchors, persistTurnAnchors, recordTurnAnchor } from '@pellux/goodvibes-sdk/platform/rewind';
 import { makeTestSurface } from '../helpers/session-surface.ts';
+import { rewriteAsLegacyPaneSession } from '../helpers/legacy-pane-session.ts';
 
 let tmpDir: string;
 
@@ -157,16 +159,13 @@ describe('resumeSessionCore', () => {
     expect(hydrateCalls).toBe(1);
   });
 
-  test('a session saved with returnContext.openPanels (from when the TUI had side panes) loads; the field is ignored', async () => {
+  test('a session saved with returnContext.openPanels (from when the TUI had side panes) loads; the loaded return context no longer carries the pane list', async () => {
     const sm = new SessionManager(tmpDir, { surface: makeTestSurface(tmpDir) });
-    sm.save('sess-panels', [{ role: 'user', content: 'from the pane era' }], {
+    const { filePath } = sm.save('sess-panels', [{ role: 'user', content: 'from the pane era' }], {
       title: 'T', model: 'm', provider: 'p', timestamp: Date.now(),
-      returnContext: {
-        activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 0, toolCallCount: 0,
-        toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
-        openPanels: ['sessions', 'git', 'fleet', 'tokens'],
-      },
     });
+    rewriteAsLegacyPaneSession(filePath);
+    expect(readFileSync(filePath, 'utf-8')).toContain('"openPanels"');
     const conversation = new ConversationManager(() => 80);
 
     const outcome = await resumeSessionCore('sess-panels', {
@@ -177,7 +176,12 @@ describe('resumeSessionCore', () => {
     });
 
     expect(outcome.resumedMessageCount).toBe(1);
-    expect(outcome.meta.returnContext?.openPanels).toEqual(['sessions', 'git', 'fleet', 'tokens']);
+    expect(conversation.getMessageCount()).toBe(1);
+    const loaded = outcome.meta.returnContext as Record<string, unknown> | undefined;
+    expect(loaded).toBeDefined();
+    expect(loaded).not.toHaveProperty('openPanels');
+    expect(outcome.meta.returnContext?.lines.some((line) => line.startsWith('Open panels'))).toBe(false);
+    expect(outcome.meta.returnContext?.lines).toEqual(['Activity: idle', 'Status: idle']);
     expect(Object.keys(outcome)).not.toContain('panels');
   });
 });
@@ -196,7 +200,6 @@ describe('parity: both resume seams reach an identical outcome for the same save
       returnContext: {
         activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 0, toolCallCount: 0,
         toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
-        openPanels: ['git'],
       },
     });
 

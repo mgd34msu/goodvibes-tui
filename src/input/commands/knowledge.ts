@@ -141,8 +141,8 @@ export const knowledgeCommand: SlashCommand = {
     if (!knowledge) {
       return;
     }
-    if (args.length === 0 && context.openKnowledgePanel) {
-      context.openKnowledgePanel();
+    if (args.length === 0 && context.openKnowledgeView) {
+      context.openKnowledgeView();
       return;
     }
     const sub = (args[0] ?? 'status').toLowerCase();

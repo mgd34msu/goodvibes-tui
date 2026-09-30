@@ -139,7 +139,7 @@ The `/channel` command gives in-session visibility into the channel runtime stat
 
 | Invocation | Output |
 |---|---|
-| `/channel` | Opens the Routes panel in the TUI |
+| `/channel` | Opens the Routes view in the TUI |
 | `/channel panel` | Same as above |
 | `/channel pair [surface]` | Guided channel pairing: lists adapters, collects declared credentials, verifies them |
 | `/channel status` | Builds a full integration review (routes, delivery, sessions, tasks, pending approvals) |

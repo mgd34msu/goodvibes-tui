@@ -113,7 +113,7 @@ export function buildHunkSelectionState(request: PermissionPromptRequest): HunkS
 /**
  * applyHunkKey, pure reducer over raw stdin `data` for an active hunk-selection
  * prompt. Mirrors the outer y/a/n prompt's raw-data key routing (not the
- * normalized panel key vocabulary) since Space must be distinguishable from
+ * normalized key vocabulary) since Space must be distinguishable from
  * the trimmed/lowercased `key` the outer switch uses.
  */
 export function applyHunkKey(state: HunkSelectionState, data: string): HunkKeyResult {

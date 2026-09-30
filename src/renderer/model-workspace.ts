@@ -7,7 +7,7 @@
  *
  *   ▏opus                                                  6 of 5,582
  *
- *   ✦ pinned                               ┌ element panel ──────────┐
+ *   ✦ pinned                               ┌ element inset ──────────┐
  *   ● Claude Opus 5.5  anthropic    1.0M     Claude Opus 5.5
  *   ✦ recent                                 anthropic:claude-opus-5-5
  *     route-llm        abacusai     8.2K     Context  ▰▰▰▰▰▰▰▰▰▰ 1.0M
@@ -18,7 +18,7 @@
  *
  * The five model targets are tabs. The list is grouped Pinned, Recent, then by
  * the group-by mode (provider by default, which includes LAN servers). The
- * detail panel shows the selected model with meters for context, benchmark
+ * detail inset shows the selected model with meters for context, benchmark
  * quality and price where that data exists, its capabilities, which targets it
  * serves, and the picker's active filters. Provider, effort, context-cap and
  * embedding-provider steps use the same frame.
@@ -41,7 +41,7 @@ import {
   type SurfaceLayer,
 } from './surface-kit.ts';
 import { drawList, type KitListResult, type KitRow } from './surface-kit-list.ts';
-import { meter, panel, panelPut, panelWrap, tabs, type KitPanel } from './surface-kit-parts.ts';
+import { meter, inset, insetPut, insetWrap, tabs, type KitInset } from './surface-kit-parts.ts';
 
 // ---------------------------------------------------------------------------
 // Formatting
@@ -99,7 +99,7 @@ function capabilityNames(model: ModelDefinition): string[] {
 // List rows per mode
 // ---------------------------------------------------------------------------
 
-/** Model rows; without a detail panel the selected row names its full key instead of the provider. */
+/** Model rows; without a detail inset the selected row names its full key instead of the provider. */
 /** The muted row shown while the catalog is still loading behind an open picker. */
 const LOADING_ROW: KitRow = { label: 'loading catalog…', muted: true };
 
@@ -199,7 +199,7 @@ function effortRows(picker: ModelPickerModal): KitRow[] {
 }
 
 // ---------------------------------------------------------------------------
-// Detail panel
+// Detail inset
 // ---------------------------------------------------------------------------
 
 /** Active filters in a few words, '' when none are set. */
@@ -213,23 +213,23 @@ function filterSummary(picker: ModelPickerModal): string {
   return parts.join(' · ');
 }
 
-function kv(canvas: ModalFrame['canvas'], p: KitPanel, y: number, key: string, value: string, fg?: string): number {
+function kv(canvas: ModalFrame['canvas'], p: KitInset, y: number, key: string, value: string, fg?: string): number {
   const t = activeTokens();
   if (y > p.bottom) return y;
-  panelPut(canvas, p, p.l, y, key, { fg: t.textMuted });
-  return panelWrap(canvas, p, p.l + 12, y, value, { fg: fg ?? t.text });
+  insetPut(canvas, p, p.l, y, key, { fg: t.textMuted });
+  return insetWrap(canvas, p, p.l + 12, y, value, { fg: fg ?? t.text });
 }
 
-function drawModelDetail(f: ModalFrame, picker: ModelPickerModal, p: KitPanel): void {
+function drawModelDetail(f: ModalFrame, picker: ModelPickerModal, p: KitInset): void {
   const t = activeTokens();
   const c = f.canvas;
   const model = picker.getSelected();
   let y = p.top;
   if (!model) {
-    y = panelWrap(c, p, p.l, y, 'Nothing is selected.', { fg: t.textMuted });
+    y = insetWrap(c, p, p.l, y, 'Nothing is selected.', { fg: t.textMuted });
   } else {
-    y = panelWrap(c, p, p.l, y, model.displayName || model.id, { fg: t.text, bold: true });
-    y = panelWrap(c, p, p.l, y, modelKey(model), { fg: t.textFaint });
+    y = insetWrap(c, p, p.l, y, model.displayName || model.id, { fg: t.text, bold: true });
+    y = insetWrap(c, p, p.l, y, modelKey(model), { fg: t.textFaint });
     y++;
     const serves = picker.targetInfos.filter((info) => isTargetModel(info, model)).map((info) => targetLabelFor(info.target));
     const configured = picker.configuredProviders.has(model.provider);
@@ -243,15 +243,15 @@ function drawModelDetail(f: ModalFrame, picker: ModelPickerModal, p: KitPanel): 
     y++;
     // Meters only where the data exists.
     if (model.contextWindow && y <= p.bottom) {
-      panelPut(c, p, p.l, y, 'Context', { fg: t.textMuted });
+      insetPut(c, p, p.l, y, 'Context', { fg: t.textMuted });
       const end = meter(c, p.l + 12, y, Math.min(1, model.contextWindow / 1_000_000), t.brand, p.bg);
-      panelPut(c, p, end + 2, y++, formatContext(model.contextWindow), { fg: t.textFaint });
+      insetPut(c, p, end + 2, y++, formatContext(model.contextWindow), { fg: t.textFaint });
     }
     const score = picker.benchmarkScore(model);
     if (score !== null && y <= p.bottom) {
-      panelPut(c, p, p.l, y, 'Quality', { fg: t.textMuted });
+      insetPut(c, p, p.l, y, 'Quality', { fg: t.textMuted });
       const end = meter(c, p.l + 12, y, score, t.success, p.bg);
-      panelPut(c, p, end + 2, y++, score.toFixed(2), { fg: t.textFaint });
+      insetPut(c, p, end + 2, y++, score.toFixed(2), { fg: t.textFaint });
     }
     if (model.pricing && y <= p.bottom) {
       y = kv(c, p, y, 'Cost', `$${model.pricing.input} in · $${model.pricing.output} out per 1M tokens`);
@@ -265,13 +265,13 @@ function drawModelDetail(f: ModalFrame, picker: ModelPickerModal, p: KitPanel): 
       }
       y += 2;
     }
-    if (model.description && y <= p.bottom) y = panelWrap(c, p, p.l, y, model.description, { fg: t.textMuted }) + 1;
-    if (picker.isLocalModel(model) && y <= p.bottom) y = panelWrap(c, p, p.l, y, 'Local model: space sets a context cap.', { fg: t.textFaint }) + 1;
+    if (model.description && y <= p.bottom) y = insetWrap(c, p, p.l, y, model.description, { fg: t.textMuted }) + 1;
+    if (picker.isLocalModel(model) && y <= p.bottom) y = insetWrap(c, p, p.l, y, 'Local model: space sets a context cap.', { fg: t.textFaint }) + 1;
   }
   drawTargetFooter(f, picker, p, y);
 }
 
-function drawTargetFooter(f: ModalFrame, picker: ModelPickerModal, p: KitPanel, fromY: number): void {
+function drawTargetFooter(f: ModalFrame, picker: ModelPickerModal, p: KitInset, fromY: number): void {
   const t = activeTokens();
   const target = picker.getSelectedTargetInfo();
   const lines: Array<{ text: string; fg: string }> = [];
@@ -284,24 +284,24 @@ function drawTargetFooter(f: ModalFrame, picker: ModelPickerModal, p: KitPanel, 
     const chords = FILTER_HINTS.map(([key, action]) => `${key} ${action}`).join(' · ');
     for (const l of wrapLines(chords, width)) lines.push({ text: l, fg: t.textFaint });
   }
-  // Pinned to the bottom of the panel when there is room, else right after the content.
+  // Pinned to the bottom of the inset when there is room, else right after the content.
   let y = Math.max(fromY, p.bottom - lines.length + 1);
   for (const line of lines) {
     if (y > p.bottom) break;
-    panelPut(f.canvas, p, p.l, y++, line.text, { fg: line.fg });
+    insetPut(f.canvas, p, p.l, y++, line.text, { fg: line.fg });
   }
 }
 
-function drawStepDetail(f: ModalFrame, picker: ModelPickerModal, p: KitPanel): void {
+function drawStepDetail(f: ModalFrame, picker: ModelPickerModal, p: KitInset): void {
   const t = activeTokens();
   const c = f.canvas;
   let y = p.top;
   if (picker.mode === 'provider') {
     const provider = picker.getFilteredProviders()[picker.selectedIndex] ?? '';
     const target = picker.getSelectedTargetInfo();
-    y = panelWrap(c, p, p.l, y, provider || 'No provider selected', { fg: t.text, bold: true });
+    y = insetWrap(c, p, p.l, y, provider || 'No provider selected', { fg: t.text, bold: true });
     y++;
-    y = panelWrap(c, p, p.l, y, `Choose a provider, then choose a model for ${target?.label ?? targetLabelFor(picker.target)}.`, { fg: t.textMuted });
+    y = insetWrap(c, p, p.l, y, `Choose a provider, then choose a model for ${target?.label ?? targetLabelFor(picker.target)}.`, { fg: t.textMuted });
     if (provider) {
       const via = picker.configuredViaMap.get(provider);
       y = kv(c, p, y + 1, 'Status', picker.configuredProviders.has(provider) ? `configured${via ? ` via ${via}` : ''}` : 'not configured', picker.configuredProviders.has(provider) ? t.success : t.warning);
@@ -309,19 +309,19 @@ function drawStepDetail(f: ModalFrame, picker: ModelPickerModal, p: KitPanel): v
     }
   } else if (picker.mode === 'embeddingProvider') {
     const selected = picker.embeddingProviders[picker.selectedIndex];
-    y = panelWrap(c, p, p.l, y, 'Embedding provider', { fg: t.text, bold: true });
-    y = panelWrap(c, p, p.l, y + 1, 'The provider memory search and the code index use to embed content.', { fg: t.textMuted });
+    y = insetWrap(c, p, p.l, y, 'Embedding provider', { fg: t.text, bold: true });
+    y = insetWrap(c, p, p.l, y + 1, 'The provider memory search and the code index use to embed content.', { fg: t.textMuted });
     if (selected) {
       y = kv(c, p, y + 1, 'Provider', selected.id);
       y = kv(c, p, y, 'Dimensions', String(selected.dimensions));
       y = kv(c, p, y, 'Status', selected.configured ? 'configured' : 'unconfigured', selected.configured ? t.success : t.warning);
-      if (selected.detail) y = panelWrap(c, p, p.l, y + 1, selected.detail, { fg: t.textMuted });
+      if (selected.detail) y = insetWrap(c, p, p.l, y + 1, selected.detail, { fg: t.textMuted });
     }
   } else if (picker.mode === 'effort') {
     const model = picker.pendingModel;
-    y = panelWrap(c, p, p.l, y, model ? (model.displayName || model.id) : 'Reasoning effort', { fg: t.text, bold: true });
-    if (model) y = panelWrap(c, p, p.l, y, modelKey(model), { fg: t.textFaint });
-    y = panelWrap(c, p, p.l, y + 1, 'Reasoning effort applies to the main chat model. Select the default effort for this model.', { fg: t.textMuted });
+    y = insetWrap(c, p, p.l, y, model ? (model.displayName || model.id) : 'Reasoning effort', { fg: t.text, bold: true });
+    if (model) y = insetWrap(c, p, p.l, y, modelKey(model), { fg: t.textFaint });
+    y = insetWrap(c, p, p.l, y + 1, 'Reasoning effort applies to the main chat model. Select the default effort for this model.', { fg: t.textMuted });
   }
   drawTargetFooter(f, picker, p, y + 1);
 }
@@ -354,7 +354,7 @@ function drawContextCap(f: ModalFrame, picker: ModelPickerModal, top: number, x0
 // Hints
 // ---------------------------------------------------------------------------
 
-/** The filter chords of the model list (shown in the detail panel, or in the hints without one). */
+/** The filter chords of the model list (shown in the detail inset, or in the hints without one). */
 const FILTER_HINTS: readonly KitHint[] = [['ctrl+t', 'price'], ['ctrl+k', 'capability'], ['ctrl+a', 'available'], ['ctrl+b', 'benchmark sort'], ['ctrl+g', 'group']];
 
 function pickerHints(picker: ModelPickerModal, withFilters: boolean): KitHint[] {
@@ -388,8 +388,8 @@ export function renderModelWorkspace(picker: ModelPickerModal, screenWidth: numb
     : picker.mode === 'provider' ? ['Providers']
     : undefined;
   const inner = modalInnerWidth(standardModalWidth(screenWidth));
-  const twoPane = inner >= 60;
-  const f = beginModal(screenWidth, screenHeight, { title: 'Models', crumbs, hints: pickerHints(picker, !twoPane) });
+  const sideBySide = inner >= 60;
+  const f = beginModal(screenWidth, screenHeight, { title: 'Models', crumbs, hints: pickerHints(picker, !sideBySide) });
 
   // Targets as tabs; the active tab carries the gradient.
   const labels = picker.targetInfos.length > 0
@@ -409,13 +409,13 @@ export function renderModelWorkspace(picker: ModelPickerModal, screenWidth: numb
     body += 2;
   }
 
-  const x1 = twoPane ? f.l + Math.floor(inner * 0.5) - 1 : f.r;
+  const x1 = sideBySide ? f.l + Math.floor(inner * 0.5) - 1 : f.r;
   let result: KitListResult | null = null;
   const scrollKey = { owner: picker, name: picker.mode };
   if (picker.mode === 'contextCap') {
     drawContextCap(f, picker, body, f.l, x1);
   } else {
-    const listed = picker.mode === 'model' ? modelRows(picker, !twoPane)
+    const listed = picker.mode === 'model' ? modelRows(picker, !sideBySide)
       : picker.mode === 'provider' ? providerRows(picker)
       : picker.mode === 'embeddingProvider' ? embeddingRows(picker)
       : effortRows(picker);
@@ -423,8 +423,8 @@ export function renderModelWorkspace(picker: ModelPickerModal, screenWidth: numb
     const rows = picker.catalogLoading && picker.mode !== 'effort' ? [LOADING_ROW, ...listed] : listed;
     result = drawList(f.canvas, { rows, top: body, bottom: f.bottom, x0: f.l, x1, scrollKey });
   }
-  if (twoPane) {
-    const p = panel(f.canvas, x1 + 3, body, f.r + 2 - (x1 + 3) + 1, f.bottom - body + 1);
+  if (sideBySide) {
+    const p = inset(f.canvas, x1 + 3, body, f.r + 2 - (x1 + 3) + 1, f.bottom - body + 1);
     if (picker.mode === 'model' || picker.mode === 'contextCap') drawModelDetail(f, picker, p);
     else drawStepDetail(f, picker, p);
   }

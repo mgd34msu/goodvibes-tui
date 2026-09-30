@@ -58,9 +58,9 @@ for reference.
 | `storage.secretPolicy` | `preferred_secure` | Secret storage policy: prefer secure backing store, fall back when allowed |
 | `permissions.mode` | `prompt` | Permission mode: `prompt`, `accept-edits`, `plan`, `allow-all`, `custom` |
 | `permissions.backgroundAgents` | `inherit` | How background/subagent tool calls consult the permission layer: `inherit` or `allow-all` |
-| `ui.systemMessages` | `panel` | Route general system messages to `panel`, `conversation`, or `both` |
-| `ui.operationalMessages` | `panel` | Route operational runtime notices to `panel`, `conversation`, or `both` |
-| `ui.wrfcMessages` | `both` | Route WRFC/orchestration updates to `panel`, `conversation`, or `both` |
+| `ui.systemMessages` | `panel` | Routing target for general system messages (`panel`, `conversation`, or `both`); every value shows them inline in the transcript |
+| `ui.operationalMessages` | `panel` | Routing target for operational runtime notices (`panel`, `conversation`, or `both`); every value shows them inline in the transcript |
+| `ui.wrfcMessages` | `both` | Routing target for WRFC/orchestration updates (`panel`, `conversation`, or `both`); every value shows them inline in the transcript |
 | `service.enabled` | `true` | Enable service-install and daemon-management verbs, including the standalone daemon's self-promotion to a supervised service at its first idle moment |
 | `service.autostart` | `false` | Install/enable or disable/remove the OS autostart service |
 | `service.restartOnFailure` | `true` | Restart managed daemon services after failure |
@@ -198,7 +198,7 @@ of them.
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `behavior.notifyAfterSeconds` | number | `60` | Seconds a turn must run before a push notification fires; `0` turns it off. Delivers to the desktop (`notify-send` / `osascript`) and to any configured ntfy/webhook URLs. Notification text is metadata only: task kind, elapsed time, ok/fail, session id. Never conversation content. |
-| `behavior.notifyOnBudgetBreach` | boolean | `true` | Alert when session cost crosses the configured budget (set via the Cost panel's `b` key). |
+| `behavior.notifyOnBudgetBreach` | boolean | `true` | Alert when session cost crosses the configured budget (set via the Usage modal's `b` key). |
 | `behavior.notifyOnAgentFailure` | boolean | `true` | Alert when a delegated or background agent fails. |
 | `behavior.notifyOnChainFailure` | boolean | `true` | Alert when a WRFC review chain fails. |
 | `behavior.notifyOnApprovalPending` | boolean | `true` | Alert the moment a tool call becomes a real, user-blocking permission prompt. Message text is tool name and permission category only, never the call's arguments. |

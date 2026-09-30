@@ -11,7 +11,7 @@
  * feedInputTokens() actually reads before/around a 'focus' token are
  * provided as real values; every other closure is a sentinel that throws if
  * called, so any future change that accidentally routes a focus token into
- * modal/panel/text/key handling fails this test loudly instead of silently
+ * modal/view/text/key handling fails this test loudly instead of silently
  * leaking an escape sequence into the prompt buffer.
  */
 import { describe, test, expect } from 'bun:test';

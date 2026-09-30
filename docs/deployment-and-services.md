@@ -168,7 +168,7 @@ If `direct` is enabled and the certificate files are missing or invalid, GoodVib
 
 ### TLS plaintext warning
 
-If a control plane or HTTP listener is configured with `hostMode` other than `local` and `tls.mode = off`, GoodVibes emits a `[SECURITY]` warning in the WRFC panel at startup. The same warning appears in the onboarding wizard network step whenever a network-facing service is selected without TLS.
+If a control plane or HTTP listener is configured with `hostMode` other than `local` and `tls.mode = off`, GoodVibes emits a `[SECURITY]` warning as a WRFC message at startup (routed by `ui.wrfcMessages`). The same warning appears in the onboarding wizard network step whenever a network-facing service is selected without TLS.
 
 To suppress the warning, set `controlPlane.tls.mode` or `httpListener.tls.mode` to `direct` (or use the `proxy` deployment shape with a terminating reverse proxy).
 

@@ -16,7 +16,7 @@ import { InputHistory } from '../input/input-history.ts';
 import { GitStatusProvider } from '../renderer/git-status.ts';
 import type { GitHeaderInfo } from '../renderer/git-status.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
-import { createShellViews, type ShellViews } from '../panels/builtin-views.ts';
+import { createShellViews, type ShellViews } from '../views/builtin-views.ts';
 import { WorkspaceRegistrationManager } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import { createSystemMessageRouter, type SystemMessageRouter } from '../core/system-message-router.ts';
 import { getConfigSnapshot } from '@pellux/goodvibes-sdk/platform/config';
@@ -337,8 +337,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
   // TURN_COMPLETED/TOOL_SUCCEEDED/TOOL_FAILED (see turn-event-wiring.ts's
   // refreshGit()), if the user runs `git init` externally and never submits
   // another turn, the header stays stuck on the startup-time fallback
-  // indefinitely. Poll at the same 5s cadence GitPanel already uses for its
-  // own self-poll (git-panel.ts) so the two mechanisms are cadence-consistent.
+  // indefinitely. Poll at the same 5s cadence the other live modals use for
+  // their own self-polls so the mechanisms are cadence-consistent.
   gitStatusProvider.startPolling(5_000, (info) => {
     lastGitInfoRef.value = info;
     requestRender();

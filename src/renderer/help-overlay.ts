@@ -159,7 +159,7 @@ function helpGroups(keybindingsManager: KeybindingsManager, commands?: SlashComm
     ['compact',     'Compact the conversation history'],
     ['clear',       'Start a fresh conversation (current one saved)'],
     ['keybindings', 'List and customize key bindings'],
-    ['panel',       'Open, focus, or manage panels'],
+    ['panel',       'Open a view by its old pane name'],
   ];
 
   const commandRows: string[] = [];

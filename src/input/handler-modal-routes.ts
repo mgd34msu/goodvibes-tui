@@ -224,14 +224,14 @@ type SettingsRouteState = {
     active: boolean;
     editingMode: boolean;
     currentCategory: string;
-    focusPane?: 'categories' | 'settings';
+    focusRegion?: 'categories' | 'settings';
     /** True when the user is actively typing into the search input bar. */
     searchFocused: boolean;
     /** Current cross-category search query. */
     searchQuery: string;
     commitEdit: () => void;
     toggleSelectedFlag: () => void;
-    /** Scroll the documentation pane (PgUp/PgDn); the renderer clamps and shows honest markers. */
+    /** Scroll the documentation region (PgUp/PgDn); the renderer clamps and shows honest markers. */
     scrollContext?: (delta: number) => void;
     activateSelected: () => void;
     handleSubscriptionLogoutKey?: (key: string) => 'confirmed' | 'cancelled' | 'absorbed' | 'inactive';
@@ -242,7 +242,7 @@ type SettingsRouteState = {
     moveDown?: () => void;
     focusCategories?: () => void;
     focusSettings?: () => void;
-    toggleFocusPane?: () => void;
+    toggleFocusRegion?: () => void;
     nextCategory: () => void;
     prevCategory?: () => void;
     editBackspace: () => void;
@@ -387,7 +387,7 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
   };
 
   if (token.type === 'key') {
-    const focusPane = modal.focusPane ?? 'settings';
+    const focusRegion = modal.focusRegion ?? 'settings';
     if (token.logicalName === 'escape') {
       // One level per press: an inline edit is a sub-dialog and is cancelled
       // first (mirrors handler-modal-stack.ts); otherwise the modal closes.
@@ -401,7 +401,7 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
     }
     if (token.logicalName === 'enter' || (token.logicalName === 'space' && !modal.editingMode && !searching)) {
       if (modal.editingMode) modal.commitEdit();
-      else if (focusPane === 'categories' && !searching) modal.focusSettings?.();
+      else if (focusRegion === 'categories' && !searching) modal.focusSettings?.();
       else {
         // Feature-unit toggle headers are boolean settings rows, so
         // activateSelected toggles them the same way it edits/toggles any
@@ -439,8 +439,8 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
       modal.scrollContext?.(3);
     }
     else if (token.logicalName === 'tab' && !searching) {
-      if (modal.toggleFocusPane) modal.toggleFocusPane();
-      else if (focusPane === 'categories') modal.focusSettings?.();
+      if (modal.toggleFocusRegion) modal.toggleFocusRegion();
+      else if (focusRegion === 'categories') modal.focusSettings?.();
       else modal.focusCategories?.();
     }
     else if (isTextBackspace(token.logicalName ?? '')) {
@@ -457,8 +457,8 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
     } else if (searching) {
       setQuery(modal.searchQuery + token.value);
     } else if (token.value === ' ') {
-      const focusPane = modal.focusPane ?? 'settings';
-      if (focusPane === 'categories') modal.focusSettings?.();
+      const focusRegion = modal.focusRegion ?? 'settings';
+      if (focusRegion === 'categories') modal.focusSettings?.();
       else {
         modal.activateSelected();
         consumeSettingsPickerRequest(state);

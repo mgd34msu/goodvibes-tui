@@ -16,7 +16,7 @@ import { resolveOperatorRpc } from '../input/commands/operator-rpc.ts';
 import type {
   PairingTailscaleServeReceipt,
   PairingTailscaleStatus,
-} from '../panels/modals/pairing-modal.ts';
+} from '../views/modals/pairing-modal.ts';
 
 export interface PairingTailscaleGatewayDeps {
   readonly configManager: ConfigManager;

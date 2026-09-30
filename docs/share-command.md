@@ -34,7 +34,7 @@ Flags can be combined:
 ## Cost summary
 
 Every export includes a token-usage summary derived from the live session. Cost is
-computed with the same pricing formula the Cost Tracker panel uses (USD per 1M
+computed with the same pricing formula the Usage modal uses (USD per 1M
 tokens), applied to the session's accumulated input, output, and cache token counts.
 
 When the active model has no pricing data, cost is left out entirely rather than

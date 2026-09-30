@@ -302,7 +302,7 @@ export function renderPolicyUsage(): string {
 }
 
 // W6 command-path parity: the policy modal dropped its 'r' (record a
-// divergence-dashboard trend sample) action because the panel used to call
+// divergence-dashboard trend sample) action because the old view called
 // this._state.recordTrendEntry() directly and /policy had no equivalent verb.
 // This exposes it as a thin wrapper: recordTrendEntry() forwards to the attached
 // DivergencePanel, so it only captures a sample while a simulation dashboard is

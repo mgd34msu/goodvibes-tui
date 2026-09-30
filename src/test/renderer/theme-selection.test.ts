@@ -33,9 +33,9 @@ import {
   setTerminalPalette,
   type TerminalPalette,
 } from '../../renderer/terminal-palette.ts';
-import { DEFAULT_PANEL_PALETTE, extendPalette } from '../../panels/polish-core.ts';
-import { buildStatusBadge } from '../../panels/polish-tables.ts';
-import { MODAL_TONES } from '../../panels/modals/modal-theme.ts';
+import { DEFAULT_VIEW_PALETTE, extendPalette } from '../../views/polish-core.ts';
+import { buildStatusBadge } from '../../views/polish-tables.ts';
+import { MODAL_TONES } from '../../views/modals/modal-theme.ts';
 import { BORDERS } from '../../renderer/layout.ts';
 import { addConversationSplashScreen } from '../../core/conversation-rendering.ts';
 import { SPLASH_GRADIENT } from '../../utils/splash-lines.ts';
@@ -118,7 +118,7 @@ describe('the system theme', () => {
     expect(refreshForTerminalPalette()).toBe(true);
     const expected = resolveThemeFile(generateSystemTheme(PALETTE, 'dark'), 'dark');
     expect(activeTokens()).toEqual(expected);
-    expect(DEFAULT_PANEL_PALETTE.info).toBe(expected.info);
+    expect(DEFAULT_VIEW_PALETTE.info).toBe(expected.info);
   });
 
   test('a palette refresh is a no-op for any other theme', () => {
@@ -132,12 +132,12 @@ describe('the system theme', () => {
 describe('a theme change reaches every palette', () => {
   test('base palettes rebuild in place', () => {
     setActiveThemeName('dracula');
-    expect(DEFAULT_PANEL_PALETTE.good).toBe(activeTokens().success);
+    expect(DEFAULT_VIEW_PALETTE.good).toBe(activeTokens().success);
     expect(MODAL_TONES.info).toBe(activeTokens().info);
   });
 
   test('extendPalette extras are rebuilt from the new theme', () => {
-    const C = extendPalette(DEFAULT_PANEL_PALETTE, () => ({ series: activeTokens().secondary }));
+    const C = extendPalette(DEFAULT_VIEW_PALETTE, () => ({ series: activeTokens().secondary }));
     setActiveThemeName('gruvbox');
     expect(C.series).toBe(bundledTokens('gruvbox', 'dark').secondary);
     setActiveThemeName('rosepine');

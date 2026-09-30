@@ -3,8 +3,8 @@ import { SurfaceModalHost } from '../../input/surface-modal-host.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { makeTestShellViews } from '../helpers/shell-views.ts';
-import type { ShellViews } from '../../panels/builtin-views.ts';
-import type { ViewPanelAdapter } from '../../panels/view-panel-adapter.ts';
+import type { ShellViews } from '../../views/builtin-views.ts';
+import type { ViewPanelAdapter } from '../../views/view-panel-adapter.ts';
 
 interface FakeEmbeddingStatus {
   readonly id: string;
@@ -37,7 +37,7 @@ describe('wireShellUiOpeners', () => {
   let commandContext: Record<string, unknown>;
   let input: Record<string, unknown>;
   let views: ShellViews;
-  let viewPanels: ViewPanelAdapter;
+  let viewPanelAdapter: ViewPanelAdapter;
   let render: ReturnType<typeof mock>;
   let testManagers = createTestManagers();
   let fakeEmbeddingRegistry = makeFakeEmbeddingRegistry();
@@ -70,14 +70,14 @@ describe('wireShellUiOpeners', () => {
       openSelection: mock(() => {}),
       surfaceModals: new SurfaceModalHost(),
     };
-    ({ views, viewPanels } = makeTestShellViews({ configManager: testManagers.configManager }));
+    ({ views, viewPanelAdapter } = makeTestShellViews({ configManager: testManagers.configManager }));
     render = mock(() => {});
 
     wireShellUiOpeners({
       commandContext: commandContext as never,
       input: input as never,
       views,
-      viewPanels,
+      viewPanelAdapter,
       configManager: testManagers.configManager,
       providerRegistry: { getSelectableModels: () => [], listModels: () => [] } as never,
       runtime: { model: 'm', provider: 'p' } as never,
@@ -150,7 +150,7 @@ describe('wireShellUiOpeners', () => {
     });
   });
 
-  test('openView routes old pane names to their modals and reports unknown names', () => {
+  test('openView routes old view names to their modals and reports unknown names', () => {
     const opened: string[] = [];
     commandContext.openAgents = mock(() => { opened.push('agents'); });
     commandContext.openUsage = mock(() => { opened.push('usage'); });
@@ -168,12 +168,12 @@ describe('wireShellUiOpeners', () => {
     expect(opened).toEqual(['agents', 'agents', 'usage', 'usage', 'changes', 'changes', 'notifications']);
   });
 
-  test('the operator API panel adapter opens views through openView', () => {
+  test('the operator API view adapter opens views through openView', () => {
     commandContext.openAgents = mock(() => {});
-    expect(viewPanels.open('agents')).toBe(true);
+    expect(viewPanelAdapter.open('agents')).toBe(true);
     expect(commandContext.openAgents).toHaveBeenCalledTimes(1);
-    expect(viewPanels.getRegisteredTypes().map((t) => t.id)).toEqual(['agents', 'usage', 'changes', 'notifications', 'sessions']);
-    expect(viewPanels.getTopPane().panels).toEqual([]);
+    expect(viewPanelAdapter.getRegisteredTypes().map((t) => t.id)).toEqual(['agents', 'usage', 'changes', 'notifications', 'sessions']);
+    expect(viewPanelAdapter.getTopPane().panels).toEqual([]);
   });
 
   test('openOnboardingWizard delegates through the shared opener seam', () => {
@@ -305,7 +305,7 @@ describe('wireShellUiOpeners', () => {
         commandContext: commandContext as never,
         input: input as never,
         views,
-        viewPanels,
+        viewPanelAdapter,
         configManager: testManagers.configManager,
         providerRegistry: {
           getSelectableModels: () => [],
@@ -349,7 +349,7 @@ describe('wireShellUiOpeners', () => {
         commandContext: commandContext as never,
         input: input as never,
         views,
-        viewPanels,
+        viewPanelAdapter,
         configManager: testManagers.configManager,
         providerRegistry: {
           getSelectableModels: () => [registeredModel, unregisteredModel],

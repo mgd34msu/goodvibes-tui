@@ -37,7 +37,7 @@ import {
   type McpEntry,
   type SettingEntry,
   type SettingsCategory,
-  type SettingsFocusPane,
+  type SettingsFocusRegion,
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
 import {
@@ -113,7 +113,7 @@ export {
   type McpEntry,
   type SettingEntry,
   type SettingsCategory,
-  type SettingsFocusPane,
+  type SettingsFocusRegion,
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
 
@@ -130,8 +130,8 @@ export class SettingsModal {
   /** Selected setting index within the current category. */
   public selectedIndex = 0;
 
-  /** Which pane receives up/down navigation and Enter/Space actions. */
-  public focusPane: SettingsFocusPane = 'settings';
+  /** Which region (settings list or documentation) receives up/down navigation and Enter/Space actions. */
+  public focusRegion: SettingsFocusRegion = 'settings';
 
   /** Whether we're in inline edit mode for the selected string/number setting. */
   public editingMode = false;
@@ -139,8 +139,8 @@ export class SettingsModal {
   /** Current value of the inline edit buffer. */
   public editBuffer = '';
   /**
-   * Scroll offset (in wrapped lines) of the documentation pane for the
-   * selected row. The renderer clamps it to the pane's real content height
+   * Scroll offset (in wrapped lines) of the documentation region for the
+   * selected row. The renderer clamps it to the region's real content height
    * and shows honest more-above/below markers, long feature documentation
    * scrolls, it never clips. Reset whenever the selection changes.
    */
@@ -251,7 +251,7 @@ export class SettingsModal {
     this.connectionEntries = initialConnectionEntries();
     this.categoryIndex = 0;
     this.selectedIndex = 0;
-    this.focusPane = 'categories';
+    this.focusRegion = 'categories';
     this.editingMode = false;
     this.editBuffer = '';
     this.pendingModelPickerTarget = null;
@@ -268,7 +268,7 @@ export class SettingsModal {
     this.active = true;
   }
 
-  /** Scroll the documentation pane by `delta` wrapped lines (renderer clamps the top end). */
+  /** Scroll the documentation region by `delta` wrapped lines (renderer clamps the top end). */
   scrollContext(delta: number): void {
     this.contextScroll = Math.max(0, this.contextScroll + delta);
   }
@@ -296,7 +296,7 @@ export class SettingsModal {
     this.serviceRegistry = null;
     this.secretsManager = null;
     this.onSettingApplied = null;
-    this.focusPane = 'settings';
+    this.focusRegion = 'settings';
   }
 
   /** Enter search mode (focus the search input bar). */
@@ -355,26 +355,26 @@ export class SettingsModal {
 
   focusCategories(): void {
     if (this.editingMode) return;
-    this.focusPane = 'categories';
+    this.focusRegion = 'categories';
   }
 
   focusSettings(): void {
     if (this.editingMode) return;
-    this.focusPane = 'settings';
+    this.focusRegion = 'settings';
   }
 
-  toggleFocusPane(): void {
+  toggleFocusRegion(): void {
     if (this.editingMode) return;
-    this.focusPane = this.focusPane === 'settings' ? 'categories' : 'settings';
+    this.focusRegion = this.focusRegion === 'settings' ? 'categories' : 'settings';
   }
 
   moveFocusedUp(): void {
-    if (this.focusPane === 'categories') this.prevCategory();
+    if (this.focusRegion === 'categories') this.prevCategory();
     else this.moveUp();
   }
 
   moveFocusedDown(): void {
-    if (this.focusPane === 'categories') this.nextCategory();
+    if (this.focusRegion === 'categories') this.nextCategory();
     else this.moveDown();
   }
 
@@ -476,7 +476,7 @@ export class SettingsModal {
     if (categoryIndex >= 0) {
       this.categoryIndex = categoryIndex;
       this.selectedIndex = 0;
-      this.focusPane = 'settings';
+      this.focusRegion = 'settings';
       return;
     }
 
@@ -487,7 +487,7 @@ export class SettingsModal {
       if (entryIndex >= 0) {
         this.categoryIndex = index;
         this.selectedIndex = entryIndex;
-        this.focusPane = 'settings';
+        this.focusRegion = 'settings';
         return;
       }
     }
@@ -709,7 +709,7 @@ export class SettingsModal {
     // has already applied the change to the gate manager (live flip for
     // runtime-toggleable features, pending-restart marker for startup-gated
     // ones). Re-read the manager for every header bound to this key so the
-    // rows and the context pane show the honest state at the point of change.
+    // rows and the context region show the honest state at the point of change.
     this._syncFeatureHeadersForKey(key);
 
     if (result.restartDomain !== null) {
@@ -721,7 +721,7 @@ export class SettingsModal {
     // No-op (result.changed === false, effectMessage === null): leave lastSettingEffectMessage untouched.
 
     // Selecting 'prompt' for payments.cvvHandling states the tradeoff at the
-    // moment of selection, not just in the documentation pane, see the
+    // moment of selection, not just in the documentation region, see the
     // SDK's own CVV_PROMPT_TRADEOFF_WARNING (platform/payments).
     if (key === PAYMENTS_CVV_HANDLING_CONFIG_KEY && value === 'prompt') {
       this.lastSettingEffectMessage = CVV_PROMPT_TRADEOFF_WARNING;

@@ -1,9 +1,10 @@
 /**
- * UX Anti-Regression: Plugin Reload While Panels Subscribed (v3 §18.5)
+ * UX Anti-Regression: Plugin Reload While Other Surfaces Are Live (v3 §18.5)
  *
- * Verifies that reloading a plugin does not break panel subscriptions,
- * panel state remains intact, plugin metadata updates correctly, and the
- * plugin registry stays consistent through the reload lifecycle.
+ * Verifies that reloading a plugin leaves the rest of the runtime state
+ * (session, overlays, conversation) untouched, plugin metadata updates
+ * correctly, and the plugin registry stays consistent through the reload
+ * lifecycle.
  *
  * All tests use pure state manipulation, no real I/O, no event bus.
  */
@@ -12,11 +13,11 @@ import { createInitialRuntimeState } from '../../runtime/store/state.ts';
 import type { RuntimeState } from '../../runtime/store/state.ts';
 import {
   selectPlugins,
-  selectPanels,
-  selectActivePanels,
+  selectOverlays,
+  selectSession,
+  selectConversation,
 } from '../../runtime/store/selectors/index.ts';
 import type { PluginDomainState, RuntimePlugin } from '@/runtime/index.ts';
-import type { PanelDomainState } from '../../runtime/store/domains/panels.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -69,28 +70,6 @@ function makePluginState(
     totalToolsContributed: activeNames.length * 3,
     initialLoadComplete: true,
     reloadInProgress,
-  };
-}
-
-/** Open panels state with plugin_manager panel open. */
-function makeOpenPanelsState(base: PanelDomainState): PanelDomainState {
-  const panelMap = new Map(base.panels);
-  const pluginManagerPanel = panelMap.get('plugin_manager');
-  if (pluginManagerPanel) {
-    panelMap.set('plugin_manager', {
-      ...pluginManagerPanel,
-      open: true,
-      focused: true,
-      lastActivatedAt: TEST_TIMESTAMP - 500,
-    });
-  }
-  return {
-    ...base,
-    panels: panelMap,
-    focusedPanelId: 'plugin_manager',
-    revision: base.revision + 1,
-    lastUpdatedAt: TEST_TIMESTAMP,
-    source: 'plugin-reload-test',
   };
 }
 
@@ -161,7 +140,7 @@ function applyPluginReload(
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('ux:plugin-reload; plugin reload while panels subscribed', () => {
+describe('ux:plugin-reload; plugin reload while other surfaces are live', () => {
   let state: RuntimeState;
 
   beforeEach(() => {
@@ -218,41 +197,28 @@ describe('ux:plugin-reload; plugin reload while panels subscribed', () => {
     });
   });
 
-  describe('panel subscriptions survive plugin reload', () => {
-    test('open panels remain open through plugin reload cycle', () => {
-      const plugins = [makePlugin('my-plugin')];
-      const openPanels = makeOpenPanelsState(selectPanels(state));
-      const withBoth: RuntimeState = { ...state, panels: openPanels as unknown as Record<string, unknown>, plugins: makePluginState(plugins) };
+  describe('other runtime slices survive plugin reload', () => {
+    test('overlays, session, and conversation slices are the same objects in every reload phase', () => {
+      const withPlugins: RuntimeState = { ...state, plugins: makePluginState([makePlugin('my-plugin')]) };
 
-      const { unloading, loading, reloaded } = applyPluginReload(withBoth, 'my-plugin');
+      const { unloading, loading, reloaded } = applyPluginReload(withPlugins, 'my-plugin');
 
       for (const phase of [unloading, loading, reloaded]) {
-        // Panels are unaffected by plugin reload
-        const pluginPanel = selectPanels(phase).panels.get('plugin_manager');
-        expect(pluginPanel?.open).toBe(true);
+        expect(selectOverlays(phase)).toBe(selectOverlays(withPlugins));
+        expect(selectSession(phase)).toBe(selectSession(withPlugins));
+        expect(selectConversation(phase)).toBe(selectConversation(withPlugins));
       }
     });
 
-    test('focused panel does not change during plugin reload', () => {
-      const plugins = [makePlugin('my-plugin')];
-      const openPanels = makeOpenPanelsState(selectPanels(state));
-      const withBoth: RuntimeState = { ...state, panels: openPanels as unknown as Record<string, unknown>, plugins: makePluginState(plugins) };
+    test('plugin revision advances once per reload phase', () => {
+      const withPlugins: RuntimeState = { ...state, plugins: makePluginState([makePlugin('my-plugin')]) };
+      const baseRevision = selectPlugins(withPlugins).revision;
 
-      const { unloading, loading, reloaded } = applyPluginReload(withBoth, 'my-plugin');
+      const { unloading, loading, reloaded } = applyPluginReload(withPlugins, 'my-plugin');
 
-      for (const phase of [unloading, loading, reloaded]) {
-        expect(selectPanels(phase).focusedPanelId).toBe('plugin_manager');
-      }
-    });
-
-    test('active panels count is unchanged by plugin reload', () => {
-      const plugins = [makePlugin('my-plugin')];
-      const openPanels = makeOpenPanelsState(selectPanels(state));
-      const withBoth: RuntimeState = { ...state, panels: openPanels as unknown as Record<string, unknown>, plugins: makePluginState(plugins) };
-      const initialActiveCount = selectActivePanels(withBoth).length;
-
-      const { reloaded } = applyPluginReload(withBoth, 'my-plugin');
-      expect(selectActivePanels(reloaded).length).toBe(initialActiveCount);
+      expect(selectPlugins(unloading).revision).toBe(baseRevision + 1);
+      expect(selectPlugins(loading).revision).toBe(baseRevision + 2);
+      expect(selectPlugins(reloaded).revision).toBe(baseRevision + 3);
     });
   });
 

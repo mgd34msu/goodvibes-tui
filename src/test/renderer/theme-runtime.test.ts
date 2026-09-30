@@ -16,7 +16,7 @@ import {
   resolveUiTones,
   setActiveThemeMode,
 } from '../../renderer/theme.ts';
-import { DEFAULT_PANEL_PALETTE, extendPalette } from '../../panels/polish-core.ts';
+import { DEFAULT_VIEW_PALETTE, extendPalette } from '../../views/polish-core.ts';
 import { beginModal, finishModal } from '../../renderer/surface-kit.ts';
 import { activeTokens } from '../../renderer/theme.ts';
 import { renderMarkdown } from '../../renderer/markdown.ts';
@@ -61,17 +61,17 @@ describe('active mode accessors', () => {
 // ---------------------------------------------------------------------------
 
 describe('chrome palette in-place rebuild', () => {
-  test('base panel palette flips its info role and restores byte-identically', () => {
-    const darkInfo = DEFAULT_PANEL_PALETTE.info;
-    const darkSnapshot = { ...DEFAULT_PANEL_PALETTE };
+  test('base view palette flips its info role and restores byte-identically', () => {
+    const darkInfo = DEFAULT_VIEW_PALETTE.info;
+    const darkSnapshot = { ...DEFAULT_VIEW_PALETTE };
 
     setActiveThemeMode('light');
-    expect(DEFAULT_PANEL_PALETTE.info).toBe(resolveUiTones('light').state.info);
-    expect(DEFAULT_PANEL_PALETTE.info).not.toBe(darkInfo);
+    expect(DEFAULT_VIEW_PALETTE.info).toBe(resolveUiTones('light').state.info);
+    expect(DEFAULT_VIEW_PALETTE.info).not.toBe(darkInfo);
 
     setActiveThemeMode('dark');
     // Reversible: every field back to the exact dark value.
-    expect({ ...DEFAULT_PANEL_PALETTE }).toEqual(darkSnapshot);
+    expect({ ...DEFAULT_VIEW_PALETTE }).toEqual(darkSnapshot);
   });
 
   test('kit surfaces read the active tokens at render time and follow a mode flip', () => {
@@ -86,7 +86,7 @@ describe('chrome palette in-place rebuild', () => {
   });
 
   test('extendPalette-derived palette tracks the base flip; extras stay put', () => {
-    const C = extendPalette(DEFAULT_PANEL_PALETTE, () => ({ custom: '#123456' }));
+    const C = extendPalette(DEFAULT_VIEW_PALETTE, () => ({ custom: '#123456' }));
     const darkInfo = C.info;
     setActiveThemeMode('light');
     // Base role re-merged from the (now-light) base…

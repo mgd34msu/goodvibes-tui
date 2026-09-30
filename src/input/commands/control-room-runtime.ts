@@ -11,8 +11,8 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     aliases: [],
     description: 'Open Agents (the old operator cockpit)',
     handler(_args, ctx) {
-      if (ctx.openCockpitPanel) {
-        ctx.openCockpitPanel();
+      if (ctx.openCockpitView) {
+        ctx.openCockpitView();
         return;
       }
       ctx.print('The Agents view is not available in this runtime.');
@@ -27,8 +27,8 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     handler(args, ctx) {
       const graphs = [...requireReadModels(ctx).orchestration.getSnapshot().graphs];
       if (args.length === 0) {
-        if (ctx.openOrchestrationPanel) {
-          ctx.openOrchestrationPanel();
+        if (ctx.openOrchestrationView) {
+          ctx.openOrchestrationView();
           return;
         }
         if (graphs.length === 0) {
@@ -103,8 +103,8 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     aliases: ['comms'],
     description: 'Inspect structured agent communication routes and recent activity',
     handler(_args, ctx) {
-      if (ctx.openCommunicationPanel) {
-        ctx.openCommunicationPanel();
+      if (ctx.openCommunicationView) {
+        ctx.openCommunicationView();
         return;
       }
       ctx.print('The Agents view is not available in this runtime.');
@@ -118,8 +118,8 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     usage: '[review | attack-paths | tokens]',
     handler(args, ctx) {
       if (args.length === 0) {
-        if (ctx.openSecurityPanel) {
-          ctx.openSecurityPanel();
+        if (ctx.openSecurityView) {
+          ctx.openSecurityView();
           return;
         }
         ctx.print('The Security view is not available in this runtime.');
@@ -201,8 +201,8 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     async handler(args, ctx) {
       const subcommand = (args[0] ?? 'open').toLowerCase();
       if (subcommand === 'open') {
-        if (ctx.openMemoryPanel) {
-          ctx.openMemoryPanel();
+        if (ctx.openMemoryView) {
+          ctx.openMemoryView();
           return;
         }
         ctx.print('The Memory view is not available in this runtime.');
@@ -250,8 +250,8 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         ctx.print(prompt ?? 'No reviewed project knowledge matched that task.');
         return;
       }
-      if (ctx.openMemoryPanel) {
-        ctx.openMemoryPanel();
+      if (ctx.openMemoryView) {
+        ctx.openMemoryView();
         return;
       }
       ctx.print(`Unknown project-memory subcommand: ${subcommand}`);

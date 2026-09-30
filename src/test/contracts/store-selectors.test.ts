@@ -1,13 +1,11 @@
 import { describe, test, expect } from 'bun:test';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
-import type { PanelDomainState } from '../../runtime/store/domains/panels.ts';
 import {
   // Primary domain selectors
   selectSession,
   selectModel,
   selectConversation,
   selectOverlays,
-  selectPanels,
   selectPermissions,
   selectTasks,
   selectAgents,
@@ -29,8 +27,6 @@ import {
   selectDomainHealth,
   selectSystemHealth,
   selectPermissionMode,
-  selectActivePanels,
-  selectFocusedPanel,
   selectAnyOverlayVisible,
   selectTurnState,
   selectStreamToolPreview,
@@ -42,7 +38,7 @@ import {
 describe('store-selectors contract', () => {
   const state = createInitialRuntimeState();
 
-  describe('primary domain selectors: all 19 return correct domain slice', () => {
+  describe('primary domain selectors: all 18 return correct domain slice', () => {
     test('selectSession returns session domain', () => {
       const session = selectSession(state);
       expect(session).toBe(state.session);
@@ -65,10 +61,8 @@ describe('store-selectors contract', () => {
       expect(overlays).toBe(state.overlays);
     });
 
-    test('selectPanels returns panels domain', () => {
-      const panels = selectPanels(state);
-      // panels selector returns Record<string, unknown> (SDK generic); runtime value is PanelDomainState
-      expect(panels === (state.panels as unknown)).toBe(true);
+    test('the runtime state has no slot for the removed side-view layout', () => {
+      expect(Object.keys(state)).not.toContain('panels');
     });
 
     test('selectPermissions returns permissions domain', () => {
@@ -169,17 +163,6 @@ describe('store-selectors contract', () => {
     test('selectPermissionMode returns a string', () => {
       const mode = selectPermissionMode(state);
       expect(typeof mode).toBe('string');
-    });
-
-    test('selectActivePanels returns an array from initial state', () => {
-      const panels = selectActivePanels(state);
-      expect(Array.isArray(panels)).toBe(true);
-    });
-
-    test('selectFocusedPanel returns undefined or a PanelState from initial state', () => {
-      const focused = selectFocusedPanel(state);
-      // Initial state may or may not have a focused panel
-      expect(focused === undefined || typeof focused === 'object').toBe(true);
     });
 
     test('selectAnyOverlayVisible returns false from initial state', () => {

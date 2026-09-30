@@ -18,7 +18,7 @@ import { assertEveryDescriptorHasHandler } from '@pellux/goodvibes-terminal-shel
 import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { revertReviewHunk } from '../../input/commands/review-runtime.ts';
-import { parseReviewDiff, flattenHunks } from '../../panels/diff-review-model.ts';
+import { parseReviewDiff, flattenHunks } from '../../views/diff-review-model.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.

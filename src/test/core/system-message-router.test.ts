@@ -6,8 +6,8 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 // ---------------------------------------------------------------------------
 // Minimal stubs
 //
-// (the purge): SystemMessagesPanel was DELETE-disposition and has been
-// removed. SystemMessageRouter no longer takes a panel at all, every
+// (the purge): the system-messages side surface was DELETE-disposition and has been
+// removed. SystemMessageRouter no longer takes a side surface at all, every
 // message now reaches conversation.addTypedSystemMessage() (see the class
 // doc in system-message-router.ts for why that's the correct behavior, not
 // a regression: resolveSystemMessageDelivery always falls back to
@@ -79,14 +79,14 @@ describe('classifyPriority (via routeAuto)', () => {
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('A fatal error occurred', 'system');
   });
 
-  test('[Scan] messages classify as low but still reach conversation (no panel to absorb them)', () => {
+  test('[Scan] messages classify as low but still reach conversation (no side surface to absorb them)', () => {
     router.routeAuto('[Scan] Found ollama at localhost:11434');
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[Scan] Found ollama at localhost:11434', 'operational');
   });
 
   test('[Agents] periodic "N running" snapshots are suppressed; lifecycle lines still reach conversation (1d)', () => {
     // The 30s "N running:" snapshot is transcript churn, dropped; the same live
-    // detail is shown in the fleet panel and the footer count.
+    // detail is shown in the Agents modal and the footer count.
     router.routeAuto('[Agents] 3 running:\n  abc12345: working');
     expect(conv.addTypedSystemMessage).not.toHaveBeenCalled();
     // A meaningful lifecycle line is not a snapshot and still routes.
@@ -125,7 +125,7 @@ describe('routeSystemMessage', () => {
     );
   });
 
-  test('panel-only targeted messages fall back to conversation (no panel attached)', () => {
+  test('messages targeted at the panel target fall back to conversation (no side surface attached)', () => {
     router.routeSystemMessage('high message', 'high');
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('high message', 'system');
   });
@@ -159,14 +159,14 @@ describe('routeSystemMessage', () => {
   test('does not throw on low route', () => {
     const r = createSystemMessageRouter(conv as unknown as ConversationManager);
     expect(() => r.low('msg')).not.toThrow();
-    // low routes to panel-only by default; with no panel it falls back to conversation
+    // low routes to the 'panel' target by default; with no side surface it falls back to conversation
     expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('msg', 'system');
   });
 
-  test('panel-targeted routes fall back to conversation (no panel exists)', () => {
+  test('routes targeted at the panel target fall back to conversation (no side surface exists)', () => {
     const r = createSystemMessageRouter(conv as unknown as ConversationManager, makeTargetResolver({ system: 'panel' }));
-    r.routeSystemMessage('panel fallback', 'low');
-    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('panel fallback', 'system');
+    r.routeSystemMessage('target fallback', 'low');
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('target fallback', 'system');
   });
 
   test('custom system target of both still reaches conversation', () => {
@@ -226,7 +226,7 @@ describe('routeAuto classification', () => {
   for (const msg of lowCases) {
     test(`classifies as low: "${msg.slice(0, 40)}"`, () => {
       router.routeAuto(msg);
-      // Low cases are 'operational' kind; without panel they fall back to conversation
+      // Low cases are 'operational' kind; without a side surface they fall back to conversation
       expect(conv.addTypedSystemMessage).toHaveBeenCalledWith(msg, 'operational');
     });
   }

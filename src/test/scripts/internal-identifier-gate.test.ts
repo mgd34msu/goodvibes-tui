@@ -19,17 +19,17 @@ const findingChain = 'C2' + '/' + 'C6';
 describe('checkNoInternalIdentifiers', () => {
   test('passes plain-language text with no internal identifiers', () => {
     const violations = checkNoInternalIdentifiers([
-      { relPath: 'src/panels/example-panel.ts', text: '// removed in a prior panel-consolidation cleanup' },
+      { relPath: 'src/views/example-view.ts', text: '// removed in a prior view-consolidation cleanup' },
     ]);
     expect(violations).toEqual([]);
   });
 
   test('fails on a wave.item id', () => {
     const violations = checkNoInternalIdentifiers([
-      { relPath: 'src/panels/example-panel.ts', text: `// panel delivery removed in ${wave}` },
+      { relPath: 'src/views/example-view.ts', text: `// view delivery removed in ${wave}` },
     ]);
     expect(violations).toHaveLength(1);
-    expect(violations[0]).toContain('src/panels/example-panel.ts:1');
+    expect(violations[0]).toContain('src/views/example-view.ts:1');
     expect(violations[0]).toContain(wave);
     expect(violations[0]).toContain('never put wave/work-order/register ids in outward-facing or in-code text');
     expect(violations[0]).toContain('[internal-identifier]');
@@ -45,7 +45,7 @@ describe('checkNoInternalIdentifiers', () => {
 
   test('fails on a lettered and a numbered work-order id', () => {
     const lettered = checkNoInternalIdentifiers([
-      { relPath: 'src/panels/example.ts', text: `// Group A (${workOrderLettered}) providers subset` },
+      { relPath: 'src/views/example.ts', text: `// Group A (${workOrderLettered}) providers subset` },
     ]);
     expect(lettered).toHaveLength(1);
     expect(lettered[0]).toContain(workOrderLettered);
@@ -64,7 +64,7 @@ describe('checkNoInternalIdentifiers', () => {
     const suffixPlaceholder = 'WO-' + '1xx';
     for (const token of [suffixLetter, suffixPlaceholder]) {
       const violations = checkNoInternalIdentifiers([
-        { relPath: 'src/panels/example.ts', text: `// merged target id (${token} console merges)` },
+        { relPath: 'src/views/example.ts', text: `// merged target id (${token} console merges)` },
       ]);
       expect(violations).toHaveLength(1);
       expect(violations[0]).toContain(token);
@@ -105,7 +105,7 @@ describe('checkNoInternalIdentifiers', () => {
     const plannedItem = 'plan ' + 'item' + ' 2.3.1';
     for (const token of [plainItem, plannedItem]) {
       const violations = checkNoInternalIdentifiers([
-        { relPath: 'src/panels/example-panel.ts', text: `// delivered by ${token} in the plan` },
+        { relPath: 'src/views/example-view.ts', text: `// delivered by ${token} in the plan` },
       ]);
       expect(violations).toHaveLength(1);
       expect(violations[0]).toContain('[internal-identifier]');
@@ -121,7 +121,7 @@ describe('checkNoInternalIdentifiers', () => {
   test('reports one violation per offending line, not per file', () => {
     const violations = checkNoInternalIdentifiers([
       {
-        relPath: 'src/panels/example.ts',
+        relPath: 'src/views/example.ts',
         text: `// first line mentions ${wave}\n// second line is clean\n// third line mentions ${debtId}`,
       },
     ]);
@@ -139,15 +139,15 @@ describe('checkNoInternalIdentifiers', () => {
 
   test('scans the memory-modal fixture with no carve-out: an internal identifier there is flagged', () => {
     const violations = checkNoInternalIdentifiers([
-      { relPath: 'src/panels/modals/memory-modal.ts', text: `summary: '${wave} batches panel retirements.'` },
+      { relPath: 'src/views/modals/memory-modal.ts', text: `summary: '${wave} batches view retirements.'` },
     ]);
     expect(violations).toHaveLength(1);
-    expect(violations[0]).toContain('src/panels/modals/memory-modal.ts');
+    expect(violations[0]).toContain('src/views/modals/memory-modal.ts');
   });
 
   test('does not flag the F2 keyboard key or unrelated short tokens', () => {
     const violations = checkNoInternalIdentifiers([
-      { relPath: 'src/input/handler-shortcuts.ts', text: "if (token.logicalName === 'f2') { openFleetPanel(); }" },
+      { relPath: 'src/input/handler-shortcuts.ts', text: "if (token.logicalName === 'f2') { openAgentsView(); }" },
     ]);
     expect(violations).toEqual([]);
   });
@@ -158,7 +158,7 @@ describe('checkNoInternalIdentifiers', () => {
   describe('lettered finding ids (A-E + digits)', () => {
     test('fails when the id sits alone inside parentheses', () => {
       const violations = checkNoInternalIdentifiers([
-        { relPath: 'src/panels/example-panel.ts', text: `// Agent transcript ${findingParen}` },
+        { relPath: 'src/views/example-view.ts', text: `// Agent transcript ${findingParen}` },
       ]);
       expect(violations).toHaveLength(1);
       expect(violations[0]).toContain(findingParen);
@@ -182,7 +182,7 @@ describe('checkNoInternalIdentifiers', () => {
 
     test('fails on a slash-chain of two ids', () => {
       const violations = checkNoInternalIdentifiers([
-        { relPath: 'src/panels/example-panel.ts', text: `// Chain summary has no single conversation (${findingChain})` },
+        { relPath: 'src/views/example-view.ts', text: `// Chain summary has no single conversation (${findingChain})` },
       ]);
       expect(violations).toHaveLength(1);
       expect(violations[0]).toContain(findingChain);

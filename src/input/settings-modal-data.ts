@@ -167,7 +167,7 @@ export function buildSettingGroups(
 
   // Synthetic behavior.budgetAlertUsd (TUI-local): no schema surface previously,
   // never in /config; /settings-sync show rejects any key not
-  // in CONFIG_KEYS. The Cost panel's 'b' key and /cost budget <usd> remain
+  // in CONFIG_KEYS. The Usage modal's 'b' key and /cost budget <usd> remain
   // the primary way to change it; this entry makes the current effective
   // value (and whether it's still the "no budget configured" default)
   // visible from /config behavior too, same rationale as notifyAfterSeconds.
@@ -336,7 +336,7 @@ export function buildNotifyAfterSecondsSyntheticEntry(configManager: Pick<Config
  *
  * 0 = no budget configured (disabled). Any positive number = the USD
  * threshold. Default matches BUDGET_ALERT_USD_DEFAULT in cost-utils.ts, the
- * single source of truth CostTrackerPanel and budget-breach-notifier.ts share.
+ * single source of truth the Usage modal and budget-breach-notifier.ts share.
  */
 export const BUDGET_ALERT_USD_SYNTHETIC_SETTING: ConfigSetting = {
   key: BUDGET_ALERT_USD_CONFIG_KEY as ConfigKey,
@@ -349,7 +349,7 @@ export const BUDGET_ALERT_USD_SYNTHETIC_SETTING: ConfigSetting = {
  * Build the synthetic SettingEntry for behavior.budgetAlertUsd.
  *
  * Delegates parsing/fallback to readBudgetAlertUsd (cost-utils.ts) so this
- * display entry can never disagree with what CostTrackerPanel and the
+ * display entry can never disagree with what the Usage modal and the
  * background budget-breach notifier actually read.
  */
 export function buildBudgetAlertUsdSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): SettingEntry {

@@ -6,7 +6,7 @@
  *   chip      2 columns of padding, the status mark, 1 space, the name,
  *             2 columns of padding
  *   current   filled in the session's own color, dark bold text
- *   others    on the panel fill, muted name, the mark in its status color
+ *   others    on the surface fill, muted name, the mark in its status color
  *   right     `tab next   shift+tab prev` keycaps ending at width-4
  *
  * Shown only when there is more than one session (the caller decides).

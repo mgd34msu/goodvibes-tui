@@ -11,10 +11,10 @@ import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { SurfaceModal, SurfaceModalHost } from './surface-modal-host.ts';
 import type { SurfaceLayer } from '../renderer/surface-kit.ts';
 import { renderNotificationsModal, type NotificationsModalView } from '../renderer/notifications-modal.ts';
-import type { PanelFeedEntry, PanelNotificationFeed } from '../panels/notifications-feed.ts';
+import type { NotificationFeedEntry, NotificationFeed } from '../views/notifications-feed.ts';
 
 export interface NotificationsModalOptions {
-  readonly feed: PanelNotificationFeed;
+  readonly feed: NotificationFeed;
   /**
    * The opener for the view a notification is about (views.ts resolves the
    * name), or null when nothing holds it.
@@ -43,7 +43,7 @@ export class NotificationsModal implements SurfaceModal, NotificationsModalView 
     });
   }
 
-  get entries(): readonly PanelFeedEntry[] {
+  get entries(): readonly NotificationFeedEntry[] {
     return this.options.feed.list();
   }
 
@@ -51,14 +51,14 @@ export class NotificationsModal implements SurfaceModal, NotificationsModalView 
     return (this.options.now ?? Date.now)();
   }
 
-  isUnread = (entry: PanelFeedEntry): boolean => this.unreadKeys.has(entry.key);
+  isUnread = (entry: NotificationFeedEntry): boolean => this.unreadKeys.has(entry.key);
 
   onClose(): void {
     this.unsubscribe();
     this.options.feed.markAllSeen();
   }
 
-  private selected(): PanelFeedEntry | undefined {
+  private selected(): NotificationFeedEntry | undefined {
     return this.entries[this.selectedIndex];
   }
 

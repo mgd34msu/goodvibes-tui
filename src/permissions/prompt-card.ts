@@ -5,7 +5,7 @@
  *
  *     △ Run a command?                            engineer · 1 more waiting
  *
- *     ┌ element panel ─────────────────────────────────────────────────┐
+ *     ┌ element inset ─────────────────────────────────────────────────┐
  *       $ rm -rf dist && bun run build
  *     └────────────────────────────────────────────────────────────────┘
  *
@@ -202,8 +202,8 @@ function titleGlyph(category: PermissionCategory): string {
 /** One visual row of the card body. */
 interface CardRow {
   readonly spans: readonly KitSpan[];
-  /** Fill the row as part of an element panel (bg), with this tint instead when set. */
-  readonly panel?: boolean;
+  /** Fill the row as part of an element inset (bg), with this tint instead when set. */
+  readonly inset?: boolean;
   readonly tint?: string;
   readonly right?: { readonly text: string; readonly fg: string };
   /** The hunk cursor row (drawn as the selected row). */
@@ -222,9 +222,9 @@ function textRows(text: string, width: number, span: Omit<KitSpan, 'text'>, inde
     .map((line, i) => ({ spans: [{ ...span, text: `${i === 0 ? '' : indent}${line}` }] }));
 }
 
-function panelRows(rows: CardRow[]): CardRow[] {
-  const blank: CardRow = { spans: [], panel: true };
-  return [blank, ...rows.map((r) => ({ ...r, panel: true })), blank];
+function insetRows(rows: CardRow[]): CardRow[] {
+  const blank: CardRow = { spans: [], inset: true };
+  return [blank, ...rows.map((r) => ({ ...r, inset: true })), blank];
 }
 
 function labelled(label: string, value: string, width: number, fg: string): CardRow[] {
@@ -252,7 +252,7 @@ function diffRows(lines: readonly string[], width: number): CardRow[] {
         spans: sign === '@' || sign === ' '
           ? [{ text: part, fg }]
           : [{ text: i === 0 ? `${sign} ` : '  ', fg: signFg }, { text: part, fg }],
-        panel: true,
+        inset: true,
         tint,
       });
     });
@@ -339,7 +339,7 @@ function hunkRows(hunkState: HunkSelectionState, width: number): CardRow[] {
     }));
     const lines = [...hunk.find.split('\n').map((l) => `-${l}`), ...hunk.replace.split('\n').map((l) => `+${l}`)];
     const shown = diffRows(lines.slice(0, MAX_HUNK_LINES), width);
-    rows.push(...panelRows(lines.length > MAX_HUNK_LINES
+    rows.push(...insetRows(lines.length > MAX_HUNK_LINES
       ? [...shown, { spans: [{ text: `+${lines.length - MAX_HUNK_LINES} more lines`, fg: t.textFaint }] }]
       : shown));
   });
@@ -373,7 +373,7 @@ function bodyRows(request: PermissionPromptRequest, state: PermissionCardState, 
   const t = activeTokens();
   const analysis = fallbackAnalysis(request);
   const rows: CardRow[] = [];
-  rows.push(...panelRows(subjectRows(request, width - 4)));
+  rows.push(...insetRows(subjectRows(request, width - 4)));
   rows.push({ spans: [] });
   // Risk chip + summary; the model judgment on its own row so it is never cut.
   const summary = wrapLines(analysis.summary, Math.max(8, width - 14));
@@ -387,7 +387,7 @@ function bodyRows(request: PermissionPromptRequest, state: PermissionCardState, 
   const diff = writeDiffLines(request, state.hunkState);
   if (diff) {
     rows.push({ spans: [] });
-    rows.push(...panelRows(diffRows(diff, width - 4)));
+    rows.push(...insetRows(diffRows(diff, width - 4)));
   }
   if (state.hunkState) {
     rows.push({ spans: [] });
@@ -400,7 +400,7 @@ function bodyRows(request: PermissionPromptRequest, state: PermissionCardState, 
   if (state.replyMode) {
     const label = state.replyMode === 'exec-answer' ? 'Answer' : 'Reason';
     rows.push({ spans: [] });
-    rows.push(...panelRows(labelled(label, `${state.replyBuffer ?? ''}▏`, width - 4, t.text)));
+    rows.push(...insetRows(labelled(label, `${state.replyBuffer ?? ''}▏`, width - 4, t.text)));
   }
   return rows;
 }
@@ -467,12 +467,12 @@ export function renderPermissionCard(request: PermissionPromptRequest, state: Pe
   for (let i = 0; i < capacity && scroll + i < body.length; i++) {
     const row = body[scroll + i]!;
     const y = f.top + i;
-    if (row.panel) f.canvas.fill(f.l - 2, y, f.r - f.l + 5, 1, row.tint ?? t.backgroundElement);
+    if (row.inset) f.canvas.fill(f.l - 2, y, f.r - f.l + 5, 1, row.tint ?? t.backgroundElement);
     if (row.cursor) {
       drawRow(f.canvas, y, { spans: row.spans.map((s) => ({ ...s, fg: undefined })), selected: true }, f.l, f.r);
       continue;
     }
-    let x = row.panel ? f.l : f.l;
+    let x = row.inset ? f.l : f.l;
     for (const span of row.spans) {
       if (span.text.startsWith('\u0000')) {
         x = chip(f.canvas, x, y, span.text.slice(1), span.fg ?? t.warning);

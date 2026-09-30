@@ -63,12 +63,12 @@ function makeContext(auth: UserAuthManager, host: SurfaceModalHost, wire: boolea
   };
   if (wire) {
     const configManager = { get: () => undefined, set: () => {} } as unknown as ConfigManager;
-    const { views, viewPanels } = makeTestShellViews({ configManager, localUserAuthManager: auth });
+    const { views, viewPanelAdapter } = makeTestShellViews({ configManager, localUserAuthManager: auth });
     wireViewOpeners({
       commandContext: context,
       input: { surfaceModals: host } as never,
       views,
-      viewPanels,
+      viewPanelAdapter,
       render: () => {},
     });
   }

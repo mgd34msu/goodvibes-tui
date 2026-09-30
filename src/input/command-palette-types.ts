@@ -14,7 +14,7 @@ export interface PaletteEntry {
   readonly category: string;
   readonly group: Exclude<PaletteGroup, 'Suggested'>;
   readonly aliases: readonly string[];
-  /** Extra search words (old pane names and the like). */
+  /** Extra search words (former view names and the like). */
   readonly keywords: readonly string[];
   readonly argsHint?: string;
   /** True when the command has required arguments: Enter fills the composer. */

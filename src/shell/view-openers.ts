@@ -13,8 +13,8 @@
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { SurfaceModal } from '../input/surface-modal-host.ts';
-import type { ShellViews } from '../panels/builtin-views.ts';
-import type { ViewPanelAdapter } from '../panels/view-panel-adapter.ts';
+import type { ShellViews } from '../views/builtin-views.ts';
+import type { ViewPanelAdapter } from '../views/view-panel-adapter.ts';
 import { AgentsModal } from '../input/agents-modal.ts';
 import { UsageModal } from '../input/usage-modal.ts';
 import { ChangesModal, type ChangesDeps } from '../input/changes-modal.ts';
@@ -22,15 +22,15 @@ import { NotificationsModal } from '../input/notifications-modal.ts';
 import { MaskedEntryModal } from '../input/masked-entry-modal.ts';
 import { confirmThrough } from '../input/confirm-dialog.ts';
 import { resolveViewName, type ViewTarget } from '../input/views.ts';
-import { getSharedNotificationFeed } from '../panels/notifications-feed.ts';
-import { getSharedHostedSessionFeed } from '../panels/hosted-session-feed.ts';
+import { getSharedNotificationFeed } from '../views/notifications-feed.ts';
+import { getSharedHostedSessionFeed } from '../views/hosted-session-feed.ts';
 import { revertReviewHunk } from '../input/commands/review-runtime.ts';
 
 export interface WireViewOpenersOptions {
   readonly commandContext: CommandContext;
   readonly input: InputHandler;
   readonly views: ShellViews;
-  readonly viewPanels: ViewPanelAdapter;
+  readonly viewPanelAdapter: ViewPanelAdapter;
   readonly render: () => void;
 }
 
@@ -42,7 +42,7 @@ function previewParts(text: string): { diff: string | null; note: string | null 
 }
 
 export function wireViewOpeners(options: WireViewOpenersOptions): void {
-  const { commandContext, input, views, viewPanels, render } = options;
+  const { commandContext, input, views, viewPanelAdapter, render } = options;
   const host = input.surfaceModals;
 
   const findOpen = <T extends SurfaceModal>(type: abstract new (...args: never[]) => T): T | undefined =>
@@ -187,19 +187,19 @@ export function wireViewOpeners(options: WireViewOpenersOptions): void {
     return true;
   };
   commandContext.openView = openView;
-  viewPanels.setOpener((id) => openView(id));
+  viewPanelAdapter.setOpener((id) => openView(id));
 
   // The older per-console callbacks commands still call, each onto its modal.
-  commandContext.openForensicsPanel = () => { openView('forensics'); };
-  commandContext.openIncidentPanel = () => { openView('incident'); };
-  commandContext.openPolicyPanel = () => { openView('policy'); };
-  commandContext.openHooksPanel = () => { openView('hooks'); };
-  commandContext.openCommunicationPanel = () => { openView('communication'); };
-  commandContext.openOrchestrationPanel = () => { openView('orchestration'); };
-  commandContext.openCockpitPanel = () => { openView('cockpit'); };
-  commandContext.openSecurityPanel = () => { openView('security'); };
-  commandContext.openKnowledgePanel = () => { openView('knowledge'); };
-  commandContext.openMemoryPanel = () => { openView('memory'); };
-  commandContext.openRemotePanel = () => { openView('remote'); };
-  commandContext.openSubscriptionPanel = () => { openView('subscription'); };
+  commandContext.openForensicsView = () => { openView('forensics'); };
+  commandContext.openIncidentView = () => { openView('incident'); };
+  commandContext.openPolicyView = () => { openView('policy'); };
+  commandContext.openHooksView = () => { openView('hooks'); };
+  commandContext.openCommunicationView = () => { openView('communication'); };
+  commandContext.openOrchestrationView = () => { openView('orchestration'); };
+  commandContext.openCockpitView = () => { openView('cockpit'); };
+  commandContext.openSecurityView = () => { openView('security'); };
+  commandContext.openKnowledgeView = () => { openView('knowledge'); };
+  commandContext.openMemoryView = () => { openView('memory'); };
+  commandContext.openRemoteView = () => { openView('remote'); };
+  commandContext.openSubscriptionView = () => { openView('subscription'); };
 }

@@ -281,6 +281,7 @@ export {
   buildLocalReturnContextSummary,
   formatReturnContextForDisplay,
   getReturnContextMode,
+  loadedReturnContext,
   maybeAssistReturnContextSummary,
   persistConversation,
   generateUserSessionId,

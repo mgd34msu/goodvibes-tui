@@ -84,7 +84,7 @@ describe('system theme under tmux with no client attached at startup', () => {
     expect(getTerminalPalette()?.background).toBeUndefined();
     expect(activeTokens().primary).toBe(fallback); // still the goodvibes stand-in
 
-    // Attach: tmux reports focus-in to the pane. The key passes through.
+    // Attach: tmux reports focus-in to the terminal. The key passes through.
     expect(h.filter('\x1b[I')).toBe('\x1b[I');
     expect(h.writes).toEqual([BATCH, BATCH]);
     expect(h.filter(tmuxReplies())).toBe('');

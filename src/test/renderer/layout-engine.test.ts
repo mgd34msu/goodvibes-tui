@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createShellLayout } from '../../renderer/layout-engine.ts';
 
 describe('layout engine', () => {
-  test('the conversation takes the full width of the body (there are no side panes)', () => {
+  test('the conversation takes the full width of the body (there are no side areas)', () => {
     const layout = createShellLayout({ width: 120, height: 40, headerHeight: 2, footerHeight: 10 });
     expect(layout.body.height).toBe(28);
     expect(layout.conversation.width).toBe(120);

@@ -79,9 +79,9 @@ describe('renderHelpOverlay', () => {
     expect(texts).toContain('/keybindings');
   });
 
-  test('lists no pane bindings (the panes are gone) and names the modal views instead', () => {
+  test('lists no side-view bindings (the side views are gone) and names the modal views instead', () => {
     const texts = renderAllText();
-    // Pane tab jumps, pane toggles and the in-panel contract no longer exist.
+    // Side-view tab jumps, side-view toggles and the in-view contract no longer exist.
     expect(texts).not.toMatch(/Alt\+\d/);
     expect(texts).not.toContain('workspace panel');
     expect(texts).not.toMatch(/in-panel controls/i);

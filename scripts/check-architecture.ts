@@ -11,7 +11,7 @@
  *   7. **Import-cycle detection**, Tarjan SCC over the src/ import graph
  *   8. **Layer-boundary rules**, codified allowed dependency directions
  *   9. **Hex-literal ratchet**, bans raw #RRGGBB literals in
- *      src/panels/**\/*.ts and src/renderer/**\/*.ts (no exemptions: theme
+ *      src/views/**\/*.ts and src/renderer/**\/*.ts (no exemptions: theme
  *      data lives in the SDK theme engine); a seeded baseline
  *      (scripts/hex-literal-baseline.json) may only shrink, never grow
  *
@@ -27,24 +27,24 @@
  * Layer 1  domain       core
  * Layer 2  runtime      runtime  (bootstrap files are composition roots, they
  *                       legitimately import shell-UI to wire everything together)
- * Layer 3  shell-UI     input, renderer, panels  (mutually coupled; form one UI layer)
+ * Layer 3  shell-UI     input, renderer, views   (mutually coupled; form one UI layer)
  * Layer 4  entrypoint   cli, daemon
  *
  * Allowed cross-layer directions (↓ = lower may import higher in special cases;
  * ↑ = higher may import lower):
- *   - shell-UI layers (input/renderer/panels) may import each other (same layer)
+ *   - shell-UI layers (input/renderer/views) may import each other (same layer)
  *   - runtime/bootstrap files may import shell-UI (composition-root privilege)
  *   - All layers may import Layer 0 foundation
  *
  * Enforced FORBIDDEN directions (rules added only where zero HEAD violations exist):
  *   - renderer  → cli, daemon
  *   - input     → cli, daemon
- *   - panels    → cli, daemon
- *   - config    → renderer, input, panels, cli, daemon
- *   - providers → renderer, input, panels, cli, daemon
- *   - channels  → renderer, input, panels
- *   - audio     → renderer, input, panels, cli
- *   - daemon    → renderer, input, panels
+ *   - views     → cli, daemon
+ *   - config    → renderer, input, views, cli, daemon
+ *   - providers → renderer, input, views, cli, daemon
+ *   - channels  → renderer, input, views
+ *   - audio     → renderer, input, views, cli
+ *   - daemon    → renderer, input, views
  *
  * ─────────────────────────────────────────────────────────────────────────────
  */
@@ -358,11 +358,12 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
     toLayers: new Set(['cli']),
   },
   {
-    // Rationale: panels are reusable UI widgets; importing CLI or daemon would
-    // make them entrypoint-specific and prevent reuse across surfaces.
-    name: 'panels-no-entrypoints',
-    rationale: 'panels are reusable UI widgets and must not depend on the CLI entrypoint',
-    fromLayers: new Set(['panels']),
+    // Rationale: views (modal content, read models and view wiring) are
+    // reusable UI pieces; importing CLI or daemon would make them
+    // entrypoint-specific and prevent reuse across surfaces.
+    name: 'views-no-entrypoints',
+    rationale: 'views are reusable UI pieces and must not depend on the CLI entrypoint',
+    fromLayers: new Set(['views']),
     toLayers: new Set(['cli']),
   },
   {
@@ -373,7 +374,7 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
     rationale:
       'config is a foundational layer read in every context, headless included, and must not depend on shell-UI',
     fromLayers: new Set(['config']),
-    toLayers: new Set(['renderer', 'input', 'panels', 'cli']),
+    toLayers: new Set(['renderer', 'input', 'views', 'cli']),
   },
   {
     // Rationale: providers supply LLM/API abstractions used by core and runtime;
@@ -382,7 +383,7 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
     rationale:
       'providers are headless LLM abstractions and must not depend on shell-UI or entrypoints',
     fromLayers: new Set(['providers']),
-    toLayers: new Set(['renderer', 'input', 'panels', 'cli']),
+    toLayers: new Set(['renderer', 'input', 'views', 'cli']),
   },
   {
     // Rationale: audio handles TTS and media playback; it is wired into the UI
@@ -390,7 +391,7 @@ const LAYER_BOUNDARY_RULES: readonly LayerBoundaryRule[] = [
     name: 'audio-no-shell-ui',
     rationale: 'audio is a headless media layer and must not import shell-UI or CLI entrypoints',
     fromLayers: new Set(['audio']),
-    toLayers: new Set(['renderer', 'input', 'panels', 'cli']),
+    toLayers: new Set(['renderer', 'input', 'views', 'cli']),
   },
 ];
 
@@ -591,7 +592,7 @@ const hexLiteralBaseline: Record<string, number> = JSON.parse(
 const hexLiteralCandidates = nonTestFiles
   .filter((file) => {
     const rel = relative(ROOT, file);
-    return rel.startsWith('src/panels/') || rel.startsWith('src/renderer/');
+    return rel.startsWith('src/views/') || rel.startsWith('src/renderer/');
   })
   .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
 for (const v of checkHexLiteralRatchet(hexLiteralCandidates, hexLiteralBaseline)) {
@@ -601,7 +602,7 @@ for (const v of checkHexLiteralRatchet(hexLiteralCandidates, hexLiteralBaseline)
 // ─── Selected-index selection-safety ban ───────────────────────────────────────
 
 const selectedIndexCandidates = nonTestFiles
-  .filter((file) => relative(ROOT, file).split('\\').join('/').startsWith('src/panels/'))
+  .filter((file) => relative(ROOT, file).split('\\').join('/').startsWith('src/views/'))
   .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
 for (const v of checkSelectedIndexReads(selectedIndexCandidates)) {
   violations.push(v);

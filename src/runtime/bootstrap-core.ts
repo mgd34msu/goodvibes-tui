@@ -1,6 +1,6 @@
 import { ConversationManager } from '../core/conversation';
-import { publishNotice } from '../core/notices.ts';
-import { getSharedNotificationFeed } from '../panels/notifications-feed.ts';
+import { createShellNoticeSink } from './notification-dispatch.ts';
+import { getSharedNotificationFeed } from '../views/notifications-feed.ts';
 import { registerSessionConversation } from './conversation-rewind-port.ts';
 import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -341,7 +341,8 @@ export async function initializeBootstrapCore(
   conversation.setConfigManager(configManager);
   // Every system notice is a toast and a notification-history entry, full
   // text (core/notices.ts); the transcript draws none of them.
-  conversation.setNoticeSink((content, { restored }) => publishNotice(getSharedNotificationFeed(), content, { restored }));
+  // One history entry per event: see createShellNoticeSink.
+  conversation.setNoticeSink(createShellNoticeSink(getSharedNotificationFeed()));
   getConversationTitle = () => conversation.title;
 
   const compositor = new Compositor(stdout);
@@ -520,7 +521,7 @@ export async function initializeBootstrapCore(
   // core WORKFLOW_REVIEW_COMPLETED / WORKFLOW_CHAIN_CREATED messages.
   // The SDK does not surface constraint-specific system messages; the TUI layer
   // adds them here so operators can observe constraint enumeration and violations
-  // in the SystemMessagesPanel and main conversation.
+  // in the main conversation.
   //
   // Pre-router buffering: events that arrive before the SystemMessageRouter is
   // attached are held in wrfcBuffer (bounded, 100 entries). When the router is
@@ -539,7 +540,7 @@ export async function initializeBootstrapCore(
   // Startup TLS banner, emitted via wrfcBuffer.push() because the
   // SystemMessageRouter is not attached yet at this point in bootstrap. The
   // smart-ref setter on systemMessageRouterRef auto-flushes the buffer when
-  // the router attaches, so the message will appear in the WRFC panel on startup.
+  // the router attaches, so the message will appear in the conversation on startup.
   {
     const cpEnabled = Boolean(configManager.get('controlPlane.enabled'));
     const cpHostMode = String(configManager.get('controlPlane.hostMode') ?? 'local');

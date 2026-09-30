@@ -7,11 +7,11 @@
 //   'delete'     → forward-delete (the character after cursor) when a moveable
 //                  cursor exists; a no-op in cursorless/end-anchored contexts,
 //                  EXCEPT where it opens a confirmation-gated clear action
-//                  (see planning panel: Delete opens the ConfirmState gate that
+//                  (see the planning modal: Delete opens the ConfirmState gate that
 //                  lets the user clear their entire draft answer).
 //
 // Consequences for each surface:
-//   Panel search filters (end-anchored, no cursor)
+//   View search filters (end-anchored, no cursor)
 //     'backspace' → remove last char   ✓
 //     'delete'    → no-op              ✓ (no cursor; nothing is "forward")
 //
@@ -19,7 +19,7 @@
 //     'backspace' → remove last char   ✓
 //     'delete'    → no-op              ✓
 //
-//   Planning panel draft answer (end-anchored, no cursor)
+//   Planning draft answer (end-anchored, no cursor)
 //     'backspace' → remove last char   ✓
 //     'delete'    → open ConfirmState gate (y/Enter confirms clear; n/Esc cancels)
 //                   The draft is NOT wiped until the user confirms.

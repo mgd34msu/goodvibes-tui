@@ -89,15 +89,15 @@ import { ChangesModal } from '../../input/changes-modal.ts';
 import { parseChanges } from '../../input/changes-model.ts';
 import type { SemanticDiff } from '../../renderer/semantic-diff.ts';
 import { NotificationsModal } from '../../input/notifications-modal.ts';
-import { PanelNotificationFeed } from '../../panels/notifications-feed.ts';
+import { NotificationFeed } from '../../views/notifications-feed.ts';
 import { MaskedEntryModal } from '../../input/masked-entry-modal.ts';
 import { setModelPricingResolver, type ResolvedModelPricing } from '@pellux/goodvibes-sdk/platform/providers';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
-import { buildFleetSnapshot, createStaticFleetReadModel } from '../../panels/fleet-read-model.ts';
+import { buildFleetSnapshot, createStaticFleetReadModel } from '../../views/fleet-read-model.ts';
 import { ConfigModal } from '../../input/config-modal.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
 import type { ConfigModalView } from '../../input/config-modal-types.ts';
-import { statusGlyph, toneStyle, pad, postureLine, kv } from '../../panels/modals/modal-surface-helpers.ts';
+import { statusGlyph, toneStyle, pad, postureLine, kv } from '../../views/modals/modal-surface-helpers.ts';
 import { activeTokens, setActiveThemeMode, setActiveThemeName } from '../../renderer/theme.ts';
 import { PermissionPromptUI } from '../../permissions/prompt.ts';
 import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
@@ -1058,7 +1058,7 @@ function fleetSteerGoldenNode(): ProcessNode {
   };
 }
 
-// The four modals that replaced the side panes (Agents, Usage, Changes,
+// The four modals that replaced the old side views (Agents, Usage, Changes,
 // Notifications) plus the local-auth password prompt. Each renders at the
 // shared sizes and at 80x24 and 120x40. Every clock the modals read is fixed:
 // the fleet snapshot's `now`, recorded turn timestamps, and the
@@ -1264,7 +1264,7 @@ describeOverlayGolden('changes-modal-preview-question', renderChangesPreviewQues
 // same in every time zone.
 function renderNotificationsSurface(width: number, height: number): Line[] {
   const now = new Date(2026, 8, 28, 16, 30).getTime();
-  const feed = new PanelNotificationFeed();
+  const feed = new NotificationFeed();
   const note = (id: string, level: string, title: string, body: string, ts: Date, domain = 'system') =>
     ({ id, level, title, body, timestamp: ts.getTime(), domain } as never);
   const single = { target: 'panel_only', reasonCode: 'routed' } as never;
@@ -1488,7 +1488,7 @@ for (const indicator of ['statusline', 'banner'] as const) {
 // sample data (no wall-clock, no host/platform reads, no async) so the goldens
 // are deterministic across machines; each surface's live buildView() derivation
 // is covered by its own unit suite (config-modal-surfaces-*.test.ts). Justified
-// per pair below as "new modal surface, migrated from panel <id>".
+// per pair below as "new modal surface, migrated from the old <id> view".
 
 /** Open a fixed view on the real host (no onOpen → no live timers) and render. */
 function renderConfigSurfaceGolden(view: ConfigModalView, width: number, height: number): Line[] {
@@ -1497,7 +1497,7 @@ function renderConfigSurfaceGolden(view: ConfigModalView, width: number, height:
   return frameFromLayer(renderConfigModal(modal, width, height), width, height);
 }
 
-// services-modal, new modal surface, migrated from panel `services`.
+// services-modal, new modal surface, migrated from the old `services` view.
 const SERVICES_VIEW: ConfigModalView = {
   title: 'Services',
   tabs: [{
@@ -1513,7 +1513,7 @@ const SERVICES_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('services-modal', (w, h) => renderConfigSurfaceGolden(SERVICES_VIEW, w, h));
 
-// subscription-modal, new modal surface, migrated from panel `subscription`.
+// subscription-modal, new modal surface, migrated from the old `subscription` view.
 const SUBSCRIPTION_VIEW: ConfigModalView = {
   title: 'Subscriptions',
   tabs: [{
@@ -1530,7 +1530,7 @@ const SUBSCRIPTION_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('subscription-modal', (w, h) => renderConfigSurfaceGolden(SUBSCRIPTION_VIEW, w, h));
 
-// remote-modal, new modal surface, migrated from panel `remote`.
+// remote-modal, new modal surface, migrated from the old `remote` view.
 const REMOTE_VIEW: ConfigModalView = {
   title: 'Remote',
   tabs: [
@@ -1558,7 +1558,7 @@ const REMOTE_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('remote-modal', (w, h) => renderConfigSurfaceGolden(REMOTE_VIEW, w, h));
 
-// providers-modal, new modal surface, migrated from panel `provider-health`
+// providers-modal, new modal surface, migrated from the old `provider-health` view
 // (also the target of the providers/accounts redirects).
 const PROVIDERS_VIEW: ConfigModalView = {
   title: 'Providers',
@@ -1584,7 +1584,7 @@ const PROVIDERS_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('providers-modal', (w, h) => renderConfigSurfaceGolden(PROVIDERS_VIEW, w, h));
 
-// settings-sync-modal, new modal surface, migrated from panel `settings-sync`.
+// settings-sync-modal, new modal surface, migrated from the old `settings-sync` view.
 const SETTINGS_SYNC_VIEW: ConfigModalView = {
   title: 'Settings Sync',
   hints: ['←/→ tab'],
@@ -1612,8 +1612,8 @@ const SETTINGS_SYNC_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('settings-sync-modal', (w, h) => renderConfigSurfaceGolden(SETTINGS_SYNC_VIEW, w, h));
 
-// local-auth-modal, new modal surface, migrated from panel `local-auth`
-// (browse view; the panel itself is kept as the masked password-entry host).
+// local-auth-modal, new modal surface, migrated from the old `local-auth` view
+// (browse view; the masked password prompt is a separate surface).
 const LOCAL_AUTH_VIEW: ConfigModalView = {
   title: 'Local Auth',
   tabs: [{
@@ -1629,7 +1629,7 @@ const LOCAL_AUTH_VIEW: ConfigModalView = {
 };
 describeOverlayGolden('local-auth-modal', (w, h) => renderConfigSurfaceGolden(LOCAL_AUTH_VIEW, w, h));
 
-// sandbox-modal, new modal surface, migrated from panel `sandbox`.
+// sandbox-modal, new modal surface, migrated from the old `sandbox` view.
 const SANDBOX_VIEW: ConfigModalView = {
   title: 'Sandbox',
   tabs: [

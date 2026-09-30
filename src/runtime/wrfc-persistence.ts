@@ -14,8 +14,8 @@
  *    SystemMessageRouter is available). It reads the snapshot, identifies
  *    chains that were in a non-terminal state at last write, emits a
  *    high-priority 'wrfc' system message per interrupted chain, and re-imports
- *    each interrupted chain into the WrfcController so it reappears as a panel
- *    row and can be resumed by the operator. The `interruptedChains` accessor
+ *    each interrupted chain into the WrfcController so it reappears as a row in the Agents modal
+ *    and can be resumed by the operator. The `interruptedChains` accessor
  *    additionally exposes the recovered set for inspection.
  *
  *    A chain that looked interrupted (non-terminal) in the old snapshot can be
@@ -88,7 +88,7 @@ export interface WrfcControllerReader {
   listChains(): WrfcChain[];
   /**
    * Re-import a chain recovered from a previous process so it reappears in the
-   * controller's in-memory map and becomes selectable/resumable from the panel.
+   * controller's in-memory map and becomes selectable/resumable from the Agents modal.
    * Optional so read-only test doubles can omit it; the real WrfcController
    * provides it. `force` is left at its default, on a fresh start the map is
    * empty so importing never clobbers a live chain.
@@ -204,7 +204,7 @@ class WrfcPersistenceImpl implements WrfcPersistence {
     const candidateInterrupted = snapshot.chains.filter((c) => isNonTerminal(c.state));
     for (const chain of candidateInterrupted) {
       // Re-import so the chain reappears in the controller's in-memory map and
-      // becomes selectable/resumable from the panel. On a fresh process start
+      // becomes selectable/resumable from the Agents modal. On a fresh process start
       // the map is empty, so importChain (force=false) never clobbers a live
       // chain. The accessor is optional for read-only test doubles.
       //

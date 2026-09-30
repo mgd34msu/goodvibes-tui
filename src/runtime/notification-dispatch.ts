@@ -5,7 +5,7 @@
  * The SDK's NotificationRouter decides where each domain notification goes
  * (conversation / status_bar / panel_only) and collapses bursts and batches.
  * Nothing in the running app routed real notifications before this: the
- * panel_only feed (panels/notifications-feed.ts) and its panel existed with no
+ * panel_only feed (views/notifications-feed.ts) and the notifications modal existed with no
  * upstream. This module builds the router, records every panel_only decision
  * (including burst-collapsed ones) into the shared feed, and bridges the
  * runtime event bus so real domain events become notifications.
@@ -14,12 +14,19 @@
 import { createNotificationRouter, type NotificationRouter } from '@pellux/goodvibes-sdk/platform/runtime/ui';
 import type { Notification, RoutingDecision, RuntimeEventBus, RuntimeEventDomain } from '@/runtime/index.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { getSharedNotificationFeed, type PanelNotificationFeed } from '../panels/notifications-feed.ts';
+import { getSharedNotificationFeed, type NotificationFeed } from '../views/notifications-feed.ts';
+import { publishNotice, type NoticeSink } from '../core/notices.ts';
 import { memoryPressureLine, memoryPressureLevel, type MemoryPressurePayload } from '@pellux/goodvibes-sdk/platform/runtime/memory';
+import { runtimeEventKey } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap';
 
 export interface NotificationDispatcher {
-  /** Route a notification; a panel_only (or burst-collapsed) decision lands in the feed. Returns the decision. */
-  dispatch(notification: Notification): RoutingDecision;
+  /**
+   * Route a notification; a panel_only (or burst-collapsed) decision lands in
+   * the feed. `eventKey` names the runtime event it came from (the SDK's
+   * runtimeEventKey), so the feed keeps one entry when the same event also
+   * arrives as a conversation notice. Returns the decision.
+   */
+  dispatch(notification: Notification, eventKey?: string): RoutingDecision;
   /** Surface batch-held notifications (call on a timer / when quiet-typing ends). */
   flush(): void;
   readonly router: NotificationRouter;
@@ -28,7 +35,7 @@ export interface NotificationDispatcher {
 /**
  * The runtime event domains whose events surface as operational notifications.
  * Deliberately a curated set of user-relevant, completion/attention-shaped
- * domains, not every domain, so the panel reflects meaningful operational
+ * domains, not every domain, so the notifications modal reflects meaningful operational
  * activity rather than raw event churn. The router's per-domain verbosity and
  * burst/batch policies still collapse floods within these.
  */
@@ -95,42 +102,48 @@ export function personFacingEvent(type: string): PersonFacingEvent | undefined {
   return Object.prototype.hasOwnProperty.call(PERSON_FACING_EVENTS, type) ? PERSON_FACING_EVENTS[type] : undefined;
 }
 
-/** The detail line an event payload carries (an error or cancel reason), if any. */
-function eventDetail(payload: unknown): string | undefined {
+/** The detail line an event payload carries (an error or cancel reason, a chain's landing outcome, or the commit it made), if any. */
+export function eventDetail(payload: unknown): string | undefined {
   if (!payload || typeof payload !== 'object') return undefined;
   const record = payload as Record<string, unknown>;
-  for (const field of ['error', 'reason']) {
+  // `note`: a passed review chain's landing outcome (committed, or why not, e.g. a refusing commit hook).
+  for (const field of ['error', 'reason', 'note']) {
     const value = record[field];
     if (typeof value === 'string' && value.trim()) return value.trim();
   }
+  const commit = record['commitHash'];
+  if (typeof commit === 'string' && commit.trim()) return `commit ${commit.trim().slice(0, 7)}`;
   return undefined;
 }
 
 export function createNotificationDispatcher(
   configManager: Pick<ConfigManager, 'get'>,
-  feed: PanelNotificationFeed = getSharedNotificationFeed(),
+  feed: NotificationFeed = getSharedNotificationFeed(),
 ): NotificationDispatcher {
   const router = createNotificationRouter(undefined, undefined, configManager);
-  const recordIfPanel = (notification: Notification, decision: RoutingDecision): void => {
+  /** Event keys of notifications the router is holding in a batch, for when the batch is flushed. */
+  const heldEventKeys = new WeakMap<Notification, string>();
+  const recordIfFeedTarget = (notification: Notification, decision: RoutingDecision, eventKey: string | undefined): void => {
     if (decision.suppressed) return;
-    if (decision.target === 'panel_only') feed.record(notification, decision);
+    if (decision.target === 'panel_only') feed.record(notification, decision, eventKey);
   };
   return {
     router,
-    dispatch(notification) {
+    dispatch(notification, eventKey) {
       const decision = router.route(notification);
-      recordIfPanel(notification, decision);
+      if (eventKey) heldEventKeys.set(notification, eventKey);
+      recordIfFeedTarget(notification, decision, eventKey);
       return decision;
     },
     flush() {
       for (const { notification } of router.flush()) {
-        // A flushed batch head surfaces as a batch-collapsed panel entry; the
+        // A flushed batch head surfaces as a batch-collapsed feed entry; the
         // feed folds all sharing this batch key into one running-count row.
         feed.record(notification, {
           target: 'panel_only',
           reasonCode: 'batch_window_collapsed',
           batchKey: `${notification.domain}:${notification.level}`,
-        });
+        }, heldEventKeys.get(notification));
       }
     },
   };
@@ -186,8 +199,13 @@ export function wireRuntimeNotificationBridge(
         title: event.title,
         ...(body ? { body } : {}),
         timestamp: envelope.ts,
-      });
+      }, runtimeEventKey(envelope.type, envelope.payload));
     }),
   );
   return () => { for (const unsubscribe of unsubscribes) unsubscribe(); };
+}
+
+/** The shell's conversation notice sink: every system notice is a toast and a history entry (core/notices.ts). */
+export function createShellNoticeSink(feed: NotificationFeed = getSharedNotificationFeed()): NoticeSink {
+  return (content, { restored }) => publishNotice(feed, content, { restored });
 }

@@ -318,11 +318,11 @@ const CHANGE_GLYPH: Record<ChangeKind, string> = {
 
 /**
  * Render a SemanticDiff as an array of compact summary strings, one change
- * per line. Suitable for display in the diff panel status area or a tooltip.
+ * per line. Suitable for display in the Changes modal's status area or a tooltip.
  *
  * Format examples:
  *   +  fn  renderDiffView
- *   ~  method  DiffPanel.showDiff  (signature changed)
+ *   ~  method  DiffModal.showDiff  (signature changed)
  *   -  class  OldWidget
  *   +  import  ./utils  { A, B }
  *   ~  import  ./types  (+NewType, -OldType)

@@ -236,7 +236,7 @@ function parseScope(token: string | undefined): RewindScope | null {
 // dead-ending on "no completed turns" while /checkpoints and the boot notice
 // both point back here, /rewind falls back to listing and restoring
 // checkpoints directly, a FILES-ONLY restore (there is no turn anchor to
-// join a conversation boundary against), reusing the same diff-panel
+// join a conversation boundary against), reusing the same diff
 // preview/confirm idiom as the turn-anchored path above.
 // ---------------------------------------------------------------------------
 

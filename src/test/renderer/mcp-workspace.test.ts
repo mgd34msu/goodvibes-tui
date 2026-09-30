@@ -4,8 +4,8 @@ import { renderMcpWorkspace } from '../../renderer/mcp-workspace.ts';
 import { activeTokens } from '../../renderer/theme.ts';
 import { layerText, layerTextBlock } from '../helpers/surface-frame.ts';
 
-describe('renderMcpWorkspace (modal surface kit, two panes)', () => {
-  test('browse: server and action groups on the left, the selected row\'s details in an element panel on the right', () => {
+describe('renderMcpWorkspace (modal surface kit, list and detail)', () => {
+  test('browse: server and action groups on the left, the selected row\'s details in an element inset on the right', () => {
     const workspace = new McpWorkspace();
     workspace.active = true;
     const layer = renderMcpWorkspace(workspace, 120, 32);
@@ -21,11 +21,11 @@ describe('renderMcpWorkspace (modal surface kit, two panes)', () => {
     expect(text).toContain('Add server');
     expect(text).toContain('Write a server through the SDK config manager');
     expect(text).not.toMatch(/[┌┐└┘│]/);
-    const panelCells = layer.lines.flat().filter((cell) => cell.bg === activeTokens().backgroundElement);
-    expect(panelCells.length).toBeGreaterThan(0);
+    const insetCells = layer.lines.flat().filter((cell) => cell.bg === activeTokens().backgroundElement);
+    expect(insetCells.length).toBeGreaterThan(0);
   });
 
-  test('the add-server form is a sub-view: crumb in the title, fields on the left, field help in the panel', () => {
+  test('the add-server form is a sub-view: crumb in the title, fields on the left, field help in the inset', () => {
     const workspace = new McpWorkspace();
     workspace.active = true;
     workspace.openAddForm();

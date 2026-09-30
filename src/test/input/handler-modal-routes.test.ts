@@ -230,7 +230,7 @@ describe('handleSettingsModalToken: reset-confirm gate', () => {
 
   test('unmodified R does not arm category reset', () => {
     const state = makeState();
-    // Navigate to settings pane so R has an effect
+    // Navigate to the settings list so R has an effect
     modal.focusSettings();
     handleSettingsModalToken(state, keyToken('r'));
     expect(modal.resetCategoryConfirm).toBeNull();

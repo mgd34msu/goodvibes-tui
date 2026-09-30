@@ -1,10 +1,10 @@
 /**
  * session-resume-liveness-confirm.ts, the "this session is open somewhere
- * else" check for the session-browser / panel resume seam.
+ * else" check for the session-browser resume seam.
  *
  * `/session resume <id>` already refuses to resume a session whose liveness
  * marker points at another running process, and tells the operator to re-run
- * with `--force`. The panel seam had no such check at all: picking a session
+ * with `--force`. The session-browser seam had no such check at all: picking a session
  * from the browser forked another terminal's live state with no warning. That
  * seam has no argv to carry a `--force`, so it asks the same question as a
  * modal instead.

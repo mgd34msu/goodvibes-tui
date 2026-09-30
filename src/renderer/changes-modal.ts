@@ -1,12 +1,12 @@
 /**
  * renderChangesModal, files, a tinted diff and review actions (replaces the
- * Git, Diff and Review panes).
+ * Git, Diff and Review views).
  *
  *   ✦ Changes  main · 2 files · +45 −1 · this session                      esc
  *
  *   ✦ files                      2     ◈ 2 semantic changes  ~ fn withRetry  + const backoff
  *     src/net/retry.ts       +3 −1
- *   ✓ test/retry.test.ts       +42     ┌ element panel ──────────────────────────────┐
+ *   ✓ test/retry.test.ts       +42     ┌ element inset ──────────────────────────────┐
  *                                         ⋯ line 9                        hunk 1 of 2
  *   ✦ recent commits                      9    try {
  *     a41c09e init                       13 -    await sleep(opts.baseDelayMs);
@@ -16,17 +16,17 @@
  *
  * Changed rows keep their syntax colors; the change shows as a background tint
  * across the row and a separate tint on the line-number gutter (the theme's
- * diff tokens, pushed further from the panel fill when a theme's tint sits too
+ * diff tokens, pushed further from the inset fill when a theme's tint sits too
  * close to it; see diff-tint.ts). Long lines wrap under their own gutter. The semantic summary
- * (tree-sitter) leads the pane. A preview (a fleet candidate, a rewind or an
+ * (tree-sitter) leads the diff side. A preview (a fleet candidate, a rewind or an
  * attempt) can carry a question with its two buttons on the first body row.
  */
 
 import { activeDiffTones, activeTokens } from './theme.ts';
 import { beginModal, finishModal, clipText, scrollCountText, wrapLines, type KitHint, type ModalFrame, type SurfaceCanvas, type SurfaceLayer } from './surface-kit.ts';
 import { drawList, type KitRow } from './surface-kit-list.ts';
-import { button, buttonWidth, panel, type KitPanel } from './surface-kit-parts.ts';
-import { drawTextBlock, splitPanes } from './surface-kit-extra.ts';
+import { button, buttonWidth, inset, type KitInset } from './surface-kit-parts.ts';
+import { drawTextBlock, splitListDetail } from './surface-kit-extra.ts';
 import { highlightCodeLines, syntaxHighlightGeneration, syntaxHighlightMisses } from './code-block.ts';
 import type { SemanticDiff } from './semantic-diff.ts';
 import { diffRowTints } from './diff-tint.ts';
@@ -58,9 +58,9 @@ export interface ChangesModalView {
   readonly sub: string;
   /** The left list: files, then recent commits (built by the modal, selection included). */
   readonly listRows: readonly KitRow[];
-  /** Files shown in the diff pane (one file, or every file of a commit or preview). */
+  /** Files shown in the diff side (one file, or every file of a commit or preview). */
   readonly diffFiles: readonly ChangeFile[];
-  /** Draw a path row above each file's hunks (more than one file in the pane). */
+  /** Draw a path row above each file's hunks (more than one file in the diff side). */
   readonly fileHeaders: boolean;
   /** The selected hunk, counted across diffFiles. */
   readonly hunkIndex: number;
@@ -77,7 +77,7 @@ export interface ChangesModalView {
   readonly scrollOwner: object;
 }
 
-/** Width of the line-number gutter inside a diff panel. */
+/** Width of the line-number gutter inside the diff inset. */
 const DIFF_GUTTER = 5;
 const GUTTER = DIFF_GUTTER;
 
@@ -165,12 +165,12 @@ export function buildDiffRows(diffFiles: readonly ChangeFile[], codeWidth: numbe
 }
 
 /**
- * Draw one diff row inside panel `p`: the change tint across the row, a
+ * Draw one diff row inside inset `p`: the change tint across the row, a
  * separate tint on the line-number gutter, the number, the sign and the
  * syntax-colored code. `lineNumbers: false` leaves the numbers out (a diff
  * whose line numbers are not known).
  */
-export function drawDiffRow(canvas: SurfaceCanvas, p: KitPanel, y: number, row: DiffRow, selectedHunk: number, options: { readonly lineNumbers?: boolean } = {}): void {
+export function drawDiffRow(canvas: SurfaceCanvas, p: KitInset, y: number, row: DiffRow, selectedHunk: number, options: { readonly lineNumbers?: boolean } = {}): void {
   const t = activeTokens();
   if (row.kind === 'file') {
     canvas.put(p.l, y, clipText(row.text, p.r - p.l + 1), { fg: t.text, bold: true, bg: p.bg });
@@ -266,7 +266,7 @@ function drawQuestion(f: ModalFrame, q: ChangesQuestion, y: number): number {
   return Math.max(y + lines.length, by + 1) + 1;
 }
 
-function drawDiffPane(f: ModalFrame, view: ChangesModalView, x: number, xr: number, top: number, bottom: number): void {
+function drawDiffColumn(f: ModalFrame, view: ChangesModalView, x: number, xr: number, top: number, bottom: number): void {
   const t = activeTokens();
   const { canvas } = f;
   let y = top;
@@ -277,9 +277,9 @@ function drawDiffPane(f: ModalFrame, view: ChangesModalView, x: number, xr: numb
   y = drawSemantic(f, view, x, xr, y);
   // Foot lines under the diff (comment, status), each wrapped in full.
   const footRows = view.foot.reduce((n, line) => n + wrapLines(line.text, xr - x + 1).length, 0);
-  const panelBottom = bottom - (footRows > 0 ? footRows + 1 : 0);
-  if (panelBottom - y + 1 >= 3) {
-    const p = panel(canvas, x - 2, y, xr - x + 5, panelBottom - y + 1);
+  const insetBottom = bottom - (footRows > 0 ? footRows + 1 : 0);
+  if (insetBottom - y + 1 >= 3) {
+    const p = inset(canvas, x - 2, y, xr - x + 5, insetBottom - y + 1);
     const codeWidth = Math.max(8, p.r - (p.l + GUTTER + 3) + 1);
     const { rows, hunkStarts } = buildRows(view, codeWidth);
     const capacity = p.bottom - p.top + 1;
@@ -289,7 +289,7 @@ function drawDiffPane(f: ModalFrame, view: ChangesModalView, x: number, xr: numb
     const hidden = scrollCountText(start, Math.max(0, rows.length - start - capacity)).replace(/more/g, 'lines');
     if (hidden) f.hintRight = hidden;
   }
-  let fy = panelBottom + 2;
+  let fy = insetBottom + 2;
   for (const line of view.foot) {
     const fg = line.tone === 'error' ? t.error : line.tone === 'success' ? t.success : line.tone === 'faint' ? t.textFaint : line.tone === 'text' ? t.text : t.textMuted;
     const wrapped = wrapLines(line.text, xr - x + 1);
@@ -313,13 +313,13 @@ export function renderChangesModal(view: ChangesModalView, screenWidth: number, 
   let top = f.top;
   if (view.question) top = drawQuestion(f, view.question, top);
   if (view.listRows.length === 0) {
-    drawDiffPane(f, view, f.l, f.r, top, f.bottom);
+    drawDiffColumn(f, view, f.l, f.r, top, f.bottom);
     return finishModal(f);
   }
-  const split = splitPanes(f.l, f.r, top, f.bottom, 0.3, 4);
+  const split = splitListDetail(f.l, f.r, top, f.bottom, 0.3, 4);
   drawList(f.canvas, { rows: view.listRows, top: split.top, bottom: split.bottom, x0: split.x0, x1: split.x1, scrollKey: { owner: view.scrollOwner, name: 'files' } });
-  const paneX = split.stacked ? f.l : split.panelX + 2;
-  const paneTop = split.stacked ? split.panelY : split.top;
-  drawDiffPane(f, view, paneX, f.r, paneTop, f.bottom);
+  const paneX = split.stacked ? f.l : split.detailX + 2;
+  const paneTop = split.stacked ? split.detailY : split.top;
+  drawDiffColumn(f, view, paneX, f.r, paneTop, f.bottom);
   return finishModal(f);
 }

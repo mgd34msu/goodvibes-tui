@@ -242,43 +242,43 @@ export function drawTextBlock(canvas: SurfaceCanvas, x: number, y: number, width
 }
 
 // ---------------------------------------------------------------------------
-// Two panes: a list on the left, an element panel on the right
+// List and detail: a list on the left, an element inset on the right
 // ---------------------------------------------------------------------------
 
-/** Text width below which two-pane modals stack the panel under the list. */
-const TWO_PANE_MIN_WIDTH = 60;
+/** Text width below which list-and-detail modals stack the inset under the list. */
+const LIST_DETAIL_MIN_WIDTH = 60;
 
-export interface PaneSplit {
+export interface ListDetailSplit {
   /** The list's text span and rows (inclusive). */
   readonly x0: number;
   readonly x1: number;
   readonly top: number;
   readonly bottom: number;
-  /** The panel fill rectangle (text inside it keeps 2 columns of padding and a padding row). */
-  readonly panelX: number;
-  readonly panelY: number;
-  readonly panelW: number;
-  readonly panelH: number;
+  /** The inset fill rectangle (text inside it keeps 2 columns of padding and a padding row). */
+  readonly detailX: number;
+  readonly detailY: number;
+  readonly detailW: number;
+  readonly detailH: number;
   readonly stacked: boolean;
 }
 
 /**
  * Split a modal body (rows top..bottom between text columns l..r) into a list
- * and an element panel. Wide bodies put the list on the left (`ratio` of the
- * width) and the panel on the right, reaching 2 columns from the fill's edge
- * like the concept's palette preview; narrow bodies stack the panel under the
+ * and an element inset. Wide bodies put the list on the left (`ratio` of the
+ * width) and the inset on the right, reaching 2 columns from the fill's edge
+ * like the concept's palette preview; narrow bodies stack the inset under the
  * list (`listRows` rows for the list, at least a third of the body).
  */
-export function splitPanes(l: number, r: number, top: number, bottom: number, ratio = 0.45, listRows?: number): PaneSplit {
+export function splitListDetail(l: number, r: number, top: number, bottom: number, ratio = 0.45, listRows?: number): ListDetailSplit {
   const inner = r - l + 1;
-  if (inner >= TWO_PANE_MIN_WIDTH) {
+  if (inner >= LIST_DETAIL_MIN_WIDTH) {
     const x1 = l + Math.max(20, Math.floor(inner * ratio)) - 1;
-    return { x0: l, x1, top, bottom, panelX: x1 + 3, panelY: top, panelW: r - x1, panelH: bottom - top + 1, stacked: false };
+    return { x0: l, x1, top, bottom, detailX: x1 + 3, detailY: top, detailW: r - x1, detailH: bottom - top + 1, stacked: false };
   }
   const body = bottom - top + 1;
   const rows = Math.max(3, Math.min(listRows ?? Math.floor(body / 2), body - 5));
   const listBottom = top + rows - 1;
-  return { x0: l, x1: r, top, bottom: listBottom, panelX: l - 2, panelY: listBottom + 2, panelW: inner + 4, panelH: bottom - listBottom - 1, stacked: true };
+  return { x0: l, x1: r, top, bottom: listBottom, detailX: l - 2, detailY: listBottom + 2, detailW: inner + 4, detailH: bottom - listBottom - 1, stacked: true };
 }
 
 // ---------------------------------------------------------------------------

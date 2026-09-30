@@ -2,18 +2,18 @@
  * hex-literal-rule.ts, architecture-gate rule.
  *
  * Bans raw `#RGB`, `#RRGGBB`, and `#RRGGBBAA` colour literals in
- * src/panels/**\/*.ts and src/renderer/**\/*.ts. Theme data lives in the SDK
+ * src/views/**\/*.ts and src/renderer/**\/*.ts. Theme data lives in the SDK
  * (bundled themes, the system theme, derived fallbacks); the renderer reads it
  * through src/renderer/theme.ts, which holds no colour literals itself, so no
  * file under the ban is exempt.
  *
- * The ~790 pre-existing literals audited across the panel/renderer layers
- * (2026-07-01 panel audit) cannot be migrated in one work order, so this is a
+ * The ~790 pre-existing literals audited across the view/renderer layers
+ * (2026-07-01 audit) cannot be migrated in one work order, so this is a
  * RATCHET: a seeded baseline (scripts/hex-literal-baseline.json) records the
  * current violating count per file. Future edits may not INCREASE a file's
  * count past its baseline entry; files absent from the baseline (new files,
  * or files already fully migrated) are held to zero. The baseline itself
- * only shrinks as later cleanup passes (the panel sweep) migrate
+ * only shrinks as later cleanup passes (the view sweep) migrate
  * individual files to tokens, this rule does not block on that sweep.
  */
 
@@ -37,7 +37,7 @@ export function countHexLiterals(text: string): number {
 export function isHexLiteralBanTarget(relPath: string): boolean {
   const normalized = relPath.split('\\').join('/');
   return (
-    (normalized.startsWith('src/panels/') || normalized.startsWith('src/renderer/')) &&
+    (normalized.startsWith('src/views/') || normalized.startsWith('src/renderer/')) &&
     !HEX_LITERAL_BAN_EXEMPT.has(normalized)
   );
 }

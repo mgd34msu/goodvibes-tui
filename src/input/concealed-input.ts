@@ -2,7 +2,7 @@
  * Composer concealed-input mode.
  *
  * Generalizes the masking that previously lived only on the two purpose-built
- * auth surfaces (local-auth panel, onboarding wizard) into the MAIN composer,
+ * auth surfaces (local-auth modal, onboarding wizard) into the MAIN composer,
  * so any password-like prompt can request concealed entry: the typed text is
  * masked in the composer AND never reaches input history or the transcript
  * plaintext. The plaintext is delivered exactly once, to the requester's

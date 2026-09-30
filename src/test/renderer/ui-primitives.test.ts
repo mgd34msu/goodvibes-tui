@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { GLYPHS } from '../../renderer/ui-primitives.ts';
-import { buildMeterLine, buildSectionHeader } from '../../panels/polish.ts';
+import { buildMeterLine, buildSectionHeader } from '../../views/polish.ts';
 import { lineToString } from '../setup.ts';
 
 describe('ui primitives', () => {

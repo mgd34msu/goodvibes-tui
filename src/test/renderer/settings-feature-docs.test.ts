@@ -8,7 +8,7 @@
  * honest more-above/below markers, it is never clipped.
  *
  * These tests render real frames at 80×24 and at 60 columns, reconstruct the
- * documentation pane's complete text by scrolling through it, and assert the
+ * documentation text's complete content by scrolling through it, and assert the
  * COMPLETE description string for every one of the features, full-string
  * assertions, never prefixes.
  */
@@ -35,7 +35,7 @@ function normalize(text: string): string {
 }
 
 /**
- * Whitespace-free comparison space: the pane wraps long atomic tokens
+ * Whitespace-free comparison space: the modal wraps long atomic tokens
  * (settings keys at 60 columns) mid-token, so full-string containment is
  * asserted with all whitespace removed, the complete text must be present,
  * wrap positions are presentation.

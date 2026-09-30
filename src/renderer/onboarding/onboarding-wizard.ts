@@ -11,7 +11,7 @@
  * Wide screens: the steps as a kit list on the left (the current step is the
  * gradient row; ✓ complete, ◈ changed, • untouched, completion right-aligned)
  * with the step summary under it, and on the right the step title, its
- * description, the field rows and a focus panel that wraps the selected
+ * description, the field rows and a focus box that wraps the selected
  * field's hint in full. Narrow screens drop the step list and keep the rest.
  */
 
@@ -24,7 +24,7 @@ import {
   type SurfaceLayer,
 } from '../surface-kit.ts';
 import { drawList, type KitRow } from '../surface-kit-list.ts';
-import { panel } from '../surface-kit-parts.ts';
+import { inset } from '../surface-kit-parts.ts';
 import { drawTextBlock, textBlockHeight, type TextLine } from '../surface-kit-extra.ts';
 import type {
   OnboardingWizardController,
@@ -107,7 +107,7 @@ function fieldRows(wizard: OnboardingWizardController): { rows: KitRow[]; scroll
   return { rows, scrollStart };
 }
 
-/** The focus panel's lines: what the selected field is and what it does, in full. */
+/** The focus box's lines: what the selected field is and what it does, in full. */
 function focusLines(wizard: OnboardingWizardController): TextLine[] {
   const t = activeTokens();
   if (wizard.isEditingTextField() && wizard.editingFieldId !== null) {
@@ -196,17 +196,17 @@ export function renderOnboardingWizard(
     { text: step.description, style: { fg: t.textMuted } },
   ], f.bottom) + 1;
 
-  // The focus panel at the bottom sizes to its text (never clipped); the
+  // The focus box at the bottom sizes to its text (never clipped); the
   // field rows get the rows between.
   const focus = focusLines(wizard);
-  const panelTextW = textW;
-  const focusRows = textBlockHeight(focus, panelTextW);
-  const panelH = Math.min(focusRows + 2, Math.max(3, f.bottom - y - 1));
-  const panelY = f.bottom - panelH + 1;
-  const p = panel(f.canvas, x0 - 2, panelY, textW + 4, panelH);
+  const insetTextW = textW;
+  const focusRows = textBlockHeight(focus, insetTextW);
+  const detailH = Math.min(focusRows + 2, Math.max(3, f.bottom - y - 1));
+  const detailY = f.bottom - detailH + 1;
+  const p = inset(f.canvas, x0 - 2, detailY, textW + 4, detailH);
   drawTextBlock(f.canvas, p.l, p.top, p.r - p.l + 1, focus, p.bottom);
 
-  const listBottom = panelY - 2;
+  const listBottom = detailY - 2;
   if (y > listBottom) y = listBottom;
   const fields = fieldRows(wizard);
   if (fields.rows.length === 0) {

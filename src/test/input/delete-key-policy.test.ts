@@ -3,21 +3,18 @@
  *
  * Covers:
  *   1. Policy predicate contracts (isTextBackspace, isTextForwardDelete)
- *   2. Panel search filter: 'delete' is a no-op (isPanelSearchBackspace)
+ *   2. View search filter: 'delete' is a no-op (isViewSearchBackspace)
  *   3. Selection modal: 'delete' is a no-op (handleSelectionModalToken)
- *   4. Planning panel draft: delete opens confirm gate; draft survives until confirmed
- *   5. Planning panel clear-draft: Delete requires y/n confirmation
- *   6. Router-path reachability: handlePanelFocusToken → panel.handleInput('delete') opens confirm
  */
 import { describe, expect, test } from 'bun:test';
 import { isTextBackspace, isTextForwardDelete } from '../../input/delete-key-policy.ts';
-import { isPanelSearchBackspace } from '../../panels/search-focus.ts';
+import { isViewSearchBackspace } from '../../views/search-focus.ts';
 import { handleSelectionModalToken } from '../../input/handler-modal-routes.ts';
 import { SelectionModal } from '../../input/selection-modal.ts';
-// (the purge), group B: the ProjectPlanningPanel delete-key/confirm-gate
-// tests were removed with the panel (migrated to the 'planning' modal, which
-// uses the host's input model, not the panel's inline draft form). The generic
-// delete-key predicate + selection-modal coverage below is unaffected.
+// (the purge), group B: the planning draft delete-key/confirm-gate tests were
+// removed when planning moved to the 'planning' modal, which uses the host's
+// input model instead of an inline draft form. The generic delete-key
+// predicate + selection-modal coverage below is unaffected.
 
 // ---------------------------------------------------------------------------
 // 1. Policy predicates
@@ -53,21 +50,21 @@ describe('delete-key policy predicates', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Panel search filter: isPanelSearchBackspace
+// 2. View search filter: isViewSearchBackspace
 // ---------------------------------------------------------------------------
 
-describe('isPanelSearchBackspace', () => {
+describe('isViewSearchBackspace', () => {
   test('backspace returns true', () => {
-    expect(isPanelSearchBackspace('backspace')).toBe(true);
+    expect(isViewSearchBackspace('backspace')).toBe(true);
   });
 
   test('delete returns false (no-op: end-anchored filter, no cursor)', () => {
-    expect(isPanelSearchBackspace('delete')).toBe(false);
+    expect(isViewSearchBackspace('delete')).toBe(false);
   });
 
   test('other keys return false', () => {
-    expect(isPanelSearchBackspace('a')).toBe(false);
-    expect(isPanelSearchBackspace('escape')).toBe(false);
+    expect(isViewSearchBackspace('a')).toBe(false);
+    expect(isViewSearchBackspace('escape')).toBe(false);
   });
 });
 

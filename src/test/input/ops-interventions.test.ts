@@ -4,7 +4,7 @@
  * This surface shipped dead for three months: OpsControlPlane construction
  * was gated on 'operator-control-plane', an id never registered in any SDK
  * registry, so isEnabled was permanently false, /ops task|agent always
- * errored, and the Ops Control panel never left its not-configured state.
+ * errored, and the Ops Control view never left its not-configured state.
  * The gate now rides the real control-plane gateway capability
  * (controlPlane.gateway, enabled in a stock configuration).
  *

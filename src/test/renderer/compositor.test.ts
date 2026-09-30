@@ -153,7 +153,7 @@ describe('Compositor: buffer reuse (double-buffer, no clone)', () => {
 });
 
 describe('Compositor: selection overlay', () => {
-  test('selection covers the full width (there is no side pane to exclude)', () => {
+  test('selection covers the full width (there is no side area to exclude)', () => {
     const { compositor } = makeCompositor();
     const selection: SelectionInfo = {
       isCellSelected: (col, _row) => col === 0 || col === WIDTH - 1,
@@ -256,8 +256,8 @@ describe('Compositor modal layers', () => {
     // Words on the layer's row: 'vv' (0-1), the one the layer cuts (3-13), 'vvvvv' (15-19).
     viewport[1]![2] = createStyledCell(' ');
     viewport[1]![14] = createStyledCell(' ');
-    const panelBg = activeTokens().backgroundPanel;
-    const layerLine = Array.from({ length: 6 }, () => createStyledCell('m', { fg: activeTokens().text, bg: panelBg }));
+    const surfaceBg = activeTokens().backgroundPanel;
+    const layerLine = Array.from({ length: 6 }, () => createStyledCell('m', { fg: activeTokens().text, bg: surfaceBg }));
     compositor.composite({
       width, height,
       header: [makeLine(width, 'h')],
@@ -272,7 +272,7 @@ describe('Compositor modal layers', () => {
     expect(buffer.getCell(0, 2)!.char).toBe('v');
     // Inside the layer: its own cells, undimmed.
     expect(buffer.getCell(5, 2)!.char).toBe('m');
-    expect(buffer.getCell(5, 2)!.bg).toBe(panelBg);
+    expect(buffer.getCell(5, 2)!.bg).toBe(surfaceBg);
     // A word the layer's edge cut in half is blanked out to its space (no
     // fragment touches the fill edge); whole words further out stay.
     expect(buffer.getCell(3, 2)!.char).toBe(' ');

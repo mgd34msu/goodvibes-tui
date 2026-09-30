@@ -508,20 +508,20 @@ describe('SecurityPanel', () => {
   test('runAudit triggers subscribers', () => {
     const auditor = makeAuditor();
     auditor.registerToken(makeToken());
-    const panel = new SecurityPanel(auditor);
+    const securityView = new SecurityPanel(auditor);
     let callCount = 0;
-    panel.subscribe(() => { callCount++; });
-    panel.runAudit();
+    securityView.subscribe(() => { callCount++; });
+    securityView.runAudit();
     expect(callCount).toBe(1);
-    panel.runAudit();
+    securityView.runAudit();
     expect(callCount).toBe(2);
-    panel.dispose();
+    securityView.dispose();
   });
 
   test('getSnapshot returns correct shape before any audit', () => {
     const auditor = makeAuditor();
-    const panel = new SecurityPanel(auditor);
-    const snap = panel.getSnapshot();
+    const securityView = new SecurityPanel(auditor);
+    const snap = securityView.getSnapshot();
     expect(snap.managed).toBe(false);
     expect(snap.totalTokens).toBe(0);
     expect(snap.results).toHaveLength(0);
@@ -531,31 +531,31 @@ describe('SecurityPanel', () => {
     expect(snap.rotationOverdue).toHaveLength(0);
     expect(snap.lastAuditAt).toBeNull();
     expect(typeof snap.capturedAt).toBe('string');
-    panel.dispose();
+    securityView.dispose();
   });
 
   test('getSnapshot reflects audit results after runAudit', () => {
     const auditor = makeAuditor();
     const now = Date.now();
     auditor.registerToken(makeToken({ issuedAt: now - THIRTY_DAYS_MS }));
-    const panel = new SecurityPanel(auditor);
-    panel.runAudit(now);
-    const snap = panel.getSnapshot();
+    const securityView = new SecurityPanel(auditor);
+    securityView.runAudit(now);
+    const snap = securityView.getSnapshot();
     expect(snap.results).toHaveLength(1);
     expect(snap.lastAuditAt).toBe(now);
     expect(snap.scopeViolations).toHaveLength(0);
     expect(snap.rotationOverdue).toHaveLength(0);
-    panel.dispose();
+    securityView.dispose();
   });
 
   test('dispose clears all subscribers', () => {
     const auditor = makeAuditor();
-    const panel = new SecurityPanel(auditor);
+    const securityView = new SecurityPanel(auditor);
     let callCount = 0;
-    panel.subscribe(() => { callCount++; });
-    panel.subscribe(() => { callCount++; });
-    panel.dispose();
-    panel.runAudit();
+    securityView.subscribe(() => { callCount++; });
+    securityView.subscribe(() => { callCount++; });
+    securityView.dispose();
+    securityView.runAudit();
     expect(callCount).toBe(0);
   });
 
@@ -573,24 +573,24 @@ describe('SecurityPanel', () => {
         policyId: `pol-${i}`,
       });
     }
-    const panel = new SecurityPanel(auditor, { bufferLimit: 3 });
-    panel.runAudit(now);
-    const snap = panel.getSnapshot();
+    const securityView = new SecurityPanel(auditor, { bufferLimit: 3 });
+    securityView.runAudit(now);
+    const snap = securityView.getSnapshot();
     expect(snap.results.length).toBeLessThanOrEqual(3);
-    panel.dispose();
+    securityView.dispose();
   });
 
   test('subscribe returns an unsubscribe function', () => {
     const auditor = makeAuditor();
-    const panel = new SecurityPanel(auditor);
+    const securityView = new SecurityPanel(auditor);
     let callCount = 0;
-    const unsub = panel.subscribe(() => { callCount++; });
-    panel.runAudit();
+    const unsub = securityView.subscribe(() => { callCount++; });
+    securityView.runAudit();
     expect(callCount).toBe(1);
     unsub();
-    panel.runAudit();
+    securityView.runAudit();
     expect(callCount).toBe(1);
-    panel.dispose();
+    securityView.dispose();
   });
 });
 

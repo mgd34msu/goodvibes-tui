@@ -1,5 +1,5 @@
 /**
- * fleet-union.ts, the Fleet panel shows everything running, not just what this
+ * fleet-union.ts, the Agents modal shows everything running, not just what this
  * terminal started.
  *
  * ── What moved to the SDK, and what stays here ────────────────────────────
@@ -11,10 +11,10 @@
  * reason string a steer/archive against a daemon-only row gets, rather than a
  * bare false). This module is now a thin wrapper over that policy.
  *
- * What stays here is the panel binding: the TUI's own `FleetReadModel`
+ * What stays here is the modal binding: the TUI's own `FleetReadModel`
  * interface (interrupt/resume/kill/steer/archive, subscribe, snapshots) and
  * `buildFleetSnapshot`, the tree-builder + honest cost/token aggregator this
- * repo's Fleet panel renders from. Rebuilding through the SAME builder the
+ * repo's Agents modal renders from. Rebuilding through the SAME builder the
  * local view uses, rather than summing two halves, is what keeps the
  * rollups, the cost/token totals and the blocked-on-user ordering computed
  * once, over the whole fleet.
@@ -33,7 +33,7 @@
  * `interrupt`/`resume`/`kill`/`steer` reach this process's own children. A
  * daemon row has no child here to signal, so those refuse, and `steer`,
  * which has a reason channel, says why rather than returning a bare false
- * that reads as "the agent ignored you". The panel's own act surface
+ * that reads as "the agent ignored you". The modal's own act surface
  * (fleet-gateway.ts) already drives the daemon's verbs for the acts the
  * daemon serves.
  */
@@ -49,7 +49,7 @@ import {
   type DaemonVerbCaller,
 } from '@pellux/goodvibes-sdk/platform/runtime/client';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-import { buildFleetSnapshot, type FleetReadModel, type FleetSnapshot } from '../../panels/fleet-read-model.ts';
+import { buildFleetSnapshot, type FleetReadModel, type FleetSnapshot } from '../../views/fleet-read-model.ts';
 
 /** Re-exported so an importer that only needs the SDK's policy has one import site. */
 export { DEFAULT_FLEET_REFRESH_MS, daemonOnlyFleetActRefusal, mergeFleetNodes, readDaemonFleetRows };

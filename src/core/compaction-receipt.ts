@@ -15,7 +15,7 @@
  *
  * The `[Compaction]` prefix is one of the FORCE_CONVERSATION_PREFIXES the
  * system-message router always surfaces inline (see system-message-router.ts),
- * so the receipt cannot be routed away into a panel and vanish.
+ * so the receipt cannot be routed away from the transcript and vanish.
  */
 
 /** The shape of the SDK's COMPACTION_RECEIPT event payload we render from. */

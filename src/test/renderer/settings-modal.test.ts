@@ -133,7 +133,7 @@ describe('renderSettingsModal', () => {
   test('category rail is grouped and opens with category focus', () => {
     const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
-    expect(modal.focusPane).toBe('categories');
+    expect(modal.focusRegion).toBe('categories');
     expect(texts).toContain('✦ interface');
     expect(texts).toContain('✦ ai routing');
     const interfaceLine = lines.find(line => lineToString(line).includes('interface'));
@@ -212,7 +212,7 @@ describe('renderSettingsModal', () => {
 
   test('non-secret string setting still renders its typed value while editing (no regression)', () => {
     while (modal.currentCategory !== 'surfaces') modal.nextCategory();
-    modal.focusPane = 'settings';
+    modal.focusRegion = 'settings';
     modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'surfaces.homeassistant.instanceUrl');
     expect(modal.selectedIndex).toBeGreaterThanOrEqual(0);
     modal.editingMode = true;
@@ -224,7 +224,7 @@ describe('renderSettingsModal', () => {
 
   test('secret-backed setting masks the typed value while editing, everywhere it would render', () => {
     while (modal.currentCategory !== 'surfaces') modal.nextCategory();
-    modal.focusPane = 'settings';
+    modal.focusRegion = 'settings';
     modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'surfaces.homeassistant.accessToken');
     expect(modal.selectedIndex).toBeGreaterThanOrEqual(0);
     modal.editingMode = true;
@@ -318,7 +318,7 @@ describe('renderSettingsModal', () => {
   test('hint row shows both reset affordances at W=120', () => {
     // Navigate to settings category (has Setting entries, not flags/mcp/subscriptions)
     while (modal.currentCategory !== 'display') modal.nextCategory();
-    modal.focusPane = 'settings';
+    modal.focusRegion = 'settings';
     // W=120 must render both reset affordances in compact form.
     const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     const texts = linesToText(lines).join('\n');
@@ -328,7 +328,7 @@ describe('renderSettingsModal', () => {
 
   test('hint row wraps rather than dropping resets at W=80', () => {
     while (modal.currentCategory !== 'display') modal.nextCategory();
-    modal.focusPane = 'settings';
+    modal.focusRegion = 'settings';
     const lines = frameFromLayer(renderSettingsModal(modal, 80), 80, 24);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain(' shift+r  reset category');

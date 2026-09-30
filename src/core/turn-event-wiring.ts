@@ -30,7 +30,7 @@ import { readBudgetAlertUsd } from '@pellux/goodvibes-sdk/platform/providers';
 /** Minimal orchestrator surface required by turn-event wiring. */
 interface TurnOrchestrator {
   readonly lastInputTokens: number;
-  /** Cumulative session usage, same object CostTrackerPanel reads, used here for budget-breach checks. */
+  /** Cumulative session usage, same object the usage modal reads, used here for budget-breach checks. */
   readonly usage: { readonly input: number; readonly output: number; readonly cacheRead: number; readonly cacheWrite: number };
   /**
    * The SDK Orchestrator's own end-of-turn popup; handOff() silences it while

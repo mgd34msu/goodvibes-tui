@@ -35,7 +35,7 @@ function makeState(overrides: Partial<KeyRouteState> = {}): KeyRouteState {
     autocomplete: null,
     blockActionsMenu: { open: () => {} },
     getBlockAnchorLine: () => 0,
-    openFleetPanel: () => {},
+    openAgentsView: () => {},
     modalOpened: () => {},
     saveUndoState: () => {},
     breakUndoCoalesce: () => {},

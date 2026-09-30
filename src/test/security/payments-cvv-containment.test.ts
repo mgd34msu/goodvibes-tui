@@ -221,7 +221,7 @@ describe('payments CVV containment', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 2. Rendered frame: the settings modal table row + doc pane + search results
+  // 2. Rendered frame: the settings modal table row + doc area + search results
   // -------------------------------------------------------------------------
   describe('settings modal render surface', () => {
     let modal: SettingsModal;
@@ -242,7 +242,7 @@ describe('payments CVV containment', () => {
 
     function selectCvvEntry(): void {
       while (modal.currentCategory !== 'payments') modal.nextCategory();
-      modal.focusPane = 'settings';
+      modal.focusRegion = 'settings';
       modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === PAYMENTS_CARD_CVV_CONFIG_KEY);
       expect(modal.selectedIndex).toBeGreaterThanOrEqual(0);
     }
@@ -304,7 +304,7 @@ describe('payments CVV containment', () => {
 
     test('selecting cvvHandling = prompt states the unattended-purchasing tradeoff at the moment of selection, using the SDK\'s own wording', () => {
       while (modal.currentCategory !== 'payments') modal.nextCategory();
-      modal.focusPane = 'settings';
+      modal.focusRegion = 'settings';
       modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === PAYMENTS_CVV_HANDLING_CONFIG_KEY);
       expect(modal.selectedIndex).toBeGreaterThanOrEqual(0);
       modal.adjustSelected('right'); // stored -> prompt (the only two values)
@@ -523,7 +523,7 @@ describe('payments CVV containment', () => {
       autocomplete: null,
       blockActionsMenu: { open: () => {} },
       getBlockAnchorLine: () => 0,
-      openFleetPanel: () => {},
+      openAgentsView: () => {},
       modalOpened: () => {},
       saveUndoState: () => {},
       breakUndoCoalesce: () => {},

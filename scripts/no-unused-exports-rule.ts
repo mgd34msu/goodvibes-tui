@@ -97,7 +97,6 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   'src/renderer/code-block.ts#settleSyntaxHighlighting', // awaits in-flight tree-sitter parses so golden frames capture the settled highlighting whatever ran earlier in the process; production repaints through onSyntaxHighlightReady instead of waiting
   'src/renderer/toast-center.ts#ToastCenter', // constructed by getSharedToastCenter; exported so tests drive expiry with a fake clock and scheduler
   'src/renderer/settings-modal.ts#settingsDocumentation', // the complete per-row documentation the settings modal windows over; tests assert its completeness
-  'src/renderer/panel-composite.ts#renderPanel', // wired via buildPanelCompositeData; dedicated cache/dirty-flag test suite
   'src/renderer/theme.ts#resolveTheme', // mode-explicit transcript resolver: activeTheme covers the active mode; per-mode token derivations pinned directly by theme tests
   'src/renderer/theme.ts#resolveUiTones', // mode-explicit resolver: activeUiTones delegates to it internally; light/dark token derivations pinned directly by theme + batch-refutation tests
   'src/renderer/system-message.ts#classifySystemMessage', // wired via renderSystemMessage's default typeOverride; ~30 branch-classification cases tested directly

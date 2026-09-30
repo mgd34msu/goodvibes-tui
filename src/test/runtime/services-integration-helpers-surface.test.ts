@@ -8,7 +8,7 @@
  * SessionSurface (session-storage-services.ts). IntegrationHelperService's
  * continuity read (getContinuitySnapshot -> readLastSessionPointer /
  * checkRecoveryFile) resolved against the UNSCOPED legacy directory, so
- * /health continuity (and the health panel's continuity domain) reported
+ * /health continuity (and the health modal's continuity domain) reported
  * "nothing here" even when a pointer and a recovery snapshot both genuinely
  * existed, just not at the path this service was looking under.
  *

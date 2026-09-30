@@ -13,7 +13,7 @@
  * (notifyCompletion) + outbound webhook (WebhookNotifier), both gated by
  * the shared focus/config gating in alert-gating.ts. Skips evaluation
  * entirely when the session model is unpriced, a $0 placeholder cost must
- * never be reported as a real breach (mirrors CostTrackerPanel's "unpriced"
+ * never be reported as a real breach (mirrors the usage modal's "unpriced"
  * display convention).
  *
  * Text (owner ruling 2026-09-29, SDK runtime/turn-notification.ts): the

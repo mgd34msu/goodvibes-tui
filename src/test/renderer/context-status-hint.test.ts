@@ -21,11 +21,11 @@
 import { describe, test, expect } from 'bun:test';
 import { resolveContextStatusHint } from '../../renderer/context-status-hint.ts';
 import { DEFAULT_CONTEXT_WINDOW } from '@pellux/goodvibes-sdk/platform/providers';
-import type { PanelSessionMaintenanceLevel } from '../../panels/session-maintenance.ts';
+import type { ViewSessionMaintenanceLevel } from '../../views/session-maintenance.ts';
 
 /** Real, provider-vouched numbers by default: a 200k window with usage actually counted. */
 function hint(
-  level: PanelSessionMaintenanceLevel,
+  level: ViewSessionMaintenanceLevel,
   autoCompactEnabled: boolean,
   usagePct: number,
   opts: { currentTokens?: number; contextWindow?: number } = {},
@@ -82,14 +82,14 @@ describe('resolveContextStatusHint', () => {
   });
 
   test('hint disappears when level returns to stable (boundary)', () => {
-    const levels: PanelSessionMaintenanceLevel[] = ['stable', 'watch', 'unknown'];
+    const levels: ViewSessionMaintenanceLevel[] = ['stable', 'watch', 'unknown'];
     for (const level of levels) {
       expect(hint(level, false, 50)).toBeNull();
     }
   });
 
   test('hint appears at actionable levels (boundary)', () => {
-    const levels: PanelSessionMaintenanceLevel[] = ['suggest-compact', 'needs-repair', 'compacting'];
+    const levels: ViewSessionMaintenanceLevel[] = ['suggest-compact', 'needs-repair', 'compacting'];
     for (const level of levels) {
       expect(hint(level, false, 80)).not.toBeNull();
     }
@@ -112,7 +112,7 @@ describe('boot state: a pressure claim must be backed by real numbers', () => {
   // evaluator legitimately reports 'suggest-compact' here, because 8,192 free
   // tokens is under its 15,000-token remaining-headroom rule.
   const bootHint = (
-    level: PanelSessionMaintenanceLevel = 'suggest-compact',
+    level: ViewSessionMaintenanceLevel = 'suggest-compact',
     over: { currentTokens?: number; contextWindow?: number; usagePct?: number } = {},
   ): string | null => hint(level, true, over.usagePct ?? 0, {
     currentTokens: over.currentTokens ?? 0,

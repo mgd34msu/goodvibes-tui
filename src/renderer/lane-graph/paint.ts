@@ -18,7 +18,7 @@ import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-
 import { activeTokens } from '../theme.ts';
 import { expandTabs, getDisplayWidth, truncateDisplay, wrapPreservingIndent } from '../../utils/terminal-width.ts';
 import { SurfaceCanvas } from '../surface-kit.ts';
-import { panel, type KitPanel } from '../surface-kit-parts.ts';
+import { inset, type KitInset } from '../surface-kit-parts.ts';
 import { buildDiffRows, drawDiffRow, semanticChips, type DiffRow } from '../changes-modal.ts';
 import { highlightCodeLines } from '../code-block.ts';
 import { languageForPath, parseChanges } from '../../input/changes-model.ts';
@@ -324,10 +324,10 @@ export interface BodyPaintOptions {
   readonly semantic?: SemanticDiff | null | undefined;
 }
 
-/** The body fill's panel: from the text column to W-4, `h` rows. */
-function bodyPanel(canvas: SurfaceCanvas, p: GraphPaint, h: number, bg: string): KitPanel {
+/** The body fill's inset: from the text column to W-4, `h` rows. */
+function bodyInset(canvas: SurfaceCanvas, p: GraphPaint, h: number, bg: string): KitInset {
   const x = textColumn(p);
-  return panel(canvas, x, 0, timeEnd(p.width) - x + 1, h, bg);
+  return inset(canvas, x, 0, timeEnd(p.width) - x + 1, h, bg);
 }
 
 function moreText(n: number, what: string, p: GraphPaint): string {
@@ -335,7 +335,7 @@ function moreText(n: number, what: string, p: GraphPaint): string {
 }
 
 /**
- * Text lines wrapped in full to the panel's text width. A body is file text or
+ * Text lines wrapped in full to the inset's text width. A body is file text or
  * command output, so its layout is kept: indentation and inner spacing stay,
  * tabs become spaces, and wrapped rows keep the line's indent.
  */
@@ -348,7 +348,7 @@ function wrapAll(lines: ReadonlyArray<{ text: string; fg: string }>, width: numb
   return out;
 }
 
-/** One drawn row of a read body: colored runs from the panel's left edge. */
+/** One drawn row of a read body: colored runs from the inset's left edge. */
 type ReadRow = ReadonlyArray<{ readonly text: string; readonly fg: string; readonly bold?: boolean; readonly italic?: boolean }>;
 
 /**
@@ -427,7 +427,7 @@ function paintReadBody(files: readonly ReadBodyFile[], p: GraphPaint, options: B
   });
   const height = drawn.length + 2;
   const canvas = new SurfaceCanvas(p.width, height);
-  const pn = bodyPanel(canvas, p, height, t.backgroundPanel);
+  const pn = bodyInset(canvas, p, height, t.backgroundPanel);
   const right = pn.l + innerWidth;
   drawn.forEach((item, k) => {
     const y = 1 + k;
@@ -475,7 +475,7 @@ export function paintBody(body: BeadBody, p: GraphPaint, options: BodyPaintOptio
     const hidden = rows.length - cap;
     const height = 1 + semanticRows + cap + (hidden > 0 ? 1 : 0) + 1;
     const canvas = new SurfaceCanvas(p.width, height);
-    const pn = bodyPanel(canvas, p, height, t.backgroundPanel);
+    const pn = bodyInset(canvas, p, height, t.backgroundPanel);
     let y = 1;
     if (semanticRows > 0 && options.semantic) {
       canvas.put(pn.l, y, '◈', { fg: t.brandEnd });
@@ -495,7 +495,7 @@ export function paintBody(body: BeadBody, p: GraphPaint, options: BodyPaintOptio
     const wrapped = wrapAll([{ text: body.text, fg: t.error }], innerWidth);
     const height = wrapped.length + 2;
     const canvas = new SurfaceCanvas(p.width, height);
-    const pn = bodyPanel(canvas, p, height, t.backgroundError);
+    const pn = bodyInset(canvas, p, height, t.backgroundError);
     wrapped.forEach((row, k) => canvas.put(pn.l, 1 + k, row.text, { fg: row.fg }));
     return { lines: canvas.lines, capped: false };
   }
@@ -520,7 +520,7 @@ export function paintBody(body: BeadBody, p: GraphPaint, options: BodyPaintOptio
   const tail = (hidden > 0 ? 1 : 0) + (footer ? (hidden > 0 ? 1 : 2) : 0);
   const height = cap + tail + 2;
   const canvas = new SurfaceCanvas(p.width, height);
-  const pn = bodyPanel(canvas, p, height, t.backgroundPanel);
+  const pn = bodyInset(canvas, p, height, t.backgroundPanel);
   for (let k = 0; k < cap; k++) canvas.put(pn.l, 1 + k, truncateDisplay(rows[k]!.text, innerWidth, p.glyphs.ellipsis), { fg: rows[k]!.fg });
   let y = 1 + cap;
   if (hidden > 0) canvas.put(pn.l, y++, moreText(hidden, 'lines', p), { fg: t.textFaint });

@@ -105,7 +105,7 @@ describe('renderOnboardingWizard', () => {
       'reachable only through the tunnel. See docs/deployment-and-services.md for the full posture.';
 
     // Narrow (collapsed, single-column) layout: hint rows are the full row
-    // width with no side panels, so consecutive wrapped lines can be
+    // width with no side columns, so consecutive wrapped lines can be
     // rejoined and whitespace-normalized back to the source sentence.
     const collapsedText = linesToText(renderOnboardingWizard(wizard, 80, 40))
       .join(' ')
@@ -113,7 +113,7 @@ describe('renderOnboardingWizard', () => {
     expect(collapsedText).toContain(fullHint);
 
     // Wide layout renders the same hint in its center column, alongside an
-    // independent left-hand step rail and right-hand summary panel on the
+    // independent left-hand step rail and right-hand summary column on the
     // same terminal rows, so a plain full-row join interleaves rail/summary
     // text between wrapped hint lines. Checking the sentence's opening and
     // closing fragments both survive is enough to prove neither end was

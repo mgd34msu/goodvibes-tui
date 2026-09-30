@@ -1,21 +1,17 @@
 /**
- * Shared ms-duration formatters for the panel layer.
+ * Shared ms-duration formatters for the view layer.
  *
  * Two families are exported, each matching a distinct behavior cluster.
  * DO NOT replace these with formatElapsed from utils/format-elapsed.ts,
  * formatElapsed floors to integer seconds and lacks the null/'?ms' guards
- * that the latency panels require.
+ * that the latency views require.
  *
- * (the purge): formatShortDuration (used only by incident-review-panel
- * and eval-panel, both removed, RETIRE-INTO-FLEET and DELETE respectively)
- * was removed as a genuinely orphaned export, no remaining caller anywhere
- * in src/.
+ * formatShortDuration was removed as a genuinely orphaned export, with no
+ * remaining caller anywhere in src/.
  */
 
 /**
  * Format a latency value in milliseconds with sub-second precision.
- *
- * Used by: provider-health-panel
  *
  *   ms <= 0     → 'n/a'
  *   ms >= 10000 → '12.3s'    (one decimal)

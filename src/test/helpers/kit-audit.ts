@@ -9,7 +9,7 @@
  *   - BAR         a ┃ does not run the full height of the block beside it
  *
  * Blocks are found the way the fills were drawn: the modal fill (every row
- * between the caps, full width) and element panels (maximal rectangles of
+ * between the caps, full width) and insets (maximal rectangles of
  * the backgroundElement color). A selected row's gradient, keycaps and chips
  * are small fills of their own and are not blocks.
  */
@@ -91,13 +91,13 @@ export function auditLayer(layer: SurfaceLayer | null, screenW: number, screenH:
     }
   }
 
-  // Element panels.
+  // Insets.
   for (const rect of rectsOf(lines, t.backgroundElement, fillTop, fillBottom)) {
     if (rect.w < 6) continue;
     const textOn = (y: number): boolean => lines[y]!.slice(rect.x, rect.x + rect.w).some((c) => hasText(c) && c.bg === rect.bg);
     if (rect.h >= 3) {
-      if (textOn(rect.y)) issues.push({ kind: 'VPAD', row: rect.y, detail: `panel x${rect.x} w${rect.w} h${rect.h}: text on its first row` });
-      if (textOn(rect.y + rect.h - 1)) issues.push({ kind: 'VPAD', row: rect.y + rect.h - 1, detail: `panel x${rect.x} w${rect.w} h${rect.h}: text on its last row` });
+      if (textOn(rect.y)) issues.push({ kind: 'VPAD', row: rect.y, detail: `inset x${rect.x} w${rect.w} h${rect.h}: text on its first row` });
+      if (textOn(rect.y + rect.h - 1)) issues.push({ kind: 'VPAD', row: rect.y + rect.h - 1, detail: `inset x${rect.x} w${rect.w} h${rect.h}: text on its last row` });
     }
     for (let y = rect.y; y < rect.y + rect.h; y++) {
       const cells = lines[y]!.slice(rect.x, rect.x + rect.w);
@@ -106,10 +106,10 @@ export function auditLayer(layer: SurfaceLayer | null, screenW: number, screenH:
       let last = cells.length - 1;
       while (last >= 0 && !(hasText(cells[last]) && cells[last]!.bg === rect.bg)) last--;
       if (first < 2 || rect.w - 1 - last < 2) {
-        issues.push({ kind: 'PADDING', row: y, detail: `panel x${rect.x} w${rect.w}: left ${first} right ${rect.w - 1 - last}` });
+        issues.push({ kind: 'PADDING', row: y, detail: `inset x${rect.x} w${rect.w}: left ${first} right ${rect.w - 1 - last}` });
       }
     }
-    // A ┃ beside a panel must run its full height.
+    // A ┃ beside an inset must run its full height.
     for (const bx of [rect.x - 1, rect.x + rect.w]) {
       const bars = Array.from({ length: rect.h }, (_, k) => lines[rect.y + k]?.[bx]?.char === '┃');
       if (bars.some(Boolean) && !bars.every(Boolean)) {

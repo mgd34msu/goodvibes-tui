@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { discoverSkills } from '../../panels/skills-discovery.ts';
+import { discoverSkills } from '../../views/skills-discovery.ts';
 import {
   installEcosystemCatalogEntry,
   listInstalledEcosystemEntries,

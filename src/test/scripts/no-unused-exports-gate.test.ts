@@ -19,7 +19,7 @@ describe('isNoUnusedExportsRuleTarget', () => {
   });
 
   test('does not target files outside src/renderer', () => {
-    expect(isNoUnusedExportsRuleTarget('src/panels/git-panel.ts')).toBe(false);
+    expect(isNoUnusedExportsRuleTarget('src/views/git-view.ts')).toBe(false);
     expect(isNoUnusedExportsRuleTarget('src/runtime/bootstrap.ts')).toBe(false);
   });
 });
@@ -192,7 +192,7 @@ describe('checkNoUnusedExports', () => {
 
   test('ignores files outside src/renderer', () => {
     const violations = checkNoUnusedExports(
-      [{ relPath: 'src/panels/git-panel.ts', text: `export function dead() {}\n` }],
+      [{ relPath: 'src/views/git-view.ts', text: `export function dead() {}\n` }],
       [],
       noopResolve,
     );

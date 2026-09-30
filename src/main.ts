@@ -64,7 +64,7 @@ import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
 import { createRenderScheduler } from '@pellux/goodvibes-terminal-shell';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
-import { footerFleetCost } from './panels/fleet-read-model.ts';
+import { footerFleetCost } from './views/fleet-read-model.ts';
 import { footerTargetRows } from './renderer/footer-targets.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, createStreamMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
@@ -659,7 +659,7 @@ async function main() {
     commandContext,
     input,
     views: ctx.views,
-    viewPanels: ctx.services.panelManager,
+    viewPanelAdapter: ctx.services.panelManager,
     configManager,
     providerRegistry,
     runtime,

@@ -15,9 +15,9 @@
 import { describe, test, expect } from 'bun:test';
 import { ConfigModal } from '../../input/config-modal.ts';
 import { renderConfigModal } from '../../renderer/config-modal.ts';
-import { createProviderHealthModalSurface, type ProviderRuntimeInspect } from '../../panels/modals/provider-health-modal.ts';
-import { createRemoteModalSurface } from '../../panels/modals/remote-modal.ts';
-import { createMemoryModalSurface } from '../../panels/modals/memory-modal.ts';
+import { createProviderHealthModalSurface, type ProviderRuntimeInspect } from '../../views/modals/provider-health-modal.ts';
+import { createRemoteModalSurface } from '../../views/modals/remote-modal.ts';
+import { createMemoryModalSurface } from '../../views/modals/memory-modal.ts';
 import {
   assertFrameLiveness,
   differingCells,

@@ -186,7 +186,7 @@ describe('full command rendering: wrapped, never truncated', () => {
       const lines = cardText(promptCardLines(width, request as never, undefined, false));
       const start = lines.findIndex((t) => t.includes('$ git commit'));
       expect(start).toBeGreaterThanOrEqual(0);
-      // The command panel: the $ row and its continuation rows, up to the panel's padding row.
+      // The command inset: the $ row and its continuation rows, up to the inset's padding row.
       const rows: string[] = [];
       for (let i = start; i < lines.length && lines[i]!.trim() !== ''; i++) rows.push(lines[i]!.trim().replace(/^\$ /, ''));
       const joined = rows.join(' ');

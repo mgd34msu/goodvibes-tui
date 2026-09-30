@@ -81,7 +81,7 @@ describe('new SDK settings surfaces: honest descriptions reach the modal', () =>
  * modal despite being real, invokable, schema-declared config. Fixed by
  * adding 'occasions' to all four; this test pins that every key actually
  * lands in a group and that the category has a real label and description
- * (never an empty modal panel, see the "modals show full text" standard).
+ * (never an empty modal body, see the "modals show full text" standard).
  */
 describe('occasions settings surface: all eleven keys reach the modal, not dropped', () => {
   const OCCASIONS_SETTING_KEYS = [
@@ -127,7 +127,7 @@ describe('occasions settings surface: all eleven keys reach the modal, not dropp
     expect(channel!.setting.default).toBe('telegram');
   });
 
-  test('the occasions category has a real label and a non-empty description (no clipped/blank panel)', () => {
+  test('the occasions category has a real label and a non-empty description (no clipped/blank modal)', () => {
     expect(CATEGORY_LABELS.occasions).toBeTruthy();
     expect(CATEGORY_INFO.occasions).toBeTruthy();
     expect(CATEGORY_INFO.occasions.length).toBeGreaterThan(20);

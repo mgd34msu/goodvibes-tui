@@ -570,7 +570,7 @@ function listSlashCommands(): string[] {
  * (Agents, Usage, Changes, Notifications, the masked password prompt).
  */
 function countBuiltinModals(root: string): number {
-  const surfaces = readFileSync(join(root, 'src', 'panels', 'builtin-modals.ts'), 'utf8');
+  const surfaces = readFileSync(join(root, 'src', 'views', 'builtin-modals.ts'), 'utf8');
   const openers = readFileSync(join(root, 'src', 'shell', 'view-openers.ts'), 'utf8');
   const surfaceCount = [...surfaces.matchAll(/registerModalSurface\(/g)].length;
   const viewModals = new Set([...openers.matchAll(/new ([A-Za-z]+Modal)\(/g)].map((m) => m[1]));

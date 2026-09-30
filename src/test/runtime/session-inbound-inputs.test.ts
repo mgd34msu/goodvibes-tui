@@ -62,7 +62,7 @@ function makeStub(inputsBySession: Record<string, StubInput[]>): {
 describe('SessionInboundInputPoller: collect, inject, ack', () => {
   test('a queued webui steer is injected and acked queued->delivered', async () => {
     const { client, delivered } = makeStub({
-      's1': [{ id: 'in-1', sessionId: 's1', intent: 'steer', state: 'queued', body: 'resize the panel', createdAt: 100, surfaceKind: 'webui', surfaceId: 'surface:webui', displayName: 'Alice' }],
+      's1': [{ id: 'in-1', sessionId: 's1', intent: 'steer', state: 'queued', body: 'resize the sidebar', createdAt: 100, surfaceKind: 'webui', surfaceId: 'surface:webui', displayName: 'Alice' }],
     });
     const received: InboundSteer[] = [];
     const poller = new SessionInboundInputPoller({
@@ -76,7 +76,7 @@ describe('SessionInboundInputPoller: collect, inject, ack', () => {
 
     expect(count).toBe(1);
     expect(received).toHaveLength(1);
-    expect(received[0]!.body).toBe('resize the panel');
+    expect(received[0]!.body).toBe('resize the sidebar');
     expect(received[0]!.surfaceKind).toBe('webui');
     expect(delivered).toEqual([{ sessionId: 's1', inputId: 'in-1', consumed: false }]);
     poller.dispose();

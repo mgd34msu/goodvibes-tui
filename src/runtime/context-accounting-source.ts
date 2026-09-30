@@ -24,7 +24,7 @@ export interface CompactionActivityBus {
  *  - getTurnInjections()  → Orchestrator.getTurnInjections() (the same bounded
  *    ring `/recall injections` renders from).
  *  - getTokenState()      → Orchestrator.usage / lastInputTokens (the same
- *    counters the footer's context bar and CostTrackerPanel read), plus the
+ *    counters the footer's context bar and the usage modal read), plus the
  *    current model's context window from the provider registry.
  *  - getCompactionState()  → compactionCount from SessionLineageTracker (the
  *    same counter session-maintenance and /compact read); isCompacting is

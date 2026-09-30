@@ -1,6 +1,6 @@
 /**
  * renderUsageModal, context and cost for this session (replaces the Tokens and
- * Cost panes).
+ * Cost views).
  *
  *   ✦ Usage  this session                                             esc
  *

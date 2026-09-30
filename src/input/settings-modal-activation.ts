@@ -10,7 +10,7 @@
  * settings-modal-reset.ts and settings-modal-mutations.ts.
  */
 
-import { handleConfirmInput } from '../panels/confirm-state.ts';
+import { handleConfirmInput } from '../views/confirm-state.ts';
 import type { FlagEntry, McpEntry, SettingEntry, SubscriptionEntry } from './settings-modal-types.ts';
 import { buildMcpEntries, buildSubscriptionEntries } from './settings-modal-data.ts';
 import { modelPickerLaunchForKey } from './settings-modal-behavior.ts';

@@ -5,20 +5,19 @@
  * Delivery is resolved from the message KIND ('system' | 'wrfc' |
  * 'operational'), which maps to a configurable routing target
  * (ui.systemMessages / ui.wrfcMessages / ui.operationalMessages, each
- * 'panel' | 'conversation' | 'both'). resolveSystemMessageDelivery() turns
- * that target, plus whether a panel is attached, into a { toPanel,
- * toConversation } decision.
+ * 'panel' | 'conversation' | 'both', the SDK's target names). resolveSystemMessageDelivery()
+ * turns that target, plus whether a side surface is attached (the SDK's
+ * `hasPanel` argument), into a { toPanel, toConversation } decision.
  *
- * (the purge): the SystemMessagesPanel this router used to optionally
- * push into was DELETE-disposition (no surviving human surface, a picker
- * over the old panel registry, not something worth a dedicated console) and
- * has been removed entirely, so this router now always resolves with
+ * (the purge): the side surface this router used to optionally push into
+ * was DELETE-disposition (no surviving human surface, not something worth a
+ * dedicated console) and has been removed entirely, so this router now always resolves with
  * `hasPanel = false`. Per resolveSystemMessageDelivery's own contract that
- * means EVERY kind/target combination (including 'panel'-only) falls back
+ * means EVERY kind/target combination (including 'panel'-target) falls back
  * to `toConversation: true`, nothing this router routes can vanish; it all
  * reaches conversation.addTypedSystemMessage(), which the transcript
  * renders as a navigable system line. This is deliberate, not a regression:
- * operational chatter that used to be tucked away in a rarely-opened panel
+ * operational chatter that used to be tucked away in a rarely-opened side surface
  * now surfaces inline, same as the messages that were already forced there
  * (see FORCE_CONVERSATION_PREFIXES below).
  *
@@ -61,7 +60,7 @@ export type {
   SystemMessageTarget,
 } from '@/runtime/index.ts';
 
-/** Panel emphasis level. Panel delivery was removed in (see file doc); kept as the priority vocabulary for callers and for the SDK's delivery-resolution signature. */
+/** Emphasis level. Side-surface delivery was removed (see file doc); kept as the priority vocabulary for callers and for the SDK's delivery-resolution signature. */
 export type SystemMessagePriority = 'high' | 'low';
 
 /**
@@ -88,7 +87,7 @@ function mustReachConversation(message: string): boolean {
 
 /**
  * Routes system messages to the conversation based on priority level and
- * configured target. See file doc for the panel removal.
+ * configured target. See file doc for the side-surface removal.
  */
 export class SystemMessageRouter {
   /** Buffered provider "from last session" replay lines, folded on a microtask. */
@@ -113,7 +112,7 @@ export class SystemMessageRouter {
    *
    * @param message  - Message text.
    * @param priority - 'high' | 'low' (kept for callers; no longer changes
-   *                   delivery now that there is no panel to emphasize on).
+   *                   delivery now that there is no side surface to emphasize on).
    * @param kind     - Classification kind ('system' | 'wrfc' | 'operational');
    *                   used to resolve routing target and conversation navigability.
    */
@@ -137,7 +136,7 @@ export class SystemMessageRouter {
   /** Post-noise-gate delivery: resolve target and append to the conversation. */
   private deliver(message: string, kind: SystemMessageKind): void {
     const target = this.getTargetForKind(kind);
-    // hasPanel is always false now that panel delivery was removed, resolveSystemMessageDelivery's own
+    // hasPanel is always false now that side-surface delivery was removed, resolveSystemMessageDelivery's own
     // contract means every target ('panel' | 'conversation' | 'both')
     // resolves toConversation: true in that case (see file doc).
     const delivery = resolveSystemMessageDelivery(target, false);

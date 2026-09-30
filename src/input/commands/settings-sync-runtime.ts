@@ -41,7 +41,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
         return;
       }
       if (sub === 'panel' || sub === 'open') {
-        ctx.openModal?.('settings-sync-modal'); // settings-sync panel -> config modal
+        ctx.openModal?.('settings-sync-modal'); // settings-sync view -> config modal
         return;
       }
       if (sub === 'report' || sub === 'review') {

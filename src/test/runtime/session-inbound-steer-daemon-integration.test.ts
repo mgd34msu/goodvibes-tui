@@ -117,14 +117,14 @@ describe('live-surface steer delivery against a real bootDaemon', () => {
     try {
       await registerLiveTuiSession(harness, 'tui-steer-1');
 
-      await webuiSteer(harness, 'tui-steer-1', 'please resize the left panel');
+      await webuiSteer(harness, 'tui-steer-1', 'please resize the left sidebar');
 
       // The daemon must have QUEUED the steer for the surface (not spawned an executor):
       // it is visible as a queued input on the session.
       try {
         await waitFor(async () => {
           const inputs = await listInputsByState(harness, 'tui-steer-1', 'queued');
-          return inputs.find((i) => i.intent === 'steer' && i.body === 'please resize the left panel') ?? null;
+          return inputs.find((i) => i.intent === 'steer' && i.body === 'please resize the left sidebar') ?? null;
         });
       } catch (waitErr) {
         // Dump the real session/input state on failure, this is a real-daemon
@@ -146,7 +146,7 @@ describe('live-surface steer delivery against a real bootDaemon', () => {
 
       // Injection callback fired with the steer body + originating surface.
       expect(received).toHaveLength(1);
-      expect(received[0]!.body).toBe('please resize the left panel');
+      expect(received[0]!.body).toBe('please resize the left sidebar');
       expect(received[0]!.surfaceKind).toBe('webui');
       expect(delivered).toBe(1);
 
@@ -154,7 +154,7 @@ describe('live-surface steer delivery against a real bootDaemon', () => {
       const stillQueued = await listInputsByState(harness, 'tui-steer-1', 'queued');
       expect(stillQueued).toHaveLength(0);
       const deliveredInputs = await listInputsByState(harness, 'tui-steer-1', 'delivered');
-      expect(deliveredInputs.some((i) => i.body === 'please resize the left panel')).toBe(true);
+      expect(deliveredInputs.some((i) => i.body === 'please resize the left sidebar')).toBe(true);
     } finally {
       poller?.dispose();
       await stopHarness(harness);

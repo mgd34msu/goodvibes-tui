@@ -16,7 +16,6 @@ describe('runtime/session-return-context', () => {
       remoteRunners: ['runner-a', 'runner-b'],
       worktreeCount: 1,
       worktreePaths: ['/tmp/wt-a'],
-      openPanels: ['remote', 'approval'],
     });
 
     expect(summary.activityLabel).toBe('assistant replied');
@@ -32,7 +31,9 @@ describe('runtime/session-return-context', () => {
     expect(summary.lines.some((line) => line.includes('Tasks: active 3, blocked 1'))).toBe(true);
     expect(summary.lines.some((line) => line.includes('Remote runners: runner-a, runner-b'))).toBe(true);
     expect(summary.lines.some((line) => line.includes('Worktree paths: /tmp/wt-a'))).toBe(true);
-    expect(summary.lines.some((line) => line.includes('Open panels: remote, approval'))).toBe(true);
+    // The builder never records open views (the TUI has no side panes; modals replaced them).
+    expect(summary.lines.some((line) => line.startsWith('Open panels'))).toBe(false);
+    expect(summary as unknown as Record<string, unknown>).not.toHaveProperty('openPanels');
     expect(summary.lines[0]).toContain('Activity');
   });
 

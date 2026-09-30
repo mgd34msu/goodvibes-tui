@@ -3,7 +3,7 @@
  *
  * The theme's diff tokens (diffAddedBg, diffRemovedBg and their line-number
  * variants) are tuned against the terminal background. A diff drawn inside a
- * lighter element panel can land within a few color units of them: gruvbox
+ * lighter element inset can land within a few color units of them: gruvbox
  * light's added row is 7 units from its element fill, rosepine light's removed
  * line-number tint 5. Those rows read as untinted.
  *
@@ -79,7 +79,7 @@ export interface DiffRowTints {
 
 const tintCache = new Map<string, DiffRowTints>();
 
-/** The active theme's diff tints, each kept visible on `fill` (the panel the diff sits on). */
+/** The active theme's diff tints, each kept visible on `fill` (the inset the diff sits on). */
 export function diffRowTints(fill: string): DiffRowTints {
   const t = activeTokens();
   const tones = activeDiffTones();

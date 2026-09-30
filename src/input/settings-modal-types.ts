@@ -93,7 +93,7 @@ export type SettingsCategory =
   | 'google'
   | 'danger';
 
-export type SettingsFocusPane = 'categories' | 'settings';
+export type SettingsFocusRegion = 'categories' | 'settings';
 
 export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
   readonly label: string;

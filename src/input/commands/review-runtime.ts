@@ -1,6 +1,6 @@
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import type { ReviewHunk } from '../../panels/diff-review-model.ts';
-import { hunkPatchText, buildHunkRevertReceiptBlock } from '../../panels/diff-review-model.ts';
+import type { ReviewHunk } from '../../views/diff-review-model.ts';
+import { hunkPatchText, buildHunkRevertReceiptBlock } from '../../views/diff-review-model.ts';
 
 /** checkpoints.revertHunkPreview result, the read-only clean-or-conflict check plus a confirm token. */
 interface RevertHunkPreview {

@@ -1,6 +1,6 @@
 /**
  * Diff row tints in the Changes modal stay clearly visible in every bundled
- * theme and mode, on the element panel the diff sits on and on the modal's
+ * theme and mode, on the element inset the diff sits on and on the modal's
  * surface fill (backgroundPanel).
  *
  * Metric: Euclidean distance in sRGB (0..441). MIN_DIFF_TINT_DISTANCE (24) is
@@ -13,7 +13,7 @@ import { diffRowTints } from '../../renderer/diff-tint.ts';
 import { activeTokens, getActiveThemeName, activeThemeMode, setActiveThemeMode, setActiveThemeName } from '../../renderer/theme.ts';
 import { drawDiffRow, type DiffRow } from '../../renderer/changes-modal.ts';
 import { beginModal } from '../../renderer/surface-kit.ts';
-import { panel } from '../../renderer/surface-kit-parts.ts';
+import { inset } from '../../renderer/surface-kit-parts.ts';
 
 /** Mirrors the floor in src/renderer/diff-tint.ts (see the justification there and above). */
 const MIN_DIFF_TINT_DISTANCE = 24;
@@ -89,7 +89,7 @@ test('drawDiffRow paints the visible tints across the row and the gutter', () =>
   setActiveThemeName('gruvbox');
   setActiveThemeMode('light');
   const f = beginModal(120, 30, { title: 'Changes' });
-  const p = panel(f.canvas, 10, 4, 60, 8);
+  const p = inset(f.canvas, 10, 4, 60, 8);
   const row: DiffRow = { kind: 'line', hunk: 0, first: true, text: 'const a = 1;', line: { kind: 'add', text: 'const a = 1;', oldNo: null, newNo: 3 }, tokens: [{ text: 'const a = 1;', fg: activeTokens().text }] };
   drawDiffRow(f.canvas, p, p.top, row, 0);
   const tints = diffRowTints(p.bg);

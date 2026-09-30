@@ -610,7 +610,7 @@ describe('product breadth commands', () => {
     expect(command).toBeDefined();
 
     const out: string[] = [];
-    const baseCtx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
+    const baseCtx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityView?: () => void };
     const ctx = {
       ...baseCtx,
       clients: {
@@ -696,7 +696,7 @@ describe('product breadth commands', () => {
     expect(health).toBeDefined();
 
     const out: string[] = [];
-    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
+    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityView?: () => void };
 
     await accounts!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('preferred=subscription');
@@ -742,7 +742,7 @@ describe('product breadth commands', () => {
     expect(setup).toBeDefined();
 
     const out: string[] = [];
-    const baseCtx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
+    const baseCtx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityView?: () => void };
     const ctx = {
       ...baseCtx,
       clients: {
@@ -1082,7 +1082,7 @@ describe('product breadth commands', () => {
     expect(security).toBeDefined();
 
     const out: string[] = [];
-    const ctx: ReturnType<typeof makeContext> & { openSecurityPanel?: () => void } = makeContext(out);
+    const ctx: ReturnType<typeof makeContext> & { openSecurityView?: () => void } = makeContext(out);
     runtimeServices.runtimeStore.setState((state) => ({
       ...state,
       mcp: {
@@ -1179,7 +1179,7 @@ describe('product breadth commands', () => {
     expect(plugin).toBeDefined();
 
     const out: string[] = [];
-    const ctx: ReturnType<typeof makeContext> & { openSecurityPanel?: () => void } = makeContext(out);
+    const ctx: ReturnType<typeof makeContext> & { openSecurityView?: () => void } = makeContext(out);
 
     await plugin!.handler(['dirs'], ctx);
     expect(out.join('\n')).toContain('Plugin Search Directories');
@@ -1311,7 +1311,7 @@ describe('product breadth commands', () => {
     expect(setup).toBeDefined();
 
     const out: string[] = [];
-    const ctx: ReturnType<typeof makeContext> & { openSecurityPanel?: () => void } = makeContext(out);
+    const ctx: ReturnType<typeof makeContext> & { openSecurityView?: () => void } = makeContext(out);
     const transferPath = join(root, 'artifacts', 'setup-transfer.json');
 
     await setup!.handler(['transfer', 'export', transferPath], ctx);
@@ -1327,9 +1327,9 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('goodvibes://open/security');
 
     out.length = 0;
-    ctx.openSecurityPanel = () => { out.push('opened-security-panel'); };
+    ctx.openSecurityView = () => { out.push('opened-security-view'); };
     await setup!.handler(['open-link', 'goodvibes://open/security?target=incident-1'], ctx);
-    expect(out.join('\n')).toContain('opened-security-panel');
+    expect(out.join('\n')).toContain('opened-security-view');
     expect(out.join('\n')).toContain('Opened setup link for security');
   });
 
@@ -1833,6 +1833,7 @@ describe('product breadth commands', () => {
           remoteRunners: ['runner-a'],
           worktreeCount: 1,
           worktreePaths: ['/tmp/demo-worktree'],
+          // Legacy open-view list (from an older session file): /session save drops it.
           openPanels: ['remote', 'approval'],
         },
       }),
@@ -1851,7 +1852,7 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Pending approvals spotted: 2');
     expect(out.join('\n')).toContain('Remote runners: runner-a');
     expect(out.join('\n')).toContain('Worktree paths: /tmp/demo-worktree');
-    expect(out.join('\n')).toContain('Open panels: remote, approval');
+    expect(out.join('\n')).not.toContain('Open panels');
   });
 
   test('install command exports and inspects install bundles', async () => {

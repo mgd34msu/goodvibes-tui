@@ -16,8 +16,8 @@ export function registerIncidentRuntimeCommands(registry: CommandRegistry): void
       const subcommand = (args[0] ?? 'open').toLowerCase();
       const forensicRegistry = ctx.extensions.forensicsRegistry;
       if (subcommand === 'open') {
-        if (ctx.openIncidentPanel) {
-          ctx.openIncidentPanel();
+        if (ctx.openIncidentView) {
+          ctx.openIncidentView();
           return;
         }
         ctx.print('The Agents view is not available in this runtime.');

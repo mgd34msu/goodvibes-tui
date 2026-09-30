@@ -107,8 +107,9 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       options.conversation.log(`Resumed session: ${sessionId}`, { fg: activeTokens().secondary });
       const returnContextMode = getReturnContextMode(options.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {
-        // A session saved while the TUI had side panes lists them; there are none to reopen now.
-        for (const line of formatReturnContextForDisplay({ ...meta.returnContext, openPanels: undefined })) {
+        // The SDK's session loader already dropped any legacy open-views list from a
+        // session saved by an older TUI, so the loaded return context is shown as-is.
+        for (const line of formatReturnContextForDisplay(meta.returnContext)) {
           options.conversation.log(`Resume: ${line}`, { fg: activeTokens().textMuted });
         }
         if ((meta.returnContext.remoteRunners?.length ?? 0) > 0) {

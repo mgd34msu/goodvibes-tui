@@ -447,7 +447,7 @@ describe('InputHistory redaction', () => {
 });
 
 // ===========================================================================
-// handleLocalAuthCommand, warning and panel routing
+// handleLocalAuthCommand, warning and view routing
 // ===========================================================================
 
 import { handleLocalAuthCommand } from '../../input/commands/local-auth-runtime.ts';
@@ -456,7 +456,6 @@ import type { CommandContext } from '../../input/command-registry.ts';
 function makeAuthContext(overrides: Partial<{
   addUser: (username: string, password: string, roles: string[]) => { username: string; roles: string[] };
   rotatePassword: (username: string, password: string) => void;
-  showPanel: (panelId: string) => void;
   openLocalAuthMaskedEntry: (kind: 'add-user' | 'rotate-password', username: string) => void;
 }>): { ctx: CommandContext; printed: string[] } {
   const printed: string[] = [];
@@ -464,7 +463,6 @@ function makeAuthContext(overrides: Partial<{
     print: (text: string) => { printed.push(text); },
     renderRequest: () => {},
     exit: () => {},
-    showPanel: overrides.showPanel ?? (() => {}),
     session: {} as CommandContext['session'],
     provider: {} as CommandContext['provider'],
     workspace: {} as CommandContext['workspace'],

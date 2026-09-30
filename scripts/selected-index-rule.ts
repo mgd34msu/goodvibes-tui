@@ -1,51 +1,40 @@
 /**
- * selected-index-rule.ts, panel selection-safety architecture-gate rule.
+ * selected-index-rule.ts, view selection-safety architecture-gate rule.
  *
- * Bans the raw token `[this.selectedIndex]` in src/panels/**\/*.ts.
+ * Bans the raw token `[this.selectedIndex]` in src/views/**\/*.ts.
  *
  * Four real bugs shipped because an action key or detail block indexed a RAW
  * item array (`this.rows`, `this.entries`, `getItems()`, a mode-specific
  * array, …) with `this.selectedIndex`, while navigation moves `selectedIndex`
  * over the FILTERED `getVisibleItems()`. When a filter is active the raw index
  * points at the wrong row. To make that class of bug structurally impossible,
- * panel code must read the selected row through `getSelectedItem()` (the
- * ScrollableListPanel accessor that indexes `getVisibleItems()`), through a
- * function-scope `const visible = this.getVisibleItems()` local, or, for
- * bespoke panels with their own selection state, through a single private
- * selected-item accessor.
+ * view code must read the selected row through `getSelectedItem()` (an
+ * accessor that indexes `getVisibleItems()`), through a function-scope
+ * `const visible = this.getVisibleItems()` local, or, for views with their own
+ * selection state, through a single private selected-item accessor.
  *
- * The base classes that OWN list navigation (scrollable-list-panel.ts,
- * expandable-list-panel.ts) legitimately index their internal cursor over the
- * visible list and are the only files exempt from the ban. Any bespoke panel
- * that genuinely needs its own indexing site should either write its private
- * accessor without the literal token (e.g. `rows.at(this.selectedIndex)`) or,
- * as a last resort, be added to the exempt list with a justifying comment.
- * Prefer zero panel exemptions.
+ * No file is currently exempt. A view that genuinely needs its own indexing
+ * site should either write its private accessor without the literal token
+ * (e.g. `rows.at(this.selectedIndex)`) or, as a last resort, be added to the
+ * exempt list with a justifying comment. Prefer zero exemptions.
  */
 
 /** The exact token this rule bans outside the exempt base classes. */
 export const SELECTED_INDEX_TOKEN = '[this.selectedIndex]';
 
 /**
- * Base-class files that own list-cursor navigation and legitimately index the
- * visible list by `this.selectedIndex`. Keep this list minimal, prefer
- * converting bespoke panels (step 2 of the panel-selection hardening) over
- * adding entries here. Each entry must carry a justifying comment.
+ * Files that legitimately index the visible list by `this.selectedIndex`
+ * (for example a base class that owns list-cursor navigation). Keep this list
+ * minimal: prefer converting views to the safe accessors over adding entries
+ * here. Each entry must carry a justifying comment. Currently empty.
  */
-export const SELECTED_INDEX_EXEMPT: ReadonlySet<string> = new Set([
-  // Owns the shared list cursor; getSelectedItem()/handleInput index the
-  // visible list here so every subclass inherits the safe read.
-  'src/panels/scrollable-list-panel.ts',
-  // Extends ScrollableListPanel; expandSelected() indexes the visible list to
-  // open the detail view for the cursor row.
-  'src/panels/expandable-list-panel.ts',
-]);
+export const SELECTED_INDEX_EXEMPT: ReadonlySet<string> = new Set<string>();
 
 /** Whether a repo-relative path falls under the selected-index ban's scope. */
 export function isSelectedIndexRuleTarget(relPath: string): boolean {
   const normalized = relPath.split('\\').join('/');
   return (
-    normalized.startsWith('src/panels/') &&
+    normalized.startsWith('src/views/') &&
     normalized.endsWith('.ts') &&
     !SELECTED_INDEX_EXEMPT.has(normalized)
   );
@@ -68,8 +57,8 @@ export interface SelectedIndexCandidate {
 }
 
 /**
- * Enforce the selected-index ban across a set of candidate panel files.
- * Returns one violation message per non-exempt panel file that contains the
+ * Enforce the selected-index ban across a set of candidate view files.
+ * Returns one violation message per non-exempt view file that contains the
  * raw `[this.selectedIndex]` token.
  */
 export function checkSelectedIndexReads(

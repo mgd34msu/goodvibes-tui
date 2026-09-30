@@ -250,10 +250,10 @@ describe('VersionMismatchError', () => {
 // ---------------------------------------------------------------------------
 
 describe('TransportPanel', () => {
-  let panel: TransportPanel;
+  let transport: TransportPanel;
 
   beforeEach(() => {
-    panel = new TransportPanel();
+    transport = new TransportPanel();
   });
 
   describe('recordSuccess', () => {
@@ -265,9 +265,9 @@ describe('TransportPanel', () => {
         peerVersion: V1_2,
         negotiatedAt: Date.now(),
       };
-      panel.recordSuccess('conn-1', 'wss://example.com', protocol);
+      transport.recordSuccess('conn-1', 'wss://example.com', protocol);
 
-      const latest = panel.getLatest('conn-1');
+      const latest = transport.getLatest('conn-1');
       expect(latest).toBeDefined();
       expect(latest!.success).toBe(true);
       expect(latest!.negotiatedVersion).toBe('1.2.0');
@@ -284,9 +284,9 @@ describe('TransportPanel', () => {
         peerVersion: V1_0,
         negotiatedAt: Date.now(),
       };
-      panel.recordSuccess('conn-2', 'wss://remote.example.com', protocol);
+      transport.recordSuccess('conn-2', 'wss://remote.example.com', protocol);
 
-      const latest = panel.getLatest('conn-2');
+      const latest = transport.getLatest('conn-2');
       expect(latest!.downgraded).toBe(true);
       expect(latest!.downgradeReason).toBe('peer_minor_older');
       expect(latest!.negotiatedVersion).toBe('1.0.0');
@@ -295,7 +295,7 @@ describe('TransportPanel', () => {
 
   describe('recordIncompatibility', () => {
     test('records major version mismatch failure', () => {
-      panel.recordIncompatibility(
+      transport.recordIncompatibility(
         'conn-3',
         'wss://legacy.example.com',
         'major_version_mismatch',
@@ -304,7 +304,7 @@ describe('TransportPanel', () => {
         '2.0.0',
       );
 
-      const latest = panel.getLatest('conn-3');
+      const latest = transport.getLatest('conn-3');
       expect(latest!.success).toBe(false);
       expect(latest!.incompatibilityCode).toBe('major_version_mismatch');
       expect(latest!.incompatibilityReason).toBe('Peer is on v2, we are on v1');
@@ -313,7 +313,7 @@ describe('TransportPanel', () => {
     });
 
     test('records peer_version_too_old failure', () => {
-      panel.recordIncompatibility(
+      transport.recordIncompatibility(
         'conn-4',
         'wss://old.example.com',
         'peer_version_too_old',
@@ -322,7 +322,7 @@ describe('TransportPanel', () => {
         '1.0.0',
       );
 
-      const failure = panel.getLatest('conn-4');
+      const failure = transport.getLatest('conn-4');
       expect(failure!.incompatibilityCode).toBe('peer_version_too_old');
     });
   });
@@ -330,18 +330,18 @@ describe('TransportPanel', () => {
   describe('record (from VersionNegotiationResult)', () => {
     test('success result is stored correctly', () => {
       const result = negotiateProtocolVersion(V1_2, V1_2);
-      panel.record('conn-5', 'wss://peer.example.com', result, '1.2.0', '1.2.0');
+      transport.record('conn-5', 'wss://peer.example.com', result, '1.2.0', '1.2.0');
 
-      const latest = panel.getLatest('conn-5');
+      const latest = transport.getLatest('conn-5');
       expect(latest!.success).toBe(true);
       expect(latest!.negotiatedVersion).toBe('1.2.0');
     });
 
     test('incompatibility result is stored correctly', () => {
       const result = negotiateProtocolVersion(V1_2, V2_0);
-      panel.record('conn-6', 'wss://v2.example.com', result, '1.2.0', '2.0.0');
+      transport.record('conn-6', 'wss://v2.example.com', result, '1.2.0', '2.0.0');
 
-      const latest = panel.getLatest('conn-6');
+      const latest = transport.getLatest('conn-6');
       expect(latest!.success).toBe(false);
       expect(latest!.incompatibilityCode).toBe('major_version_mismatch');
     });
@@ -349,15 +349,15 @@ describe('TransportPanel', () => {
 
   describe('getIncompatibilityFailures', () => {
     test('returns all incompatibility failures across connections', () => {
-      panel.recordIncompatibility('conn-a', 'wss://a.example.com', 'major_version_mismatch', 'major', '1.2.0', '2.0.0');
-      panel.recordIncompatibility('conn-b', 'wss://b.example.com', 'peer_version_too_old', 'too old', '1.2.0', '1.0.0');
+      transport.recordIncompatibility('conn-a', 'wss://a.example.com', 'major_version_mismatch', 'major', '1.2.0', '2.0.0');
+      transport.recordIncompatibility('conn-b', 'wss://b.example.com', 'peer_version_too_old', 'too old', '1.2.0', '1.0.0');
 
       const protocol: NegotiatedProtocol = {
         version: V1_2, downgraded: false, offeredVersion: V1_2, peerVersion: V1_2, negotiatedAt: Date.now(),
       };
-      panel.recordSuccess('conn-c', 'wss://c.example.com', protocol);
+      transport.recordSuccess('conn-c', 'wss://c.example.com', protocol);
 
-      const failures = panel.getIncompatibilityFailures();
+      const failures = transport.getIncompatibilityFailures();
       expect(failures.length).toBe(2);
       expect(failures.every((f) => !f.success)).toBe(true);
       expect(failures.every((f) => f.incompatibilityCode !== undefined)).toBe(true);
@@ -366,7 +366,7 @@ describe('TransportPanel', () => {
     test('incompatible peer cannot proceed: verify the entry blocks session', () => {
       // The acceptance criterion: incompatible peer must not proceed silently.
       // Verify that the recorded failure is surface-able and has the code.
-      panel.recordIncompatibility(
+      transport.recordIncompatibility(
         'conn-block',
         'wss://incompatible.example.com',
         'major_version_mismatch',
@@ -375,7 +375,7 @@ describe('TransportPanel', () => {
         '3.0.0',
       );
 
-      const failures = panel.getIncompatibilityFailures();
+      const failures = transport.getIncompatibilityFailures();
       const entry = failures.find((f) => f.connectionId === 'conn-block');
       expect(entry).toBeDefined();
       expect(entry!.success).toBe(false);
@@ -398,10 +398,10 @@ describe('TransportPanel', () => {
       const full: NegotiatedProtocol = {
         version: V1_2, downgraded: false, offeredVersion: V1_2, peerVersion: V1_2, negotiatedAt: Date.now(),
       };
-      panel.recordSuccess('conn-down', 'wss://d.example.com', downgraded);
-      panel.recordSuccess('conn-full', 'wss://f.example.com', full);
+      transport.recordSuccess('conn-down', 'wss://d.example.com', downgraded);
+      transport.recordSuccess('conn-full', 'wss://f.example.com', full);
 
-      const downgrades = panel.getDowngrades();
+      const downgrades = transport.getDowngrades();
       expect(downgrades.length).toBe(1);
       expect(downgrades[0]!.connectionId).toBe('conn-down');
     });
@@ -416,11 +416,11 @@ describe('TransportPanel', () => {
         version: V1_0, downgraded: true, downgradeReason: 'peer_minor_older', offeredVersion: V1_2, peerVersion: V1_0, negotiatedAt: Date.now(),
       };
 
-      panel.recordSuccess('s1', 'wss://s1.example.com', fullProto);
-      panel.recordSuccess('s2', 'wss://s2.example.com', downProto);
-      panel.recordIncompatibility('s3', 'wss://s3.example.com', 'major_version_mismatch', 'msg', '1.2.0', '2.0.0');
+      transport.recordSuccess('s1', 'wss://s1.example.com', fullProto);
+      transport.recordSuccess('s2', 'wss://s2.example.com', downProto);
+      transport.recordIncompatibility('s3', 'wss://s3.example.com', 'major_version_mismatch', 'msg', '1.2.0', '2.0.0');
 
-      const summary = panel.getSummary();
+      const summary = transport.getSummary();
       expect(summary.totalConnections).toBe(3);
       expect(summary.successfulNegotiations).toBe(2);
       expect(summary.downgradedConnections).toBe(1);
@@ -431,21 +431,21 @@ describe('TransportPanel', () => {
   describe('subscribe', () => {
     test('subscriber is called on recordSuccess', () => {
       let calls = 0;
-      panel.subscribe(() => { calls++; });
+      transport.subscribe(() => { calls++; });
 
       const proto: NegotiatedProtocol = {
         version: V1_2, downgraded: false, offeredVersion: V1_2, peerVersion: V1_2, negotiatedAt: Date.now(),
       };
-      panel.recordSuccess('conn-sub', 'wss://sub.example.com', proto);
+      transport.recordSuccess('conn-sub', 'wss://sub.example.com', proto);
       expect(calls).toBe(1);
     });
 
     test('unsubscribe stops notifications', () => {
       let calls = 0;
-      const unsub = panel.subscribe(() => { calls++; });
+      const unsub = transport.subscribe(() => { calls++; });
       unsub();
 
-      panel.recordIncompatibility('conn-unsub', 'wss://u.example.com', 'major_version_mismatch', 'msg', '1.2.0', '2.0.0');
+      transport.recordIncompatibility('conn-unsub', 'wss://u.example.com', 'major_version_mismatch', 'msg', '1.2.0', '2.0.0');
       expect(calls).toBe(0);
     });
   });
@@ -455,14 +455,14 @@ describe('TransportPanel', () => {
       const proto: NegotiatedProtocol = {
         version: V1_2, downgraded: false, offeredVersion: V1_2, peerVersion: V1_2, negotiatedAt: Date.now(),
       };
-      panel.recordSuccess('conn-dispose', 'wss://d.example.com', proto);
+      transport.recordSuccess('conn-dispose', 'wss://d.example.com', proto);
       let calls = 0;
-      panel.subscribe(() => { calls++; });
+      transport.subscribe(() => { calls++; });
 
-      panel.dispose();
+      transport.dispose();
 
-      expect(panel.getLatest('conn-dispose')).toBeUndefined();
-      expect(panel.getAll().length).toBe(0);
+      expect(transport.getLatest('conn-dispose')).toBeUndefined();
+      expect(transport.getAll().length).toBe(0);
       expect(calls).toBe(0); // subscriber was cleared
     });
   });

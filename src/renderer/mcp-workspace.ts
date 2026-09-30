@@ -1,8 +1,8 @@
 /**
- * renderMcpWorkspace, the MCP server workspace as a kit modal with two panes:
+ * renderMcpWorkspace, the MCP server workspace as a kit modal with a list and a detail side:
  * the server and action list on the left (✦ servers / actions groups, a ● or
  * ○ connection marker, the selected row as the gradient) and the selected
- * row's details in an element panel on the right (connection, trust, launch
+ * row's details in an element inset on the right (connection, trust, launch
  * command, allowed paths and hosts, quarantine, the server's tools, and the
  * status line). The add/edit form and the remove confirmation are sub-views
  * of the same modal: Esc returns from them to the browser.
@@ -20,8 +20,8 @@ import {
   type SurfaceLayer,
 } from './surface-kit.ts';
 import { drawList, type KitRow } from './surface-kit-list.ts';
-import { panel } from './surface-kit-parts.ts';
-import { drawTextBlock, splitPanes, textBlockHeight, type TextLine } from './surface-kit-extra.ts';
+import { inset } from './surface-kit-parts.ts';
+import { drawTextBlock, splitListDetail, textBlockHeight, type TextLine } from './surface-kit-extra.ts';
 
 function statusColor(text: string): string {
   const t = activeTokens();
@@ -138,9 +138,9 @@ function hintsFor(workspace: McpWorkspace): KitHint[] {
   return [['↑↓', 'move'], ['⏎', 'edit or run'], ['a', 'add'], ['d', 'remove'], ['r', 'reload'], ['t', 'tools']];
 }
 
-function drawPanel(f: ModalFrame, split: ReturnType<typeof splitPanes>, lines: readonly TextLine[]): void {
+function drawDetailInset(f: ModalFrame, split: ReturnType<typeof splitListDetail>, lines: readonly TextLine[]): void {
   const t = activeTokens();
-  const p = panel(f.canvas, split.panelX, split.panelY, split.panelW, split.panelH);
+  const p = inset(f.canvas, split.detailX, split.detailY, split.detailW, split.detailH);
   const width = p.r - p.l + 1;
   const need = textBlockHeight(lines, width);
   const room = p.bottom - p.top + 1;
@@ -148,7 +148,7 @@ function drawPanel(f: ModalFrame, split: ReturnType<typeof splitPanes>, lines: r
     drawTextBlock(f.canvas, p.l, p.top, width, lines, p.bottom);
     return;
   }
-  // Keep the last panel row for an honest count of what did not fit.
+  // Keep the last inset row for an honest count of what did not fit.
   drawTextBlock(f.canvas, p.l, p.top, width, lines, p.bottom - 1);
   f.canvas.put(p.l, p.bottom, `${need - room + 1} more lines`, { fg: t.textFaint });
 }
@@ -160,7 +160,7 @@ export function renderMcpWorkspace(workspace: McpWorkspace, screenWidth: number,
     : workspace.mode === 'delete-confirm' ? ['Remove server'] : [];
   const f = beginModal(screenWidth, screenHeight, { title: 'MCP servers', crumbs, hints: hintsFor(workspace) });
 
-  // Status sits under both panes, wrapped in full.
+  // Status sits under both sides, wrapped in full.
   const status: TextLine[] = [{ text: `Status: ${workspace.status}`, style: { fg: statusColor(workspace.status) } }];
   const statusRows = textBlockHeight(status, f.r - f.l + 1);
   const bodyBottom = f.bottom - statusRows - 1;
@@ -174,7 +174,7 @@ export function renderMcpWorkspace(workspace: McpWorkspace, screenWidth: number,
   }
 
   if (workspace.mode === 'delete-confirm') {
-    const split = splitPanes(f.l, f.r, top, bodyBottom, 0.45, 3);
+    const split = splitListDetail(f.l, f.r, top, bodyBottom, 0.45, 3);
     drawList(f.canvas, {
       rows: [
         { label: `Remove ${workspace.editingServerName ?? '(unknown)'}`, danger: true, selected: true, mark: '✕', markFg: t.error, right: 'y' },
@@ -182,7 +182,7 @@ export function renderMcpWorkspace(workspace: McpWorkspace, screenWidth: number,
       ],
       top: split.top, bottom: split.bottom, x0: split.x0, x1: split.x1,
     });
-    drawPanel(f, split, [
+    drawDetailInset(f, split, [
       { text: `Remove configured server: ${workspace.editingServerName ?? '(unknown)'}`, style: { fg: t.text, bold: true } },
       { text: 'This removes the selected writable project or global config entry and reloads the MCP runtime.', style: { fg: t.textMuted } },
       { text: '' },
@@ -192,9 +192,9 @@ export function renderMcpWorkspace(workspace: McpWorkspace, screenWidth: number,
   }
 
   const rows = workspace.mode === 'form' ? formRows(workspace) : browseRows(workspace);
-  const split = splitPanes(f.l, f.r, top, bodyBottom, 0.45);
+  const split = splitListDetail(f.l, f.r, top, bodyBottom, 0.45);
   const res = drawList(f.canvas, { rows, top: split.top, bottom: split.bottom, x0: split.x0, x1: split.x1 });
   f.hintRight = scrollCountText(res.above, res.below);
-  drawPanel(f, split, workspace.mode === 'form' ? formLines(workspace) : detailLines(workspace));
+  drawDetailInset(f, split, workspace.mode === 'form' ? formLines(workspace) : detailLines(workspace));
   return finishModal(f);
 }

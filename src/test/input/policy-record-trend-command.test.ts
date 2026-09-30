@@ -5,7 +5,7 @@ import { registerBuiltinCommands } from '../../input/commands.ts';
 
 // W6 command-path parity: /policy record-trend is a thin wrapper over
 // PolicyRuntimeState.recordTrendEntry() (the policy modal dropped its 'r' action
-// because the panel called that method directly and /policy had no equivalent
+// because the old view called that method directly and /policy had no equivalent
 // verb). recordTrendEntry() forwards to the attached DivergencePanel, so the
 // verb is honest about needing an active simulation dashboard.
 

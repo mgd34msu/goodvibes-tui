@@ -5,7 +5,7 @@
  * from the registry so it can never drift from the real command set. With no
  * query the palette shows four curated groups (Suggested, Session, Views,
  * Settings) and then every other command; typing filters across names,
- * aliases, titles, descriptions, categories and search words (old pane names
+ * aliases, titles, descriptions, categories and search words (former view names
  * such as "fleet", "cockpit", "tokens" and "git" find the modal that holds
  * them now: Agents, Usage, Changes, Notifications). The slash
  * command sits right-aligned on every row, so the palette also teaches it.

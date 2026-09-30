@@ -68,7 +68,7 @@ export function terminalHostedClientId(): string {
   return cachedClientId;
 }
 
-/** The narrow client the command layer and the panel share. */
+/** The narrow client the command layer and the hosted-sessions modal share. */
 export interface HostedSessionsClient {
   /** This terminal's attach identity, the same string the records carry. */
   readonly clientId: string;

@@ -1,6 +1,6 @@
 /**
  * changes-modal.ts, the Changes modal (/changes, /diff, /git diff, /review,
- * ctrl+p "changes"). Replaces the Git, Diff and Review panes.
+ * ctrl+p "changes"). Holds the Git, Diff and Review views.
  *
  * Two modes:
  *   - workspace: the repository's changes from git (this session's files, not
@@ -27,7 +27,7 @@ import {
   applyHunkToIndex, commitStaged, initRepo, isGitRepo, loadCommitDiff, loadDiff, loadRecentCommits, loadRepoSummary,
   loadSemanticDiff, setFileStaged, CHANGES_SOURCES, CHANGES_SOURCE_LABELS, type ChangesSource, type CommitEntry, type RepoSummary,
 } from './changes-git.ts';
-import { buildSteerMessage, type HunkComment, type ReviewHunk } from '../panels/diff-review-model.ts';
+import { buildSteerMessage, type HunkComment, type ReviewHunk } from '../views/diff-review-model.ts';
 import { isTextBackspace } from './delete-key-policy.ts';
 import type { ConfirmOptions } from './confirm-dialog.ts';
 
@@ -192,7 +192,7 @@ export class ChangesModal implements SurfaceModal {
     return item?.kind === 'commit' ? this.commits[item.index] ?? null : null;
   }
 
-  /** The files the diff pane shows. */
+  /** The files the diff region shows. */
   diffFiles(): ChangeFile[] {
     const commit = this.currentCommit();
     if (commit) {

@@ -2,7 +2,7 @@
  * user-message.ts, a user message in the transcript.
  *
  *   col 2        ┃ in the bar color on every row, padding rows included
- *   cols 3..w-3  the panel fill, full width
+ *   cols 3..w-3  the surface fill, full width
  *   rows         one padding row, the text, one padding row
  *   text         from column 5, wrapped to width-9
  *

@@ -1,12 +1,12 @@
 /**
  * renderAgentsModal, every agent, chain, workflow, hosted session and
- * background process in one list (replaces the Fleet pane and its aliases).
+ * background process in one list (replaces the Fleet view and its aliases).
  *
  *   ✦ Agents  3 running · 1 failed · you $0.25 · fleet $0.47             esc
  *
  *   ▏Type / to filter agents                                         6 shown
  *
- *   ✦ running                                  ┌ element panel ─────────────┐
+ *   ✦ running                                  ┌ element inset ─────────────┐
  *   ◐ engineer  Add a maxDelayMs cap  2m · $0.12   engineer
  *   ◐ └ tester  Edit test/retry.test.ts   48s      claude-sonnet · worktree
  *   ✦ finished                                     → Read src/net/retry.ts
@@ -23,8 +23,8 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { activeTokens } from './theme.ts';
 import { beginModal, finishModal, clipText, scrollCountText, searchRow, wrapLines, type KitHint, type ModalFrame, type SurfaceCanvas, type SurfaceLayer } from './surface-kit.ts';
 import { drawList, type KitRow } from './surface-kit-list.ts';
-import { panel, type KitPanel } from './surface-kit-parts.ts';
-import { drawTextBlock, splitPanes } from './surface-kit-extra.ts';
+import { inset, type KitInset } from './surface-kit-parts.ts';
+import { drawTextBlock, splitListDetail } from './surface-kit-extra.ts';
 
 export type AgentsTone = 'text' | 'muted' | 'faint' | 'brand' | 'success' | 'warning' | 'error';
 
@@ -37,7 +37,7 @@ export interface AgentsText {
   readonly glyph?: string;
 }
 
-/** Content for the right panel or the full view: text, or prebuilt lines (fleet detail, transcripts). */
+/** Content for the detail inset or the full view: text, or prebuilt lines (fleet detail, transcripts). */
 export type AgentsBlock =
   | { readonly kind: 'text'; readonly lines: readonly AgentsText[] }
   /** Prebuilt lines for a width (the fleet's detail block). */
@@ -114,7 +114,7 @@ function blitLine(canvas: SurfaceCanvas, x: number, y: number, line: Line, width
   }
 }
 
-/** Width the prebuilt detail lines are built at before they are wrapped to the panel. */
+/** Width the prebuilt detail lines are built at before they are wrapped to the inset. */
 const DETAIL_BUILD_WIDTH = 400;
 
 /**
@@ -176,7 +176,7 @@ function textRows(lines: readonly AgentsText[], width: number): number {
   return lines.reduce((n, line) => n + wrapLines(line.text, Math.max(1, width - (line.glyph ? 2 : 0))).length, 0);
 }
 
-function drawDetail(canvas: SurfaceCanvas, p: KitPanel, detail: AgentsDetail): void {
+function drawDetail(canvas: SurfaceCanvas, p: KitInset, detail: AgentsDetail): void {
   const t = activeTokens();
   const width = p.r - p.l + 1;
   let y = p.top;
@@ -254,11 +254,11 @@ function drawListLevel(f: ModalFrame, view: AgentsModalView): void {
     drawBottom(f, view);
     return;
   }
-  const split = splitPanes(f.l, f.r, top, bottom, 0.5, 6);
+  const split = splitListDetail(f.l, f.r, top, bottom, 0.5, 6);
   const result = drawList(f.canvas, { rows: view.rows, top: split.top, bottom: split.bottom, x0: split.x0, x1: split.x1, scrollKey: { owner: view.scrollOwner, name: 'list' } });
   f.hintRight = scrollCountText(result.above, result.below);
-  if (view.detail && split.panelH >= 4) {
-    const p = panel(f.canvas, split.panelX, split.panelY, split.panelW, split.panelH);
+  if (view.detail && split.detailH >= 4) {
+    const p = inset(f.canvas, split.detailX, split.detailY, split.detailW, split.detailH);
     drawDetail(f.canvas, p, view.detail);
   }
   drawBottom(f, view);
@@ -291,11 +291,11 @@ function drawPickerLevel(f: ModalFrame, view: AgentsModalView): void {
   const y = drawTextBlock(f.canvas, f.l, f.top, width, [{ text: picker.intro, style: { fg: t.textMuted } }], f.bottom) + 1;
   const bottom = f.bottom - bottomRows(view, width);
   const rows: KitRow[] = picker.options.map((option) => ({ label: option.label, desc: option.detail, selected: option.selected }));
-  const split = picker.side.length > 0 ? splitPanes(f.l, f.r, y, bottom, 0.5, 6) : null;
+  const split = picker.side.length > 0 ? splitListDetail(f.l, f.r, y, bottom, 0.5, 6) : null;
   const result = drawList(f.canvas, { rows, top: y, bottom: split ? split.bottom : bottom, x0: f.l, x1: split ? split.x1 : f.r, scrollKey: { owner: view.scrollOwner, name: 'picker' } });
   f.hintRight = scrollCountText(result.above, result.below);
-  if (split && split.panelH >= 4) {
-    const p = panel(f.canvas, split.panelX, split.panelY, split.panelW, split.panelH);
+  if (split && split.detailH >= 4) {
+    const p = inset(f.canvas, split.detailX, split.detailY, split.detailW, split.detailH);
     drawTexts(f.canvas, p.l, p.top, p.r - p.l + 1, picker.side, p.bottom, p.bg);
   }
   drawBottom(f, view);

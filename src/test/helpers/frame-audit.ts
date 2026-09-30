@@ -31,8 +31,8 @@
  * so blocks are recovered from them: a block is a stack of rows where one
  * FILL color (the theme's surface, element, code and other background tokens)
  * spans the same columns. Cells of any other color inside such a span (a
- * keycap chip, the selected row's gradient, a tinted diff row, an element
- * panel inside a modal) are islands of the row, not breaks in it, the same
+ * keycap chip, the selected row's gradient, a tinted diff row, an inset
+ * inside a modal) are islands of the row, not breaks in it, the same
  * way the audit script treated drawings on top of a fill.
  */
 

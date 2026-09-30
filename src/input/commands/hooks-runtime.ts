@@ -11,8 +11,8 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
     async handler(args, ctx) {
       const hookApi = requireHookApi(ctx);
       const workbench = hookApi.workbench;
-      if (args.length === 0 && ctx.openHooksPanel) {
-        ctx.openHooksPanel();
+      if (args.length === 0 && ctx.openHooksView) {
+        ctx.openHooksView();
         return;
       }
 

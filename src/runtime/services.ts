@@ -19,7 +19,7 @@
  *
  * The SDK's own note on that shape applies here literally: it is a FLOOR, not a
  * ceiling. Everything below the `createClientRuntimeServices` call is what THIS
- * surface adds on top, panels, keybindings, the WRFC controller wired over the
+ * surface adds on top, views, keybindings, the WRFC controller wired over the
  * client's own `agentManager`, the workstream engine, the fleet read model, the
  * voice stack with its local playback sink, the knowledge stack the recall
  * surfaces read. None of those need daemon furniture; they are simply not
@@ -30,7 +30,7 @@
  *
  * `sessionBroker` and `approvalBroker` are still constructed. They are this
  * surface's own record of the sessions it is running and the asks it raised,
- * what the transcript, the session panel and the approval card read. They are
+ * what the transcript, the session browser and the approval card read. They are
  * NOT authoritative: session identity is mirrored to the daemon's spine
  * (register/heartbeat/inputs) and an ask is raised on the daemon
  * (`approvals.raise`) so every other surface can see and answer it. Where the
@@ -65,7 +65,7 @@ import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from
 import { CacheRegistry, PauseController } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 import { wireMemoryGovernance } from './memory-governance-services.ts';
 import { wireVoiceSetup } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import { createViewPanelAdapter } from '../panels/view-panel-adapter.ts';
+import { createViewPanelAdapter } from '../views/view-panel-adapter.ts';
 import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
 import { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
@@ -102,7 +102,7 @@ import { createFleetUnionReadModel } from './client/fleet-union.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { VERSION } from '../version.ts';
 import { createSessionConversationRewindPort, hasSessionConversation } from './conversation-rewind-port.ts';
-import { createFleetReadModel } from '../panels/fleet-read-model.ts';
+import { createFleetReadModel } from '../views/fleet-read-model.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { RuntimeServicesOptions, RuntimeServices } from './runtime-services-types.ts';
 export type { RuntimeServicesOptions, RuntimeServices } from './runtime-services-types.ts';
@@ -136,7 +136,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   // nothing and keeps the ordering honest.
   const shellPaths = createShellPathService({ workingDirectory, homeDirectory });
   // The surface's own record of the asks it raised, what the approval card and
-  // the panel read. The AUTHORITATIVE record is the daemon's; the raiser below
+  // the modal read. The AUTHORITATIVE record is the daemon's; the raiser below
   // keeps the two in step (see the SDK's client/approval-raiser.ts).
   const approvalBroker = new ApprovalBroker({
     storePath: shellPaths.resolveProjectPath('tui', 'control-plane', 'approvals.json'),
@@ -156,7 +156,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     actor: 'tui',
     sessionId: () => liveSessionIdRef.value,
     // The "local prompt" is this surface's own broker plus the terminal ask:
-    // that is what puts the ask on the approval card and in the panel while the
+    // that is what puts the ask on the approval card and in the modal while the
     // daemon holds the record every other surface reads.
     localPrompt: () => (request) => approvalBroker.requestApproval({
       request,
@@ -219,7 +219,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     admitExpensiveWorkRef.current?.(label) ?? { allowed: true };
   const isKnowledgeBackgroundPaused = (): boolean => pauseController.isPaused('knowledge-self-improvement');
   // The operator API's panels.list / panels.open, answered by the modal views.
-  const viewPanels = createViewPanelAdapter();
+  const viewPanelAdapter = createViewPanelAdapter();
   const keybindingsManager = new KeybindingsManager({
     configPath: shellPaths.resolveUserPath('tui', 'keybindings.json'),
   });
@@ -468,10 +468,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     runtimeBus: options.runtimeBus,
     providerRegistry,
   });
-  // What the Fleet panel reads: this surface's own live registry UNION the
+  // What the Agents modal reads: this surface's own live registry UNION the
   // adopted daemon's rows. The daemon runs work no registry here knows about
   // (scheduled jobs, channel-driven runs, sessions other surfaces started, the
-  // external agents it observes), and a panel showing only half the fleet is
+  // external agents it observes), and a modal showing only half the fleet is
   // worse than one showing none, the half it shows looks complete.
   const fleetReadModel = createFleetUnionReadModel({
     local: createFleetReadModel(processRegistry, options.runtimeBus),
@@ -513,7 +513,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
 
   const integrationHelpers = new IntegrationHelperService({
     surface, configManager, automationManager, approvalBroker, sessionBroker, distributedRuntime,
-    remoteRunnerRegistry, remoteSupervisor, panelManager: viewPanels, localUserAuthManager, providerRegistry,
+    remoteRunnerRegistry, remoteSupervisor, panelManager: viewPanelAdapter, localUserAuthManager, providerRegistry,
     serviceRegistry, subscriptionManager, secretsManager,
     runtimeStore: options.runtimeStore, runtimeBus: options.runtimeBus,
     getConversationTitle: options.getConversationTitle,
@@ -573,7 +573,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     runtimeBus: options.runtimeBus,
     runtimeStore: options.runtimeStore,
     runtimeDispatch,
-    panelManager: viewPanels,
+    panelManager: viewPanelAdapter,
     keybindingsManager,
     routeBindings,
     surfaceRegistry,

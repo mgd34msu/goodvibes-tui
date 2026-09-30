@@ -4,7 +4,7 @@
  * source these rules catch is emitted (from the SDK) through
  * SystemMessageRouter, so this one funnel is where first-run plumbing is kept
  * out of the user's stream while the information stays reachable elsewhere
- * (fleet panel, /health, /model, activity log). (item 1.)
+ * (Agents modal, /health, /model, activity log). (item 1.)
  */
 
 export interface NoiseGateDeps {
@@ -48,7 +48,7 @@ export function classifyNoise(message: string, deps: NoiseGateDeps): NoiseVerdic
   }
 
   // 1d, periodic "[Agents] N running:" status snapshot. The same live detail
-  // is shown in the fleet panel (per-agent activity) and the footer count, so
+  // is shown in the Agents modal (per-agent activity) and the footer count, so
   // the 30-second transcript churn is dropped. Meaningful lifecycle lines
   // ("[Agents] ✓ …", "[Agents] Cohort …", "[Agents] ✗ …") do not match.
   if (AGENTS_RUNNING_SNAPSHOT_RE.test(message)) {

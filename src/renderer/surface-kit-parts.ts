@@ -1,7 +1,7 @@
 /**
  * surface-kit-parts.ts, the smaller pieces of the modal surface kit:
  *
- *   - element panels (a lighter fill inside a modal: 2 columns of side padding,
+ *   - element insets (a lighter fill inside a modal: 2 columns of side padding,
  *     a padding row above and below)
  *   - tabs (the active tab carries the gradient)
  *   - button chips (arrows pick, Enter confirms; the danger chip is red)
@@ -28,14 +28,14 @@ import {
 import { drawList, drawRow, drawScrollingList, measureRow, type KitListResult, type KitRow } from './surface-kit-list.ts';
 
 // ---------------------------------------------------------------------------
-// Element panels
+// Element insets
 // ---------------------------------------------------------------------------
 
-/** Side padding inside a panel. */
-const PANEL_PAD_X = 2;
+/** Side padding inside an inset. */
+const INSET_PAD_X = 2;
 
-export interface KitPanel {
-  /** Panel fill rectangle (canvas coordinates). */
+export interface KitInset {
+  /** Inset fill rectangle (canvas coordinates). */
   readonly x: number;
   readonly y: number;
   readonly w: number;
@@ -48,26 +48,26 @@ export interface KitPanel {
   readonly bg: string;
 }
 
-/** Fill a lighter element panel and return its text area. */
-export function panel(canvas: SurfaceCanvas, x: number, y: number, w: number, h: number, bg = activeTokens().backgroundElement): KitPanel {
+/** Fill a lighter element inset and return its text area. */
+export function inset(canvas: SurfaceCanvas, x: number, y: number, w: number, h: number, bg = activeTokens().backgroundElement): KitInset {
   canvas.fill(x, y, w, h, bg);
   return {
     x, y, w, h, bg,
-    l: x + PANEL_PAD_X,
-    r: x + w - 1 - PANEL_PAD_X,
+    l: x + INSET_PAD_X,
+    r: x + w - 1 - INSET_PAD_X,
     top: y + 1,
     bottom: y + h - 2,
   };
 }
 
-/** Put text inside a panel (keeps the panel bg). Returns the column after it. */
-export function panelPut(canvas: SurfaceCanvas, p: KitPanel, x: number, y: number, text: string, style: KitStyle = {}): number {
+/** Put text inside an inset (keeps the inset bg). Returns the column after it. */
+export function insetPut(canvas: SurfaceCanvas, p: KitInset, x: number, y: number, text: string, style: KitStyle = {}): number {
   if (y < p.top || y > p.bottom) return x;
   return canvas.put(x, y, clipText(text, p.r - x + 1), { ...style, bg: p.bg });
 }
 
-/** Wrapped text inside a panel from row y; returns the row after the last line drawn. */
-export function panelWrap(canvas: SurfaceCanvas, p: KitPanel, x: number, y: number, text: string, style: KitStyle = {}): number {
+/** Wrapped text inside an inset from row y; returns the row after the last line drawn. */
+export function insetWrap(canvas: SurfaceCanvas, p: KitInset, x: number, y: number, text: string, style: KitStyle = {}): number {
   let yy = y;
   for (const line of wrapLines(text, p.r - x + 1)) {
     if (yy > p.bottom) break;
@@ -77,17 +77,17 @@ export function panelWrap(canvas: SurfaceCanvas, p: KitPanel, x: number, y: numb
   return yy;
 }
 
-/** One line of panel text. */
-export interface PanelLine { readonly text: string; readonly style: KitStyle }
+/** One line of inset text. */
+export interface InsetLine { readonly text: string; readonly style: KitStyle }
 
 /**
- * Wrap and draw paragraphs inside a panel from row y. When they do not all
+ * Wrap and draw paragraphs inside an inset from row y. When they do not all
  * fit, the last visible row says how many lines are hidden instead of the text
  * stopping silently. Returns the row after the last one drawn.
  */
-export function panelLines(canvas: SurfaceCanvas, p: KitPanel, x: number, y: number, paragraphs: readonly PanelLine[]): number {
+export function insetLines(canvas: SurfaceCanvas, p: KitInset, x: number, y: number, paragraphs: readonly InsetLine[]): number {
   const t = activeTokens();
-  const lines: PanelLine[] = [];
+  const lines: InsetLine[] = [];
   for (const para of paragraphs) {
     if (para.text === '') lines.push(para);
     else for (const text of wrapLines(para.text, p.r - x + 1)) lines.push({ text, style: para.style });

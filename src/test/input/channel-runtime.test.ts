@@ -76,18 +76,18 @@ describe('/channel command', () => {
 
   test('opens the routes view (the Agents modal) when called with no args', () => {
     const registry = makeRegistry();
-    const panelIds: string[] = [];
-    const ctx = makeCtx({ openView: (id) => { panelIds.push(id); return true; } });
+    const viewIds: string[] = [];
+    const ctx = makeCtx({ openView: (id) => { viewIds.push(id); return true; } });
     registry.get('channel')!.handler([], ctx);
-    expect(panelIds).toEqual(['routes']);
+    expect(viewIds).toEqual(['routes']);
   });
 
   test('opens the routes view when called with "panel"', () => {
     const registry = makeRegistry();
-    const panelIds: string[] = [];
-    const ctx = makeCtx({ openView: (id) => { panelIds.push(id); return true; } });
+    const viewIds: string[] = [];
+    const ctx = makeCtx({ openView: (id) => { viewIds.push(id); return true; } });
     registry.get('channel')!.handler(['panel'], ctx);
-    expect(panelIds).toEqual(['routes']);
+    expect(viewIds).toEqual(['routes']);
   });
 
   test('status shows route count and families', () => {

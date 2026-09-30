@@ -8,7 +8,7 @@
 // already is (bootstrap-command-context.ts).
 //
 // Render precedent: TRANSCRIPT + subcommand approve (like /plan approve,
-// planning-runtime.ts), NOT a panel, a multi-phase proposal is too rich for
+// planning-runtime.ts), NOT a modal, a multi-phase proposal is too rich for
 // a one-line confirm overlay, and Pillar-3 doctrine keeps work visible in the
 // transcript. create -> approve -> launch is a real three-step flow (edit and
 // cancel apply to the pending proposal too). The transcript IS the plan-review

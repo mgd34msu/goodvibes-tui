@@ -91,7 +91,7 @@ describe('liveness contract: settings modal (values-only update)', () => {
       expect(cursorRowA).toBeGreaterThanOrEqual(0);
 
       // Values-only update: mutating a NON-selected entry avoids the selected
-      // entry's detail-panel echo, so exactly one rendered row changes.
+      // entry's detail echo, so exactly one rendered row changes.
       // renderSettingsModal reads entry.currentValue via formatValue, the same
       // shape as a live config tick.
       items[1]!.currentValue = bumpValue(items[1]!.currentValue);

@@ -186,7 +186,7 @@ In-process subagent management. See [Agent system](#agent-system) below for arch
 Session state, persistent memory, telemetry, hooks, and output modes, all in one tool.
 
 - KV state: session-scoped key-value store with atomic persistence
-- Durable memory posture: inspect the reviewed knowledge store and related runtime state (the full durable-memory workflow lives under `/recall` and the knowledge panels)
+- Durable memory posture: inspect the reviewed knowledge store and related runtime state (the full durable-memory workflow lives under `/recall` and the knowledge modals)
 - Hook management: list, enable, disable, add, and remove hooks at runtime
 - Output mode switching: switch between `default`, `vibecoding`, and `justvibes` verbosity presets
 - Analytics: record tool calls, query by filter, export as JSON/CSV, dashboard view, backed by WASM SQLite
@@ -223,7 +223,7 @@ Product-control tools that expose runtime breadth directly. See [MCP integration
 
 - `mcp`: inspect MCP servers, tools, schema freshness, security posture, auth posture, and quarantine controls
 - `remote`: inspect and manage distributed peers, node-host contracts, work queues, artifacts, and review flows
-- `control`: inspect packaged command families, panel/control-room families, built-in subscription providers, and sandbox presets
+- `control`: inspect packaged command families, view and control-room families, built-in subscription providers, and sandbox presets
 
 ### channel
 
@@ -384,11 +384,11 @@ Five keys are fixed and are not in the rebindable table: `F2` (open or close Age
 
 ### Views
 
-There are no side panes. Every view opens as a modal over the dimmed conversation, and `Esc` closes one level at a time.
+Every view opens as a modal over the dimmed conversation, and `Esc` closes one level at a time.
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+P` / `Ctrl+K` | Command palette: every command, view and setting; the old pane names (fleet, tokens, git, …) are search words |
+| `Ctrl+P` / `Ctrl+K` | Command palette: every command, view and setting; older view names (fleet, tokens, git, …) are search words too |
 | `F2` / `Ctrl+O` | Agents: running and finished agents, WRFC chains, workflows and hosted sessions; steer (`s`), stop (`Ctrl+X`, asks first; `Ctrl+X` again confirms), open an agent or background process full screen (`Enter`) |
 | `/usage` | Usage: context bar with the compaction threshold, session totals, per-turn bars, fleet cost split, compact now |
 | `/changes` | Changes: changed files with +/- counts, a tinted syntax-colored diff, the semantic summary, hunk navigation (`]` `[`), stage hunk (`space`), review comments (`c`), mark reviewed (`m`), open in editor (`o`) |
@@ -694,7 +694,7 @@ Beyond direct local plugins, a local-first curated distribution channel covers p
 
 ## Operator surfaces
 
-> **note.** There are no side panes. Operator read/navigate surfaces open as
+> **note.** Operator read/navigate surfaces open as
 > **modals**: providers/health, services, subscription, remote, sandbox,
 > settings-sync and marketplace, plugins, skills, hooks, policy, security,
 > knowledge, memory, docs→keybindings, qr-code→pairing, work-plan,

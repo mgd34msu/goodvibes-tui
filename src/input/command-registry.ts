@@ -119,7 +119,7 @@ export interface CommandUiActions {
   /** Set the daemon-held keep-awake toggle (power.keepAwake.set), acquiring/releasing the inhibitor live; returns the new state. */
   setKeepAwake?: (enabled: boolean) => Promise<import('../core/power-status.ts').PowerSurfaceState>;
   /** True while an LLM turn is actively streaming. Used to give Escape
-   *  cancel-turn precedence over a focused panel's own escape handling. */
+   *  cancel-turn precedence over a focused modal's own escape handling. */
   isGenerating?: () => boolean;
   completeModelSelection?: (selection: {
     model: { id: string; provider: string; displayName: string; registryKey: string };
@@ -193,7 +193,7 @@ export interface CommandShellUiOpeners {
   openSettingsModal?: (target?: string) => void;
   /**
    * Open a MIGRATE-TO-MODAL surface by name (purge skeleton, B
-   * command runtimes call this instead of openCommandPanel once their panel
+   * command runtimes call this instead of an older view opener once their view
    * is converted to a ModalFactory config). Threaded from ui-openers.ts the
    * same way openSettingsModal is.
    */
@@ -266,20 +266,20 @@ export interface CommandShellUiOpeners {
   /** Open a file in $VISUAL / $EDITOR (at a line when the editor takes one). */
   openFileInEditor?: (path: string, line?: number) => void;
   focusPrompt?: () => void;
-  openOpsPanel?: () => void;
-  openCockpitPanel?: () => void;
-  openOrchestrationPanel?: () => void;
-  openForensicsPanel?: () => void;
-  openIncidentPanel?: () => void;
-  openPolicyPanel?: () => void;
-  openHooksPanel?: () => void;
-  openCommunicationPanel?: () => void;
+  openOpsView?: () => void;
+  openCockpitView?: () => void;
+  openOrchestrationView?: () => void;
+  openForensicsView?: () => void;
+  openIncidentView?: () => void;
+  openPolicyView?: () => void;
+  openHooksView?: () => void;
+  openCommunicationView?: () => void;
   openMcpWorkspace?: () => void;
-  openSecurityPanel?: () => void;
-  openKnowledgePanel?: () => void;
-  openMemoryPanel?: () => void;
-  openRemotePanel?: () => void;
-  openSubscriptionPanel?: () => void;
+  openSecurityView?: () => void;
+  openKnowledgeView?: () => void;
+  openMemoryView?: () => void;
+  openRemoteView?: () => void;
+  openSubscriptionView?: () => void;
   /**
    * Open the local-auth password prompt (a kit modal) for the operation and
    * user. Keystrokes land in a private buffer that is never drawn; no
@@ -392,7 +392,7 @@ export interface CommandOpsServices
 export interface CommandExtensionRegistryServices {
   readonly toolRegistry: ToolRegistry;
   readonly mcpRegistry: McpRegistry;
-  readonly evalRegistry?: import('../panels/eval-registry.ts').EvalRegistry;
+  readonly evalRegistry?: import('../views/eval-registry.ts').EvalRegistry;
 }
 
 export interface CommandExtensionServices
@@ -450,7 +450,7 @@ export interface CommandContext
  * unaffected, fuzzyMatch still searches every registered command exactly as
  * before; this only reorders the empty-query case. Curated for breadth across
  * the product's main workflows rather than raw usage frequency: help/config
- * (orientation), panel/model (workspace + provider), recall/codebase/search
+ * (orientation), panel (legacy view aliases)/model (workspace + provider), recall/codebase/search
  * (knowledge), workstream/checkpoint (control-plane), imagine (generation),
  * sessions (continuity), quit (exit).
  */

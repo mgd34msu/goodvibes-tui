@@ -18,7 +18,7 @@ import type {
   FilteredProvidersCache,
   GroupByMode,
   ModelItemsCache,
-  ModelPickerFocusPane,
+  ModelPickerFocusRegion,
   ModelPickerTarget,
   ModelPickerTargetInfo,
   PickerItem,
@@ -59,7 +59,7 @@ export type {
   EmbeddingProviderPickerEntry,
   GroupByMode,
   ModelFamily,
-  ModelPickerFocusPane,
+  ModelPickerFocusRegion,
   ModelPickerTarget,
   ModelPickerTargetInfo,
   PickerItem,
@@ -91,7 +91,7 @@ export class ModelPickerModal {
   public mode: PickerMode = 'model';
   /** Which config target this picker session will write to on commit. */
   public target: ModelPickerTarget = 'main';
-  public focusPane: ModelPickerFocusPane = 'items';
+  public focusRegion: ModelPickerFocusRegion = 'items';
   public targetInfos: ModelPickerTargetInfo[] = [];
   public targetIndex = 0;
   public searchFocused = false;
@@ -170,12 +170,12 @@ export class ModelPickerModal {
   }
 
   focusTargets(): void {
-    this.focusPane = 'targets';
+    this.focusRegion = 'targets';
     this.searchFocused = false;
   }
 
   focusItems(): void {
-    this.focusPane = 'items';
+    this.focusRegion = 'items';
   }
 
   moveTarget(delta: number): void {
@@ -313,7 +313,7 @@ export class ModelPickerModal {
     this.mode = 'model';
     this.active = true;
     this.pendingModel = null;
-    this.focusPane = 'items';
+    this.focusRegion = 'items';
     this.searchFocused = false;
     this.focusSearch();
     this.query = '';
@@ -333,7 +333,7 @@ export class ModelPickerModal {
     this.mode = 'provider';
     this.active = true;
     this.pendingModel = null;
-    this.focusPane = 'items';
+    this.focusRegion = 'items';
     this.searchFocused = false;
     this.focusSearch();
     this.query = '';
@@ -358,7 +358,7 @@ export class ModelPickerModal {
     this.mode = 'embeddingProvider';
     this.active = true;
     this.pendingModel = null;
-    this.focusPane = 'items';
+    this.focusRegion = 'items';
     this.searchFocused = false;
     this.query = '';
     const idx = providers.findIndex((provider) => provider.id === currentId);
@@ -444,7 +444,7 @@ export class ModelPickerModal {
     this.active = false;
     this.mode = 'model';
     this.target = 'main';
-    this.focusPane = 'items';
+    this.focusRegion = 'items';
     this.targetInfos = [];
     this.targetIndex = 0;
     this.models = [];

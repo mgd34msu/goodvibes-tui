@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { getOperatorRpc, describeOperatorRpcError } from './operator-rpc.ts';
-import { renderWorkstreamGraphLines } from '../../panels/workstream-graph-render.ts';
+import { renderWorkstreamGraphLines } from '../../views/workstream-graph-render.ts';
 
 // ---------------------------------------------------------------------------
 // /graph, a workstream's task graph (fleet.graph.get) rendered legibly.

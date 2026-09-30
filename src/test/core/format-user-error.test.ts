@@ -158,11 +158,11 @@ function simulateTurnError(
   router.high(`[Error] ${message} ${action}`);
 }
 
-// (the purge): SystemMessagesPanel was DELETE-disposition and has been
-// removed; SystemMessageRouter no longer takes a panel argument at all (see
+// (the purge): the system-messages side surface was DELETE-disposition and has been
+// removed; SystemMessageRouter no longer takes a delivery-surface argument at all (see
 // system-message-router.ts's file doc, every message now reaches
 // conversation.addTypedSystemMessage()). These tests used to also assert on
-// a mock panel's push() calls; that assertion is gone, the conversation
+// a mock surface's push() calls; that assertion is gone, the conversation
 // assertion is what remains and is unchanged in spirit.
 describe('TURN_ERROR -> SystemMessageRouter', () => {
   test('auth error routes as high-priority message containing /login', () => {

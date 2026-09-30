@@ -39,14 +39,14 @@ import {
   buildRecoveryRetireItems,
   describeRecoverySnapshot,
 } from '../../runtime/recovery-prompt.ts';
-import { marketplaceModalGoldenSurface } from '../../panels/modals/marketplace-modal.ts';
-import { hooksModalGoldenSurface } from '../../panels/modals/hooks-modal.ts';
-import { securityModalGoldenSurface } from '../../panels/modals/security-modal.ts';
-import { keybindingsModalGoldenSurface } from '../../panels/modals/keybindings-modal.ts';
-import { pairingModalGoldenSurface } from '../../panels/modals/pairing-modal.ts';
-import { memoryModalGoldenSurface } from '../../panels/modals/memory-modal.ts';
-import { workPlanModalGoldenSurface } from '../../panels/modals/work-plan-modal.ts';
-import { devicesModalGoldenSurface } from '../../panels/modals/devices-modal.ts';
+import { marketplaceModalGoldenSurface } from '../../views/modals/marketplace-modal.ts';
+import { hooksModalGoldenSurface } from '../../views/modals/hooks-modal.ts';
+import { securityModalGoldenSurface } from '../../views/modals/security-modal.ts';
+import { keybindingsModalGoldenSurface } from '../../views/modals/keybindings-modal.ts';
+import { pairingModalGoldenSurface } from '../../views/modals/pairing-modal.ts';
+import { memoryModalGoldenSurface } from '../../views/modals/memory-modal.ts';
+import { workPlanModalGoldenSurface } from '../../views/modals/work-plan-modal.ts';
+import { devicesModalGoldenSurface } from '../../views/modals/devices-modal.ts';
 import { createTestManagers } from './test-managers.ts';
 
 export interface KitFrame {
@@ -156,7 +156,7 @@ export async function buildKitFrames(W: number, H: number): Promise<KitFrame[]> 
   const help = new OverlayFilter();
   const keys = new OverlayFilter();
   const keysFiltered = new OverlayFilter();
-  keysFiltered.query = 'panel';
+  keysFiltered.query = 'modal';
   return [
     { name: 'config-marketplace', layer: await configFrame(marketplaceModalGoldenSurface, W, H) },
     { name: 'config-hooks', layer: await configFrame(hooksModalGoldenSurface, W, H) },

@@ -73,7 +73,7 @@ A custom answer is typed in the normal composer, or recorded with `/project-plan
 | `/project-plan list` and `/project-plan show <id>` | Inspect older execution-plan records |
 | `/project-plan mode\|explain\|override\|status\|clear` | Route to the adaptive runtime controls |
 
-Use natural language such as "stop planning" or the panel dismiss action when the TUI has entered planning but the current work should continue as normal chat.
+Use natural language such as "stop planning" or the modal's dismiss action when the TUI has entered planning but the current work should continue as normal chat.
 
 `/project-plan` is unrelated to the plain `/plan` command, which only toggles the session's read-only permission plan mode (writes, commands, and network calls blocked until you exit). `/plan` never touches project-planning state; `Shift+Tab` cycles the same permission mode.
 
@@ -85,7 +85,7 @@ The command surface (aliases `/wp`, `/todo`, `/workplan`):
 
 | Command | Does |
 | --- | --- |
-| `/work-plan` or `/work-plan panel` | Open the Work Plan panel |
+| `/work-plan` or `/work-plan panel` | Open the Work Plan modal |
 | `/work-plan add <title> [--owner name] [--source label] [--notes text]` | Add an item |
 | `/work-plan edit <id> [<new title>] [--owner name] [--source label] [--notes text]` | Edit an item's title or fields |
 | `/work-plan list` | Print the plan as a list |
@@ -96,9 +96,9 @@ The command surface (aliases `/wp`, `/todo`, `/workplan`):
 | `/work-plan remove <id>` | Remove an item |
 | `/work-plan clear-done` | Clear completed (done/cancelled) items |
 
-The TUI stores work-plan state under `~/.goodvibes/tui/work-plans/<projectId>.json` and renders it in the `Work Plan` panel. Terminal items (done or cancelled) age out automatically once they pass a time and count bound; open, in-progress, blocked, and failed items are never reclaimed. Anything a sweep removes is recorded on the plan as a housekeeping note rather than deleted silently, and a plan file that is unreadable (for example torn by a crash) is quarantined alongside the original rather than overwritten, so the list can still be recovered by hand.
+The TUI stores work-plan state under `~/.goodvibes/tui/work-plans/<projectId>.json` and renders it in the `Work Plan` modal. Terminal items (done or cancelled) age out automatically once they pass a time and count bound; open, in-progress, blocked, and failed items are never reclaimed. Anything a sweep removes is recorded on the plan as a housekeeping note rather than deleted silently, and a plan file that is unreadable (for example torn by a crash) is quarantined alongside the original rather than overwritten, so the list can still be recovered by hand.
 
-The panel's keys:
+The modal's keys:
 
 | Key | Action |
 | --- | --- |
@@ -112,7 +112,7 @@ The panel's keys:
 | `c` | Clear completed (done/cancelled) items |
 | `r` | Refresh from disk |
 | `x` | Export to a Markdown file next to the JSON store (`<store-file>.md`), the same rendering `/work-plan show` prints |
-| `i` / `w` | On an item with linked ids, open the Inspector on the linked agent or the WRFC panel on the linked chain |
+| `i` / `w` | On an item with linked ids, open the Agents modal on the linked agent or on the linked WRFC chain |
 
 When the selected item has linked ids (`item.linked` holds any of `agentId`, `wrfcId`, `taskId`, `sessionId`), the detail block shows them with their jump key.
 
@@ -128,7 +128,7 @@ The TUI does not need to call daemon routes for its own local planning loop, but
 | `GET\|POST /api/projects/planning/decisions` | `projectPlanning.decisions.list` / `projectPlanning.decisions.record` | List or record durable decisions |
 | `GET\|POST /api/projects/planning/language` | `projectPlanning.language.get` / `projectPlanning.language.upsert` | Read or write project-language records |
 
-A separate set of routes covers the task graph shown in the panel:
+A separate set of routes covers the task graph shown in the modal:
 
 | Route | Operator method |
 | --- | --- |

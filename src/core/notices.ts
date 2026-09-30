@@ -10,10 +10,20 @@
  * further lines are the body. The conversation still stores the message, so a
  * saved session keeps it, and restoring that session puts it back in the
  * history without toasting it again.
+ *
+ * One entry per event: a "[WRFC] …" or "[Agents] …" line that restates an
+ * agent or chain event (the SDK's runtimeEventOfNotice names it) is kept under
+ * that event's plain title, with the line's detail as the body, and carries
+ * the event's key; the terminal's own "[WRFC] …" lines get their plain titles
+ * from core/wrfc-notice-titles.ts. The runtime-bus bridge (runtime/notification-dispatch.ts)
+ * records the same event with the same key, and the feed keeps one entry for
+ * both (NotificationFeed, eventKey).
  */
 
 import type { Notification } from '@/runtime/index.ts';
-import type { PanelNotificationFeed } from '../panels/notifications-feed.ts';
+import { runtimeEventOfNotice } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap';
+import { shellChainNoticeOf } from './wrfc-notice-titles.ts';
+import type { NotificationFeed } from '../views/notifications-feed.ts';
 import { classifySystemMessage } from '../renderer/system-message.ts';
 
 /** Receives every system notice added to (or restored into) the conversation. */
@@ -51,8 +61,15 @@ export interface NoticeOptions {
 }
 
 /** Keep one system notice in the history; the feed's toast bridge toasts it unless restored. */
-export function publishNotice(feed: PanelNotificationFeed, text: string, options: NoticeOptions = {}): void {
+export function publishNotice(feed: NotificationFeed, text: string, options: NoticeOptions = {}): void {
   if (text.trim().length === 0) return;
+  const restored = options.restored === true;
   const parts = noticeParts(text);
-  feed.recordNotice({ ...parts, timestamp: (options.now ?? Date.now)(), restored: options.restored === true });
+  const sdkEvent = runtimeEventOfNotice(text);
+  const event = sdkEvent ?? shellChainNoticeOf(text);
+  if (event) {
+    feed.recordNotice({ domain: parts.domain, level: event.level, title: event.title, body: event.detail, timestamp: (options.now ?? Date.now)(), restored, eventKey: sdkEvent?.key });
+    return;
+  }
+  feed.recordNotice({ ...parts, timestamp: (options.now ?? Date.now)(), restored });
 }

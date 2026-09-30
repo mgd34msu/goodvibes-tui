@@ -4,7 +4,7 @@ import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { SHIPPED_CREDENTIAL_READ_RULES } from '@pellux/goodvibes-sdk/platform/permissions';
 
 // ---------------------------------------------------------------------------
-// /permissions provenance panel.
+// /permissions provenance report.
 //
 // Shows every permission-relevant setting in effect AND where each value came
 // from. Provenance is taken from the platform's own ConfigManager.
@@ -58,7 +58,7 @@ export interface PermissionProvenance {
   readonly shippedRules: readonly ShippedPolicyRuleRow[];
 }
 
-/** The permission-relevant settings, in the order the panel lists them. */
+/** The permission-relevant settings, in the order the report lists them. */
 const PERMISSION_KEYS: readonly { readonly key: string; readonly label: string; readonly note?: string }[] = [
   { key: 'permissions.mode', label: 'Permission mode', note: 'also the current session mode' },
   { key: 'permissions.backgroundAgents', label: 'Background-agent mode' },
@@ -218,7 +218,7 @@ function displayValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** Render the provenance panel as plain lines for the command surface. */
+/** Render the provenance report as plain lines for the command surface. */
 export function renderPermissionProvenance(provenance: PermissionProvenance): string {
   const lines: string[] = [
     'Permissions: settings in effect and where each came from',

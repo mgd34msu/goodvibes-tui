@@ -432,12 +432,12 @@ describe('ModelPickerModal', () => {
     // never filtering and no indication anything happened, see the doc
     // comment on ModelPickerModal.openAllModels(). Search now starts focused
     // so "just start typing" filters immediately, matching every other
-    // picker; focusPane stays 'items' (Left/Right pane switching, Down to
+    // picker; focusRegion stays 'items' (Left/Right region switching, Down to
     // blur into list nav, etc. are unaffected).
     test('starts with search focus so typing filters immediately', () => {
       picker.openAllModels(ALL_MODELS, 'free-1');
       expect(picker.searchFocused).toBe(true);
-      expect(picker.focusPane).toBe('items');
+      expect(picker.focusRegion).toBe('items');
     });
 
     test('restores availableOnly to true after showModelsForProvider set it to false', () => {
@@ -1245,13 +1245,13 @@ describe('ModelPickerModal', () => {
       expect(picker.getFilteredProviders()[picker.selectedIndex]).toBe('provC');
     });
 
-    test('focus helpers switch panes without changing target or selection', () => {
+    test('focus helpers switch regions without changing target or selection', () => {
       picker.openAllModels(ALL_MODELS, 'provA:free-1');
       const selectedBefore = picker.selectedIndex;
       picker.focusTargets();
-      expect(picker.focusPane).toBe('targets');
+      expect(picker.focusRegion).toBe('targets');
       picker.focusItems();
-      expect(picker.focusPane).toBe('items');
+      expect(picker.focusRegion).toBe('items');
       expect(picker.selectedIndex).toBe(selectedBefore);
       expect(picker.target).toBe('main');
     });

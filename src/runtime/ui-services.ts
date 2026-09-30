@@ -40,7 +40,7 @@ export interface UiProviderServices {
 export interface UiSessionServices {
   readonly sessionManager: RuntimeServices['sessionManager'];
   /**
-   * The panel-facing session READ source is the cross-surface union
+   * The modal-facing session READ source is the cross-surface union
    * facade, not the raw local broker, in adopted-daemon ('external') mode the
    * local broker misses sessions hosted for other surfaces. Sync signature
    * preserved; the facade's cache makes that honest (see session-union-cache.ts).
@@ -114,11 +114,11 @@ export interface UiRuntimeSharedServices {
     readonly distributedRuntime: RuntimeServices['distributedRuntime'];
     readonly remoteRunnerRegistry: RuntimeServices['remoteRunnerRegistry'] & RemoteRunnerRegistry;
     readonly remoteSupervisor: RuntimeServices['remoteSupervisor'] & RemoteSupervisor;
-    /** the shared live process registry backing the Fleet panel. */
+    /** the shared live process registry backing the Agents modal. */
     readonly processRegistry: RuntimeServices['processRegistry'];
-    /** The Fleet panel's read model: local rows union the adopted daemon's. */
+    /** The Agents modal's read model: local rows union the adopted daemon's. */
     readonly fleetReadModel: RuntimeServices['fleetReadModel'];
-    /** The shared runtime event bus, the Fleet panel subscribes to its 'communication' domain for the honest steer-consumed signal. */
+    /** The shared runtime event bus, the Agents modal subscribes to its 'communication' domain for the honest steer-consumed signal. */
     readonly runtimeBus: RuntimeServices['runtimeBus'];
   };
 }

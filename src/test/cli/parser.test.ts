@@ -384,7 +384,6 @@ describe('pointer-file resume (--continue integration)', () => {
           blockedTasks: 0,
           remoteContracts: 0,
           worktreeCount: 0,
-          openPanels: [],
           lines: ['Activity: user prompt queued'],
         },
       },

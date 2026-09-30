@@ -78,7 +78,6 @@ function makeContext(
 ): CommandContext {
   return {
     print: (message: string) => out.push(message),
-    showPanel: (panelId: string) => { opened.push(panelId); },
     // /project-plan open now routes to the 'planning' modal via ctx.openModal.
     openModal: (name: string) => { opened.push(name); },
     session: {
@@ -214,7 +213,7 @@ describe('/project-plan project planning runtime command', () => {
     const opened: string[] = [];
     const fake = makeService();
 
-    await registry.execute('project-plan', ['replace', 'the', 'planning', 'panel'], makeContext(fake.service, out, opened));
+    await registry.execute('project-plan', ['replace', 'the', 'planning', 'modal'], makeContext(fake.service, out, opened));
 
     expect(opened).toContain('planning-modal');
     expect(out.join('\n')).toContain('Answer in the prompt, or open the Planning modal');

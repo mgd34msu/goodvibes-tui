@@ -54,7 +54,7 @@ import type { RuntimeEventBus, DistributedRuntimeManager, RemoteRunnerRegistry, 
 import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import type { CacheRegistry, PauseController, MemoryGovernor } from '@pellux/goodvibes-sdk/platform/runtime/memory';
 import type { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search';
-import type { ViewPanelAdapter } from '../panels/view-panel-adapter.ts';
+import type { ViewPanelAdapter } from '../views/view-panel-adapter.ts';
 import type { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { HookDispatcher, HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins';
@@ -120,7 +120,7 @@ export interface RuntimeServices {
   readonly runtimeDispatch: DomainDispatch;
   /**
    * The SDK's panel-manager contract (the operator API's panels.list /
-   * panels.open), answered by the modal views; there are no panes.
+   * panels.open), answered by the modal views.
    */
   readonly panelManager: ViewPanelAdapter;
   readonly keybindingsManager: KeybindingsManager;
@@ -132,7 +132,7 @@ export interface RuntimeServices {
   readonly watcherRegistry: WatcherRegistry;
   /**
    * This surface's own record of the asks IT raised, what the approval card
-   * and the panel render. Not authoritative: `requestApproval` below raises the
+   * and the modal renders. Not authoritative: `requestApproval` below raises the
    * same ask on the daemon, whose record every other surface reads.
    */
   readonly approvalBroker: ApprovalBroker;
@@ -172,7 +172,7 @@ export interface RuntimeServices {
   readonly localhostFetchApproval: ReturnType<typeof buildLocalhostFetchApproval>;
   /** Terminal prompt-answer handler that rides the approval broker; shared by the tool registry and orchestrator so an interactive command's prompt gets an ask/card on every surface. */
   readonly execPromptAnswerHandler: ReturnType<typeof buildExecPromptAnswerHandler>;
-  /** Routes curated runtime-domain events into the panel_only notification feed (the panel's live producer). */
+  /** Routes curated runtime-domain events into the panel_only notification feed (the notifications modal's live producer). */
   readonly notificationDispatcher: NotificationDispatcher;
   /** Durable user-origin permission rules (remembered approvals); permissions.rules.* surface. Mirrors the SDK composition. */
   readonly userPermissionRuleStore: UserPermissionRuleStore;
@@ -284,10 +284,10 @@ export interface RuntimeServices {
   /** Controller the governor uses to pause/resume the deferrable background jobs under pressure. */
   readonly pauseController: PauseController;
   readonly sessionLiveTurnControls: SessionLiveTurnControlsHolder;
-  /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Fleet panel; archive-aware, finished subtrees can be moved to the session archive view. */
+  /** Unified live process registry (agents, WRFC chains, workflows, watchers, background processes) backing the Agents modal; archive-aware, finished subtrees can be moved to the session archive view. */
   readonly processRegistry: ArchivableProcessRegistry;
   /**
-   * What the Fleet panel reads: this surface's own registry rows UNION the
+   * What the Agents modal reads: this surface's own registry rows UNION the
    * adopted daemon's, deduped by node id with the local (live, actionable) copy
    * winning. Interval-refreshed on the daemon half, see client/fleet-union.ts.
    */

@@ -16,6 +16,11 @@ import { describe, expect, test, beforeEach } from 'bun:test';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
+import { makeTestSurface } from '../helpers/session-surface.ts';
+import { legacyPaneReturnContext, rewriteAsLegacyPaneSession } from '../helpers/legacy-pane-session.ts';
 
 // ── Stub helpers ─────────────────────────────────────────────────────────────
 
@@ -387,56 +392,64 @@ describe('session-command-routing (TASK-032)', () => {
   });
 
   test('/session list tolerates a legacy saved layout (returnContext.openPanels) and prints nothing about panes', async () => {
-    const cmd = registry.get('session')!;
-    const ctx = makeCtx({
-      sessionManager: {
-        ...stubSessionManager,
-        list: () => ([
-          {
-            name: 'sess-many-panels', title: 'Many panels', timestamp: Date.now(), messageCount: 4, model: 'm', provider: 'p', filePath: '/tmp/x',
-            returnContext: {
-              activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 0, toolCallCount: 0,
-              toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
-              openPanels: ['git', 'tasks', 'diff', 'ops-control', 'help'],
-            },
-          },
-        ]),
-      } as unknown as typeof stubSessionManager,
-    });
+    const dir = makeProjectTempDir('gv-session-list-legacy-panes');
+    try {
+      const sm = new SessionManager(dir, { surface: makeTestSurface(dir) });
+      const { filePath } = sm.save('sess-many-panels', [
+        { role: 'user', content: 'a' }, { role: 'assistant', content: 'b' },
+        { role: 'user', content: 'c' }, { role: 'assistant', content: 'd' },
+      ], { title: 'Many panels', model: 'm', provider: 'p', timestamp: Date.now() });
+      rewriteAsLegacyPaneSession(filePath, ['git', 'tasks', 'diff', 'ops-control', 'help']);
 
-    await cmd.handler(['list'], ctx as unknown as CommandContext);
+      // The saved session loads, and the loaded return context has no open-view list.
+      const listed = sm.list().find((entry) => entry.name === 'sess-many-panels');
+      expect(listed).toBeDefined();
+      expect(listed!.returnContext as Record<string, unknown> | undefined).not.toHaveProperty('openPanels');
+      expect(listed!.returnContext?.lines.some((line) => line.startsWith('Open panels'))).toBe(false);
 
-    const output = ctx.printed.join('\n');
-    expect(output).toContain('sess-many-panels');
-    expect(output).toContain('4 msgs');
-    expect(output).not.toContain('panels=');
-    expect(output).not.toContain('more)');
-    expect(output).not.toMatch(/ops-control/);
+      const cmd = registry.get('session')!;
+      const ctx = makeCtx({ sessionManager: sm as unknown as CommandContext['session']['sessionManager'] });
+      await cmd.handler(['list'], ctx as unknown as CommandContext);
+
+      const output = ctx.printed.join('\n');
+      expect(output).toContain('sess-many-panels');
+      expect(output).toContain('4 msgs');
+      expect(output).not.toContain('panels=');
+      expect(output).not.toContain('Open panels');
+      expect(output).not.toContain('more)');
+      expect(output).not.toMatch(/ops-control/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('/session list still prints the posture line for a legacy session that carries openPanels', async () => {
-    const cmd = registry.get('session')!;
-    const ctx = makeCtx({
-      sessionManager: {
-        ...stubSessionManager,
-        list: () => ([
-          {
-            name: 'sess-few-panels', title: 'Few panels', timestamp: Date.now(), messageCount: 4, model: 'm', provider: 'p', filePath: '/tmp/y',
-            returnContext: {
-              activityLabel: 'idle', statusLabel: 'idle', pendingApprovals: 1, activeTasks: 2, toolCallCount: 0,
-              toolResultCount: 0, assistantTurnCount: 0, userTurnCount: 0, lines: [],
-              openPanels: ['git', 'tasks'],
-            },
-          },
-        ]),
-      } as unknown as typeof stubSessionManager,
-    });
+    const dir = makeProjectTempDir('gv-session-list-legacy-posture');
+    try {
+      const sm = new SessionManager(dir, { surface: makeTestSurface(dir) });
+      const { filePath } = sm.save('sess-few-panels', [{ role: 'user', content: 'a' }], {
+        title: 'Few panels', model: 'm', provider: 'p', timestamp: Date.now(),
+      });
+      const lines = readFileSync(filePath, 'utf-8').split('\n');
+      const meta = JSON.parse(lines[0]!) as Record<string, unknown>;
+      meta['returnContext'] = legacyPaneReturnContext(['git', 'tasks'], { pendingApprovals: 1, activeTasks: 2 });
+      lines[0] = JSON.stringify(meta);
+      writeFileSync(filePath, lines.join('\n'), 'utf-8');
 
-    await cmd.handler(['list'], ctx as unknown as CommandContext);
+      const listed = sm.list().find((entry) => entry.name === 'sess-few-panels');
+      expect(listed!.returnContext as Record<string, unknown> | undefined).not.toHaveProperty('openPanels');
 
-    const output = ctx.printed.join('\n');
-    expect(output).toContain('posture: active=2  approvals=1');
-    expect(output).not.toContain('panels=');
+      const cmd = registry.get('session')!;
+      const ctx = makeCtx({ sessionManager: sm as unknown as CommandContext['session']['sessionManager'] });
+      await cmd.handler(['list'], ctx as unknown as CommandContext);
+
+      const output = ctx.printed.join('\n');
+      expect(output).toContain('posture: active=2  approvals=1');
+      expect(output).not.toContain('panels=');
+      expect(output).not.toContain('Open panels');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('/sessions excludes subagent transcripts (agent-* names) from the listing; mixed fixture', async () => {

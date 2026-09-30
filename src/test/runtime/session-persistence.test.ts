@@ -28,6 +28,7 @@ import {
 } from '@/runtime/index.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { ageRecoverySnapshot } from '../helpers/session-surface.ts';
+import { legacyPaneReturnContext } from '../helpers/legacy-pane-session.ts';
 
 function makeTmpDir(prefix: string): string {
   return makeProjectTempDir(prefix);
@@ -56,21 +57,17 @@ describe('runtime/session-persistence', () => {
         messages: [{ role: 'user', content: 'hello' }],
         timestamp: 1_700_000_000_000,
         titleSource: 'user',
-        returnContext: {
+        // Legacy shape: a pane list from when the TUI had side panes.
+        returnContext: legacyPaneReturnContext(['remote', 'approval'], {
           activityLabel: 'user prompt queued',
           statusLabel: 'awaiting response',
-          pendingApprovals: 0,
-          toolCallCount: 0,
-          toolResultCount: 0,
-          assistantTurnCount: 0,
           userTurnCount: 1,
           activeTasks: 2,
           blockedTasks: 1,
           remoteContracts: 1,
           worktreeCount: 3,
-          openPanels: ['remote', 'approval'],
-          lines: ['Activity: user prompt queued', 'Status: awaiting response'],
-        },
+          lines: ['Activity: user prompt queued', 'Status: awaiting response', 'Open panels: remote, approval'],
+        }) as never,
       },
       'gpt-test',
       'openai',
@@ -90,7 +87,9 @@ describe('runtime/session-persistence', () => {
     expect(meta.titleSource).toBe('user');
     expect(meta.returnContext?.statusLabel).toBe('awaiting response');
     expect(meta.returnContext?.worktreeCount).toBe(3);
-    expect(meta.returnContext?.openPanels).toEqual(['remote', 'approval']);
+    // The pane list is dropped on load.
+    expect(meta.returnContext as Record<string, unknown> | undefined).not.toHaveProperty('openPanels');
+    expect(meta.returnContext?.lines).toEqual(['Activity: user prompt queued', 'Status: awaiting response']);
     expect(messages).toEqual([{ role: 'user', content: 'hello' }]);
   });
 
@@ -142,10 +141,10 @@ describe('runtime/session-persistence', () => {
     writeRecoveryFile(
       {
         titleSource: 'system',
-        returnContext: {
+        // Legacy shape: a pane list from when the TUI had side panes.
+        returnContext: legacyPaneReturnContext(['remote', 'approval'], {
           activityLabel: 'assistant replied',
           statusLabel: 'ready for next turn',
-          pendingApprovals: 0,
           toolCallCount: 1,
           toolResultCount: 1,
           assistantTurnCount: 1,
@@ -154,9 +153,8 @@ describe('runtime/session-persistence', () => {
           blockedTasks: 1,
           remoteContracts: 1,
           worktreeCount: 2,
-          openPanels: ['remote', 'approval'],
-          lines: ['Activity: assistant replied', 'Status: ready for next turn'],
-        },
+          lines: ['Activity: assistant replied', 'Status: ready for next turn', 'Open panels: remote, approval'],
+        }) as never,
         messages: [
           { role: 'user', content: 'recover me' },
           { role: 'assistant', content: 'restored' },
@@ -177,6 +175,9 @@ describe('runtime/session-persistence', () => {
     expect(loaded?.titleSource).toBe('system');
     expect(loaded?.returnContext?.statusLabel).toBe('ready for next turn');
     expect(loaded?.returnContext?.remoteContracts).toBe(1);
-    expect(loaded?.returnContext?.openPanels).toEqual(['remote', 'approval']);
+    // The pane list is dropped on load.
+    expect(loaded?.returnContext as Record<string, unknown> | undefined).not.toHaveProperty('openPanels');
+    expect(loaded?.returnContext?.lines).toEqual(['Activity: assistant replied', 'Status: ready for next turn']);
+    expect(info?.returnContext as Record<string, unknown> | undefined).not.toHaveProperty('openPanels');
   });
 });

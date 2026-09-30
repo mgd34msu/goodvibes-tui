@@ -8,8 +8,8 @@ export const policyCommand: SlashCommand = {
   usage: '<subcommand> [args]',
   argsHint: 'load|simulate|diff|lint|preflight|promote|rollback|status',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
-    if (args.length === 0 && context.openPolicyPanel) {
-      context.openPolicyPanel();
+    if (args.length === 0 && context.openPolicyView) {
+      context.openPolicyView();
       return;
     }
     await dispatchPolicyCommand(args, context);

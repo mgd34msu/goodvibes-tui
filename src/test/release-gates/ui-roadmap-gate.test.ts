@@ -43,7 +43,7 @@ describe('UI roadmap gate', () => {
     expect(conversation.prevTranscriptEventLine(999, 'tool_result')).toBe(toolLine);
   });
 
-  test('opens views through the shared shell opener path: an old pane name lands on its modal, focus stays in the composer', () => {
+  test('opens views through the shared shell opener path: an old view name lands on its modal, focus stays in the composer', () => {
     const testManagers = createTestManagers();
     const surfaceModals = new SurfaceModalHost();
     const input = {

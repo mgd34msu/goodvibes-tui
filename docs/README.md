@@ -32,7 +32,7 @@ This directory contains the current product documentation for `goodvibes-tui`.
   Session memory, durable memory, structured knowledge, connectors, extractors, embeddings, artifacts, and multimodal analysis.
 
 - [Project planning](project-planning.md)
-  TUI-owned conversational planning loop, passive SDK planning artifacts, project-scoped knowledge spaces, readiness evaluation, and the Planning panel.
+  TUI-owned conversational planning loop, passive SDK planning artifacts, project-scoped knowledge spaces, readiness evaluation, and the Planning modal.
 
 - [Channels, remote runtime, and API](channels-remote-and-api.md)
   Omnichannel surfaces, reply routing, remote peers, node-host contracts, and the daemon/control-plane HTTP + streaming surfaces.
@@ -45,6 +45,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 
 - [CLI flags](cli-flags.md)
   Global flags reference covering session lifecycle (`--continue`, `--resume`, `--fork`), the `-y`/`--non-interactive` commit gate for plugin bundle installs, output format consolidation, the `--host` alias, and all other startup and command-specific flags.
+
+- [Architecture](architecture.md)
+  Source layout, the import-direction rules `bun run architecture:check` enforces, and the operator API bridge that answers `panels.list` / `panels.open` with the modal views.
 
 - [Commands reference](commands-reference.md)
   The generated, categorized list of every slash command, its arguments, and its description. It is the same list `?` renders in the product.

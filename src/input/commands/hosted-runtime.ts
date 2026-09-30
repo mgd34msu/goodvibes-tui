@@ -44,7 +44,7 @@ import {
 } from '../../runtime/client/hosted-sessions.ts';
 import { watchHostedSession, type HostedSessionSubscription } from '../../runtime/client/hosted-session-stream.ts';
 import { getOrCreateCompanionToken } from '@pellux/goodvibes-sdk/platform/pairing';
-import { getSharedHostedSessionFeed, type HostedSessionFeed } from '../../panels/hosted-session-feed.ts';
+import { getSharedHostedSessionFeed, type HostedSessionFeed } from '../../views/hosted-session-feed.ts';
 import { getSharedHostedSessionRoster } from '../../runtime/client/hosted-roster.ts';
 
 /** The last list this terminal printed, so `attach 2` means what the user just read. */

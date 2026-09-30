@@ -80,7 +80,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
 
       const projectPlanningService = ctx.workspace.projectPlanningService;
       const projectId = ctx.workspace.projectPlanningProjectId;
-      const openProjectPlanningPanel = () => openModalCommand(ctx, 'planning-modal');
+      const openProjectPlanningModal = () => openModalCommand(ctx, 'planning-modal');
 
       if (args.length === 0) {
         if (projectPlanningService && projectId) {
@@ -95,7 +95,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
           const { evaluation } = stateResult.state
             ? await persistEvaluatedNextQuestion(projectPlanningService, projectId, stateResult.state, initialEvaluation)
             : { evaluation: initialEvaluation };
-          openProjectPlanningPanel();
+          openProjectPlanningModal();
           ctx.print(
             `Project planning: ${evaluation.readiness}\n` +
             `Project: ${status.projectId}\n` +
@@ -116,7 +116,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
       }
 
       if (args[0] === 'panel') {
-        openProjectPlanningPanel();
+        openProjectPlanningModal();
         ctx.print('Opened project planning.');
         return;
       }
@@ -144,7 +144,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
           },
         });
         const evaluation = await projectPlanningService.evaluate({ projectId });
-        openProjectPlanningPanel();
+        openProjectPlanningModal();
         ctx.print(`Project planning approved. Readiness: ${evaluation.readiness}. State: ${result.state?.id ?? 'current'}.`);
         return;
       }
@@ -255,7 +255,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
           }
           return;
         }
-        openProjectPlanningPanel();
+        openProjectPlanningModal();
         ctx.print(
           `Recorded answer to: ${answerResult.question?.prompt ?? 'question'}\n` +
           `Readiness: ${answerResult.evaluation.readiness}\n` +
@@ -307,7 +307,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         ? await persistEvaluatedNextQuestion(projectPlanningService, projectId, result.state, initialEvaluation)
         : { state: result.state, evaluation: initialEvaluation };
       sessionLineageTracker.setOriginalTask(taskDescription.slice(0, 200));
-      openProjectPlanningPanel();
+      openProjectPlanningModal();
 
       ctx.print(
         `Project planning seeded: "${state?.goal ?? taskDescription}"\n` +

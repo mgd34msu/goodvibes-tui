@@ -247,26 +247,26 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           ctx.print(`Invalid setup link: ${link}`);
           return;
         }
-        const panelOpeners: Record<string, (() => void) | undefined> = {
-          cockpit: ctx.openCockpitPanel,
-          security: ctx.openSecurityPanel,
-          remote: ctx.openRemotePanel,
-          knowledge: ctx.openKnowledgePanel,
-          incident: ctx.openIncidentPanel,
-          hooks: ctx.openHooksPanel,
-          orchestration: ctx.openOrchestrationPanel,
+        const viewOpeners: Record<string, (() => void) | undefined> = {
+          cockpit: ctx.openCockpitView,
+          security: ctx.openSecurityView,
+          remote: ctx.openRemoteView,
+          knowledge: ctx.openKnowledgeView,
+          incident: ctx.openIncidentView,
+          hooks: ctx.openHooksView,
+          orchestration: ctx.openOrchestrationView,
         };
         if (parsed.surface === 'tasks') {
           ctx.openView?.('tasks');
           ctx.print(`Opened setup link for tasks${parsed.target ? ` (${parsed.target})` : ''}.`);
           return;
         }
-        const openPanel = panelOpeners[parsed.surface];
-        if (!openPanel) {
+        const openSurface = viewOpeners[parsed.surface];
+        if (!openSurface) {
           ctx.print(`Unsupported setup link surface: ${parsed.surface}`);
           return;
         }
-        openPanel();
+        openSurface();
         ctx.print(`Opened setup link for ${parsed.surface}${parsed.target ? ` (${parsed.target})` : ''}.`);
         return;
       }

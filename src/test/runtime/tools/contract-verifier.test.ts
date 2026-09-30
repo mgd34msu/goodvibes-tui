@@ -394,31 +394,31 @@ describe('verifyAll', () => {
 // ── ToolContractsPanel ────────────────────────────────────────────────────────
 
 describe('ToolContractsPanel', () => {
-  let panel: ToolContractsPanel;
+  let contracts: ToolContractsPanel;
 
   beforeEach(() => {
-    panel = new ToolContractsPanel();
+    contracts = new ToolContractsPanel();
   });
 
   it('load() populates entries and triggers subscribers', () => {
     let notified = false;
-    panel.subscribe(() => { notified = true; });
+    contracts.subscribe(() => { notified = true; });
 
     const tools = [
       makeTool({ name: 'tool_a', category: 'read' }),
       makeTool({ name: 'tool_b', category: 'write', idempotent: true }),
     ];
-    panel.load(verifier.verifyAll(tools));
+    contracts.load(verifier.verifyAll(tools));
 
     expect(notified).toBe(true);
-    expect(panel.get('tool_a')).toBeDefined();
-    expect(panel.get('tool_b')).toBeDefined();
+    expect(contracts.get('tool_a')).toBeDefined();
+    expect(contracts.get('tool_b')).toBeDefined();
   });
 
   it('upsert() adds or updates a single entry', () => {
     const result = verifier.verify(makeTool({ name: 'my_tool', category: 'read' }));
-    panel.upsert(result);
-    const entry = panel.get('my_tool');
+    contracts.upsert(result);
+    const entry = contracts.get('my_tool');
     expect(entry).toBeDefined();
     expect(entry!.toolName).toBe('my_tool');
   });
@@ -428,8 +428,8 @@ describe('ToolContractsPanel', () => {
       makeTool({ name: 'z_tool', category: 'read' }),
       makeTool({ name: 'a_tool', category: 'read' }),
     ];
-    panel.load(verifier.verifyAll(tools));
-    const all = panel.getAll();
+    contracts.load(verifier.verifyAll(tools));
+    const all = contracts.getAll();
     expect(all[0].toolName).toBe('a_tool');
     expect(all[1].toolName).toBe('z_tool');
   });
@@ -439,8 +439,8 @@ describe('ToolContractsPanel', () => {
       makeTool({ name: 'good_tool', category: 'read' }),
       makeTool({ name: 'bad_tool', _missingParams: true }),
     ];
-    panel.load(verifier.verifyAll(tools));
-    const failures = panel.getFailures();
+    contracts.load(verifier.verifyAll(tools));
+    const failures = contracts.getFailures();
     expect(failures).toHaveLength(1);
     expect(failures[0].toolName).toBe('bad_tool');
   });
@@ -451,8 +451,8 @@ describe('ToolContractsPanel', () => {
       makeTool({ name: 'warn_tool', parameters: { type: 'object' } }),  // passes with warn
       makeTool({ name: 'fail_tool', _missingParams: true }),  // fails
     ];
-    panel.load(verifier.verifyAll(tools));
-    const summary = panel.getSummary();
+    contracts.load(verifier.verifyAll(tools));
+    const summary = contracts.getSummary();
     expect(summary.total).toBe(3);
     expect(summary.failed).toBe(1);
     expect(summary.passed + summary.passedWithWarnings).toBe(2);
@@ -461,42 +461,42 @@ describe('ToolContractsPanel', () => {
 
   it('subscribe() returns unsubscribe function that stops notifications', () => {
     let count = 0;
-    const unsub = panel.subscribe(() => { count++; });
+    const unsub = contracts.subscribe(() => { count++; });
 
-    panel.upsert(verifier.verify(makeTool({ name: 'tool_x', category: 'read' })));
+    contracts.upsert(verifier.verify(makeTool({ name: 'tool_x', category: 'read' })));
     expect(count).toBe(1);
 
     unsub();
-    panel.upsert(verifier.verify(makeTool({ name: 'tool_y', category: 'read' })));
+    contracts.upsert(verifier.verify(makeTool({ name: 'tool_y', category: 'read' })));
     expect(count).toBe(1); // No further notifications
   });
 
   it('dispose() clears entries and history', () => {
-    panel.load(verifier.verifyAll([makeTool({ name: 'tool_a', category: 'read' })]));
-    panel.dispose();
-    expect(panel.getAll()).toHaveLength(0);
-    expect(panel.getSummary().total).toBe(0);
+    contracts.load(verifier.verifyAll([makeTool({ name: 'tool_a', category: 'read' })]));
+    contracts.dispose();
+    expect(contracts.getAll()).toHaveLength(0);
+    expect(contracts.getSummary().total).toBe(0);
   });
 
   it('dispose() stops subscriber notifications', () => {
     let count = 0;
-    panel.subscribe(() => { count++; });
-    panel.dispose();
+    contracts.subscribe(() => { count++; });
+    contracts.dispose();
     // After dispose, load should not throw but also should not notify (subscribers cleared)
     // We verify no throw occurs
     expect(() => {
-      panel.load(verifier.verifyAll([]));
+      contracts.load(verifier.verifyAll([]));
     }).not.toThrow();
   });
 
-  it('subscriber errors are caught and do not crash the panel', () => {
+  it('subscriber errors are caught and do not crash the contracts', () => {
     const originalDebug = console.debug;
     console.debug = () => {};
     try {
-      panel.subscribe(() => { throw new Error('subscriber boom'); });
+      contracts.subscribe(() => { throw new Error('subscriber boom'); });
       // Should not throw
       expect(() => {
-        panel.upsert(verifier.verify(makeTool({ name: 'safe_tool', category: 'read' })));
+        contracts.upsert(verifier.verify(makeTool({ name: 'safe_tool', category: 'read' })));
       }).not.toThrow();
     } finally {
       console.debug = originalDebug;

@@ -179,19 +179,19 @@ export function createBootstrapCommandActions(
   | 'print'
   | 'exit'
   | 'reloadSystemPrompt'
-  | 'openForensicsPanel'
-  | 'openIncidentPanel'
-  | 'openPolicyPanel'
-  | 'openHooksPanel'
-  | 'openCommunicationPanel'
-  | 'openOrchestrationPanel'
-  | 'openCockpitPanel'
+  | 'openForensicsView'
+  | 'openIncidentView'
+  | 'openPolicyView'
+  | 'openHooksView'
+  | 'openCommunicationView'
+  | 'openOrchestrationView'
+  | 'openCockpitView'
   | 'openMcpWorkspace'
-  | 'openSecurityPanel'
-  | 'openKnowledgePanel'
-  | 'openMemoryPanel'
-  | 'openRemotePanel'
-  | 'openSubscriptionPanel'
+  | 'openSecurityView'
+  | 'openKnowledgeView'
+  | 'openMemoryView'
+  | 'openRemoteView'
+  | 'openSubscriptionView'
   | 'openLocalAuthMaskedEntry'
 > {
   const {
@@ -299,19 +299,19 @@ export function createBootstrapCommandActions(
     },
     exit: () => unwiredShellAction('exit'),
     reloadSystemPrompt: loadSystemPrompt,
-    openForensicsPanel: viewNotAttached('Agents'),
-    openIncidentPanel: viewNotAttached('Agents'),
-    openPolicyPanel: viewNotAttached('Policy'),
-    openHooksPanel: viewNotAttached('Hooks'),
-    openCommunicationPanel: viewNotAttached('Agents'),
-    openOrchestrationPanel: viewNotAttached('Agents'),
-    openCockpitPanel: viewNotAttached('Agents'),
+    openForensicsView: viewNotAttached('Agents'),
+    openIncidentView: viewNotAttached('Agents'),
+    openPolicyView: viewNotAttached('Policy'),
+    openHooksView: viewNotAttached('Hooks'),
+    openCommunicationView: viewNotAttached('Agents'),
+    openOrchestrationView: viewNotAttached('Agents'),
+    openCockpitView: viewNotAttached('Agents'),
     openMcpWorkspace: () => unwiredShellAction('openMcpWorkspace'),
-    openSecurityPanel: viewNotAttached('Security'),
-    openKnowledgePanel: viewNotAttached('Knowledge'),
-    openMemoryPanel: viewNotAttached('Memory'),
-    openRemotePanel: viewNotAttached('Remote'),
-    openSubscriptionPanel: viewNotAttached('Subscriptions'),
+    openSecurityView: viewNotAttached('Security'),
+    openKnowledgeView: viewNotAttached('Knowledge'),
+    openMemoryView: viewNotAttached('Memory'),
+    openRemoteView: viewNotAttached('Remote'),
+    openSubscriptionView: viewNotAttached('Subscriptions'),
     openLocalAuthMaskedEntry: viewNotAttached('The password prompt'),
   };
 }

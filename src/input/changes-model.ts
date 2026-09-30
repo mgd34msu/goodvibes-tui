@@ -2,14 +2,14 @@
  * changes-model.ts, the Changes modal's data: a unified diff split into files
  * and hunks, every line numbered on both sides.
  *
- * Built on the review model's hunk parser (panels/diff-review-model.ts) so the
+ * Built on the review model's hunk parser (views/diff-review-model.ts) so the
  * hunks the Changes modal navigates are the very ReviewHunk values the review
  * comment and hunk-revert seams take. Each file keeps its own header lines so
  * one hunk can be turned back into a patch git will apply on its own (staging
  * a hunk is `git apply --cached` of exactly that patch).
  */
 
-import { parseReviewDiff, type ReviewHunk } from '../panels/diff-review-model.ts';
+import { parseReviewDiff, type ReviewHunk } from '../views/diff-review-model.ts';
 
 export type ChangeLineKind = 'add' | 'del' | 'ctx' | 'note';
 

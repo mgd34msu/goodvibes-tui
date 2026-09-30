@@ -26,7 +26,7 @@ import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createDaemonVerbCaller } from './operator-endpoint.ts';
 import { createHostedSessionsClient } from './hosted-sessions.ts';
-import { getSharedHostedSessionFeed, type HostedSessionFeed } from '../../panels/hosted-session-feed.ts';
+import { getSharedHostedSessionFeed, type HostedSessionFeed } from '../../views/hosted-session-feed.ts';
 
 /** How long the exit will wait for the detach before giving up on it. */
 export const HOSTED_DETACH_ON_EXIT_TIMEOUT_MS = 1_500;
@@ -34,7 +34,7 @@ export const HOSTED_DETACH_ON_EXIT_TIMEOUT_MS = 1_500;
 export interface LeaveHostedSessionOnExitOptions {
   readonly configManager: ConfigManager;
   readonly homeDirectory: string | (() => string);
-  /** Defaults to the shared feed the `/hosted` command and the panel use. */
+  /** Defaults to the shared feed the `/hosted` command and the hosted-sessions modal use. */
   readonly feed?: HostedSessionFeed | undefined;
   readonly timeoutMs?: number | undefined;
 }

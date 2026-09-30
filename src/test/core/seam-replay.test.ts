@@ -11,8 +11,8 @@
  *   1. CLI / command resume, session-workflow.ts calls replayJournalForSession
  *      after fromJSON + rebuildHistory. Here we call the same function through
  *      the same arguments to verify the path is correctly wired.
- *   2. In-TUI panel resume, createResumeSessionHandler with a real journal.
- *      Asserts replayed messages appear after the panel resume handler runs.
+ *   2. In-TUI session-browser resume, createResumeSessionHandler with a real journal.
+ *      Asserts replayed messages appear after the session-browser resume handler runs.
  *
  * A third seam used to live here: the silent startup auto-restore
  * (autoRestoreRecoverySession in shell/recovery-input-helpers.ts). That
@@ -169,9 +169,9 @@ describe('seam-replay: seam 1; CLI/command resume (replayJournalForSession)', ()
   });
 });
 
-// ── Seam 2: In-TUI panel resume (bootstrap-hook-bridge.ts path) ───────────────
+// ── Seam 2: In-TUI session-browser resume (bootstrap-hook-bridge.ts path) ───────────────
 
-describe('seam-replay: seam 2; in-TUI panel resume (createResumeSessionHandler)', () => {
+describe('seam-replay: seam 2; in-TUI session-browser resume (createResumeSessionHandler)', () => {
   test('replays journal turns newer than session snapshot onto conversation', async () => {
     const sessionId = 'seam3-ses';
     const homeDirectory = tmpDir;
@@ -239,7 +239,7 @@ describe('seam-replay: seam 2; in-TUI panel resume (createResumeSessionHandler)'
     const resumeSession = createResumeSessionHandler(options);
     await resumeSession(sessionId);
 
-    // After panel resume, journal records are replayed onto the conversation.
+    // After session-browser resume, journal records are replayed onto the conversation.
     expect(conversation.getMessageCount()).toBeGreaterThan(0);
     expect(persistCalled).toBe(true);
     // Journal cleaned up.

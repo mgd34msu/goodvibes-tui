@@ -20,7 +20,7 @@ import { CommandPalette, buildPaletteEntries, paletteScore, recordPaletteUse, re
 import { ConfirmDialog, confirmThrough } from '../../input/confirm-dialog.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
 import { ToastCenter, bridgeNotificationFeedToToasts } from '../../renderer/toast-center.ts';
-import { PanelNotificationFeed } from '../../panels/notifications-feed.ts';
+import { NotificationFeed } from '../../views/notifications-feed.ts';
 import type { SlashCommand } from '../../input/command-registry.ts';
 import { frameFromLayer } from '../helpers/surface-frame.ts';
 
@@ -169,7 +169,7 @@ describe('command palette', () => {
     resetPaletteUsageForTests();
   });
 
-  test('typing searches names, aliases, titles and search words (old pane names find their home)', () => {
+  test('typing searches names, aliases, titles and search words (former view names find their home)', () => {
     const entries = buildPaletteEntries(COMMANDS, new Map());
     const byId = (id: string) => entries.find((e) => e.id === id)!;
     expect(paletteScore(byId('agents'), 'fleet')).toBeGreaterThan(0);
@@ -211,7 +211,7 @@ describe('command palette', () => {
     expect(host.active).toBe(false);
   });
 
-  test('ctrl+p (and ctrl+k) are bound to the command palette; ctrl+shift+p (the old pane picker) is bound to nothing', () => {
+  test('ctrl+p (and ctrl+k) are bound to the command palette; ctrl+shift+p (the old view picker) is bound to nothing', () => {
     const km = new KeybindingsManager({ configPath: '/nonexistent/keybindings.json' });
     expect(km.matches('command-palette', key('p', { ctrl: true }) as never)).toBe(true);
     expect(km.matches('command-palette', key('k', { ctrl: true }) as never)).toBe(true);
@@ -225,7 +225,7 @@ describe('command palette', () => {
     expect(frame).toMatch(/Changes +\/changes/);
     expect(frame).toMatch(/Show the working-tree diff +\/diff/);
     expect(frame).toContain('Enter runs it now');
-    // The preview names the search words an entry answers to (old pane names included).
+    // The preview names the search words an entry answers to (former view names included).
     expect(frame).toMatch(/Finds: changes, git, diff, review/);
   });
 });
@@ -297,7 +297,7 @@ describe('toasts', () => {
 
   test('the notification feed toasts warnings and criticals, not information', () => {
     const { toasts } = center();
-    const feed = new PanelNotificationFeed();
+    const feed = new NotificationFeed();
     bridgeNotificationFeedToToasts(feed, toasts);
     const note = (id: string, level: 'info' | 'warning' | 'critical') => ({ id, domain: 'agents', level, title: `n-${id}`, timestamp: 1 }) as never;
     feed.record(note('1', 'info'), { target: 'panel_only', reasonCode: 'default' } as never);

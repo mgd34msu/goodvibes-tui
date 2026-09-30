@@ -1,12 +1,12 @@
 /**
- * views.ts, where every old pane name goes now.
+ * views.ts, where every old view name goes now.
  *
- * The side panes are gone; their content lives in four kit modals (Usage,
- * Changes, Agents, Notifications), the session picker and the config-modal
- * surfaces. Old names still arrive from many places: `/panel open <id>`,
- * notifications that name the pane they are about, cross-modal jumps (the work
- * plan's "show this agent"), saved muscle memory. resolveViewName turns any of
- * them into the modal that holds that content now, so none of them dead-ends.
+ * Views live in four kit modals (Usage, Changes, Agents, Notifications), the
+ * session picker and the config-modal surfaces. Old names still arrive from
+ * many places: `/panel open <id>`, notifications that name the view they are
+ * about, cross-modal jumps (the work plan's "show this agent"), saved muscle
+ * memory. resolveViewName turns any of them into the modal that holds that
+ * content now, so none of them dead-ends.
  */
 
 /** A specific row to select when a view opens (a fleet process id, optionally its kind). */
@@ -68,7 +68,7 @@ export function resolveViewName(name: string, modalRedirect: (name: string) => s
   if (!id) return null;
   if (id === 'hosted') return { kind: 'agents', hosted: true };
   if (AGENT_VIEW_NAMES.includes(id)) return { kind: 'agents' };
-  // The old cost pane's heart was the per-agent cost ledger: Usage's Agents tab.
+  // The old cost view's heart was the per-agent cost ledger: Usage's Agents tab.
   if (id === 'cost') return { kind: 'usage', tab: 'agents' };
   if (USAGE_VIEW_NAMES.includes(id)) return { kind: 'usage' };
   if (id === 'review') return { kind: 'changes', mode: 'review' };

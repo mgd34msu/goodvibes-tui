@@ -330,14 +330,14 @@ describe('modal space actions', () => {
     }
   });
 
-  test('settings modal uses left/right to switch panes instead of mutating values', () => {
+  test('settings modal uses left/right to switch regions instead of mutating values', () => {
     const calls: string[] = [];
     const handled = handleSettingsModalToken({
       settingsModal: {
         active: true,
         editingMode: false,
         currentCategory: 'display',
-        focusPane: 'settings',
+        focusRegion: 'settings',
         searchFocused: false,
         searchQuery: '',
         commitEdit: () => {},

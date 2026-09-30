@@ -1,7 +1,7 @@
 /**
  * /provider command handler.
  *
- * Implements the Provider Optimizer panel commands:
+ * Implements the Provider Optimizer commands:
  *
  *   /provider optimizer on|off  , Enable or disable the provider optimizer
  *   /provider route auto|manual , Set optimizer routing mode
