@@ -4,6 +4,64 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [2.1.0] - 2026-09-30
+
+### Added
+
+- **Themes.** display.theme picks goodvibes (the default), goodvibes-neon,
+  catppuccin, tokyonight, dracula, nord, gruvbox, one-dark, rosepine,
+  solarized, github, or system, which follows the terminal's own palette,
+  under tmux and over ssh too. Settings previews themes live. A theme you
+  already chose is kept.
+- **Modals replace panes.** Usage, Changes, Agents and Notifications open as
+  large dimmed modals on one surface kit with a live search row and one-level
+  Esc; ctrl+p opens the command palette.
+- **A calmer base screen.** A one-row header, an empty row under it,
+  full-width user messages, an input area that holds only input, and a status
+  line with the context bar and its compaction tick.
+- **The throbber is back** on its own row above the input area, naming what
+  the session is doing with elapsed time, with half-row gaps between output,
+  throbber, input area and status line.
+- **A lane-graph work tree** with status on each bead, agents as lanes,
+  folding, and a display.treeGlyphs choice of rounded, square or ascii.
+- **Full-screen agent and process views** with session chips. Esc never
+  stops them and ctrl+x asks before stopping.
+- **A back-to-bottom pill** shows while the output is scrolled back. Esc
+  returns to the live output and never interrupts the turn.
+- **Notifications name the work** on the desktop, in the terminal, on
+  webhooks and for approvals, budgets, agents and workstreams. The
+  behavior.notificationsMetadataOnly setting sends metadata only and is off
+  by default.
+- **System notices are toasts** kept in a /notifications history with plain
+  names, one entry per event.
+- /context window and /status say where the context window came from.
+
+### Changed
+
+- **WRFC chains run in their own git worktree.** A passed chain commits only
+  its own changes plus edits GoodVibes' own tools made, runs your git hooks,
+  and leaves your other uncommitted edits in place. A failed chain stops its
+  remaining fix tasks.
+- A remote model with no real window takes it from the models.dev catalog,
+  so abacusai route-llm reads 128.0k instead of a guessed 8.2k.
+- The pins move to sdk 2.1.0 and daemon 1.29.0.
+- Every open dependency advisory is closed: undici, brace-expansion, the
+  Anthropic client (0.92), qs, body-parser, ip-address, fflate, fast-uri,
+  js-yaml and sharp move to patched versions.
+
+### Fixed
+
+- Read and command bodies keep their indentation; wrapped prose no longer
+  starts one column right; long code lines wrap.
+- A finished turn stops saying working; ended processes stop counting as
+  running.
+- The recovery offer opens before the first frame and never takes keys typed
+  before it appeared.
+- Instructions meant for the model no longer show as notices, and notices
+  keep their full text.
+- Printed command output survives resizes.
+
+
 ## [2.0.21] - 2026-08-23
 
 ### Changes
