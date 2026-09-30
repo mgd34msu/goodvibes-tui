@@ -18,7 +18,8 @@ import type { AgentLaneInfo, WorkTreeSources } from '../../core/work-tree-source
 import { SessionViews } from '../../shell/session-views.ts';
 import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import type { ThrobberState } from '../../renderer/throbber.ts';
-import { renderHeaderLine } from '../../renderer/header-line.ts';
+import type { BackToBottomState } from '../../renderer/back-to-bottom.ts';
+import { renderHeaderLine, withHeaderGap } from '../../renderer/header-line.ts';
 
 type Message = ConversationMessageSnapshot;
 type AgentRecord = NonNullable<ReturnType<AgentManager['getStatus']>>;
@@ -173,17 +174,19 @@ export function makeViewScene(options: { readonly withProcess?: boolean; readonl
 }
 
 /** The whole screen for a scene: header (+ chips), the view's body, the composer and status line. */
-export function renderViewScreen(scene: ViewScene, width: number, height: number, throbber: ThrobberState | null = null): Line[] {
+export function renderViewScreen(scene: ViewScene, width: number, height: number, throbber: ThrobberState | null = null, backToBottom: BackToBottomState | null = null): Line[] {
   const views = scene.views;
   const frame = views.frame(width, FIXTURE_VERSION);
   const header: Line[] = frame ? [frame.header] : renderHeaderLine(width, 'claude-opus-5-5', undefined, undefined, FIXTURE_VERSION);
   const chips = views.chips(width);
   if (chips) header.push(chips);
+  // The main screen keeps an empty row under its header block; a view's body starts with its own (main.ts).
+  if (!frame) header.push(...withHeaderGap([], width));
   const footer = buildShellFooter({
     width, promptText: '', promptLineCount: 1, usage: { up: 0, down: 0 }, showExitNotice: false, lastCopyTime: 0,
     runningAgentCount: 1, runningProcessCount: 1, indicatorFocused: false, view: frame?.footer ?? null,
     promptFocused: frame?.footer.disabledReason === undefined,
-    throbber, turnRunning: throbber !== null,
+    throbber, turnRunning: throbber !== null, backToBottom,
   }).lines;
   const bodyHeight = height - header.length - footer.length;
   const body = frame ? frame.body(bodyHeight) : Array.from({ length: bodyHeight }, () => {

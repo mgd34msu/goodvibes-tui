@@ -163,6 +163,8 @@ export interface FeedContextClosures {
   /** The view a clicked footer screen row opens (the usage rows open Usage), or undefined. */
   footerTargetAt: (row: number) => import('../renderer/footer-targets.ts').FooterTarget | undefined;
   openFooterTarget: (target: import('../renderer/footer-targets.ts').FooterTarget) => void;
+  /** Screen rows above the transcript (the header, the chips, the gap under them). */
+  bodyTopRow: () => number;
   handleBlockToggle: () => void;
   findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   cleanupMarkerRegistry: (text: string) => void;

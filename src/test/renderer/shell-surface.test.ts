@@ -75,10 +75,46 @@ describe('shell surface: the composer', () => {
     expect(lineToString(result.lines[2]!)).toContain('sk anything, or type / for commands and @ for files');
   });
 
-  test('an unfocused empty composer says how to get back', () => {
+  test('an unfocused empty composer keeps its normal placeholder: the input area is input only', () => {
     const result = footer({ promptText: '', indicatorFocused: true });
-    expect(lineToString(result.lines[2]!)).toContain('Esc returns to the composer');
+    expect(lineToString(result.lines[2]!)).toContain('Ask anything');
+    expect(lineToString(result.lines[2]!)).not.toContain('Esc returns');
     expect(lineToString(result.lines[2]!)).not.toContain('█');
+  });
+
+  test('tree mode: the input area keeps its placeholder and the status line leads with esc back to typing at every width', () => {
+    for (const width of [60, 80, 120, 160]) {
+      const result = footer({ promptText: '', promptFocused: false, workTreeFocused: true, width, turnRunning: true });
+      const status = lineToString(result.lines[result.lines.length - 1]!);
+      expect(lineToString(result.lines[2]!)).toContain('Ask anything');
+      expect(status).toContain('esc  back to typing');
+      // Esc leads; the other keys give way first.
+      expect(status.indexOf('esc  back to typing')).toBeLessThan(Math.max(status.indexOf('move between beads'), status.length));
+      if (status.includes('↑↓')) expect(status.indexOf('esc')).toBeLessThan(status.indexOf('↑↓'));
+    }
+  });
+
+  test('scrolled back: the pill shows over the input area and a running turn\'s esc says back to bottom; at the bottom neither', () => {
+    const scrolled = footer({ promptText: '', turnRunning: true, backToBottom: { escKey: true } });
+    const rows = scrolled.lines.map(lineToString);
+    const pill = rows.findIndex((r) => r.includes('↓ Back to bottom'));
+    expect(pill).toBeGreaterThan(0);
+    expect(rows[pill]).toContain('↓ Back to bottom   esc');
+    expect(rows[pill + 1]).toContain('▄'); // right over the input area's cap
+    expect(rows[pill - 1]!.trim()).toBe(''); // one empty row keeps it off the text above
+    expect(rows[rows.length - 1]).toContain('back to bottom');
+    expect(rows[rows.length - 1]).not.toContain('interrupt');
+    const bottom = footer({ promptText: '', turnRunning: true, backToBottom: null }).lines.map(lineToString);
+    expect(bottom.some((r) => r.includes('Back to bottom'))).toBe(false);
+    expect(bottom[bottom.length - 1]).toContain('interrupt');
+  });
+
+  test('scrolled back with text in the composer: the pill drops its esc keycap and the next Esc clears the input', () => {
+    const rows = footer({ promptText: 'draft', turnRunning: true, backToBottom: { escKey: false } }).lines.map(lineToString);
+    const pill = rows.find((r) => r.includes('↓ Back to bottom'));
+    expect(pill).toBeDefined();
+    expect(pill).not.toContain('esc');
+    expect(rows[rows.length - 1]).toContain('clear input');
   });
 
   test('the composer holds only input: no mode, model, provider or warning inside it', () => {

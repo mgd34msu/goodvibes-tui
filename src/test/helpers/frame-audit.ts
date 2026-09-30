@@ -18,6 +18,11 @@
  *               table's └──┘ border counts as output here. The throbber (a spinner glyph in
  *               column 3, text from column 5) sits over a fully empty row,
  *               since a half row cannot be drawn between two rows of text.
+ *   - HEADER    output touching the header: on a screen that starts with the
+ *               header row (GoodVibes at column 1), the row after the header
+ *               block (the header, plus the session chips row when it shows)
+ *               holds nothing drawn but a cap; the main screen keeps one
+ *               empty row there and a view's body starts with one.
  *
  * (Its fifth check, overlapping text between drawing calls, needs the draw
  * history and does not apply to a finished frame.)
@@ -37,7 +42,7 @@ import { getDisplayWidth } from '../../utils/terminal-width.ts';
 import { SPINNER_FRAMES } from '../../renderer/ui-primitives.ts';
 
 export interface FrameIssue {
-  readonly kind: 'OVERFLOW' | 'PADDING' | 'VPAD-TOP' | 'VPAD-BOT' | 'BAR' | 'GAP';
+  readonly kind: 'OVERFLOW' | 'PADDING' | 'VPAD-TOP' | 'VPAD-BOT' | 'BAR' | 'GAP' | 'HEADER';
   readonly row: number;
   readonly detail: string;
 }
@@ -180,7 +185,28 @@ export function auditFrame(lines: readonly Line[], width: number, tokens: Readon
     }
   }
   issues.push(...auditStack(lines, fills));
+  issues.push(...auditHeaderGap(lines));
   return issues;
+}
+
+const rowString = (row: Line | undefined): string => (row ?? []).map((c) => c.char || ' ').join('');
+
+/** The header row: the brand at column 1. */
+function isHeaderRow(row: Line | undefined): boolean {
+  return rowString(row).startsWith(' GoodVibes');
+}
+
+/** The session chips row under the header: the chips, then its tab / shift+tab keys. */
+function isChipsRow(row: Line | undefined): boolean {
+  return /\btab {2}next\b/.test(rowString(row));
+}
+
+/** The HEADER check (see the file header). */
+function auditHeaderGap(lines: readonly Line[]): FrameIssue[] {
+  if (lines.length < 3 || !isHeaderRow(lines[0])) return [];
+  const below = isChipsRow(lines[1]) ? 2 : 1;
+  if (!hasContent(lines[below])) return [];
+  return [{ kind: 'HEADER', row: below, detail: `output directly under the header :: ${rowText(lines[below]!, 0, lines[below]!.length)}` }];
 }
 
 /** The input area's own half-row glyphs: a row of only these (and blanks) is a gap row. */

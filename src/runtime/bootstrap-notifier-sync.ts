@@ -1,4 +1,5 @@
-import type { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
+import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
+import { readNotificationsMetadataOnly } from '@pellux/goodvibes-sdk/platform/runtime/operations';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
 import type { createDomainDispatch } from './store/index.ts';
 
@@ -38,4 +39,19 @@ export function syncNotifierQueueIntegrations(
       },
     }, 'bootstrap.notifier');
   }
+}
+
+/**
+ * The Slack and Discord notifier, built from the configured services. Its
+ * agent and workstream notices name the task unless
+ * behavior.notificationsMetadataOnly is on; the setting is read at send time,
+ * so a change applies without a restart.
+ */
+export function createRuntimeNotifier(
+  serviceRegistry: Parameters<typeof Notifier.fromConfig>[0],
+  configGet: (key: string) => unknown,
+): Promise<Notifier> {
+  return Notifier.fromConfig(serviceRegistry, {
+    metadataOnly: () => readNotificationsMetadataOnly(configGet),
+  });
 }

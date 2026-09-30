@@ -97,6 +97,8 @@ export class SessionViews implements SessionViewControls {
   readonly focus: SessionFocus;
   readonly log = new ProcessOutputLog();
   private scrollBy = new Map<string, number>();
+  /** The most each view could scroll at its last frame. */
+  private maxScrollBy = new Map<string, number>();
   private readonly collapse = new Map<string, Map<string, boolean>>();
   private readonly steers: Array<{ readonly agentId: string; readonly text: string; readonly at: number }> = [];
   private notice: { readonly text: string; readonly tone: 'error' | 'info'; readonly until: number } | null = null;
@@ -191,8 +193,14 @@ export class SessionViews implements SessionViewControls {
   chipsVisible(): boolean { return this.focus.chipsVisible(); }
   cycle(delta: 1 | -1): void { this.focus.cycle(delta); }
 
+  /**
+   * Esc inside a view, one layer per press: close the process search, then
+   * (scrolled back) return to the live bottom, then go up one level. Nothing
+   * here ever stops the agent, the process or main.
+   */
   escape(): void {
     if (this.search) { this.search = null; return; }
+    if (this.scrolledBack()) { this.follow(); return; }
     this.focus.back();
   }
 
@@ -213,7 +221,20 @@ export class SessionViews implements SessionViewControls {
 
   scroll(rows: number): void {
     const key = this.scrollKey();
-    this.scrollBy.set(key, Math.max(0, (this.scrollBy.get(key) ?? 0) + rows));
+    // Clamped to what the last frame could show, so a scroll past the top
+    // never leaves the view "scrolled back" with nothing further up.
+    const max = this.maxScrollBy.get(key) ?? Number.POSITIVE_INFINITY;
+    this.scrollBy.set(key, Math.max(0, Math.min(max, (this.scrollBy.get(key) ?? 0) + rows)));
+  }
+
+  /** The next Esc returns the scrolled-back view to its live bottom (no search open, an empty composer). */
+  escGoesToBottom(): boolean {
+    return this.scrolledBack() && !this.search && this.deps.promptText().length === 0;
+  }
+
+  /** The open view is scrolled away from its live bottom (the back-to-bottom pill shows). */
+  scrolledBack(): boolean {
+    return this.active && (this.scrollBy.get(this.scrollKey()) ?? 0) > 0;
   }
 
   pageRows(): number { return Math.max(1, this.lastPage - 2); }
@@ -331,6 +352,7 @@ export class SessionViews implements SessionViewControls {
   private escHint(): readonly [string, string] {
     if (this.search) return ['esc', 'close search'];
     if (this.deps.promptText().length > 0) return ['esc', 'clear input'];
+    if (this.scrolledBack()) return ['esc', 'back to bottom'];
     return ['esc', `back to ${this.focus.nameOf(this.focus.parentOf(this.focus.current))}`];
   }
 
@@ -461,8 +483,10 @@ export class SessionViews implements SessionViewControls {
       const rows = this.rows(id, width);
       const key = this.scrollKey();
       const inner = SessionViews.innerRows(height);
-      const scroll = Math.min(this.scrollBy.get(key) ?? 0, processMaxScroll(rows.length, inner));
+      const max = processMaxScroll(rows.length, inner);
+      const scroll = Math.min(this.scrollBy.get(key) ?? 0, max);
       this.scrollBy.set(key, scroll);
+      this.maxScrollBy.set(key, max);
       const lines = renderProcessView({
         width, height: inner, rows, scrollFromBottom: scroll, color, ended, dropped: this.log.dropped(id),
         search: this.search ? { query: this.search.query, editing: this.search.editing, current: this.search.current } : null,
@@ -493,7 +517,7 @@ export class SessionViews implements SessionViewControls {
     const key = this.scrollKey();
     const maxScroll = Math.max(0, all.length - inner);
     const scroll = Math.min(this.scrollBy.get(key) ?? 0, maxScroll);
-    if (this.kind === 'agent') this.scrollBy.set(key, scroll);
+    if (this.kind === 'agent') { this.scrollBy.set(key, scroll); this.maxScrollBy.set(key, maxScroll); }
     const end = this.kind === 'agent' ? all.length - scroll : all.length;
     const shown = all.slice(Math.max(0, end - inner), end).map((l) => l.slice(0, width));
     while (shown.length < inner) shown.push(blank());

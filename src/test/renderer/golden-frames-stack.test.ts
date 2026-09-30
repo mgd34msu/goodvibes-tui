@@ -2,8 +2,10 @@
 // golden-frames-stack.test.ts, the bottom of the main screen, whole: output
 // text, the throbber, the input area and the status line, with the gaps
 // between them, at rest, while main thinks, while it runs a tool, and with
-// the keyboard in the work tree (tree mode, Alt+Up), at 80, 120 and 160
-// columns.
+// the keyboard in the work tree (tree mode, Alt+Up), and scrolled back from
+// the live bottom (the back-to-bottom pill) at rest and while a tool runs, at
+// 80, 120 and 160 columns. Every frame starts with the header row and the
+// empty row under it.
 //
 // The transcript ends with a table row, the case where the last row of output
 // used to sit directly on the input area. Each frame asserts the exact stack
@@ -18,6 +20,7 @@ import { describe, expect, test } from 'bun:test';
 import { createEmptyLine, type Line } from '@pellux/goodvibes-sdk/platform/types';
 import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
+import { withHeaderGap } from '../../renderer/header-line.ts';
 import { renderMarkdown } from '../../renderer/markdown.ts';
 import { appendConversationMessages, type ConversationRenderContext } from '../../core/conversation-rendering.ts';
 import { settleSyntaxHighlighting } from '../../renderer/code-block.ts';
@@ -33,7 +36,7 @@ const DIR = new URL('./golden-frames/', import.meta.url).pathname;
 const HEIGHT = 30;
 const VERSION = '0.29.0';
 
-type Mode = 'rest' | 'thinking' | 'tool' | 'tree';
+type Mode = 'rest' | 'thinking' | 'tool' | 'tree' | 'scrolled' | 'scrolled-tool';
 
 const THINKING: ThrobberState = { spinner: '⠋', frame: 0, activity: { kind: 'model', phrase: 'Thinking...', elapsedMs: 12_000 } };
 const TOOL: ThrobberState = { spinner: '⠙', frame: 0, activity: { kind: 'tool', tool: 'exec', argument: 'bun test src/net/retry.test.ts', elapsedMs: 3_000 } };
@@ -81,8 +84,9 @@ function treeTranscript(width: number): Line[] {
 }
 
 function screen(width: number, mode: Mode): Line[] {
-  const header = UIFactory.createHeader(width, 'claude-opus-4', 'Fix retry backoff', { branch: 'main', dirty: true, ahead: 0, behind: 0 }, VERSION);
-  const working = mode !== 'rest';
+  const header = withHeaderGap(UIFactory.createHeader(width, 'claude-opus-4', 'Fix retry backoff', { branch: 'main', dirty: true, ahead: 0, behind: 0 }, VERSION), width);
+  const working = mode !== 'rest' && mode !== 'scrolled';
+  const scrolled = mode === 'scrolled' || mode === 'scrolled-tool';
   const footer = buildShellFooter({
     width,
     promptText: '',
@@ -103,8 +107,9 @@ function screen(width: number, mode: Mode): Line[] {
     runningProcessCount: 0,
     indicatorFocused: false,
     permissionMode: 'prompt',
-    throbber: mode === 'thinking' ? THINKING : mode === 'tool' || mode === 'tree' ? TOOL : null,
+    throbber: mode === 'thinking' ? THINKING : mode === 'tool' || mode === 'tree' || mode === 'scrolled-tool' ? TOOL : null,
     turnRunning: working,
+    backToBottom: scrolled ? { escKey: true } : null,
   }).lines;
   const body = mode === 'tree' ? treeTranscript(width) : tableTranscript(width);
   const room = HEIGHT - header.length - footer.length;
@@ -118,7 +123,7 @@ const isBlank = (line: Line | undefined): boolean => (line ?? []).every((c) => (
 
 describe('golden-frames : the stack under the transcript', () => {
   for (const width of [80, 120, 160]) {
-    for (const mode of ['rest', 'thinking', 'tool', 'tree'] as const) {
+    for (const mode of ['rest', 'thinking', 'tool', 'tree', 'scrolled', 'scrolled-tool'] as const) {
       const name = `stack-${mode}-${width}`;
       test(name, async () => {
         screen(width, mode);
@@ -131,10 +136,40 @@ describe('golden-frames : the stack under the transcript', () => {
         expect(text(lines[H - 1])).toContain('ctrl+p');
         expect(text(lines[H - 2]).slice(2, 4)).toBe('╹▀');
         expect(text(lines[H - 3])[2]).toBe('┃');
-        expect(text(lines[H - 4])).toContain(mode === 'tree' ? 'Esc returns to the composer' : 'Ask anything');
+        // The header row, then one empty row, then the output.
+        expect(text(lines[0])).toMatch(/^ GoodVibes/);
+        expect(isBlank(lines[1])).toBe(true);
+        // The input area holds only input: its placeholder, in tree mode too.
+        expect(text(lines[H - 4])).toContain('Ask anything');
+        expect(text(lines[H - 4])).not.toContain('Esc returns');
         expect(text(lines[H - 5])[2]).toBe('┃');
         expect(text(lines[H - 6]).slice(2, 4)).toBe('╻▄');
-        if (mode === 'rest') {
+        const pill = lines.findIndex((l) => text(l).includes('Back to bottom'));
+        if (mode === 'scrolled' || mode === 'scrolled-tool') {
+          // The pill sits right over the input area's ▄ cap, centered, with its esc keycap,
+          // one full empty row under the text above it.
+          expect(pill).toBe(H - 7);
+          const row = text(lines[H - 7]);
+          expect(row).toContain('↓ Back to bottom   esc ');
+          const first = row.search(/\S/);
+          const last = row.trimEnd().length - 1;
+          const fill = lines[H - 7]!.map((c, x) => (c.bg !== '' ? x : -1)).filter((x) => x >= 0);
+          expect(first - fill[0]!).toBe(2);
+          expect(fill[fill.length - 1]! - last).toBeGreaterThanOrEqual(2);
+          expect(Math.abs((fill[0]! + fill[fill.length - 1]!) / 2 - (width - 1) / 2)).toBeLessThanOrEqual(1);
+          expect(isBlank(lines[H - 8])).toBe(true);
+          if (mode === 'scrolled') {
+            expect(text(lines[H - 9])).toContain('└');
+            expect(text(lines[H - 1])).not.toContain('interrupt');
+          } else {
+            expect(text(lines[H - 9])).toContain('Running exec · bun test src/net/retry.test.ts · 3s');
+            expect(isBlank(lines[H - 10])).toBe(true);
+            expect(text(lines[H - 11])).toContain('└');
+            // Scrolled back, the next Esc returns to the bottom and never interrupts.
+            expect(text(lines[H - 1])).toContain('esc  back to bottom');
+            expect(text(lines[H - 1])).not.toContain('interrupt');
+          }
+        } else if (mode === 'rest') {
           // Output text sits half a row over the input area (the ▄ cap's empty top half).
           expect(text(lines[H - 7])).toContain('└');
           expect(text(lines[H - 1])).not.toContain('interrupt');
@@ -144,8 +179,10 @@ describe('golden-frames : the stack under the transcript', () => {
           expect(text(lines[H - 7])).toContain(mode === 'thinking' ? 'Thinking... · 12s' : 'Running exec · bun test src/net/retry.test.ts · 3s');
           expect(isBlank(lines[H - 8])).toBe(true);
           if (mode !== 'tree') expect(text(lines[H - 9])).toContain('└');
-          expect(text(lines[H - 1])).toContain(mode === 'tree' ? 'move between beads' : 'interrupt');
+          expect(text(lines[H - 1])).toContain(mode === 'tree' ? 'esc  back to typing' : 'interrupt');
         }
+        // At the live bottom there is no pill.
+        if (mode !== 'scrolled' && mode !== 'scrolled-tool') expect(pill).toBe(-1);
         if (mode === 'tree') expect(lines.some((l) => l[0]?.char === '┃')).toBe(true); // the focused row
         assertGoldenIn(DIR, name, lines);
         expect(encodeGolden(name, screen(width, mode))).toBe(encodeGolden(name, lines));

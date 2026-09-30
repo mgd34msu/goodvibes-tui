@@ -46,8 +46,8 @@ const FRAMES: ReadonlyArray<{ readonly name: string; readonly width: number; rea
   // Main keeps working under a view: its throbber, led by "main", sits over the view's input area.
   { name: 'agent-view-main-working-120x30', width: 120, height: 30, render: () => { const s = makeViewScene(); s.views.open({ kind: 'agent', id: 'eng' }); return renderViewScreen(s, 120, 30, MAIN_WORKING); } },
   { name: 'process-view-main-working-80x24', width: 80, height: 24, render: () => { const s = makeViewScene(); s.views.open({ kind: 'process', id: 'bg-1' }); return renderViewScreen(s, 80, 24, MAIN_WORKING); } },
-  { name: 'session-chips-main-120', width: 120, height: 8, render: () => renderViewScreen(makeViewScene(), 120, 8) },
-  { name: 'session-chips-main-80', width: 80, height: 8, render: () => renderViewScreen(makeViewScene(), 80, 8) },
+  { name: 'session-chips-main-120', width: 120, height: 9, render: () => renderViewScreen(makeViewScene(), 120, 9) },
+  { name: 'session-chips-main-80', width: 80, height: 9, render: () => renderViewScreen(makeViewScene(), 80, 9) },
 ];
 
 describe(`golden-frames : session views (${THEME})`, () => {

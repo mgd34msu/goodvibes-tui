@@ -47,6 +47,7 @@ import { buildShellFooter } from '../../renderer/shell-surface.ts';
 import { centerViewportContent } from '../../renderer/conversation-layout.ts';
 import { renderConversationEventLine } from '../../renderer/conversation-surface.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
+import { withHeaderGap } from '../../renderer/header-line.ts';
 import type { GitHeaderInfo } from '../../renderer/git-status.ts';
 import { renderMarkdown } from '../../renderer/markdown.ts';
 import { renderCodeBlock, settleSyntaxHighlighting } from '../../renderer/code-block.ts';
@@ -2091,7 +2092,7 @@ function baseFooter(width: number, overrides: Partial<Parameters<typeof buildShe
 }
 
 function renderHomeScreenSurface(width: number, height: number): Line[] {
-  const header = UIFactory.createHeader(width, 'claude-opus-4', undefined, CHROME_GIT, CHROME_FIXTURE_VERSION);
+  const header = withHeaderGap(UIFactory.createHeader(width, 'claude-opus-4', undefined, CHROME_GIT, CHROME_FIXTURE_VERSION), width);
   const footer = baseFooter(width);
   const room = height - header.length - footer.length;
   return [...header, ...centerViewportContent(renderSplashSurface(width), room, width), ...footer];
@@ -2122,7 +2123,7 @@ function renderBaseScreenSurface(width: number, height: number): Line[] {
     '| 1 | 200 |',
     '| 2 | 400 |',
   ].join('\n'), width));
-  const header = UIFactory.createHeader(width, 'claude-opus-4', 'Fix retry backoff', CHROME_GIT, CHROME_FIXTURE_VERSION);
+  const header = withHeaderGap(UIFactory.createHeader(width, 'claude-opus-4', 'Fix retry backoff', CHROME_GIT, CHROME_FIXTURE_VERSION), width);
   return screenFrame(width, height, body, baseFooter(width, { dangerMode: true }), header);
 }
 
@@ -2137,7 +2138,7 @@ describe('golden-frames : the main screen', () => {
       if (want.trim()) expect(text).toContain(want);
     }
     // Centered: the blank rows above and below the splash differ by at most one.
-    const body = text.slice(1, 30 - baseFooter(100).length);
+    const body = text.slice(2, 30 - baseFooter(100).length); // under the header and its gap row
     const first = body.findIndex((r) => r.trim() !== '');
     let last = body.length - 1;
     while (last > first && body[last]!.trim() === '') last--;

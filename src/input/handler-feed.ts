@@ -163,6 +163,7 @@ export interface InputFeedContext {
   readonly handlePathCompletion: () => boolean;
   readonly footerTargetAt: (row: number) => import('../renderer/footer-targets.ts').FooterTarget | undefined;
   readonly openFooterTarget: (target: import('../renderer/footer-targets.ts').FooterTarget) => void;
+  readonly bodyTopRow: () => number;
   readonly handleBlockToggle: () => void;
   readonly findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   readonly cleanupMarkerRegistry: (text: string) => void;
@@ -500,6 +501,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         handleCopy: context.handleCopy,
         footerTargetAt: context.footerTargetAt,
         openFooterTarget: context.openFooterTarget,
+        bodyTopRow: context.bodyTopRow,
       }, token);
       context.mouseDownRow = mouseRoute.mouseDownRow;
       context.mouseDownCol = mouseRoute.mouseDownCol;

@@ -203,6 +203,14 @@ export interface WireStreamEventMetricsOptions {
    */
   readonly retryTurn?: (notice?: string) => boolean;
   /**
+   * Called synchronously, inside the TURN_ERROR handler, when failover has
+   * re-submitted the turn (retryTurn returned true). main.ts passes
+   * turn-event-wiring's continueTurnAfterFailover, so the failed attempt is
+   * not told as its own turn: one notice per user turn, for how it finally
+   * ended.
+   */
+  readonly onFailoverRetry?: () => void;
+  /**
    * Optional cost catalog for attaching per-1M-token cost information to
    * the failover notice.  When provided and both models have non-zero pricing,
    * the notice includes input and output cost comparisons.  When absent or pricing is
@@ -360,7 +368,7 @@ export function wireStreamEventMetrics(
 ): WireStreamEventMetricsResult {
   const {
     events, metrics, orchestrator, providerRegistry,
-    systemMessageRouter, render, providerOptimizer, retryTurn, costLookup,
+    systemMessageRouter, render, providerOptimizer, retryTurn, onFailoverRetry, costLookup,
     isApprovalPending, stallThresholdMs, failoverState, getConfiguredRegistryKey,
     getConfiguredReasoningEffort,
   } = options;
@@ -644,7 +652,9 @@ export function wireStreamEventMetrics(
         // retryTurn option doc). Emitting it here instead would delete it.
         const failoverNotice = `[Failover] ${fromProvider} -> ${next.providerId} (${errorClass})${billingSuffix}${costSuffix}`
           + (effortNote ? `\n[Failover] ${effortNote}` : '');
-        if (!retryTurn(failoverNotice)) {
+        if (retryTurn(failoverNotice)) {
+          onFailoverRetry?.();
+        } else {
           // No turn to re-submit (the failed turn did not come from the
           // composer, so there is no pre-submission snapshot to roll back to).
           // The registry has still MOVED, so the switch gets narrated here and

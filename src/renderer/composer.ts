@@ -42,8 +42,6 @@ export interface ComposerOptions {
   /** Cursor offset into promptText (rows joined with one separator), when on screen. */
   readonly cursorPos?: number;
   readonly focused: boolean;
-  /** Shown instead of the placeholder while another surface owns the keyboard. */
-  readonly unfocusedHint?: string;
   /** Faint hint after the cursor on the last row (a command's arguments). */
   readonly argsHint?: string;
   /** The bar's color: the session mode (brand, plan, auto-approving modes, shell), or the agent or process shown. */
@@ -117,8 +115,8 @@ export function renderComposer(options: ComposerOptions): Line[] {
     const last = i === rows.length - 1;
     const empty = rows.length === 1 && text === '';
     if (empty) {
-      const hint = options.focused ? placeholder : (options.unfocusedHint ?? placeholder);
-      put(line, COMPOSER_TEXT_X, textEnd, truncateDisplay(hint, Math.max(0, textEnd - COMPOSER_TEXT_X)), { fg: t.textFaint, bg });
+      // The input area holds only input: its placeholder, focused or not (the status line says where the keys are).
+      put(line, COMPOSER_TEXT_X, textEnd, truncateDisplay(placeholder, Math.max(0, textEnd - COMPOSER_TEXT_X)), { fg: t.textFaint, bg });
     } else {
       put(line, COMPOSER_TEXT_X, textEnd + 1, text, { fg: textFg, bg });
     }

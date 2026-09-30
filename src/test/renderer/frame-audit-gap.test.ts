@@ -81,3 +81,29 @@ describe('layout audit: a table border is output too', () => {
     ]);
   });
 });
+
+const headerIssues = (lines: Line[]): string[] => auditFrame(lines, W, activeTokens()).filter((i) => i.kind === 'HEADER').map((i) => `row ${i.row}: ${i.detail}`);
+const header = (): Line => row(W, 'GoodVibes 2.0.21', { x: 1 });
+const chips = (): Line => row(W, '◐ main     ◐ engineer     tab  next    shift+tab  prev', { x: 5 });
+const stackBottom = (): Line[] => [capRow(W, '▄'), ...inputArea(W), capRow(W, '▀'), row(W, 'normal   main', { x: 3 })];
+
+describe('layout audit: output never touches the header', () => {
+  test('the header, one empty row, then output passes', () => {
+    expect(headerIssues([header(), row(W), row(W, 'The retry helper never backs off.'), ...stackBottom()])).toEqual([]);
+  });
+
+  test('output directly under the header fails', () => {
+    expect(headerIssues([header(), row(W, 'The retry helper never backs off.'), row(W), ...stackBottom()])).toEqual([
+      'row 1: output directly under the header :: The retry helper never backs off.',
+    ]);
+  });
+
+  test('with the session chips row, the row after the chips is the one that must stay empty', () => {
+    expect(headerIssues([header(), chips(), row(W), row(W, 'output'), ...stackBottom()])).toEqual([]);
+    expect(headerIssues([header(), chips(), row(W, 'output'), ...stackBottom()])).toEqual(['row 2: output directly under the header :: output']);
+  });
+
+  test('the input area\'s own cap right under the header is not output', () => {
+    expect(headerIssues([header(), ...stackBottom()])).toEqual([]);
+  });
+});

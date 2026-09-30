@@ -9,7 +9,8 @@
  *           followed by the failover marker in the warning color while the
  *           serving backend is not the configured one
  *
- * No rule row under it. The header is the one place for session identity:
+ * No rule row under it; on the main screen one empty row (withHeaderGap)
+ * keeps the output off it. The header is the one place for session identity:
  * title, branch, model. Inside an agent or process view the title gives way
  * to the breadcrumb (main › engineer, the last name in its own color) and the
  * right side names that session: the agent's model, or the process's pid,
@@ -151,3 +152,18 @@ function renderViewHeader(line: Line, width: number, version: string, view: Head
   if (right) put(line, rightX, end, { text: right, fg: view.rightFg ?? t.text });
   return line;
 }
+
+/**
+ * The main screen's header block with its gap: the header row (and the
+ * session chips row, when it shows), then one empty row, so output never
+ * touches the header. An agent or process view's body starts with its own
+ * empty row, so a view does not take this one.
+ */
+export function withHeaderGap(header: readonly Line[], width: number): Line[] {
+  const gap = createEmptyLine(width);
+  for (const cell of gap) cell.bg = '';
+  return [...header, gap];
+}
+
+/** Rows the gap under the main screen's header adds. */
+export const HEADER_GAP_ROWS = 1;

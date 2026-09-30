@@ -167,6 +167,10 @@ export class InputHandler implements InputHandlerLike {
   public surfaceModals = new SurfaceModalHost();
   /** Agent and process views (shell/session-views.ts); null until the shell wires them. */
   public sessionView: import('./handler-session-view-route.ts').SessionViewControls | null = null;
+  /** The main transcript's scroll, for Esc while scrolled back (handler-modal-stack.ts); null until the shell wires it. */
+  public transcriptScroll: import('./handler-modal-stack.ts').TranscriptScrollControls | null = null;
+  /** Screen rows above the transcript, set each frame by the shell: the header, the chips, the gap under them. */
+  public bodyTopRow = 2;
   public settingsModal = new SettingsModal();
   public configModal = new ConfigModal();
   public mcpWorkspace = new McpWorkspace();
@@ -339,6 +343,7 @@ export class InputHandler implements InputHandlerLike {
         handlePathCompletion: () => this.handlePathCompletion(),
         footerTargetAt: (row: number) => this.footerTargets.get(row),
         openFooterTarget: (target) => { this.onFooterTarget?.(target); },
+        bodyTopRow: () => this.bodyTopRow,
         handleBlockToggle: () => this.handleBlockToggle(),
         findMarkerAtPos: (pos: number) => this.findMarkerAtPos(pos),
         cleanupMarkerRegistry: (text: string) => this.cleanupMarkerRegistry(text),

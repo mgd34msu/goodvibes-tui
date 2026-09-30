@@ -10,7 +10,6 @@ import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
 import { createSandboxContainmentNotice } from './daemon-attach-notices.ts';
 import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
-import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { Compositor } from '../renderer/compositor.ts'; import { activeTokens } from '../renderer/theme.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
@@ -39,7 +38,7 @@ import type { SystemMessagePriority } from '../core/system-message-router.ts';
 import { SessionSpineClient, SessionUnionCache, TUI_SPINE_PARTICIPANT } from '@pellux/goodvibes-sdk/platform/runtime/session-spine';
 import { SessionInboundInputPoller, createBootstrapInboundInputPoller } from './session-inbound-inputs.ts';
 import { trustGatedAsk, type WorkspaceTrustLevel } from '@pellux/goodvibes-sdk/platform/runtime/operations';
-import { syncNotifierQueueIntegrations } from './bootstrap-notifier-sync.ts';
+import { createRuntimeNotifier, syncNotifierQueueIntegrations } from './bootstrap-notifier-sync.ts';
 
 // --- Pre-router buffer ---
 
@@ -693,7 +692,7 @@ export async function initializeBootstrapCore(
   }
   services.webhookNotifier.attachToRuntimeBus(runtimeBus);
 
-  const notifier = await Notifier.fromConfig(services.serviceRegistry);
+  const notifier = await createRuntimeNotifier(services.serviceRegistry, (key) => configManager.get(key as Parameters<typeof configManager.get>[0]));
   syncNotifierQueueIntegrations(notifier, runtimeBus, domainDispatch);
 
   await syncConfiguredServices(domainDispatch.syncIntegration, services.serviceRegistry);

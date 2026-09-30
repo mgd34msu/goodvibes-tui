@@ -32,6 +32,12 @@ interface TurnOrchestrator {
   readonly lastInputTokens: number;
   /** Cumulative session usage, same object CostTrackerPanel reads, used here for budget-breach checks. */
   readonly usage: { readonly input: number; readonly output: number; readonly cacheRead: number; readonly cacheWrite: number };
+  /**
+   * The SDK Orchestrator's own end-of-turn popup; handOff() silences it while
+   * this wiring's long-task notice owns the popup and returns the release.
+   * Optional so bare test doubles still satisfy the type.
+   */
+  readonly turnEndNotice?: { handOff(): () => void };
 }
 
 /** Minimal provider registry surface required by turn-event wiring. */
@@ -115,6 +121,17 @@ export interface WireTurnEventHandlersOptions {
    */
   readonly notifyDesktop?: typeof notifyCompletion;
   /**
+   * The terminal bell for a turn over 5s that did not reach the desktop popup
+   * (the popup rings it itself); defaults to writing BEL to stdout, which is
+   * what the SDK Orchestrator's own popup did before this wiring took it over.
+   */
+  readonly ringBell?: () => void;
+  /**
+   * How long a failover retry may take to start before the failed turn it
+   * replaces is told as failed after all. @internal, tests only.
+   */
+  readonly _failoverRetryGraceMs?: number;
+  /**
    * Minimal test seam: injectable clock for controlling Date.now() in tests.
    * Defaults to the real Date.now when absent.
    * @internal, tests only
@@ -148,6 +165,18 @@ function wrapJournalWithSessionRebind(
   };
 }
 
+/**
+ * How long a failover retry may take to reach TURN_SUBMITTED (it waits on the
+ * memory-recall refresh first) before the failure it replaced is told anyway.
+ */
+const FAILOVER_RETRY_GRACE_MS = 30_000;
+
+/** The Orchestrator's own popup rang the bell for a turn over this long. */
+const TURN_BELL_AFTER_MS = 5_000;
+
+/** The Orchestrator's own popup came for a turn over this long (SDK notifyCompletion). */
+const TURN_DESKTOP_AFTER_MS = 30_000;
+
 /** Most agent/workstream names kept at once; a lost terminal event cannot grow the maps unbounded. */
 const MAX_REMEMBERED_NAMES = 256;
 
@@ -172,6 +201,14 @@ export interface WireTurnEventHandlersResult {
   readonly unsubs: ReadonlyArray<() => void>;
   /** The per-session transcript journal; call appendRecord() for user-submitted events. */
   readonly transcriptJournal: TranscriptJournal;
+  /**
+   * The failover path re-submits the failed turn on another provider (see
+   * stream-event-wiring.ts onFailoverRetry). Call it synchronously from that
+   * TURN_ERROR: the failure notice for the turn is withheld, and the retry's
+   * TURN_SUBMITTED continues the same user turn, so the user gets one notice
+   * for how it finally ended.
+   */
+  readonly continueTurnAfterFailover: () => void;
 }
 
 /**
@@ -199,11 +236,21 @@ export function wireTurnEventHandlers(
     lastGitInfoRef, buildSessionContinuityHints, render, webhookNotifier, focusTracker,
     terminalNotifier, runtimeBus, systemMessageRouter,
     notifyDesktop = notifyCompletion,
+    ringBell = () => { process.stdout.write('\x07'); },
+    _failoverRetryGraceMs = FAILOVER_RETRY_GRACE_MS,
     _clock = Date.now,
   } = options;
 
   const unsubs: Array<() => void> = [];
   const configGet = (k: string): unknown => configManager.get(k as Parameters<typeof configManager.get>[0]);
+
+  // ONE POPUP PER TURN. The long-task notice below owns the turn's desktop
+  // popup: it names the turn, counts what it did, honors
+  // behavior.notifyAfterSeconds and the unfocused-only gate, and reaches the
+  // webhook. The SDK Orchestrator pops its own end-of-turn notice too, so it
+  // is handed off here for as long as this wiring lives.
+  const releaseTurnEndNotice = orchestrator.turnEndNotice?.handOff();
+  if (releaseTurnEndNotice) unsubs.push(releaseTurnEndNotice);
 
   // Create the per-session transcript journal. Path mirrors recovery-file
   // convention (homeDirectory-scoped). Created lazily on first append.
@@ -253,6 +300,20 @@ export function wireTurnEventHandlers(
     })
     : null;
 
+  // Provider failover (stream-event-wiring.ts) re-submits a failed turn on
+  // another provider. The user asked once, so the user turn spans every
+  // attempt: its failure is withheld while the retry is on its way, and the
+  // retry's TURN_SUBMITTED continues it (same start time, tally and name).
+  let failoverRetryPending = false;
+  let withheldFailure: { turnId: string; reason: string | null; timer: ReturnType<typeof setTimeout> } | null = null;
+  const clearWithheldFailure = (): void => {
+    if (withheldFailure) clearTimeout(withheldFailure.timer);
+    withheldFailure = null;
+  };
+  const continueTurnAfterFailover = (): void => {
+    failoverRetryPending = true;
+  };
+
   /**
    * The end of a turn, however it ended: the in-terminal (OSC 9) notice on
    * its own per-signal config + focus gate, then the long-task desktop and
@@ -261,6 +322,8 @@ export function wireTurnEventHandlers(
   const notifyTurnEnd = (turnId: string, outcome: TurnOutcome, reason: string | null): void => {
     if (turnId === lastEndedTurnId) return;
     lastEndedTurnId = turnId;
+    clearWithheldFailure();
+    failoverRetryPending = false;
     const turnElapsedMs = turnStartTime !== null ? _clock() - turnStartTime : 0;
     turnStartTime = null;
     const name = nameCurrentTurn();
@@ -270,7 +333,8 @@ export function wireTurnEventHandlers(
     terminalNotifier?.notify('turn-end', buildTurnNotificationLine({
       outcome, elapsedMs: turnElapsedMs, name, reason, sessionId: runtime.sessionId, ...activity,
     }, { metadataOnly }, NOTIFICATION_TEXT_LIMITS.terminal));
-    maybeNotifyLongTask({
+    const notifyOnComplete = configGet('behavior.notifyOnComplete') !== false;
+    const popped = maybeNotifyLongTask({
       elapsedMs: turnElapsedMs,
       status: outcome === 'completed' ? 'ok' : 'fail',
       outcome,
@@ -285,8 +349,41 @@ export function wireTurnEventHandlers(
       focusTracker,
       configGet,
       notifyDesktop,
+      desktop: notifyOnComplete,
+      // The SDK popup this replaces came past 30s whatever notifyAfterSeconds
+      // said (default 60): the one popup keeps that, the webhook keeps the threshold.
+      desktopAfterMs: TURN_DESKTOP_AFTER_MS,
+    });
+    // The popup rings the bell itself; a shorter turn still gets the bell the
+    // Orchestrator's own popup gave it (behavior.notifyOnComplete).
+    if (!popped && notifyOnComplete && turnElapsedMs > TURN_BELL_AFTER_MS) {
+      try { ringBell(); } catch { /* stdout may already be torn down */ }
+    }
+  };
+
+  /**
+   * A TURN_ERROR. The failover path decides synchronously, in its own
+   * TURN_ERROR handler, whether to re-submit the turn, and this handler runs
+   * first (main.ts wires it first), so the notice waits a microtask for that
+   * decision. Withheld while a retry is on its way; told anyway if the retry
+   * has not started within the grace period.
+   */
+  const onTurnError = (turnId: string, reason: string | null): void => {
+    queueMicrotask(() => {
+      if (!failoverRetryPending) {
+        notifyTurnEnd(turnId, 'failed', reason);
+        return;
+      }
+      clearWithheldFailure();
+      const timer = setTimeout(() => {
+        if (withheldFailure?.turnId !== turnId) return;
+        notifyTurnEnd(turnId, 'failed', reason);
+      }, _failoverRetryGraceMs);
+      (timer as { unref?: () => void }).unref?.();
+      withheldFailure = { turnId, reason, timer };
     });
   };
+  unsubs.push(clearWithheldFailure);
 
   const refreshGit = (): void => {
     gitStatusProvider.refresh().then((info) => { lastGitInfoRef.value = info; render(); }).catch(() => { /* non-fatal */ });
@@ -295,9 +392,17 @@ export function wireTurnEventHandlers(
   // Journal user message immediately on TURN_SUBMITTED so a SIGKILL during
   // the subsequent stream loses at most the in-flight token chunk.
   unsubs.push(events.turns.on('TURN_SUBMITTED', (evt) => {
-    turnStartTime = _clock();
-    turnText = typeof evt?.prompt === 'string' ? evt.prompt : null;
-    tally.reset();
+    if (failoverRetryPending && withheldFailure !== null) {
+      // The failover's re-submission: the same user turn goes on.
+      clearWithheldFailure();
+      failoverRetryPending = false;
+    } else {
+      clearWithheldFailure();
+      failoverRetryPending = false;
+      turnStartTime = _clock();
+      turnText = typeof evt?.prompt === 'string' ? evt.prompt : null;
+      tally.reset();
+    }
     try {
       const snap = conversation.toJSON() as { messages: Array<import('./conversation.ts').ConversationMessageSnapshot> };
       transcriptJournal.appendRecord('user_message', snap.messages);
@@ -307,7 +412,7 @@ export function wireTurnEventHandlers(
   // A turn that failed or was cancelled ends without TURN_COMPLETED; it is
   // named and told the same way.
   unsubs.push(events.turns.on('TURN_ERROR', (evt) => {
-    notifyTurnEnd(evt.turnId, 'failed', evt.error);
+    onTurnError(evt.turnId, evt.error);
   }));
   unsubs.push(events.turns.on('PREFLIGHT_FAIL', (evt) => {
     notifyTurnEnd(evt.turnId, 'failed', evt.reason);
@@ -502,5 +607,5 @@ export function wireTurnEventHandlers(
     }));
   }
 
-  return { refreshGit, unsubs, transcriptJournal };
+  return { refreshGit, unsubs, transcriptJournal, continueTurnAfterFailover };
 }

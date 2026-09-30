@@ -112,8 +112,22 @@ export interface MaybeNotifyLongTaskOptions {
   readonly notifyDesktop?: typeof notifyCompletion | undefined;
 
   /**
+   * False skips the desktop popup (behavior.notifyOnComplete off for a turn);
+   * the webhook still goes out. Default true.
+   */
+  readonly desktop?: boolean | undefined;
+
+  /**
+   * The desktop popup is also due past this many milliseconds, even under
+   * `thresholdSeconds` (and when the threshold is 0): a turn's end passes the
+   * SDK Orchestrator's own popup rule here (over 30s), since this notice
+   * replaced that popup. The webhook still waits for `thresholdSeconds`.
+   */
+  readonly desktopAfterMs?: number | undefined;
+
+  /**
    * Threshold in seconds from config (behavior.notifyAfterSeconds).
-   * 0 means off; notifications are suppressed entirely.
+   * 0 means off: no webhook, and no popup unless `desktopAfterMs` makes one due.
    * Should be the raw config value; this function normalises it.
    */
   readonly thresholdSeconds: number;
@@ -153,15 +167,12 @@ export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
   const { elapsedMs, status, kind, sessionId, thresholdSeconds, webhookNotifier, focusTracker, configGet } = opts;
   const notifyDesktop = opts.notifyDesktop ?? notifyCompletion;
 
-  // Off-state: 0 disables notifications entirely.
-  if (thresholdSeconds === NOTIFY_AFTER_SECONDS_OFF) {
-    logger.debug('long-task-notifier: disabled (threshold=0)');
-    return false;
-  }
-
-  // Gate: only notify when the task exceeded the threshold.
+  // The threshold gates both deliveries (0 is off); a desktop floor
+  // (desktopAfterMs) can make the popup alone due before it.
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  if (elapsedSeconds < thresholdSeconds) {
+  const thresholdMet = thresholdSeconds !== NOTIFY_AFTER_SECONDS_OFF && elapsedSeconds >= thresholdSeconds;
+  const desktopDue = opts.desktop !== false && (thresholdMet || (opts.desktopAfterMs !== undefined && elapsedMs > opts.desktopAfterMs));
+  if (!thresholdMet && !desktopDue) {
     logger.debug('long-task-notifier: below threshold', { elapsedSeconds, thresholdSeconds });
     return false;
   }
@@ -190,16 +201,21 @@ export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
   // Its own duration heuristic only pops a desktop notification above 30s;
   // the threshold above is the user's (behavior.notifyAfterSeconds), so a
   // threshold under 30s must still reach the desktop.
-  try {
-    notifyDesktop(notice.title, notice.body, Math.max(elapsedMs, FORCE_NOTIFY_DURATION_MS));
-  } catch (err) {
-    logger.debug('long-task-notifier: desktop notify error', { error: String(err) });
+  let delivered = false;
+  if (desktopDue) {
+    delivered = true;
+    try {
+      notifyDesktop(notice.title, notice.body, Math.max(elapsedMs, FORCE_NOTIFY_DURATION_MS));
+    } catch (err) {
+      logger.debug('long-task-notifier: desktop notify error', { error: String(err) });
+    }
   }
 
   // Delivery 2: outbound webhook (ntfy / generic endpoint) if configured.
-  if (webhookNotifier) {
+  if (webhookNotifier && thresholdMet) {
     const urls = webhookNotifier.getUrls();
     if (urls.length > 0) {
+      delivered = true;
       webhookNotifier.send(formatWebhookText(notice)).catch((err: unknown) => {
         logger.debug('long-task-notifier: webhook send error', { error: String(err) });
       });
@@ -208,7 +224,7 @@ export function maybeNotifyLongTask(opts: MaybeNotifyLongTaskOptions): boolean {
     }
   }
 
-  return true;
+  return delivered;
 }
 
 /**

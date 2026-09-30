@@ -8,6 +8,7 @@ import { SLEEP_DISABLED_CHIP } from '../core/power-status.ts';
 import { renderComposer, COMPOSER_FIXED_ROWS } from './composer.ts';
 import { renderStatusLine, type StatusChip } from './status-line.ts';
 import { renderThrobberLine, type ThrobberState } from './throbber.ts';
+import { renderBackToBottomPill, type BackToBottomState } from './back-to-bottom.ts';
 import { voiceCaptureChip } from './voice-capture-chip.ts';
 import { tagFooterLine } from './footer-targets.ts';
 
@@ -22,6 +23,9 @@ import { tagFooterLine } from './footer-targets.ts';
  *                 status line, when they have something to say
  *   throbber      what main is doing right now, only while it works
  *                 (throbber.ts)
+ *   back to bottom  the pill, centered, only while the output is scrolled
+ *                 away from its live bottom (back-to-bottom.ts); a fill row,
+ *                 so a full empty row keeps it off the text above it
  *   input area    ▄ cap, padding, text, padding, ▀ cap (composer.ts): the
  *                 caps are the half rows between the input area and the rows
  *                 above and below it
@@ -29,7 +33,9 @@ import { tagFooterLine } from './footer-targets.ts';
  *
  * At rest that is 6 rows (input area 5 + status 1), and with the header the
  * resting chrome is 7. While main works, 2 more: the blank row and the
- * throbber. The input area holds only input. Token totals, the per-turn
+ * throbber; while the output is scrolled back, 2 more: an empty row and the
+ * back-to-bottom pill. The input area holds only input (its placeholder,
+ * even while the keyboard is in the work tree). Token totals, the per-turn
  * history, tool count, notification mode, the session spine and the web
  * surface address live in the Usage modal and /status, not on the main
  * screen. What stays always visible is safety: the approval mode and the
@@ -38,9 +44,13 @@ import { tagFooterLine } from './footer-targets.ts';
  * model) and the compaction-pressure hint (a hint row above the input area).
  */
 
-/** The work tree's keys, shown on the status line while the keyboard is in it. */
+/**
+ * The work tree's keys, shown on the status line while the keyboard is in it.
+ * Esc leads: the way back to typing is never dropped for lack of room; the
+ * other keys give way from the end (status-line.ts keeps whole keys in order).
+ */
 const WORK_TREE_KEYS: ReadonlyArray<readonly [string, string]> = [
-  ['↑↓', 'move between beads'], ['←→', 'fold / unfold'], ['enter', 'open'], ['y', 'copy'], ['esc', 'back to typing'],
+  ['esc', 'back to typing'], ['↑↓', 'move between beads'], ['←→', 'fold / unfold'], ['enter', 'open'], ['y', 'copy'],
 ];
 
 /** What an agent or process view changes under the transcript. */
@@ -114,6 +124,13 @@ export interface ShellFooterBuildOptions {
   readonly throbber?: ThrobberState | null;
   /** A main turn is running: the status line leads with what Esc does now (interrupt, or clear input). */
   readonly turnRunning?: boolean;
+  /**
+   * The output is scrolled away from its live bottom: the back-to-bottom pill
+   * shows above the input area, and a running turn's esc hint says "back to
+   * bottom" (Esc returns there and never interrupts while scrolled). Null or
+   * absent at the bottom.
+   */
+  readonly backToBottom?: BackToBottomState | null;
 }
 
 export interface ShellFooterBuildResult {
@@ -249,7 +266,12 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
   if (options.scriptableStatusLine) above.push(UIFactory.stringToLine(`   ${options.scriptableStatusLine}`, options.width, { fg: t.textMuted }));
   // The throbber: main's activity, led by "main" inside a view.
   if (options.throbber) above.push(renderThrobberLine(options.width, view ? { ...options.throbber, owner: 'main' } : options.throbber));
-  // A full empty row keeps these text rows off the transcript (a view's body ends with one already).
+  // The back-to-bottom pill is a fill row: a full empty row keeps it off any text row above it.
+  if (options.backToBottom) {
+    if (above.length > 0) above.push(blankRow(options.width));
+    above.push(renderBackToBottomPill(options.width, options.backToBottom));
+  }
+  // A full empty row keeps these rows off the transcript (a view's body ends with one already).
   if (above.length > 0 && !view) lines.push(blankRow(options.width));
   lines.push(...above);
 
@@ -259,7 +281,6 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
     promptText: options.promptText,
     cursorPos: options.promptCursorPos,
     focused,
-    unfocusedHint: 'Esc returns to the composer',
     argsHint: options.commandArgsHint,
     modeColor: view ? view.barColor : composerBarColor(options.permissionMode, options.composerPendingRisk === 'shell'),
     placeholder: view?.placeholder,
@@ -302,8 +323,9 @@ export function buildShellFooter(options: ShellFooterBuildOptions): ShellFooterB
     notice: options.showExitNotice
       ? { text: 'Press Ctrl+C again to exit', tone: 'error' }
       : copied ? { text: 'Copied', tone: 'info' } : null,
-    // With text in the composer the next Esc clears it; only an empty composer's Esc interrupts.
-    busy: options.turnRunning ? { escAction: options.promptText.trim().length > 0 ? 'clear input' : undefined } : null,
+    // With text in the composer the next Esc clears it; scrolled back, it returns to the
+    // bottom; only an empty composer's Esc at the bottom interrupts.
+    busy: options.turnRunning ? { escAction: options.promptText.trim().length > 0 ? 'clear input' : options.backToBottom ? 'back to bottom' : undefined } : null,
     keys: options.workTreeFocused ? WORK_TREE_KEYS : null,
     directory: displayDirectory(options.workingDir, options.homeDirectory),
     branch: options.branch,

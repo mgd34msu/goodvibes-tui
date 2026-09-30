@@ -119,6 +119,7 @@ export interface InputHandlerLike {
   blockActionsMenu: BlockActionsMenu;
   surfaceModals: import('./surface-modal-host.ts').SurfaceModalHost;
   sessionView: import('./handler-session-view-route.ts').SessionViewControls | null;
+  transcriptScroll: import('./handler-modal-stack.ts').TranscriptScrollControls | null;
   selectionModal: SelectionModal;
 
   // ── Onboarding ────────────────────────────────────────────────────────────

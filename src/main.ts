@@ -27,6 +27,8 @@ import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
 import { buildShellFooter, estimateShellFooterHeight, promptCursorOffset, statusCostText } from './renderer/shell-surface.ts';
+import { HEADER_GAP_ROWS, withHeaderGap } from './renderer/header-line.ts';
+import { TranscriptScroll } from './shell/transcript-scroll.ts';
 import { formatStatusReport } from './shell/status-report.ts';
 import { voiceCaptureDescription } from './renderer/voice-capture-chip.ts';
 import { voiceCaptureRowVisible } from './core/voice-capture-status.ts';
@@ -185,10 +187,8 @@ async function main() {
   }));
   refreshFixSessionsFromApprovals(() => approvalBroker.listApprovals(), onFixSessionStarted, onFixSessionError); // catch pre-subscription stamps
 
-  let scrollTop = 0;
-  let scrollLocked = true;
-  // Cached from the overlay-aware clamp the renderer computes (conversation-layout) each frame so scroll() clamps against exactly what is displayed, not a footer estimate.
-  let lastMaxScroll: number | null = null;
+  // Where the main transcript is scrolled to; each frame's overlay-aware clamp (conversation-layout) is fed back so a scroll clamps against exactly what is displayed (shell/transcript-scroll.ts).
+  const transcript = new TranscriptScroll();
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
   const streamMetrics: StreamMetrics = createStreamMetrics();
   // When the running compaction was first seen (the throbber's elapsed time); undefined while none runs.
@@ -209,25 +209,24 @@ async function main() {
     const currentModel = providerRegistry.getCurrentModel();
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const rows = stdout.rows || 24;
-    return rows - (sessionViews?.headerRows() ?? 1) - estimateShellFooterHeight(promptLines); // the header row (+ the session chips)
+    // The header row (+ the session chips), and on the main screen the empty row under them (a view's body brings its own).
+    return rows - (sessionViews?.headerRows() ?? 1) - (sessionViews?.active ? 0 : HEADER_GAP_ROWS) - estimateShellFooterHeight(promptLines);
   };
 
   const scroll = (delta: number) => {
     if (sessionViews?.active) { sessionViews.scroll(-delta); return; } // a view scrolls its own lines (up is positive there)
-    // Prefer the last clamp the renderer computed (overlay- and real-footer-aware).
-    // The footer estimate is only a fallback for the pre-first-render frame.
-    const maxScroll = lastMaxScroll ?? Math.max(0, conversation.history.getLineCount() - getViewportHeight());
-    scrollTop = Math.max(0, Math.min(scrollTop + delta, maxScroll));
-    // Re-lock if user scrolled to bottom, otherwise unlock
-    scrollLocked = scrollTop >= maxScroll;
+    // The footer estimate is only a fallback for the pre-first-render frame; reaching the bottom re-locks.
+    transcript.scrollBy(delta, () => Math.max(0, conversation.history.getLineCount() - getViewportHeight()));
   };
 
-  const scrollToEnd = (vHeight: number) => {
-    // Respect a manual scroll-up by the user: only auto-follow the tail when parked at the
-    // bottom (scrollLocked). submitInput re-locks on new input so turns resume following.
-    if (!scrollLocked) return;
-    scrollTop = Math.max(0, conversation.history.getLineCount() - vHeight);
+  // Back to the live bottom: re-lock, and the next frame follows the tail again.
+  const scrollToLiveBottom = () => {
+    transcript.toBottom();
+    render();
   };
+
+  // Respect a manual scroll-up: only follow the tail while parked at the bottom (submitInput re-locks on new input).
+  const scrollToEnd = (vHeight: number) => transcript.followTail(conversation.history.getLineCount(), vHeight);
 
   const unsubs: Array<() => void> = [];
   // The work tree's live facts: call/turn timings, agent lanes, the call a permission prompt holds, fold persistence (work-tree-wiring.ts).
@@ -282,7 +281,7 @@ async function main() {
   unsubs.push(...ambience.unsubs);
   const submitInput = (text: string, content?: ContentPart[], options: { readonly spokenOutput?: boolean } = {}) => {
     input.clearModalStack();
-    scrollLocked = true; // Re-lock on any user input
+    transcript.toBottom(); // Re-lock on any user input
     conversation.dismissSplash(); // owner rule: any submission retires the splash for the run
     let processedText = applyAtModelDirective(text, {
       providerRegistry, runtime, configManager, notify: (m) => systemMessageRouter.high(m),
@@ -320,16 +319,14 @@ async function main() {
       render();
       return;
     }
-    scrollLocked = false;
-    scrollTop = Math.max(0, line);
+    transcript.jumpTo(line);
     render();
   };
 
   const scrollToLine = (line: number) => {
     conversation.getDisplayBlocks();
     const maxScroll = Math.max(0, conversation.history.getLineCount() - getViewportHeight());
-    scrollLocked = false;
-    scrollTop = Math.max(0, Math.min(line, maxScroll));
+    transcript.jumpTo(line, maxScroll);
     render();
   };
 
@@ -366,7 +363,7 @@ async function main() {
   const input: InputHandler = new InputHandler(
     () => render(),
     selection,
-    () => scrollTop,
+    () => transcript.top,
     getViewportHeight,
     () => conversation.history,
     scroll,
@@ -423,6 +420,8 @@ async function main() {
     mainBusy: () => orchestrator.isThinking, mainModel: () => lastHeaderModel, promptText: () => input.prompt, requestRender: () => render(),
   });
   sessionViews = views; input.sessionView = views; unsubs.push(() => views.dispose());
+  // Esc while the main transcript is scrolled back returns to the live bottom and never interrupts the turn (handler-modal-stack.ts).
+  input.transcriptScroll = { scrolledBack: () => transcript.scrolledBack && !views.active, toBottom: scrollToLiveBottom };
   commandContext.openSessionView = (target) => views.open(target);
 
   input.setCommandRegistry(commandRegistry, commandContext);
@@ -468,6 +467,11 @@ async function main() {
     const headerLines = viewFrame ? [viewFrame.header] : UIFactory.createHeader(width, activeModel.headerModel, conversation.title || undefined, lastGitInfoRef.value, undefined, activeModel.divergenceNote);
     const chipsRow = views.chips(width);
     if (chipsRow) headerLines.push(chipsRow);
+    // Scrolled away from the live bottom: the back-to-bottom pill, with the esc keycap only while the next Esc goes there.
+    const promptEmpty = input.prompt.length === 0 && !input.commandMode;
+    const backToBottom = viewFrame
+      ? (views.scrolledBack() ? { escKey: views.escGoesToBottom() } : null)
+      : (transcript.scrolledBack && !conversation.isSplashShowing() ? { escKey: promptEmpty && !conversation.workTree.focused && !input.indicatorFocused } : null);
     const managerAgents = agentManager.list().filter((a) => a.status === 'running' || a.status === 'pending');
     const runtimeAgents = agentSnapshot.active;
     const runningAgentSummary = summarizeRunningAgents(managerAgents, runtimeAgents, ctx.services.wrfcController.listChains());
@@ -539,11 +543,13 @@ async function main() {
       runningAgentProgress: runningAgentSummary.progress,
       composerFlags: composerState.flags,
       composerPendingRisk: composerState.pendingRisk, permissionMode: configManager.get('permissions.mode') as string, voiceCapture: voiceCaptureStatus(),
-      throbber, turnRunning: orchestrator.isThinking,
+      throbber, turnRunning: orchestrator.isThinking, backToBottom,
     }).lines;
 
     const onboardingOwnsScreen = input.onboardingWizard.active;
-    const shellHeaderLines = onboardingOwnsScreen ? [] : headerLines;
+    // The main screen keeps one empty row under the header; a view's body starts with its own.
+    const shellHeaderLines = onboardingOwnsScreen ? [] : viewFrame ? headerLines : withHeaderGap(headerLines, width);
+    input.bodyTopRow = shellHeaderLines.length; // mouse rows map to transcript rows from here
     const shellFooterLines = onboardingOwnsScreen ? [] : footerLines;
     input.footerTargets = footerTargetRows(shellFooterLines, height - shellFooterLines.length); // clickable usage rows open Usage
     const shellLayout = createShellLayout({
@@ -575,12 +581,14 @@ async function main() {
       conversation,
       width: conversationWidth,
       viewportHeight: vHeight,
-      scrollTop,
-      scrollLocked,
+      scrollTop: transcript.top,
+      scrollLocked: transcript.locked,
       overlayRows,
     });
-    scrollTop = conversationViewport.nextScrollTop;
-    lastMaxScroll = conversationViewport.maxScroll;
+    // Unlocked but already at the bottom (a jump that landed there, output that
+    // shrank) is the live bottom: it follows again, and the pill drawn this frame goes.
+    if (transcript.settle(conversationViewport.nextScrollTop, conversationViewport.maxScroll) && backToBottom && !viewFrame) render();
+    const scrollTop = transcript.top;
     let viewport = viewFrame ? viewFrame.body(vHeight) : conversation.isSplashShowing()
       ? centerViewportContent(conversationViewport.viewport, conversationViewport.effectiveHeight, conversationWidth)
       : conversationViewport.viewport;
@@ -668,7 +676,7 @@ async function main() {
     render, trustPromptRef,
   });
 
-  const { refreshGit, unsubs: turnUnsubs } = wireTurnEventHandlers({
+  const { refreshGit, unsubs: turnUnsubs, continueTurnAfterFailover } = wireTurnEventHandlers({
     events: uiServices.events,
     conversation,
     runtime,
@@ -710,7 +718,7 @@ async function main() {
   const streamResult: WireStreamEventMetricsResult = wireStreamEventMetrics({
     events: uiServices.events, orchestrator, providerRegistry,
     systemMessageRouter, render, metrics: streamMetrics,
-    providerOptimizer: ctx.services.providerOptimizer, costLookup: providerRegistry, retryTurn,
+    providerOptimizer: ctx.services.providerOptimizer, costLookup: providerRegistry, retryTurn, onFailoverRetry: continueTurnAfterFailover,
     failoverState, getConfiguredRegistryKey: () => configManager.get('provider.model') as string | undefined,
     // The REQUESTED level, through the one helper every remap site reads from.
     getConfiguredReasoningEffort: () => requestedEffortLevel(configManager),

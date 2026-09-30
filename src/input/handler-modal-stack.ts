@@ -55,11 +55,26 @@ export type EscapeState = ModalStackState & {
    * a view never stops the agent, the process or main.
    */
   sessionView?: { readonly active: boolean; escape(): void };
+  /**
+   * The main transcript's scroll. While it is scrolled away from the live
+   * bottom (and no modal, composer text or view took the Esc first), Esc
+   * returns to the bottom and re-locks there; it never reaches
+   * cancelGeneration then. At the bottom the next Esc interrupts as before.
+   */
+  transcriptScroll?: TranscriptScrollControls;
   /** Kit modals: the top one (or its own sub-level) is the first thing Esc pops. */
   surfaceModals?: { readonly active: boolean; escape(): boolean };
   clearOnboardingModelPickerCancelState?: () => void;
   restoreOnboardingModelPickerCancelState?: () => void;
 };
+
+/** What handleEscape needs of the main transcript's scroll. */
+export interface TranscriptScrollControls {
+  /** The main transcript is scrolled away from its live bottom. */
+  scrolledBack(): boolean;
+  /** Return to the live bottom and follow it again. */
+  toBottom(): void;
+}
 
 export function handleEscape(state: EscapeState): {
   prompt: string;
@@ -273,6 +288,24 @@ export function handleEscape(state: EscapeState): {
   // interrupting belongs to main alone.
   if (state.sessionView?.active) {
     state.sessionView.escape();
+    state.requestRender();
+    return {
+      prompt,
+      cursorPos,
+      commandMode,
+      helpOverlayActive,
+      helpScrollOffset,
+      shortcutsOverlayActive,
+      shortcutsScrollOffset,
+      selectionCallback,
+      indicatorFocused,
+      modalReturnFocus,
+    };
+  }
+
+  // Scrolled back: Esc returns to the live output and never interrupts the turn.
+  if (state.transcriptScroll?.scrolledBack()) {
+    state.transcriptScroll.toBottom();
     state.requestRender();
     return {
       prompt,

@@ -116,6 +116,12 @@ function runTurn(h: ReturnType<typeof harness>, end: () => void): void {
   end();
 }
 
+/**
+ * A failed turn's notice waits one microtask for the failover path's decision
+ * (turn-event-wiring.ts onTurnError); the other endings are told at once.
+ */
+const settled = (): Promise<void> => Promise.resolve();
+
 const ENDINGS = {
   completed: (h: ReturnType<typeof harness>) => h.turn('TURN_COMPLETED', { turnId: 't1', response: 'ok', stopReason: 'completed' }),
   failed: (h: ReturnType<typeof harness>) => h.turn('TURN_ERROR', { turnId: 't1', error: 'Provider returned HTTP 502: upstream timed out', stopReason: 'provider_error' }),
@@ -131,16 +137,18 @@ const EXPECTED_BODY = {
 describe('a finished turn is named on every channel (privacy setting off, the default)', () => {
   for (const outcome of ['completed', 'failed', 'cancelled'] as const) {
     describe(`${outcome} turn`, () => {
-      test('desktop: title is the turn name trimmed at a word, body is the outcome', () => {
+      test('desktop: title is the turn name trimmed at a word, body is the outcome', async () => {
         const h = harness();
         runTurn(h, () => ENDINGS[outcome](h));
+      await settled();
         expect(h.captured.desktop).toEqual([{ title: NAME_60, body: EXPECTED_BODY[outcome] }]);
         expect(isWordPrefix(h.captured.desktop[0]!.title, ASK)).toBe(true);
       });
 
-      test('in-terminal (OSC 9): one line with the name and the outcome', () => {
+      test('in-terminal (OSC 9): one line with the name and the outcome', async () => {
         const h = harness();
         runTurn(h, () => ENDINGS[outcome](h));
+      await settled();
         expect(h.captured.terminal).toHaveLength(1);
         const { signal, message } = h.captured.terminal[0]!;
         expect(signal).toBe('turn-end');
@@ -151,9 +159,10 @@ describe('a finished turn is named on every channel (privacy setting off, the de
         expect(rest.join(': ').startsWith(EXPECTED_BODY[outcome].slice(0, 20))).toBe(true);
       });
 
-      test('webhook: the name line, then the outcome line', () => {
+      test('webhook: the name line, then the outcome line', async () => {
         const h = harness();
         runTurn(h, () => ENDINGS[outcome](h));
+      await settled();
         expect(h.captured.webhook).toEqual([`${NAME_60}\n${EXPECTED_BODY[outcome]}`]);
       });
     });
@@ -182,9 +191,10 @@ describe('a finished turn is named on every channel (privacy setting off, the de
 
 describe('behavior.notificationsMetadataOnly on: every channel is metadata only', () => {
   for (const outcome of ['completed', 'failed', 'cancelled'] as const) {
-    test(`${outcome} turn`, () => {
+    test(`${outcome} turn`, async () => {
       const h = harness({ 'behavior.notificationsMetadataOnly': true });
       runTurn(h, () => ENDINGS[outcome](h));
+      await settled();
       const word = outcome === 'completed' ? 'done' : outcome;
       const lead = outcome === 'completed' ? 'Done in 1m 23s' : `${outcome === 'failed' ? 'Failed' : 'Cancelled'} after 1m 23s`;
       const body = `${lead}, 2 files changed, 1 tool call, 1 agent started, review 9/10, session test-ses`;
