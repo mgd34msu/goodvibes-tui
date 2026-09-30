@@ -42,8 +42,21 @@ describe('PanelNotificationFeed', () => {
     // The count is the true accumulated count, not an estimate. The group
     // folded five different kinds, so it is titled by its group and the body
     // counts each kind (the latest member's title would claim all five).
-    expect(entries[0]?.title).toBe('tools events');
+    expect(entries[0]?.title).toBe('Tools updates');
     expect(entries[0]?.body).toBe('Progress update 0 \u00d71, Progress update 1 \u00d71, Progress update 2 \u00d71, Progress update 3 \u00d71, Progress update 4 \u00d71');
+  });
+
+  test('a collapsed group of mixed kinds is titled with a plain name, never the raw domain id', () => {
+    const feed = new PanelNotificationFeed();
+    for (const title of ['Agent finished', 'Agent failed']) {
+      feed.record(
+        makeNotification({ domain: 'agents', level: 'info', title }),
+        { target: 'panel_only', reasonCode: 'burst_collapsed', batchKey: 'agents:info' },
+      );
+    }
+    const [entry] = feed.list();
+    expect(entry?.title).toBe('Agent updates');
+    expect(entry?.title).not.toContain('events');
   });
 
   test('notifies subscribers on every record()', () => {

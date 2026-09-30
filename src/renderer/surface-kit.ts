@@ -40,15 +40,13 @@ export interface SurfaceLayer {
   readonly lines: Line[];
   /** Dim the whole screen before this layer is stamped (modals do; popups and toasts do not). */
   readonly dim: boolean;
-}
-
-/**
- * A cell the stamp skips entirely (the screen underneath shows through):
- * empty char, fg and bg. Wide-character continuation cells keep their fg, so
- * they are never mistaken for one.
- */
-export function transparentCell(): Cell {
-  return { ...createEmptyCell(), char: '', fg: '', bg: '' };
+  /**
+   * A blank cell of this layer (a space with no background) clears the screen
+   * cell under it to the plain screen instead of keeping its background: the
+   * layer's own gap around a floating surface (toasts), so nothing underneath
+   * touches its edges.
+   */
+  readonly clearBlank?: boolean;
 }
 
 export function isTransparentCell(cell: Cell): boolean {

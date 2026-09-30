@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types';
 import { ConversationManager } from '../../core/conversation.ts';
 import { renderCodeBlock, settleSyntaxHighlighting, syntaxHighlightGeneration, syntaxHighlightMisses } from '../../renderer/code-block.ts';
+import { SyntaxHighlighter } from '../../renderer/syntax-highlighter.ts';
 
 const grammar = existsSync(join(process.cwd(), 'node_modules', 'web-tree-sitter', 'web-tree-sitter.wasm'))
   && existsSync(join(process.cwd(), 'node_modules', 'tree-sitter-typescript', 'tree-sitter-typescript.wasm'));
@@ -68,5 +69,61 @@ describe('syntax highlighting settles the same way whatever drew first', () => {
     const before = syntaxHighlightMisses();
     renderCodeBlock(lines, 'no-such-language-xyz', 80);
     expect(syntaxHighlightMisses()).toBe(before);
+  });
+});
+
+describe('parses in flight together never share a tree', () => {
+  // The highlighter used one virtual path for every parse, and the tree-sitter
+  // service deletes the previous tree of a path when that path is parsed
+  // again. Two blocks highlighted back to back (two code fences in one frame,
+  // or a test file leaving a parse running when the next one starts) had the
+  // second parse free the first one's tree before it was walked, and the
+  // first block kept colours read from freed memory.
+  const codeA = [
+    'export interface RetryOptions {',
+    '  attempts: number;',
+    '  baseDelayMs: number;',
+    '}',
+    `export const tagA = ${JSON.stringify(String(Math.random()))};`,
+  ];
+  const codeB = [
+    'import { sleep } from "./sleep.ts";',
+    'export async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {',
+    '  for (let i = 0; i < attempts; i++) { try { return await fn(); } catch { await sleep(100 * 2 ** i); } }',
+    '  throw new Error("unreachable");',
+    '}',
+    `export const tagB = ${JSON.stringify(String(Math.random()))};`,
+  ];
+
+  async function alone(code: string[]): Promise<unknown> {
+    const hl = new SyntaxHighlighter();
+    hl.highlight(code.join('\n'), 'ts');
+    await hl.settle();
+    return hl.highlight(code.join('\n'), 'ts');
+  }
+
+  test.skipIf(!grammar)('blocks highlighted together get the tokens each gets alone', async () => {
+    // Many blocks in flight at once, as a transcript with several fences (or
+    // a test file that never settles) leaves them.
+    const blocks = [codeA, codeB, ...Array.from({ length: 24 }, (_, i) => [
+      `export function f${i}(x: number): string {`,
+      `  const y = x * ${i} + ${JSON.stringify(String(Math.random()))}.length;`,
+      '  return `${y}`;',
+      '}',
+    ])];
+    const expected: unknown[] = [];
+    for (const code of blocks) expected.push(await alone(code));
+    const hl = new SyntaxHighlighter();
+    // The grammar is loaded first, as it is in a running app: while it loads,
+    // every parse waits on it and they happen to run one after another.
+    hl.highlight(`const warm = ${JSON.stringify(String(Math.random()))};`, 'ts');
+    await hl.settle();
+    for (const code of blocks) hl.highlight(code.join('\n'), 'ts');
+    await hl.settle();
+    // A block whose parse walked a freed tree failed for good (null, the
+    // regex placeholder forever) or kept wrong colours.
+    blocks.forEach((code, i) => {
+      expect(hl.highlight(code.join('\n'), 'ts')).toEqual(expected[i] as never);
+    });
   });
 });

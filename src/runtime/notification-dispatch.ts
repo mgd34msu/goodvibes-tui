@@ -41,19 +41,69 @@ export const NOTIFICATION_BRIDGE_DOMAINS: readonly RuntimeEventDomain[] = [
   'security',
 ];
 
-/** Turn an UPPER_SNAKE event type into a short human title ("AGENT_COMPLETED" → "Agent completed"). */
-export function humanizeEventType(type: string): string {
-  const words = type.toLowerCase().split(/[_\s]+/).filter(Boolean);
-  if (words.length === 0) return type;
-  return words.map((word, index) => (index === 0 ? word[0]!.toUpperCase() + word.slice(1) : word)).join(' ');
+/** A runtime event a person reads in the notification history: its plain title and severity. */
+export interface PersonFacingEvent {
+  readonly title: string;
+  readonly level: Notification['level'];
 }
 
-/** Derive a notification severity from an event type, errors/failures warn, the rest are informational. */
-export function levelForEventType(type: string): Notification['level'] {
-  const upper = type.toUpperCase();
-  if (/(FAILED|ERROR|CRASH|DENIED|BLOCKED)/.test(upper)) return 'warning';
-  if (/(CRITICAL|FATAL|BREACH)/.test(upper)) return 'critical';
-  return 'info';
+/**
+ * The runtime events that become notification-history entries, by event type,
+ * with the plain title each one shows. Everything else on the bridged domains
+ * (stream deltas, progress ticks, gate results, state changes, queue and start
+ * events) is internal traffic and never enters the history: this table is an
+ * allowlist, so a new SDK event type stays out until someone names it here.
+ */
+export const PERSON_FACING_EVENTS: Readonly<Record<string, PersonFacingEvent>> = {
+  // agents
+  AGENT_COMPLETED: { title: 'Agent finished', level: 'info' },
+  AGENT_FAILED: { title: 'Agent failed', level: 'warning' },
+  AGENT_CANCELLED: { title: 'Agent cancelled', level: 'info' },
+  AGENT_AWAITING_MESSAGE: { title: 'Agent is waiting for a reply', level: 'info' },
+  // tasks
+  TASK_COMPLETED: { title: 'Task finished', level: 'info' },
+  TASK_FAILED: { title: 'Task failed', level: 'warning' },
+  TASK_BLOCKED: { title: 'Task blocked', level: 'warning' },
+  TASK_CANCELLED: { title: 'Task cancelled', level: 'info' },
+  // workflows (review chains)
+  WORKFLOW_CHAIN_PASSED: { title: 'Review chain passed', level: 'info' },
+  WORKFLOW_CHAIN_FAILED: { title: 'Review chain failed', level: 'warning' },
+  WORKFLOW_CASCADE_ABORTED: { title: 'Review chain stopped', level: 'warning' },
+  WORKFLOW_AUTO_COMMITTED: { title: 'Reviewed changes committed', level: 'info' },
+  WORKFLOW_SCORE_REGRESSION: { title: 'Review score dropped', level: 'warning' },
+  // automation (scheduled jobs)
+  AUTOMATION_RUN_COMPLETED: { title: 'Scheduled job finished', level: 'info' },
+  AUTOMATION_RUN_FAILED: { title: 'Scheduled job failed', level: 'warning' },
+  AUTOMATION_JOB_AUTO_DISABLED: { title: 'Scheduled job turned off after repeated failures', level: 'warning' },
+  AUTOMATION_SCHEDULE_ERROR: { title: 'Schedule could not be read', level: 'warning' },
+  // deliveries (outgoing channel messages)
+  DELIVERY_FAILED: { title: 'Message delivery failed', level: 'warning' },
+  DELIVERY_DEAD_LETTERED: { title: 'Message could not be delivered', level: 'warning' },
+  // security
+  AUTH_FAILED: { title: 'Sign-in failed', level: 'warning' },
+  COMPANION_PAIR_REQUESTED: { title: 'Device pairing requested', level: 'info' },
+  COMPANION_PAIR_VERIFIED: { title: 'Device paired', level: 'info' },
+  COMPANION_TOKEN_REVOKED: { title: 'Device access revoked', level: 'info' },
+  TOKEN_ROTATION_WARNING: { title: 'Access token expires soon', level: 'warning' },
+  TOKEN_ROTATION_EXPIRED: { title: 'Access token expired', level: 'warning' },
+  TOKEN_BLOCKED: { title: 'Access token blocked', level: 'warning' },
+  TOKEN_SCOPE_VIOLATION: { title: 'Request refused: outside the token\'s permissions', level: 'warning' },
+};
+
+/** The history entry an event type makes, or undefined for internal traffic that is not recorded. */
+export function personFacingEvent(type: string): PersonFacingEvent | undefined {
+  return Object.prototype.hasOwnProperty.call(PERSON_FACING_EVENTS, type) ? PERSON_FACING_EVENTS[type] : undefined;
+}
+
+/** The detail line an event payload carries (an error or cancel reason), if any. */
+function eventDetail(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as Record<string, unknown>;
+  for (const field of ['error', 'reason']) {
+    const value = record[field];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
 }
 
 export function createNotificationDispatcher(
@@ -114,9 +164,10 @@ export function wireMemoryPressureNotice(
 }
 
 /**
- * Bridge the runtime event bus to the dispatcher: each event in a curated
- * domain becomes a notification and is routed. Returns an unsubscribe function
- * that detaches every domain listener.
+ * Bridge the runtime event bus to the dispatcher: each person-facing event
+ * (PERSON_FACING_EVENTS) in a curated domain becomes a notification with its
+ * plain title and is routed. Internal events are not recorded at all. Returns
+ * an unsubscribe function that detaches every domain listener.
  */
 export function wireRuntimeNotificationBridge(
   runtimeBus: RuntimeEventBus,
@@ -125,11 +176,15 @@ export function wireRuntimeNotificationBridge(
 ): () => void {
   const unsubscribes = domains.map((domain) =>
     runtimeBus.onDomain(domain, (envelope) => {
+      const event = personFacingEvent(envelope.type);
+      if (!event) return;
+      const body = eventDetail(envelope.payload);
       dispatcher.dispatch({
         id: envelope.traceId ?? `${domain}-${envelope.type}-${envelope.ts}`,
         domain,
-        level: levelForEventType(envelope.type),
-        title: humanizeEventType(envelope.type),
+        level: event.level,
+        title: event.title,
+        ...(body ? { body } : {}),
         timestamp: envelope.ts,
       });
     }),

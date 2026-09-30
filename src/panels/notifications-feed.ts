@@ -75,6 +75,25 @@ function subjectOf(notification: Notification): string | undefined {
   return undefined;
 }
 
+/** Plain names for a collapsed group of mixed notifications, by domain. */
+const GROUP_TITLES: Readonly<Record<string, string>> = {
+  agents: 'Agent updates',
+  tasks: 'Task updates',
+  workflows: 'Review chain updates',
+  automation: 'Scheduled job updates',
+  deliveries: 'Message delivery updates',
+  security: 'Security updates',
+  ops: 'System updates',
+};
+
+/** The title a collapsed group of mixed notifications shows: a plain name, never a raw domain id. */
+export function groupTitle(domain: string): string {
+  const known = GROUP_TITLES[domain];
+  if (known) return known;
+  const words = domain.replace(/[_-]+/g, ' ').trim();
+  return words ? `${words[0]!.toUpperCase()}${words.slice(1)} updates` : 'Updates';
+}
+
 /**
  * Entries kept before the oldest leave. System notices share this bound, so a
  * long session's full notice history stays reachable in the modal.
@@ -121,7 +140,7 @@ export class PanelNotificationFeed {
       counts.set(notification.title, (counts.get(notification.title) ?? 0) + 1);
       this.groupTitles.set(key, counts);
       if (counts.size > 1) {
-        title = `${notification.domain} events`;
+        title = groupTitle(notification.domain);
         body = [...counts].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} \u00d7${n}`).join(', ');
       }
     }

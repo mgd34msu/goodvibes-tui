@@ -11,7 +11,8 @@ import { bridgeNotificationFeedToToasts, ToastCenter } from '../../renderer/toas
 import { renderToasts } from '../../renderer/surface-kit-parts.ts';
 import { renderNotificationsModal } from '../../renderer/notifications-modal.ts';
 import { appendConversationMessages, type ConversationRenderContext } from '../../core/conversation-rendering.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types';
+import { createEmptyLine, type Line } from '@pellux/goodvibes-sdk/platform/types';
+import { frameFromLayer } from '../helpers/surface-frame.ts';
 
 const FAILED = '[Agents] ✗ engineer b6834750: "Spawn one reviewer agent to review and verify the backoff…" — failed in 51s: planned-fix execution is not wired in this composition (setFixWorkstreamRunner was never called)';
 
@@ -75,9 +76,11 @@ describe('notices show their full text, wrapped', () => {
     for (const line of layer.lines) {
       const row = line.map((cell) => cell.char).join('');
       if (row.trim().length === 0) continue;
-      expect(row[0]).toBe('┃');
-      expect(row[1]).toBe(' ');
-      expect(row[2]).toBe(' ');
+      const bar = row.indexOf('┃');
+      expect(bar).toBeGreaterThan(0);
+      expect(row[bar + 1]).toBe(' ');
+      expect(row[bar + 2]).toBe(' ');
+      expect(row[row.length - 1]).toBe('┃');
       expect(row[row.length - 2]).toBe(' ');
       expect(row[row.length - 3]).toBe(' ');
     }
@@ -107,6 +110,47 @@ describe('toasts never cover the composer or the status line', () => {
   });
 });
 
+describe('toasts keep a gap from the transcript under them', () => {
+  // A transcript whose every row is a filled block with text across the full
+  // fill (columns 3 to width-3), the worst case for a floating toast.
+  const W = 100;
+  const H = 30;
+  const BLOCK_BG = '#223344';
+  function transcript(): Line[] {
+    return Array.from({ length: H }, () => {
+      const line = createEmptyLine(W);
+      for (let x = 3; x <= W - 3; x++) line[x] = { ...line[x]!, char: 'x', bg: BLOCK_BG };
+      return line;
+    });
+  }
+  const plain = (line: Line, x: number): boolean => line[x]!.char === ' ' && line[x]!.bg === '';
+
+  test('the lowest toast has a cleared row under it and cleared columns on its left; stacked toasts a cleared row between', () => {
+    const toasts = [{ title: 'First notice', tone: 'info' as const }, { title: 'Second notice', body: 'with a body', tone: 'warning' as const }];
+    const layer = renderToasts(W, H, toasts, { top: 1, bottom: H - 6 })!;
+    const frame = frameFromLayer(layer, W, H, transcript());
+    const toastRows = frame.map((line, y) => ({ y, bars: line.map((c) => c.char).join('').split('┃').length - 1 })).filter((r) => r.bars === 2).map((r) => r.y);
+    expect(toastRows.length).toBeGreaterThan(0);
+    const lowest = Math.max(...toastRows);
+    const left = frame[toastRows[0]!]!.findIndex((c) => c.char === '┃');
+    const right = frame[toastRows[0]!]!.map((c) => c.char).lastIndexOf('┃');
+    // Under the lowest toast: one full row of plain screen across its width and its left gap.
+    for (let x = left - 2; x <= right; x++) expect(plain(frame[lowest + 1]!, x)).toBe(true);
+    // Beside every toast row: two plain columns before the bar.
+    for (const y of toastRows) {
+      expect(plain(frame[y]!, left - 1)).toBe(true);
+      expect(plain(frame[y]!, left - 2)).toBe(true);
+    }
+    // Between the two toasts: a plain row, never the block showing through.
+    const gaps = [];
+    for (let y = toastRows[0]!; y < lowest; y++) if (!toastRows.includes(y)) gaps.push(y);
+    expect(gaps.length).toBe(1);
+    for (let x = left; x <= right; x++) expect(plain(frame[gaps[0]!]!, x)).toBe(true);
+    // And the gap stays inside the area, above the footer.
+    expect(layer.y + layer.lines.length).toBeLessThanOrEqual(H - 6);
+  });
+});
+
 describe('an agent view still draws its own agent\'s system messages', () => {
   test('without systemNotices the notice is a row', () => {
     const lines: Line[] = [];
@@ -133,7 +177,7 @@ describe('history counts say what they count', () => {
     feed.record(note('Agent completed', 9), decision);
     const [entry] = feed.list();
     expect(entry!.collapsedCount).toBe(6);
-    expect(entry!.title).toBe('agents events');
+    expect(entry!.title).toBe('Agent updates');
     expect(entry!.body).toBe('Agent stream delta ×5, Agent completed ×1');
   });
 

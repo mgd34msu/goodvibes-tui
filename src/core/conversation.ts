@@ -15,7 +15,8 @@ import type { BlockMeta } from './conversation-types.ts';
 import type { NoticeSink } from './notices.ts';
 import { MessageLineCache } from './conversation-line-cache.ts';
 import { SplashGateState } from './conversation-splash-state.ts';
-import { resolveTranscriptEventLine } from './conversation-event-navigation.ts';
+import { nearestBlock, resolveTranscriptEventLine, wrapToLine } from './conversation-event-navigation.ts';
+import { DisplayOnlyOutput } from './conversation-display-only.ts';
 import { SearchExpansionTracker } from './conversation-search-expansion.ts';
 import {
   addConversationSplashScreen,
@@ -68,6 +69,8 @@ export { sumConversationUsage } from './conversation-usage.ts';
 
 export class ConversationManager extends SdkConversationManager {
   public history = new InfiniteBuffer();
+  /** Display-only output kept for redraw (conversation-display-only.ts). */
+  private readonly displayOnly = new DisplayOnlyOutput();
   private _getWidth: () => number;
   /** Tracks the rendered width; a change invalidates the full history. */
   private lastRenderedWidth = 0;
@@ -289,7 +292,8 @@ export class ConversationManager extends SdkConversationManager {
     // rebuild later in the stream does.
     this.streamingStartLine = 0;
     this.flushHistory();
-    this.streamingStartLine = this.history.getLineCount();
+    // The streamed text starts above any display-only draws kept below it.
+    this.streamingStartLine = this.history.getLineCount() - this.displayOnly.trailingLineCount;
     this._streamWidth = this._getWidth();
     this._lastStreamRenderMs = 0;
   }
@@ -318,6 +322,7 @@ export class ConversationManager extends SdkConversationManager {
         const width = this._getWidth();
         this.history.truncateToLine(this.streamingStartLine);
         this.history.addLines(this.streamingLines(content, width));
+        this.displayOnly.drawTrailing(width, () => this.history.getLineCount());
       }
     }
   }
@@ -329,6 +334,7 @@ export class ConversationManager extends SdkConversationManager {
   public override finalizeStreamingBlock(): void {
     super.finalizeStreamingBlock();
     this.streamingStartLine = -1;
+    this.displayOnly.resetTrailing();
     this._streamWidth = -1;
     this._lastStreamRenderMs = 0;
     this.markDirty();
@@ -355,6 +361,7 @@ export class ConversationManager extends SdkConversationManager {
     this.errorLineRegistry = [];
     this.messageKindRegistry = new Map();
     this.streamingStartLine = -1;
+    this.displayOnly.drop();
     this.workTree.reset();
     this._displayFromMessageIndex = 0; // full reset, show everything on next render
   }
@@ -403,6 +410,8 @@ export class ConversationManager extends SdkConversationManager {
     super.fromJSON(data);
     // A restored session's notices go back into the history (not toasted).
     for (const message of data.messages) if (message.role === 'system') this.noticeSink?.(message.content, { restored: true });
+    // Output printed over the conversation this one replaces is not about it.
+    this.displayOnly.drop();
     this.history.clear();
     this.lineCache.clear();
     this.appendedUpTo = 0;
@@ -455,6 +464,7 @@ export class ConversationManager extends SdkConversationManager {
     this.lastRenderedWidth = width;
     this.dirty = false;
     this.builtWhileActive = this.workTreeSources.turnActive?.() ?? false;
+    this.displayOnly.resetTrailing();
 
     const snapshot = this.getMessageSnapshot();
     // During streaming, the in-progress placeholder (always the last message) is
@@ -488,8 +498,14 @@ export class ConversationManager extends SdkConversationManager {
     // renderSnapshot) is left uncached: its content mutates in place per delta and
     // the incremental streaming path (updateStreamingBlock) owns it.
     const streamingPlaceholderAbsIdx = isStreaming ? snapshot.length - 1 : -1;
-    this.appendMessages(visibleSnapshot, width, displayStart, streamingPlaceholderAbsIdx);
+    // Display-only draws go back where they were printed: after the unit that
+    // holds the last message that existed then. The turn still streaming is
+    // last and its text continues below it, so what follows it waits.
+    const kept = this.displayOnly.cursor(width);
+    kept.through(displayStart - 1);
+    this.appendMessages(visibleSnapshot, width, displayStart, streamingPlaceholderAbsIdx, (last, streaming) => { if (!streaming) kept.through(last); });
     this.appendedUpTo = snapshot.length;
+    if (!isStreaming) kept.through(Number.POSITIVE_INFINITY);
 
     if (isStreaming) {
       // Re-anchor the streaming block to the freshly rebuilt buffer and re-render
@@ -501,8 +517,21 @@ export class ConversationManager extends SdkConversationManager {
       if (typeof streamingContent === 'string' && streamingContent.length > 0) {
         this.history.addLines(this.streamingLines(streamingContent, width));
       }
+      kept.trailStreamed(() => this.history.getLineCount()); // printed this turn: below the streamed text
     }
   }
+
+  /** Keep a display-only draw and draw it now (below streamed text while streaming; over the splash, it retires the splash). */
+  private recordDisplayOnly(draw: (width: number) => void): void {
+    const seq = this.displayOnly.keep(this.getMessageSnapshot().length, draw);
+    if (this.splashGate.showing && this.splashGate.dismiss()) return this.rebuildHistory();
+    const before = this.history.getLineCount();
+    draw(this._getWidth());
+    this.displayOnly.noteDrawn(seq, this.history.getLineCount() - before, this.streamingStartLine >= 0);
+  }
+
+  /** Display-only draws kept for redraw (bounded; for memory-hygiene assertions). */
+  public getDisplayOnlyCount(): number { return this.displayOnly.count; }
 
   /**
    * flushHistory - Incremental update. Appends only newly added messages.
@@ -561,6 +590,7 @@ export class ConversationManager extends SdkConversationManager {
     width: number,
     msgIndexOffset = 0,
     streamingPlaceholderAbsIdx = -1,
+    afterUnit?: (lastIndex: number, streaming: boolean) => void,
   ): void {
     this.lineCache.renderInto(
       this.renderingContext(),
@@ -569,6 +599,7 @@ export class ConversationManager extends SdkConversationManager {
       this.messageLineRegistry,
       msgIndexOffset,
       streamingPlaceholderAbsIdx,
+      afterUnit,
     );
   }
 
@@ -585,30 +616,12 @@ export class ConversationManager extends SdkConversationManager {
   /** Override the unicode probe (tests, and a terminal the caller knows better). */
   public setUnicodeCapable(capable: boolean): void { this.unicodeCapable = capable; this.markDirty(); }
   /** Find the nearest block to a given line index, optionally filtered by type. */
-  public findNearestBlock(lineIndex: number, typeFilter?: string): BlockMeta | null {
-    let nearest: BlockMeta | null = null;
-    let nearestDist = Infinity;
-    for (const block of this.blockRegistry) {
-      if (typeFilter !== undefined && block.type !== typeFilter) continue;
-      if (lineIndex >= block.startLine && lineIndex < block.startLine + block.lineCount) {
-        return block;
-      }
-      const dist = Math.abs(block.startLine - lineIndex);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = block;
-      }
-    }
-    return nearest;
-  }
+  public findNearestBlock(lineIndex: number, typeFilter?: string): BlockMeta | null { return nearestBlock(this.blockRegistry, lineIndex, typeFilter); }
 
-  /**
-   * isCollapsed - Returns whether the block at blockIndex is collapsed.
-   */
+  /** isCollapsed - Returns whether the block at blockIndex is collapsed. */
   public isCollapsed(blockIndex: number): boolean {
     const block = this.blockRegistry[blockIndex];
-    if (!block) return false;
-    return this.collapsedNow(block);
+    return block ? this.collapsedNow(block) : false;
   }
 
   /** Current collapse of a block: an unset bead key is a closed bead; everything else defaults open. */
@@ -632,11 +645,7 @@ export class ConversationManager extends SdkConversationManager {
   public getDiffAtLine(lineIndex: number): { filePath: string; original: string; updated: string } | null {
     const nearest = this.findNearestBlock(lineIndex, 'diff');
     if (!nearest || !nearest.filePath) return null;
-    return {
-      filePath: nearest.filePath,
-      original: nearest.diffOriginal ?? '',
-      updated: nearest.diffUpdated ?? '',
-    };
+    return { filePath: nearest.filePath, original: nearest.diffOriginal ?? '', updated: nearest.diffUpdated ?? '' };
   }
 
   /**
@@ -691,23 +700,13 @@ export class ConversationManager extends SdkConversationManager {
    * nextErrorLine - Find the next error line after currentLine (wraps around).
    * Returns -1 if there are no error lines.
    */
-  public nextErrorLine(currentLine: number): number {
-    const errors = this.getErrorLines();
-    if (errors.length === 0) return -1;
-    const after = errors.find(l => l > currentLine);
-    return after ?? errors[0];
-  }
+  public nextErrorLine(currentLine: number): number { return wrapToLine(this.getErrorLines(), currentLine, 'next'); }
 
   /**
    * prevErrorLine - Find the previous error line before currentLine (wraps around).
    * Returns -1 if there are no error lines.
    */
-  public prevErrorLine(currentLine: number): number {
-    const errors = this.getErrorLines();
-    if (errors.length === 0) return -1;
-    const before = [...errors].reverse().find(l => l < currentLine);
-    return before ?? errors[errors.length - 1];
-  }
+  public prevErrorLine(currentLine: number): number { return wrapToLine(this.getErrorLines(), currentLine, 'prev'); }
 
   public nextTranscriptEventLine(currentLine: number, kind: TranscriptEventKind | 'all' = 'all'): number {
     this.flushHistory();
@@ -742,8 +741,9 @@ export class ConversationManager extends SdkConversationManager {
     return conversationTextToLines(text, width, style);
   }
 
+  /** Print display-only text into the transcript (never a message); it survives every rebuild. */
   public log(text: string, style: Partial<Cell> = {}, indent = '      '): void {
-    logConversationText(this.renderingContext(), this._getWidth(), text, style, indent);
+    this.recordDisplayOnly((width) => logConversationText(this.renderingContext(), width, text, style, indent));
   }
 
   /**
@@ -759,7 +759,7 @@ export class ConversationManager extends SdkConversationManager {
     durationMs: number,
     errorMsg?: string,
   ): void {
-    logConversationToolResult(this.renderingContext(), this._getWidth(), toolCall, status, resultSummary, durationMs, errorMsg);
+    this.recordDisplayOnly((width) => logConversationToolResult(this.renderingContext(), width, toolCall, status, resultSummary, durationMs, errorMsg));
     this.markDirty();
   }
 
@@ -776,6 +776,7 @@ export class ConversationManager extends SdkConversationManager {
    */
   public clearDisplay(): void {
     this.history.clear();
+    this.displayOnly.drop();
     this.blockRegistry = [];
     this.messageLineRegistry = [];
     this.errorLineRegistry = [];

@@ -40,3 +40,30 @@ export function resolveTranscriptEventLine(
   }
   return [...lines].reverse().find((line) => line < currentLine) ?? lines[lines.length - 1]!;
 }
+
+/** The next (or previous) line in a sorted list after (or before) `currentLine`, wrapping around; -1 when the list is empty. */
+export function wrapToLine(lines: readonly number[], currentLine: number, direction: 'next' | 'prev'): number {
+  if (lines.length === 0) return -1;
+  if (direction === 'next') return lines.find((line) => line > currentLine) ?? lines[0]!;
+  return [...lines].reverse().find((line) => line < currentLine) ?? lines[lines.length - 1]!;
+}
+
+/** The block containing `lineIndex`, else the one starting nearest it (optionally only blocks of `typeFilter`). */
+export function nearestBlock<B extends { readonly type: string; readonly startLine: number; readonly lineCount: number }>(
+  blocks: readonly B[],
+  lineIndex: number,
+  typeFilter?: string,
+): B | null {
+  let nearest: B | null = null;
+  let nearestDist = Infinity;
+  for (const block of blocks) {
+    if (typeFilter !== undefined && block.type !== typeFilter) continue;
+    if (lineIndex >= block.startLine && lineIndex < block.startLine + block.lineCount) return block;
+    const dist = Math.abs(block.startLine - lineIndex);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = block;
+    }
+  }
+  return nearest;
+}

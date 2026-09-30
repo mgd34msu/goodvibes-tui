@@ -241,6 +241,79 @@ describe('ConversationManager', () => {
       expect(frame).toContain('resume notice');
     });
 
+    test('display-only command output survives a resize, in place (live defect: /context window output vanished on resize)', () => {
+      let width = 120;
+      const c = new ConversationManager(() => width);
+      const frame = (): string => c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      c.getDisplayBlocks();
+      c.dismissSplash();
+      c.addUserMessage('first question');
+      c.addAssistantMessage('first answer', { model: 'm1' });
+      c.getDisplayBlocks();
+      c.log('Context window for Free Models Router: 200,000 tokens');
+      c.addUserMessage('second question');
+      expect(frame()).toContain('Context window for Free Models Router: 200,000 tokens');
+
+      // A resize rebuilds the whole transcript at the new width.
+      width = 90;
+      const after = frame();
+      expect(after).toContain('Context window for Free Models Router: 200,000 tokens');
+      // Still between the messages it was printed between.
+      expect(after.indexOf('first answer')).toBeLessThan(after.indexOf('Context window for Free Models Router'));
+      expect(after.indexOf('Context window for Free Models Router')).toBeLessThan(after.indexOf('second question'));
+      // And back again, drawn once.
+      width = 120;
+      expect(frame().split('Context window for Free Models Router').length - 1).toBe(1);
+    });
+
+    test('output printed while a reply streams stays below the streamed text across deltas and a resize', () => {
+      let width = 120;
+      const c = new ConversationManager(() => width);
+      const frame = (): string => c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      c.dismissSplash();
+      c.addUserMessage('question');
+      c.getDisplayBlocks();
+      c.startStreamingBlock();
+      c.updateStreamingBlock('partial answer');
+      c.log('printed mid-turn');
+      c.updateStreamingBlock('partial answer grows');
+      let shown = frame();
+      expect(shown).toContain('printed mid-turn');
+      expect(shown.indexOf('partial answer grows')).toBeLessThan(shown.indexOf('printed mid-turn'));
+      width = 100;
+      c.updateStreamingBlock('partial answer grows more');
+      shown = frame();
+      expect(shown.split('printed mid-turn').length - 1).toBe(1);
+      expect(shown.indexOf('partial answer grows more')).toBeLessThan(shown.indexOf('printed mid-turn'));
+    });
+
+    test('output printed over the splash retires it and stays through a resize', () => {
+      let width = 120;
+      const c = new ConversationManager(() => width);
+      const frame = (): string => c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(frame()).toContain('██████╗');
+      c.log('[Ctrl+Y: No block found nearby]');
+      expect(frame()).toContain('[Ctrl+Y: No block found nearby]');
+      width = 90;
+      const shown = frame();
+      expect(shown).toContain('[Ctrl+Y: No block found nearby]');
+      expect(shown).not.toContain('██████╗');
+    });
+
+    test('clearing the display drops kept display-only output', () => {
+      let width = 120;
+      const c = new ConversationManager(() => width);
+      c.dismissSplash();
+      c.addUserMessage('q');
+      c.getDisplayBlocks();
+      c.log('old receipt');
+      c.clearDisplay();
+      width = 100;
+      const shown = c.getDisplayBlocks().map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(shown).not.toContain('old receipt');
+      expect(c.getDisplayOnlyCount()).toBe(0);
+    });
+
     test('the splash stays gone for the rest of the run, including when the panel posture toggles', () => {
       const c = new ConversationManager(() => 120);
       c.getDisplayBlocks();

@@ -171,6 +171,13 @@ export class MessageLineCache {
     messageLineRegistry: number[],
     msgIndexOffset: number,
     streamingPlaceholderAbsIdx: number,
+    /**
+     * Called after each unit is in the buffer, with the absolute index of the
+     * unit's last message and whether it is the turn still streaming. The
+     * conversation draws display-only output (a command's printed text) there,
+     * after the messages it followed.
+     */
+    afterUnit?: (lastIndex: number, streaming: boolean) => void,
   ): void {
     const config = context.configManager;
     const common: Part[] = [
@@ -214,9 +221,11 @@ export class MessageLineCache {
       }
 
       const existing = this.entries.get(id);
+      const lastIndex = unit.kind === 'turn' ? unit.end : unit.index;
       if (existing && this.isValid(existing, key, focus, context.collapseState)) {
         this.apply(context, existing, base, messageLineRegistry);
         touched.add(id);
+        afterUnit?.(lastIndex, streaming);
         continue;
       }
 
@@ -226,6 +235,7 @@ export class MessageLineCache {
       this.apply(context, entry, base, messageLineRegistry);
       this.entries.set(id, entry);
       touched.add(id);
+      afterUnit?.(lastIndex, streaming);
     }
 
     // Mark-and-sweep: a full rebuild plans every visible unit, so an entry not

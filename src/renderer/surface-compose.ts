@@ -128,7 +128,8 @@ function stampLayer(grid: CellGrid, layer: SurfaceLayer): void {
       const cell = line[q]!;
       if (isTransparentCell(cell)) continue;
       const under = grid.getCell(x, y);
-      grid.setCell(x, y, { ...cell, bg: cell.bg !== '' ? cell.bg : under?.bg ?? '' });
+      if (layer.clearBlank && cell.char === ' ' && cell.bg === '') grid.setCell(x, y, createEmptyCell());
+      else grid.setCell(x, y, { ...cell, bg: cell.bg !== '' ? cell.bg : under?.bg ?? '' });
       if (firstX < 0) firstX = x;
       lastX = x;
     }

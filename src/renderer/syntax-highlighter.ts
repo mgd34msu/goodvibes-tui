@@ -459,6 +459,8 @@ export class SyntaxHighlighter {
   private readonly readyListeners = new Set<() => void>();
   private _generation = 0;
   private _misses = 0;
+  /** Numbers each parse's virtual path, so no two parses in flight share a tree. */
+  private parseSeq = 0;
 
   constructor() {
     this.service = new TreeSitterService();
@@ -524,11 +526,18 @@ export class SyntaxHighlighter {
   private scheduleParse(code: string, langId: string, key: string): void {
     this.pending.add(key);
 
-    // Use a stable virtual path for the parser cache key
-    const virtualPath = `__highlight__.${langId}`;
+    // Each parse gets its own virtual path. The service keeps one tree per
+    // path and deletes the previous tree when the same path is parsed again,
+    // so a shared path let a second parse in flight free this parse's tree
+    // before collectSpans walked it: the spans came from freed memory, the
+    // wrong colours were cached for good, and which ones depended on what
+    // else was being highlighted at the time. The tree is released (the
+    // service's invalidate) once this parse has walked it.
+    const virtualPath = `__highlight__/${++this.parseSeq}.${langId}`;
 
     const run = Promise.resolve().then(async () => {
       let landed = false;
+      let parsed = false;
       try {
         // Ensure the grammar is loaded
         const language = await this.service.loadLanguage(langId);
@@ -540,6 +549,7 @@ export class SyntaxHighlighter {
 
         // Parse the code
         const tree = await this.service.parse(virtualPath, code, langId);
+        parsed = true;
         if (!tree) {
           logger.debug('SyntaxHighlighter: parse returned null', { langId });
           this.markFailed(key);
@@ -565,6 +575,7 @@ export class SyntaxHighlighter {
         logger.warn('SyntaxHighlighter: parse error', { langId, error: summarizeError(err) });
         this.markFailed(key);
       } finally {
+        if (parsed) this.service.invalidate(virtualPath);
         this.pending.delete(key);
       }
       if (landed) for (const listener of this.readyListeners) listener();
