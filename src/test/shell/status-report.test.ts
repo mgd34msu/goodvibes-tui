@@ -49,6 +49,15 @@ describe('/status report', () => {
     expect(text).not.toMatch(/compacts at/);
   });
 
+  test('the context section names where the window came from', () => {
+    expect(report({ contextWindow: 128_000, contextWindowSource: 'catalog: abacus' })).toMatch(/window from +catalog: abacus/);
+    expect(report({ contextWindow: 200_000, contextWindowSource: 'consensus of 4 providers' })).toMatch(/window from +consensus of 4 providers/);
+    const unknown = report({ contextWindow: 0, contextWindowSource: 'family default' });
+    expect(unknown).toMatch(/used +13\.2k \/ unknown/);
+    expect(unknown).toMatch(/window from +family default/);
+    expect(report()).not.toMatch(/window from/);
+  });
+
   test('"—" instead of a false 0 before the first input count', () => {
     const text = report({ usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextTokens: 0 });
     expect(text).toMatch(/input +—/);

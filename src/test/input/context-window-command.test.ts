@@ -77,7 +77,7 @@ function makeHarness(opts: { override?: number | null; observed?: number | null;
 
   const providerRegistry = {
     getCurrentModel: () => {
-      if (override !== null) return { ...baseModel, contextWindow: override, contextWindowProvenance: 'configured_cap' as const };
+      if (override !== null) return { ...baseModel, contextWindow: override, contextWindowProvenance: 'configured_cap' as const, contextWindowOrigin: { kind: 'user_override' as const } };
       if (observed !== null && observed < baseModel.contextWindow) {
         return { ...baseModel, contextWindow: observed, contextWindowProvenance: 'observed_limit' as const };
       }
@@ -120,10 +120,10 @@ describe('handleContextWindowSubcommand', () => {
     expect(h.printed).toHaveLength(1);
   });
 
-  test('no args with an active override labels it as a custom override', () => {
+  test('no args with an active override labels it as a user override', () => {
     const h = makeHarness({ override: 150_000 });
     const out = handleContextWindowSubcommand([], h.ctx);
-    expect(out).toContain('custom override');
+    expect(out).toContain('source:   user override');
     expect(out).toContain('150,000 tokens');
   });
 
@@ -182,15 +182,31 @@ describe('handleContextWindowSubcommand', () => {
 
 describe('buildContextWindowStatusText provenance labels', () => {
   test.each([
-    ['configured_cap', 'custom override'],
-    ['provider_api', 'reported by the provider'],
-    ['fallback', 'family default'],
-  ] as const)('%s → %s', (provenance, label) => {
-    const model = makeModel({ contextWindowProvenance: provenance });
+    [{ contextWindowProvenance: 'configured_cap', contextWindowOrigin: { kind: 'user_override' } }, 'source:   user override'],
+    [{ contextWindowProvenance: 'configured_cap', contextWindowOrigin: { kind: 'provider_file' } }, 'source:   provider file'],
+    [{ contextWindowProvenance: 'provider_api' }, 'source:   reported by the provider'],
+    [{ contextWindowProvenance: 'catalog', contextWindowOrigin: { kind: 'catalog', catalogProviderId: 'abacus' } }, 'source:   catalog: abacus'],
+    [{ contextWindowProvenance: 'catalog', contextWindowOrigin: { kind: 'consensus', providers: 4, agreeing: 4 } }, 'source:   consensus of 4 providers'],
+  ] as const)('%o → %s', (overrides, label) => {
+    const model = makeModel(overrides as Partial<ModelDefinition>);
     expect(buildContextWindowStatusText(model, 100_000, null)).toContain(label);
   });
 
   test('missing provenance → model catalog', () => {
-    expect(buildContextWindowStatusText(makeModel(), 100_000, null)).toContain('model catalog');
+    expect(buildContextWindowStatusText(makeModel(), 100_000, null)).toContain('source:   model catalog');
+  });
+
+  test('a family default reads as unknown and names itself a guess', () => {
+    const model = makeModel({ contextWindow: 128_000, contextWindowProvenance: 'fallback', contextWindowOrigin: { kind: 'family_default' } });
+    const text = buildContextWindowStatusText(model, null, null);
+    expect(text).toContain('resolved: unknown (no catalog provider lists this model; the family default of 128,000 tokens is a guess)');
+    expect(text).toContain('source:   family default');
+  });
+
+  test('a disproven window keeps its own explanation and no source line', () => {
+    const model = makeModel({ contextWindow: 150_000, contextWindowProvenance: 'accepted_floor' });
+    const text = buildContextWindowStatusText(model, null, null);
+    expect(text).toContain('unknown (the provider accepted 150,000 tokens, more than the stated window)');
+    expect(text).not.toContain('source:');
   });
 });

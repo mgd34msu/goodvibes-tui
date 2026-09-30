@@ -22,7 +22,7 @@ import { wireWorkTree } from './core/work-tree-wiring.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { InputHistory } from './input/input-history.ts';
-import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
+import { describeContextWindowSource, getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
@@ -643,7 +643,7 @@ async function main() {
       permissionMode: configManager.get('permissions.mode') as string, toolCount: toolRegistry.list().length, notifyMode: modeManager.getHITLMode(),
       usage: orchestrator.usage,
       cost: statusCostText({ up: orchestrator.usage.input, down: orchestrator.usage.output, cacheRead: orchestrator.usage.cacheRead, cacheWrite: orchestrator.usage.cacheWrite, fleetCostUsd: footerFleetCost(() => ctx.services.processRegistry.query().nodes, true) }, active.footerModel),
-      contextTokens: orchestrator.lastInputTokens, contextWindow: providerRegistry.getKnownContextWindowForModel(serving) ?? 0,
+      contextTokens: orchestrator.lastInputTokens, contextWindow: providerRegistry.getKnownContextWindowForModel(serving) ?? 0, contextWindowSource: describeContextWindowSource(serving),
       compactFraction: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),
       sessionSpine: spine?.sessionSpineActive && spine.sessionSpineStatus && spine.sessionSpineStatus !== 'unknown' ? spine.sessionSpineStatus : undefined,
       webSurfaceUrl: configManager.get('web.enabled') ? resolveWebSurfaceUrl(configManager) : undefined,

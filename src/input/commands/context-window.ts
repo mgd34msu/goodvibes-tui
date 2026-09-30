@@ -6,11 +6,13 @@
  * control-plane config dir with provenance 'configured_cap'), so it survives
  * restarts, applies to any model (cloud or local), and is honored by every
  * consumer of the same home. Clearing returns the model to its automatic
- * window (catalog / provider API / family fallback).
+ * window (catalog / provider API / family fallback). The source line names
+ * where the window came from, with the SDK's describeContextWindowSource
+ * ('catalog: abacus', 'consensus of 4 providers', 'family default').
  */
 import type { CommandContext } from '../command-registry.ts';
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
-import { MAX_CONTEXT_WINDOW_OVERRIDE } from '@pellux/goodvibes-sdk/platform/providers';
+import { MAX_CONTEXT_WINDOW_OVERRIDE, describeContextWindowSource } from '@pellux/goodvibes-sdk/platform/providers';
 
 /**
  * Parse a user-supplied context window size. Accepts plain token counts
@@ -28,17 +30,6 @@ export function parseContextWindowSize(raw: string): number | null {
   return value;
 }
 
-function describeProvenance(model: ModelDefinition): string {
-  switch (model.contextWindowProvenance) {
-    case 'configured_cap': return 'custom override';
-    case 'observed_limit': return 'learned from a provider rejection';
-    case 'provider_api': return 'reported by the provider';
-    case 'accepted_floor': return 'unknown: the provider accepted a larger request than the stated window';
-    case 'fallback': return 'family default (no catalog entry)';
-    default: return 'model catalog';
-  }
-}
-
 /** Status text for the current model's window + override state. */
 export function buildContextWindowStatusText(
   model: ModelDefinition,
@@ -50,11 +41,17 @@ export function buildContextWindowStatusText(
   const resolvedText = resolvedWindow === null
     ? model.contextWindowProvenance === 'accepted_floor'
       ? `unknown (the provider accepted ${model.contextWindow.toLocaleString()} tokens, more than the stated window)`
-      : 'unknown (no catalog entry or provider report states it)'
-    : `${resolvedWindow.toLocaleString()} tokens (${describeProvenance(model)})`;
+      : model.contextWindowOrigin?.kind === 'family_default'
+        ? `unknown (no catalog provider lists this model; the family default of ${model.contextWindow.toLocaleString()} tokens is a guess)`
+        : 'unknown (no catalog entry or provider report states it)'
+    : `${resolvedWindow.toLocaleString()} tokens`;
+  const sourceText = resolvedWindow === null && model.contextWindowProvenance === 'accepted_floor'
+    ? null
+    : describeContextWindowSource(model);
   const lines = [
     `Context window for ${model.displayName} (${model.registryKey}):`,
     `  resolved: ${resolvedText}`,
+    ...(sourceText === null ? [] : [`  source:   ${sourceText}`]),
     `  override: ${override === null ? 'none (automatic)' : `${override.toLocaleString()} tokens`}`,
   ];
   if (observed !== null) {

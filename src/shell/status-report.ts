@@ -27,6 +27,8 @@ export interface StatusReportSource {
   readonly cost: string | null;
   readonly contextTokens: number;
   readonly contextWindow: number;
+  /** Where the window came from ('catalog: abacus', 'consensus of 4 providers', 'family default'). */
+  readonly contextWindowSource?: string;
   /** Compaction threshold as a fraction. */
   readonly compactFraction: number;
   readonly sessionSpine?: 'online' | 'offline';
@@ -64,9 +66,11 @@ export function formatStatusReport(s: StatusReportSource): string {
   if (s.contextWindow > 0) {
     const pct = Math.round(Math.min(1, s.contextTokens / s.contextWindow) * 100);
     row('used', `${s.contextTokens > 0 ? n(s.contextTokens) : '—'} / ${n(s.contextWindow)} (${pct}%)`);
+    if (s.contextWindowSource) row('window from', s.contextWindowSource);
     row('compacts at', `${Math.round(s.compactFraction * 100)}%`);
   } else {
     row('used', `${s.contextTokens > 0 ? n(s.contextTokens) : '—'} / unknown (nothing states this model's context window)`);
+    if (s.contextWindowSource) row('window from', s.contextWindowSource);
   }
   lines.push('Surfaces');
   row('spine', s.sessionSpine ?? 'local only');
