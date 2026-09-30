@@ -1,5 +1,7 @@
 import { describe, test, expect, afterEach } from 'bun:test';
-import { rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { GitStatusProvider } from '../../renderer/git-status.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
@@ -204,7 +206,9 @@ describe('GitStatusProvider', () => {
     }
 
     test('a live not-a-repo -> is-a-repo flip (external `git init`) triggers exactly one refresh-driven onChange call', async () => {
-      tmpDir = makeProjectTempDir('gv-git-status-poll');
+      // A system temp dir: the project temp root can sit inside a git checkout,
+      // which would make the directory a repo before the test flips it.
+      tmpDir = mkdtempSync(join(tmpdir(), 'gv-git-status-poll-'));
       const provider = new GitStatusProvider(tmpDir);
       providers.push(provider);
 
