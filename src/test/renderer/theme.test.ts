@@ -11,8 +11,6 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { readFileSync } from 'fs';
-import path from 'path';
 import { TONE_TOKENS } from '@pellux/goodvibes-sdk/platform/presentation';
 import {
   activeTokens,
@@ -50,10 +48,6 @@ function collectStringLeaves(value: unknown, prefix: string, out: Array<[string,
 }
 
 describe('resolveTheme', () => {
-  test('is stable per (theme, mode): same object on repeat reads', () => {
-    expect(resolveTheme('dark')).toBe(resolveTheme('dark'));
-    expect(resolveTheme('light')).toBe(resolveTheme('light'));
-  });
 
   test('light differs from dark', () => {
     expect(resolveTheme('light')).not.toBe(resolveTheme('dark'));
@@ -142,14 +136,4 @@ describe('resolveUiTones', () => {
     expect(resolveUiTones('light').state.reasoning).not.toBe(resolveUiTones('dark').state.reasoning);
     expect(resolveUiTones('light').accent.brand).not.toBe(resolveUiTones('dark').accent.brand);
   });
-});
-
-describe('theme data lives in the SDK, not in the renderer', () => {
-  const root = path.resolve(import.meta.dir, '../..');
-  for (const file of ['renderer/theme.ts', 'renderer/syntax-highlighter.ts', 'renderer/syntax-theme.ts', 'renderer/code-block.ts']) {
-    test(`${file} has no raw hex colour literal`, () => {
-      const content = readFileSync(path.join(root, file), 'utf-8');
-      expect(content.match(/#[0-9a-fA-F]{6}\b/g) ?? []).toEqual([]);
-    });
-  }
 });

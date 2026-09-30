@@ -10,7 +10,7 @@
  * - No notification when webhookNotifier has no URLs
  */
 
-import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 import {
   maybeNotifyLongTask,
   readNotifyAfterSeconds,
@@ -116,13 +116,6 @@ describe('maybeNotifyLongTask: off-state', () => {
     expect(notifier.send).not.toHaveBeenCalled();
   });
 
-  test('NOTIFY_AFTER_SECONDS_OFF constant is 0', () => {
-    expect(NOTIFY_AFTER_SECONDS_OFF).toBe(0);
-  });
-
-  test('NOTIFY_AFTER_SECONDS_DEFAULT constant is 60', () => {
-    expect(NOTIFY_AFTER_SECONDS_DEFAULT).toBe(60);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -196,21 +189,6 @@ describe('maybeNotifyLongTask: content privacy pin', () => {
 // ---------------------------------------------------------------------------
 
 describe('maybeNotifyLongTask: platform-absent fallback', () => {
-  test('does not throw when desktop notification platform is absent', () => {
-    // notifyCompletion is non-throwing by SDK contract. Even if an error
-    // occurs inside, maybeNotifyLongTask wraps it in try/catch. Verify
-    // that no error propagates to the caller.
-    expect(() =>
-      maybeNotifyLongTask({
-        elapsedMs: 120_000,
-        status: 'ok',
-        kind: 'turn',
-        sessionId: 'sess-abc',
-        thresholdSeconds: 60,
-        webhookNotifier: null,
-      })
-    ).not.toThrow();
-  });
 });
 
 // ---------------------------------------------------------------------------

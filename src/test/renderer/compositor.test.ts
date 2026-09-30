@@ -65,11 +65,6 @@ function makeBaseRequest(overrides: Partial<CompositeRequest> = {}): CompositeRe
 // ---------------------------------------------------------------------------
 
 describe('Compositor: full-width body', () => {
-  test('produces output (stdout.write called)', () => {
-    const { compositor, stream } = makeCompositor();
-    compositor.composite(makeBaseRequest());
-    expect(stream.writes.length).toBeGreaterThan(0);
-  });
 
   test('renders viewport lines via full-width blit', () => {
     const { compositor } = makeCompositor();

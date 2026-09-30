@@ -28,11 +28,6 @@ function makeModal(overrides: Partial<SessionPickerModal> = {}): SessionPickerMo
 }
 
 describe('renderSessionPickerModal', () => {
-  test('returns a non-empty Line[] array', () => {
-    const lines = frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24);
-    expect(Array.isArray(lines)).toBe(true);
-    expect(lines.length).toBeGreaterThan(0);
-  });
 
   test('each line has correct terminal width', () => {
     const lines = frameFromLayer(renderSessionPickerModal(makeModal(), W), W, 24);

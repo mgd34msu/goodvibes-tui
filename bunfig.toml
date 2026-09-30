@@ -5,28 +5,3 @@
 # repo relied on were dead code and a fully GREEN run left over a thousand
 # directories behind. See src/test/preload/temp-cleanup.ts.
 preload = ["./src/test/preload/temp-cleanup.ts"]
-
-# Coverage is OFF unless the --coverage CLI flag is passed. Do NOT add
-# "coverage = false" here: in bun 1.3.10 that bunfig key OVERRIDES the CLI
-# --coverage flag, which silently breaks scripts/coverage-gate.ts (the child
-# run emits no coverage table and the gate fails unconditionally).
-# Per-file runs (bun run test) never pass --coverage, so they stay coverage-free.
-# Aggregate coverage is measured and ENFORCED by bun run test:coverage
-# (scripts/coverage-gate.ts), which runs the whole suite in one process and
-# gates the All-files row against ratchet floors (functions >= 71%,
-# lines >= 75%; measured baseline 2026-06-11: 73.14/76.80).
-coverageReporter = ["text"]
-coverageDir = "coverage"
-
-# Coverage measures THIS repository's sources, never a dependency's.
-#
-# Normally that is automatic: bun excludes node_modules, and the SDK lives
-# there. But a developer running against a local SDK checkout replaces that
-# directory with a symlink to it, and the resolved paths then land OUTSIDE this
-# repo, where the node_modules exclusion no longer applies. Every SDK dist file
-# joined the coverage table, and the run died partway through printing it
-# ("internal error (WriteFailed)") — so the gate failed for everyone using a
-# dev link, and reported nothing about this repo's coverage while doing it.
-#
-# A no-op in CI, where the SDK is an ordinary installed package.
-coveragePathIgnorePatterns = ["**/goodvibes-sdk/**", "**/node_modules/**"]

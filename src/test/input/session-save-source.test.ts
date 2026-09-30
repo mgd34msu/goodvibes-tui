@@ -110,13 +110,4 @@ describe('the standalone /save command', () => {
 });
 
 describe('automatic persistence is stamped as automatic', () => {
-  test('a plain SessionManager.save with no stated source is not silently promoted to a user save', () => {
-    const sm = new SessionManager(tmpDir, { surface });
-    sm.save('machine-written', [{ role: 'user', content: 'x' }], { title: 't', model: 'm', provider: 'p', timestamp: Date.now() });
-
-    // The SDK defaults an unstated source to 'auto' (or leaves it absent,
-    // which retention also treats as automatic). What must never happen is a
-    // 'user' stamp appearing on a save nobody asked for.
-    expect(sm.getMeta('machine-written')?.saveSource).not.toBe('user');
-  });
 });

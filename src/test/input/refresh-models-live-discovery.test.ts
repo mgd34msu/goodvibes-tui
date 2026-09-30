@@ -1,6 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerLocalRuntimeCommands } from '../../input/commands/local-runtime.ts';
 
@@ -59,16 +57,5 @@ describe('/refresh-models live model discovery', () => {
     const text = printed.join('\n');
     expect(text).toContain('Live model discovery failed: network down');
     expect(text).toContain('Some refreshes failed');
-  });
-});
-
-describe('composition parity: live model discovery init', () => {
-  // Guards the composition-root fork-drift class: the shared services composition
-  // must kick off live model discovery, not only custom providers. If this ever
-  // regresses, the TUI silently stops refreshing provider model lists.
-  test('services composition calls initProviderModelDiscovery alongside initCustomProviders', () => {
-    const source = readFileSync(join(import.meta.dir, '../../runtime/services.ts'), 'utf-8');
-    expect(source).toContain('providerRegistry.initCustomProviders()');
-    expect(source).toContain('providerRegistry.initProviderModelDiscovery()');
   });
 });

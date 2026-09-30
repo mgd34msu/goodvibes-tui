@@ -97,12 +97,6 @@ describe('renderSettingsModal', () => {
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('returns a non-empty Line[] array', () => {
-    const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
-    expect(Array.isArray(lines)).toBe(true);
-    expect(lines.length).toBeGreaterThan(0);
-  });
-
   test('each line has correct terminal width', () => {
     const lines = frameFromLayer(renderSettingsModal(modal, W), W, 24);
     for (const line of lines) {

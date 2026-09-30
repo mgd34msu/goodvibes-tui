@@ -1,19 +1,16 @@
 /**
- * Architecture Check, static analysis gate run in CI via `bun run architecture:check`.
+ * Architecture check, run in CI via `bun run architecture:check`.
  *
- * What this checks:
- *   1. Source-file line-count gate (non-test files ≤ 800 lines)
- *   2. Pattern-based rules (no singletons, no ambient globals, etc.)
- *   3. Explicit-any detection (via TypeScript compiler API)
- *   4. Test discipline (no mock.module())
- *   5. Required-snippet presence (foundation artifacts)
- *   6. SDK contract catalog invariants
- *   7. **Import-cycle detection**, Tarjan SCC over the src/ import graph
- *   8. **Layer-boundary rules**, codified allowed dependency directions
- *   9. **Hex-literal ratchet**, bans raw #RRGGBB literals in
- *      src/views/**\/*.ts and src/renderer/**\/*.ts (no exemptions: theme
- *      data lives in the SDK theme engine); a seeded baseline
- *      (scripts/hex-literal-baseline.json) may only shrink, never grow
+ * Runtime dependency structure only:
+ *   1. Import-cycle detection, Tarjan SCC over the src/ import graph
+ *   2. Layer-boundary rules, codified allowed dependency directions
+ *   3. Boundary rules that guard nothing (a layer that is not a src/ directory)
+ *
+ * The 800-line cap, the unused-export rule and the text-pattern rules (hex
+ * literals, selectedIndex reads, internal identifiers, singletons, mkdtemp,
+ * explicit any, mock.module, required snippets) were removed in the 2026-09
+ * testing overhaul: they policed wording and style, not behavior. See
+ * docs/testing-and-validation.md.
  *
  * ─── LAYER MAP ───────────────────────────────────────────────────────────────
  *
@@ -51,24 +48,9 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import ts from 'typescript';
-import { checkHexLiteralRatchet } from './hex-literal-rule.ts';
-import { checkNoUnusedExports } from './no-unused-exports-rule.ts';
-import { checkSelectedIndexReads } from './selected-index-rule.ts';
-import { checkNoInternalIdentifiers } from './internal-identifier-rule.ts';
 
 const ROOT = join(import.meta.dir, '..');
 const SRC_ROOT = join(ROOT, 'src');
-const SCRIPTS_ROOT = join(ROOT, 'scripts');
-const MAX_SOURCE_LINES = 800;
-
-type Rule = {
-  readonly name: string;
-  readonly files: readonly string[];
-  readonly pattern: RegExp;
-  readonly allow?: readonly string[];
-  readonly message: string;
-};
 
 function walk(dir: string): string[] {
   const entries = readdirSync(dir, { withFileTypes: true });
@@ -88,52 +70,6 @@ function walk(dir: string): string[] {
 
 function isTestSource(path: string): boolean {
   return path.includes('/src/test/') || path.endsWith('.test.ts') || path.includes('/__tests__/');
-}
-
-/**
- * Paths named by a rule that no longer exist.
- *
- * A rule scoped to a directory that has since moved out of this repository
- * matches nothing and passes, forever, while reading as if it were still
- * guarding something. That is worse than no rule at all, so a named-but-missing
- * path is a failure of THIS file, reported at the end beside the violations it
- * would otherwise have hidden.
- */
-const missingRuleTargets = new Set<string>();
-
-function expandTargets(targets: readonly string[]): string[] {
-  return targets.flatMap((target) => {
-    const abs = join(ROOT, target);
-    if (!existsSync(abs)) {
-      missingRuleTargets.add(target);
-      return [];
-    }
-    const stats = statSync(abs);
-    if (stats.isDirectory()) {
-      return walk(abs).filter((file) => !isTestSource(file));
-    }
-    return [abs];
-  });
-}
-
-/**
- * An exemption for a file that is gone is the same defect in the other
- * direction: it reads as a deliberate carve-out and exempts nothing.
- */
-function checkAllowEntries(rulesToCheck: readonly Rule[]): string[] {
-  const stale: string[] = [];
-  for (const rule of rulesToCheck) {
-    for (const entry of rule.allow ?? []) {
-      if (!existsSync(join(ROOT, entry))) {
-        stale.push(`[${rule.name}] allow-entry names a file that does not exist: ${entry}`);
-      }
-    }
-  }
-  return stale;
-}
-
-function isGenericObjectSchema(schema: Record<string, unknown> | undefined): boolean {
-  return Boolean(schema && schema.type === 'object' && !Object.hasOwn(schema, 'properties'));
 }
 
 // ─── Import-graph utilities ───────────────────────────────────────────────────
@@ -430,266 +366,9 @@ function checkLayerBoundaries(
 
 // ─── Main analysis ────────────────────────────────────────────────────────────
 
-const allSourceFiles = walk(SRC_ROOT);
-const scriptFiles = walk(SCRIPTS_ROOT);
-const nonTestFiles = allSourceFiles.filter((file) => !isTestSource(file));
-const testFiles = allSourceFiles.filter((file) => isTestSource(file));
-const explicitAnyFiles = [...allSourceFiles, ...scriptFiles];
-const violations: string[] = [];
-
 const startMs = Date.now();
-
-for (const file of nonTestFiles) {
-  const text = readFileSync(file, 'utf-8');
-  const normalized = text.endsWith('\n') ? text.slice(0, -1) : text;
-  const lineCount = normalized.length === 0 ? 0 : normalized.split('\n').length;
-  if (lineCount > MAX_SOURCE_LINES) {
-    violations.push(`${relative(ROOT, file)}: exceeds ${MAX_SOURCE_LINES} lines (${lineCount})`);
-  }
-}
-
-const rules: readonly Rule[] = [
-  {
-    name: 'no-runtime-globals',
-    files: nonTestFiles,
-    pattern: /__goodvibesRuntime(Store|Dispatch)/,
-    message: 'runtime store/dispatch globals are forbidden; use RuntimeServices ownership instead',
-  },
-  {
-    name: 'no-ambient-integration-helper-usage',
-    files: nonTestFiles,
-    pattern: /\b(setIntegrationHelpersContext|clearIntegrationHelpersContext|getIntegrationHelpersContextOptional|getLegacyIntegrationHelperService)\b/,
-    message: 'ambient integration-helper access is forbidden outside the helper module',
-  },
-  {
-    name: 'no-legacy-runtime-singletons',
-    files: nonTestFiles,
-    pattern: /\b(getPolicyRuntimeState|getMemoryRegistry|getMemoryStore|getSubscriptionManager|getLocalUserAuthManager|getRemoteRunnerRegistry|getDistributedRuntimeManagerForTesting|resetDistributedRuntimeManagerForTesting|_setKnowledgeRegistryForTesting|_resetMemoryRegistryForTesting|FeatureFlagManager\.getInstance|getSecretsManager)\b/,
-    allow: ['src/config/secrets.ts'],
-    message: 'legacy singleton/service-locator access is forbidden; use explicit RuntimeServices ownership or explicit instances',
-  },
-  {
-    name: 'no-ambient-tool-singletons',
-    files: nonTestFiles,
-    pattern: /\b(fetchTool|findTool|execTool)\b/,
-    message: 'ambient tool singletons are forbidden; construct tool instances explicitly',
-  },
-  {
-    name: 'no-singleton-core-lookups-in-adapters',
-    files: expandTargets(['src/runtime/bootstrap.ts']),
-    pattern: /\b(AutomationManager|SharedSessionBroker|ApprovalBroker|RouteBindingManager|SurfaceRegistry|WatcherRegistry|ChannelPolicyManager)\.getInstance\(|\bgetDistributedRuntimeManager\(/,
-    message: 'adapter/composition code must use explicit RuntimeServices ownership instead of singleton lookups',
-  },
-  {
-    name: 'no-singleton-lookups-in-shell-bridges',
-    files: expandTargets([
-      'src/main.ts',
-      'src/runtime/bootstrap-command-context.ts',
-    ]),
-    pattern: /\b(AutomationManager|SharedSessionBroker|ApprovalBroker|AgentManager|ModeManager|ChannelPolicyManager|FileUndoManager)\.getInstance\(|\bChannelDeliveryRouter\.getActive\(/,
-    message: 'shell adapters and builtin channel bridges must receive explicit app-owned dependencies',
-  },
-  {
-    name: 'no-implicit-project-root-literals',
-    files: nonTestFiles,
-    allow: ['src/main.ts'],
-    pattern: /join\(\s*['"]\.goodvibes['"]|join\(\s*['"]\.['"]\s*,\s*['"]\.goodvibes['"]|workspaceRoot:\s*['"]\.['"]/,
-    message: 'reusable code must not hide project-root ownership behind relative .goodvibes paths or "." workspace roots; inject explicit owned roots instead',
-  },
-  {
-    name: 'no-ambient-root-discovery-in-reusable-code',
-    files: nonTestFiles,
-    allow: [
-      // The composition root, and the only place that asks. It asks the SDK's
-      // platform/config resolvers rather than answering for itself: the two
-      // roots used to be answered separately and the client's answer ignored
-      // GOODVIBES_HOME, so a redirected process wrote into the real tree. Every
-      // other module still takes its roots injected.
-      'src/main.ts',
-    ],
-    pattern: /\bprocess\.cwd\(\)|\bhomedir\(\)/,
-    message: 'reusable code must not discover cwd/home implicitly; composition roots must pass owned roots explicitly',
-  },
-  {
-    // Rationale: this exact combination, a directory created straight under
-    // the real OS temp dir, cleaned up only via afterEach/afterAll/finally,
-    // is what exhausted /tmp (1,048,436 of 1,048,576 inodes in use on one
-    // host): that cleanup never runs when the test process is killed by a
-    // signal (a `timeout 300` wrapper, the runner killing a hung file, an
-    // OOM). The sanctioned replacement, makeProjectTempDir
-    // (src/test/helpers/project-temp.ts), roots scratch under this repo's
-    // own .test-tmp instead, where a killed process's leftovers are bounded
-    // by the age-gated sweep in scripts/stale-tmp-sweep.ts. A handful of
-    // tests legitimately need a real path under the OS temp dir for
-    // behavioral reasons (proving a boundary check accepts/rejects the real
-    // temp root, or a "not inside a repo" check), none of those call
-    // mkdtemp/mkdtempSync to do it, so this rule bans only the exact
-    // dir-creation shape, not every mention of tmpdir().
-    name: 'no-raw-mkdtemp-under-os-tmpdir-in-tests',
-    files: testFiles,
-    // The containment mechanism itself, and the file that tests it. Neither can
-    // route through makeProjectTempDir without becoming circular:
-    //  - preload/temp-cleanup.ts creates the ONE per-process directory inside
-    //    the inherited temp root and then repoints TMPDIR/TMP/TEMP at it. That
-    //    creation is what makes every other mkdtemp in the run land somewhere
-    //    contained; rooting it under .test-tmp instead would leave the real temp
-    //    dir unredirected, which is the leak this rule exists to stop.
-    //  - helpers/temp-cleanup.test.ts spawns child `bun test` processes on
-    //    GENERATED fixture files whose source calls mkdtempSync(join(tmpdir(),…))
-    //    on purpose: that call is the behaviour under test, inside the child the
-    //    preload has already repointed tmpdir(), and the assertion is that the
-    //    directories land in the isolated root. The scratch this file creates for
-    //    itself does go through makeProjectTempDir; only the fixture SOURCE
-    //    strings match this pattern.
-    allow: [
-      'src/test/preload/temp-cleanup.ts',
-      'src/test/helpers/temp-cleanup.test.ts',
-    ],
-    pattern: /\bmkdtemp(Sync)?\s*\([^)]*\btmpdir\s*\(\s*\)/,
-    message: 'do not mkdtemp/mkdtempSync directly under the real OS temp dir (tmpdir()/os.tmpdir()) in a test: use makeProjectTempDir from src/test/helpers/project-temp.ts instead, so a signal-killed process leaks into the swept .test-tmp root, not the real /tmp',
-  },
-  {
-    name: 'one-goodvibes-home-meaning',
-    // Scripts included on purpose: the disagreement this bans lived in
-    // scripts/, not in src/. audit-goodvibes-home.ts and verify-live.ts read
-    // GOODVIBES_HOME as the .goodvibes DIRECTORY while the runtime read it as
-    // the tree ROOT the directory sits under, so a redirected round inspected a
-    // different tree than the one it had just written to. One variable with two
-    // meanings is how a home-redirection incident starts, and one already has.
-    //
-    // Everything derives from the SDK's platform/config now:
-    // resolveGoodVibesHome for the root, resolveGoodVibesTreeDirectory for the
-    // .goodvibes directory under it. The resolvers moved there because the
-    // daemon carried a byte-identical copy, and one meaning cannot live in two
-    // repositories. Reading the raw variable anywhere here is how a second
-    // meaning gets reintroduced, so it is refused rather than discouraged in a
-    // comment, and with the resolvers out of this repo there is no local file
-    // left to exempt. Writing it (the systemd unit's Environment= block in
-    // src/cli/service-posture.ts) is untouched, this bans reads.
-    files: [...nonTestFiles, ...scriptFiles],
-    allow: [],
-    pattern: /\benv(?:ironment)?\s*(?:\[\s*['"]GOODVIBES_HOME['"]\s*\]|\.GOODVIBES_HOME\b)/,
-    message: "GOODVIBES_HOME has one meaning (the tree root) and one reader; derive from @pellux/goodvibes-sdk/platform/config (resolveGoodVibesHome / resolveGoodVibesTreeDirectory) instead of reading the variable directly",
-  },
-];
-
-for (const rule of rules) {
-  for (const file of rule.files) {
-    const rel = relative(ROOT, file);
-    if (rule.allow?.includes(rel)) continue;
-    const text = readFileSync(file, 'utf-8');
-    if (rule.pattern.test(text)) {
-      violations.push(`${rel}: ${rule.message} [${rule.name}]`);
-    }
-  }
-}
-
-// ─── Hex-literal ratchet ──────────────────────────────────────────────────
-
-const hexLiteralBaseline: Record<string, number> = JSON.parse(
-  readFileSync(join(ROOT, 'scripts/hex-literal-baseline.json'), 'utf-8'),
-);
-const hexLiteralCandidates = nonTestFiles
-  .filter((file) => {
-    const rel = relative(ROOT, file);
-    return rel.startsWith('src/views/') || rel.startsWith('src/renderer/');
-  })
-  .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
-for (const v of checkHexLiteralRatchet(hexLiteralCandidates, hexLiteralBaseline)) {
-  violations.push(v);
-}
-
-// ─── Selected-index selection-safety ban ───────────────────────────────────────
-
-const selectedIndexCandidates = nonTestFiles
-  .filter((file) => relative(ROOT, file).split('\\').join('/').startsWith('src/views/'))
-  .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
-for (const v of checkSelectedIndexReads(selectedIndexCandidates)) {
-  violations.push(v);
-}
-
-// ─── No-unused-exports ────────────────────────────────────────────────
-
-const noUnusedExportsTargets = nonTestFiles
-  .filter((file) => relative(ROOT, file).split('\\').join('/').startsWith('src/renderer/'))
-  .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
-const noUnusedExportsImporters = [...allSourceFiles, ...scriptFiles].map((file) => ({
-  relPath: relative(ROOT, file),
-  text: readFileSync(file, 'utf-8'),
-  isTest: isTestSource(file),
-}));
-const resolveSpecifierRelative = (fromRelPath: string, specifier: string): string | null => {
-  const resolved = resolveImport(join(ROOT, fromRelPath), specifier);
-  return resolved ? relative(ROOT, resolved) : null;
-};
-for (const v of checkNoUnusedExports(noUnusedExportsTargets, noUnusedExportsImporters, resolveSpecifierRelative)) {
-  violations.push(v);
-}
-
-for (const file of explicitAnyFiles) {
-  const text = readFileSync(file, 'utf-8');
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const rel = relative(ROOT, file);
-  const seenPositions = new Set<number>();
-
-  const visit = (node: ts.Node): void => {
-    if (node.kind === ts.SyntaxKind.AnyKeyword) {
-      const start = node.getStart(source);
-      if (!seenPositions.has(start)) {
-        seenPositions.add(start);
-        const { line, character } = source.getLineAndCharacterOfPosition(start);
-        violations.push(`${rel}:${line + 1}:${character + 1}: explicit any is forbidden`);
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-
-  visit(source);
-}
-
-for (const file of testFiles) {
-  const text = readFileSync(file, 'utf-8');
-  if (text.includes('mock.module(')) {
-    violations.push(`${relative(ROOT, file)}: process-global mock.module() is forbidden in tests; use explicit dependency injection or local spies instead`);
-  }
-}
-
-const requiredSnippets: Array<{ file: string; snippets: readonly string[]; message: string }> = [
-  {
-    file: 'scripts/project-surfaces.ts',
-    snippets: [
-      'GatewayMethodCatalog',
-      '@pellux/goodvibes-sdk/platform/control-plane',
-    ],
-    message: 'foundation artifacts must be generated from SDK control-plane surfaces',
-  },
-];
-
-for (const requirement of requiredSnippets) {
-  const file = join(ROOT, requirement.file);
-  const text = readFileSync(file, 'utf-8');
-  if (!requirement.snippets.some((snippet) => text.includes(snippet))) {
-    violations.push(`${requirement.file}: ${requirement.message}`);
-  }
-}
-
-const { GatewayMethodCatalog } = await import('@pellux/goodvibes-sdk/platform/control-plane');
-const catalog = new GatewayMethodCatalog();
-const methodIds = new Set(catalog.list().map((method) => method.id));
-if (!methodIds.has('control.contract')) {
-  violations.push('operator-contract: control.contract must stay cataloged');
-}
-if (!methodIds.has('remote.node_host.contract')) {
-  violations.push('operator-contract: remote.node_host.contract must stay cataloged');
-}
-for (const method of catalog.list()) {
-  if (isGenericObjectSchema(method.inputSchema)) {
-    violations.push(`operator-contract: ${method.id} still exposes a generic object input schema`);
-  }
-  if (isGenericObjectSchema(method.outputSchema)) {
-    violations.push(`operator-contract: ${method.id} still exposes a generic object output schema`);
-  }
-}
+const nonTestFiles = walk(SRC_ROOT).filter((file) => !isTestSource(file));
+const violations: string[] = [];
 
 // ─── Cycle detection ──────────────────────────────────────────────────────────
 
@@ -705,39 +384,6 @@ for (const cycle of cycles) {
 
 const layerViolations = checkLayerBoundaries(graph, LAYER_BOUNDARY_RULES);
 for (const v of layerViolations) {
-  violations.push(v);
-}
-
-// ─── No internal planning identifiers ─────────────────────────────────────────
-
-function walkMarkdown(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  const entries = readdirSync(dir, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const abs = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkMarkdown(abs));
-      continue;
-    }
-    if (entry.isFile() && abs.endsWith('.md')) {
-      files.push(abs);
-    }
-  }
-  return files;
-}
-
-const internalIdentifierCandidates = [
-  ...allSourceFiles,
-  ...scriptFiles,
-  ...walkMarkdown(join(ROOT, 'docs')),
-  // The root changelog is in-repo, outward-facing text, it is scanned too, so a
-  // planning codename can never land in a release note.
-  ...(existsSync(join(ROOT, 'CHANGELOG.md')) ? [join(ROOT, 'CHANGELOG.md')] : []),
-  ...(existsSync(join(ROOT, 'action.yml')) ? [join(ROOT, 'action.yml')] : []),
-].map((file) => ({ relPath: relative(ROOT, file).split('\\').join('/'), text: readFileSync(file, 'utf-8') }));
-
-for (const v of checkNoInternalIdentifiers(internalIdentifierCandidates)) {
   violations.push(v);
 }
 
@@ -760,16 +406,6 @@ for (const rule of LAYER_BOUNDARY_RULES) {
       );
     }
   }
-}
-
-for (const stale of checkAllowEntries(rules)) {
-  violations.push(stale);
-}
-for (const target of [...missingRuleTargets].sort()) {
-  violations.push(
-    `a rule is scoped to "${target}", which does not exist; the rule matches nothing and passes vacuously;`
-    + ' remove the path (and the rule, if it has no live paths left) or correct it',
-  );
 }
 
 // ─── Report ───────────────────────────────────────────────────────────────────

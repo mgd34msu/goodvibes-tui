@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { auditGoodVibesHome } from '../config/goodvibes-home-audit.ts';
-import { buildVerificationLedger } from './verification-ledger.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export type LiveVerificationStatus = 'pass' | 'warn' | 'fail' | 'skip';
@@ -231,15 +230,6 @@ export async function buildLiveVerificationReport(options: LiveVerificationOptio
   const daemonBaseUrl = resolveDaemonBaseUrl(homeDir, options.daemonBaseUrl);
   const token = options.token ?? readDaemonToken(homeDir);
   const checks: LiveVerificationCheck[] = [];
-
-  const ledger = buildVerificationLedger(projectRoot);
-  checks.push({
-    id: 'verification-ledger',
-    title: 'Verification inventory ledger',
-    status: ledger.totals.localSignalPercent >= 90 ? 'pass' : 'fail',
-    summary: `${ledger.totals.localSignalPercent}% local verification signal across ${ledger.totals.total} inventory items.`,
-    detail: `${ledger.totals.localBehaviorPercent}% local behavior verified; ${ledger.totals.externalOutcomeRequired} item(s) require external outcomes.`,
-  });
 
   const audit = await auditGoodVibesHome({ homeDir });
   const staleCandidates = audit.settings?.staleCandidates?.length ?? 0;

@@ -563,11 +563,6 @@ if (!binary) {
       await host.stop();
     });
 
-    test('S15 checkpoints: the checkpoint list is answered by the daemon', async () => {
-      const rows = readList<unknown>(await verbs.invoke('checkpoints.list', {}), 'checkpoints');
-      expect(Array.isArray(rows)).toBe(true);
-    });
-
     // ── hosted sessions ────────────────────────────────────────────────────
     //
     // Everything below drives the real binary through the whole hosted story:

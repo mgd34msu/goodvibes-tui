@@ -69,11 +69,6 @@ describe('/channel command', () => {
     return registry;
   }
 
-  test('registers as "channel" with no aliases', () => {
-    const registry = makeRegistry();
-    expect(registry.get('channel')).toBeDefined();
-  });
-
   test('opens the routes view (the Agents modal) when called with no args', () => {
     const registry = makeRegistry();
     const viewIds: string[] = [];

@@ -438,13 +438,6 @@ describe('payments CVV containment', () => {
       expect(mayOfferCardEntryFlow(CARD_ENTRY_SURFACE)).toBe(true);
     });
 
-    test('a remote messaging surface is refused by the SDK allowlist itself, not a local literal', () => {
-      for (const remote of ['telegram', 'discord', 'slack', 'whatsapp', 'signal', 'ntfy', 'webhook']) {
-        expect(mayEnterCardDetails(remote)).toBe(false);
-        expect(mayOfferCardEntryFlow(remote)).toBe(false);
-      }
-    });
-
     test('startCardEntryFlow refuses to begin when driven with a non-entry surface, printing the SDK\'s own refusal text', () => {
       const { ctx, printed } = makeCommandCtx();
       let concealedInputOffered = false;

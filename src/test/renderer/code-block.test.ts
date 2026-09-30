@@ -9,11 +9,6 @@ const WIDTH = 80;
 const lineText = lineToString;
 
 describe('renderCodeBlock', () => {
-  test('returns Line array', () => {
-    const result = renderCodeBlock(['const x = 1;'], 'ts', WIDTH);
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
-  });
 
   test('each line has correct width', () => {
     const result = renderCodeBlock(['const x = 1;', 'let y = 2;'], 'ts', WIDTH);
@@ -72,31 +67,11 @@ describe('renderCodeBlock', () => {
     expect(result.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('handles TypeScript language detection', () => {
-    const result = renderCodeBlock(['const x = 1;'], 'typescript', WIDTH);
-    expect(result.length).toBeGreaterThan(0);
-  });
-
   test('handles python language', () => {
     const result = renderCodeBlock(['def foo():', '  return 42'], 'python', WIDTH);
     const bodyLines = result.slice(1, -1);
     const text = bodyLines.map(lineText).join('\n');
     expect(text).toContain('foo');
-  });
-
-  test('handles bash language', () => {
-    const result = renderCodeBlock(['echo hello'], 'bash', WIDTH);
-    expect(result.length).toBeGreaterThan(0);
-  });
-
-  test('handles json language', () => {
-    const result = renderCodeBlock(['{"key": "value"}'], 'json', WIDTH);
-    expect(result.length).toBeGreaterThan(0);
-  });
-
-  test('handles unknown language without crash', () => {
-    const result = renderCodeBlock(['some content'], 'cobol', WIDTH);
-    expect(Array.isArray(result)).toBe(true);
   });
 
   test('code lines have dark background color', () => {

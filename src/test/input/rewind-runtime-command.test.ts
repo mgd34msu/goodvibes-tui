@@ -104,11 +104,6 @@ function makeCtx(_dir: string, mgr: WorkspaceCheckpointManager | undefined, conv
 // ---------------------------------------------------------------------------
 
 describe('rewind-runtime registration', () => {
-  test('registers /rewind', () => {
-    const registry = new CommandRegistry();
-    registerRewindRuntimeCommands(registry);
-    expect(registry.get('rewind')).toBeDefined();
-  });
 });
 
 describe('/rewind: recent-turns picker', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -139,22 +139,10 @@ describe('loadFromDisk()', () => {
     expect(km.matches('search', { logicalName: 'g', ctrl: true })).toBe(true);
   });
 
-  it('does not throw when config file is missing', () => {
-    const km = new KeybindingsManager({ configPath: makeConfigPath() });
-    expect(() => km.loadFromDisk()).not.toThrow();
-  });
-
   it('retains defaults when config file is missing', () => {
     const km = new KeybindingsManager({ configPath: makeConfigPath() });
     km.loadFromDisk();
     expect(km.matches('search', { logicalName: 'f', ctrl: true })).toBe(true);
-  });
-
-  it('handles malformed JSON gracefully (no throw)', () => {
-    const path = makeConfigPath();
-    writeFileSync(path, '{ invalid json !!', 'utf-8');
-    const km = new KeybindingsManager({ configPath: path });
-    expect(() => km.loadFromDisk()).not.toThrow();
   });
 
   it('retains defaults when JSON is malformed', () => {

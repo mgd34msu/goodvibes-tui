@@ -102,12 +102,6 @@ describe('buildCompactionPreview', () => {
     expect(result).toContain('Auto-compacting');
   });
 
-  test('handles empty message array without crashing', () => {
-    const result = buildCompactionPreview({ messages: [], contextWindow: 0, pinnedMemoryCount: 0, trigger: 'manual' });
-    expect(typeof result).toBe('string');
-    expect(result.length).toBeGreaterThan(0);
-  });
-
   test('singular message label for 1 message', () => {
     const msgs: ProviderMessage[] = [makeMsg('user', 'hello')];
     const result = buildCompactionPreview({ messages: msgs, contextWindow: 0, pinnedMemoryCount: 0, trigger: 'manual' });

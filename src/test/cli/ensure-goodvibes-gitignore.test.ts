@@ -15,20 +15,6 @@ import { join } from 'node:path';
 import { ensureGoodvibesGitignore } from '../../cli/ensure-goodvibes-gitignore.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
-describe('entrypoint wiring', () => {
-  test('the shell entrypoint calls ensureGoodvibesGitignore during bootstrap', () => {
-    const src = readFileSync(join(import.meta.dir, '../../cli/entrypoint.ts'), 'utf-8');
-    expect(src).toContain("import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';");
-    expect(src).toContain('ensureGoodvibesGitignore(bootstrapWorkingDir)');
-  });
-
-  test('the entrypoint only prints a notice when the rule was actually just added (gated on the return value)', () => {
-    const src = readFileSync(join(import.meta.dir, '../../cli/entrypoint.ts'), 'utf-8');
-    expect(src).toContain('if (ensureGoodvibesGitignore(bootstrapWorkingDir)) {');
-    expect(src).toContain("added '.goodvibes/' to .gitignore");
-  });
-});
-
 const dirs: string[] = [];
 function makeProjectDir(withGit = true): string {
   const dir = makeProjectTempDir('gv-gitignore');

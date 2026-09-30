@@ -11,7 +11,7 @@ import { relative } from 'node:path';
 
 /**
  * Parse the first non-flag positional argv token as the test-file filter
- * pattern. Recognizes and skips the runner's own flags (`--coverage`,
+ * pattern. Recognizes and skips the runner's own flags (`--changed[=<ref>]`,
  * `--jobs N`, `--timeout N`) so a pattern can be combined with any of them;
  * unrecognized flags are skipped defensively rather than treated as the
  * pattern. A value-taking flag whose value were NOT skipped would be read as
@@ -22,10 +22,21 @@ const VALUE_FLAGS = new Set(['--jobs', '--timeout']);
 export function parseTestPattern(argv: readonly string[]): string | undefined {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
-    if (arg === '--coverage') continue;
     if (VALUE_FLAGS.has(arg)) { i++; continue; } // skip the flag and its value
     if (arg.startsWith('--')) continue; // ignore unrecognized flags defensively
     return arg;
+  }
+  return undefined;
+}
+
+/**
+ * The base ref of `--changed=<ref>`: '' for a bare `--changed` (bun's default,
+ * the uncommitted changes), undefined when the flag is absent.
+ */
+export function parseChangedBase(argv: readonly string[]): string | undefined {
+  for (const arg of argv) {
+    if (arg === '--changed') return '';
+    if (arg.startsWith('--changed=')) return arg.slice('--changed='.length);
   }
   return undefined;
 }

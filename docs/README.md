@@ -64,8 +64,11 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Release and publishing](release-and-publishing.md)
   Release validation, GitHub CD, compiled binary releases, npm distribution, and the GitHub Packages mirror.
 
+- [Testing and validation](testing-and-validation.md)
+  What runs while you work, on every push, and before a release; the test layers; the end-to-end tests against the built binary.
+
 - [Local verification](verification/local-verification.md)
-  Inventory coverage, GoodVibes home audits, compiled CLI probes, authenticated daemon probes, and release-oriented local gates.
+  GoodVibes home audits, compiled CLI probes, and authenticated daemon probes against your own machine.
 
 - [Changelog](../CHANGELOG.md)
   Current release history. Older per-version release-note files remain under `docs/releases/` for historical releases, but `CHANGELOG.md` is the canonical current stream.

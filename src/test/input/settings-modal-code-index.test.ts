@@ -59,9 +59,4 @@ describe('storage.codeIndexEnabled synthetic setting', () => {
     expect(storageKeys.filter((k) => k === (CODE_INDEX_ENABLED_CONFIG_KEY as string))).toHaveLength(1);
   });
 
-  test('isCodeIndexAutoStartEnabled mirrors the same key/default the settings entry uses', () => {
-    expect(isCodeIndexAutoStartEnabled(cm)).toBe(false);
-    cm.set(CODE_INDEX_ENABLED_CONFIG_KEY as ConfigKey, true as never);
-    expect(isCodeIndexAutoStartEnabled(cm)).toBe(true);
-  });
 });

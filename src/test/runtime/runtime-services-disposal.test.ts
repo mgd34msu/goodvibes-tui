@@ -165,7 +165,3 @@ test('dispose() stops every poller the graph started', () => {
   const survivors = liveAfterDispose.filter((e) => POLLER_OWNERS.some((o) => e.includes(o)));
   expect(survivors).toEqual([]);
 });
-
-test('dispose() is idempotent', () => {
-  expect(() => { services.dispose(); services.dispose(); }).not.toThrow();
-});

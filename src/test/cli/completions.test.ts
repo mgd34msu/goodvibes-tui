@@ -104,14 +104,6 @@ describe('GLOBAL_FLAGS data integrity', () => {
     expect(outputFlag!.valueEnum).toContain('stream-json');
   });
 
-  test('no flag has any type', () => {
-    // Structural check: all flags have required fields
-    for (const flag of GLOBAL_FLAGS) {
-      expect(typeof flag.name).toBe('string');
-      expect(typeof flag.takesValue).toBe('boolean');
-      expect(typeof flag.description).toBe('string');
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------

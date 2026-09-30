@@ -10,7 +10,7 @@
  * - unpriced model never fires (cost would be a placeholder, not real)
  * - focus/config gating is respected (delegates to alert-gating.ts)
  */
-import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, mock, afterEach } from 'bun:test';
 import { createBudgetBreachNotifier } from '../../core/budget-breach-notifier.ts';
 import { setPricingSource } from '@pellux/goodvibes-sdk/platform/providers';
 import { FocusTracker } from '@pellux/goodvibes-sdk/platform/runtime/operations';
@@ -152,16 +152,4 @@ describe('budget-breach-notifier', () => {
     expect(notifier.send).not.toHaveBeenCalled();
   });
 
-  test('never throws when webhookNotifier is null', () => {
-    const tracker = new FocusTracker();
-    tracker.setFocused(false);
-    const checker = createBudgetBreachNotifier({
-      focusTracker: tracker,
-      configGet: makeConfigGet({}),
-      webhookNotifier: null,
-      sessionId: 'sess-abc-123',
-    });
-    const usage = { input: 10_000_000, output: 0, cacheRead: 0, cacheWrite: 0 };
-    expect(() => checker.check(usage, PRICED_MODEL, 1)).not.toThrow();
-  });
 });

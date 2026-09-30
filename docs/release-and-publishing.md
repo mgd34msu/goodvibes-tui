@@ -31,22 +31,21 @@ what a reader sees on the release page.
   before that release cut it into its own version section, which is the
   path a new breaking-change entry follows today.
 
-## Local release checks
+## Before a release
 
-Before cutting a release tag, run:
+CI validates every push (see [testing and validation](testing-and-validation.md)),
+and the release gates (perf budgets and the release end-to-end set) run before
+a push that releases. At the version bump, regenerate what carries the version:
 
 ```bash
-bun x tsc --noEmit --pretty false
-bun run test
-bun run test:coverage
-bun run architecture:check
-bun run perf:check
-bun run eval:gate
-bun run build
-bun run foundation:artifacts
-bun run publish:check
-git diff --check
+bun run release:prepare --minor   # or --patch, --major, --version X.Y.Z
 ```
+
+It sets `package.json`'s version, relocks, rewrites `src/version.ts`, the
+README badge, `docs/foundation-artifacts`, `docs/commands-reference.md` and
+the SDK reusable-workflow and toolchain pins in `.github/workflows`, and
+scaffolds the CHANGELOG section. It never commits. Review `git diff`, write the
+release notes, and push.
 
 If you are cutting a version, the repo-level release helper is:
 
@@ -75,7 +74,8 @@ mode itself, so the release still ships without anyone pushing a tag.
 
 The repo includes:
 
-- `.github/workflows/ci.yml`
+- `.github/workflows/ci.yml` (every push and PR)
+- `.github/workflows/release-gates.yml` (nightly, on demand, and before a release)
 - `.github/workflows/release.yml`
 
 `release.yml` is a by-reference release. Instead of re-running the CI gates,

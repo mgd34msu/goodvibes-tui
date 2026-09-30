@@ -59,9 +59,4 @@ describe('renderBlockActionsMenu', () => {
     expect(layer.y + layer.lines.length).toBeLessThanOrEqual(30);
   });
 
-  test('degrades gracefully on a very narrow terminal without throwing', () => {
-    const menu = new BlockActionsMenu();
-    menu.open({ blockIndex: 0, type: 'tool', startLine: 0, lineCount: 3, rawContent: 'x', collapseKey: 'k0' });
-    expect(() => renderBlockActionsMenu(menu, 30, 20)).not.toThrow();
-  });
 });

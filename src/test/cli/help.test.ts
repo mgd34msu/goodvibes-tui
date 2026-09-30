@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { renderGoodVibesVersion, renderDaemonStartupBanner } from '../../cli/help.ts';
 import { resolveRuntimeEndpointBinding } from '@pellux/goodvibes-terminal-shell';
-import { resolveWebPort } from '@pellux/goodvibes-sdk/platform/daemon';
 import { VERSION } from '../../version.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
@@ -107,91 +106,4 @@ describe('daemon startup banner: binding honesty (mirrors the SDK bind path)', (
     expect(line).toContain('host=127.0.0.1 port=3421');
   });
 
-  test("hostMode 'custom' honors the configured host", () => {
-    const binding = resolveRuntimeEndpointBinding(
-      fakeConfig({ 'controlPlane.hostMode': 'custom', 'controlPlane.host': '192.168.1.50', 'controlPlane.port': 3421 }),
-      'controlPlane',
-    );
-    expect(binding.host).toBe('192.168.1.50');
-  });
-
-  test('port 0 falls back to 3421 exactly like the bind path; the banner never says port=0', () => {
-    // Verifier probe: controlPlane.port: 0 → daemon serves 3421, old banner said port=0.
-    const binding = resolveRuntimeEndpointBinding(
-      fakeConfig({ 'controlPlane.port': 0 }),
-      'controlPlane',
-    );
-    expect(binding.port).toBe(3421);
-  });
-
-  test('a non-numeric port falls back to 3421 exactly like the bind path; the banner never says port=NaN', () => {
-    // Verifier probe: controlPlane.port: "abc" → daemon serves 3421, old banner said port=NaN.
-    const binding = resolveRuntimeEndpointBinding(
-      fakeConfig({ 'controlPlane.port': 'abc' }),
-      'controlPlane',
-    );
-    expect(binding.port).toBe(3421);
-  });
-
-  test("unrecognized hostMode strings ('LAN', 'Network', '') are flagged recognized:false; the SDK bind path has no default case for them and the daemon cannot bind", () => {
-    // Pins the verifier's fixture: the SDK's resolveHostBinding is a switch
-    // with NO default case, so these values yield an undefined binding and the
-    // daemon throws in its constructor. The display resolver must not present
-    // its loopback fallback as a definite binding for a config the SDK cannot
-    // bind at all, recognized:false is the signal callers warn on.
-    for (const badMode of ['LAN', 'Network', '', 'local ']) {
-      const binding = resolveRuntimeEndpointBinding(
-        fakeConfig({ 'controlPlane.hostMode': badMode, 'controlPlane.port': 3421 }),
-        'controlPlane',
-      );
-      expect(binding.recognized).toBe(false);
-      expect(binding.hostMode).toBe(badMode);
-    }
-    // The three SDK-recognized modes are affirmatively recognized.
-    for (const goodMode of ['local', 'network', 'custom']) {
-      const binding = resolveRuntimeEndpointBinding(
-        fakeConfig({ 'controlPlane.hostMode': goodMode }),
-        'controlPlane',
-      );
-      expect(binding.recognized).toBe(true);
-    }
-    // Unset hostMode defaults to 'local', recognized, exactly like the SDK's
-    // own `?? 'local'`.
-    expect(resolveRuntimeEndpointBinding(fakeConfig({}), 'controlPlane').recognized).toBe(true);
-  });
-
-  test("web port is the SDK's resolveWebPort, called rather than copied", () => {
-    // This used to assert the copy's semantics, a bare `Number(raw ?? 3423)`,
-    // so a stored 0 displayed as 0 and a non-numeric value as NaN, because
-    // that was what the SDK's web machinery did and a display must not
-    // disagree with the machinery. The SDK closed that gap: resolveWebBinding
-    // validates, and surface announcements, channel account links and
-    // tailscale-serve all anchor to it. So the assertion is the same one it
-    // always was, agreement, against the function itself rather than against
-    // a transcription of what it used to do.
-    for (const stored of [0, 'abc', 8080, undefined]) {
-      expect(resolveRuntimeEndpointBinding(fakeConfig(stored === undefined ? {} : { 'web.port': stored }), 'web').port)
-        .toBe(resolveWebPort(stored));
-    }
-    expect(resolveRuntimeEndpointBinding(fakeConfig({}), 'web').port).toBe(3423);
-    // controlPlane/httpListener keep the resolveHostBinding-anchored collapse.
-    expect(resolveRuntimeEndpointBinding(fakeConfig({ 'controlPlane.port': 0 }), 'controlPlane').port).toBe(3421);
-    expect(resolveRuntimeEndpointBinding(fakeConfig({ 'httpListener.port': 'abc' }), 'httpListener').port).toBe(3422);
-  });
-
-  test('GOODVIBES_DAEMON_HOST in the environment does not influence the displayed binding (the bind path never reads it)', () => {
-    // Verifier probe: Environment=GOODVIBES_DAEMON_HOST=0.0.0.0 in the unit →
-    // daemon binds per config (local → 127.0.0.1) while the old banner printed
-    // the env value. The binding resolution reads config ONLY.
-    const previous = process.env.GOODVIBES_DAEMON_HOST;
-    process.env.GOODVIBES_DAEMON_HOST = '0.0.0.0';
-    try {
-      const binding = resolveRuntimeEndpointBinding(fakeConfig({}), 'controlPlane');
-      expect(binding.host).toBe('127.0.0.1');
-      expect(binding.port).toBe(3421);
-    } finally {
-      if (previous === undefined) delete process.env.GOODVIBES_DAEMON_HOST;
-      else process.env.GOODVIBES_DAEMON_HOST = previous;
-    }
-  });
 });

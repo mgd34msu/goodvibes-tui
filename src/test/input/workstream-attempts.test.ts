@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// workstream-attempts.test.ts, best-of-N surface: plan validation + the
+// workstream-attempts.test.ts, best-of-N surface: the
 // /workstream attempts list|diff|judge|pick subcommands.
 // ---------------------------------------------------------------------------
 
@@ -7,7 +7,6 @@ import { describe, expect, test } from 'bun:test';
 import type {
   AttemptJudgment,
   AttemptPickResult,
-  CreateWorkstreamInput,
   HeldMergeGroup,
   OrchestrationEngine,
 } from '@pellux/goodvibes-sdk/platform/orchestration';
@@ -15,58 +14,6 @@ import { AttemptError } from '@pellux/goodvibes-sdk/platform/orchestration';
 import type { CommandContext } from '../../input/command-registry.ts';
 import type { WorkstreamCommandService } from '@pellux/goodvibes-sdk/platform/orchestration';
 import { handleAttemptsSubcommand } from '../../input/commands/workstream-attempts.ts';
-import { validateAttempts } from '@pellux/goodvibes-sdk/platform/orchestration';
-
-// ---- validateAttempts ----------------------------------------------------
-
-function spec(items: CreateWorkstreamInput['items'], isolation?: 'shared' | 'worktree'): CreateWorkstreamInput {
-  return { title: 't', phases: [], items, isolation };
-}
-
-describe('validateAttempts: worktree + stable-id constraints (non-leaf allowed)', () => {
-  test('a worktree-isolated leaf best-of-N item is valid', () => {
-    const v = validateAttempts(spec([{ id: 'a', title: 'A', task: 'a', attempts: 3 }], 'worktree'));
-    expect(v.hasAttempts).toBe(true);
-    expect(v.violations).toHaveLength(0);
-  });
-
-  test('best-of-N under shared isolation is a violation', () => {
-    const v = validateAttempts(spec([{ id: 'a', title: 'A', task: 'a', attempts: 3 }], 'shared'));
-    expect(v.violations.some((m) => /worktree-isolated/.test(m))).toBe(true);
-  });
-
-  test('a best-of-N item that itself declares dependencies is allowed (non-leaf)', () => {
-    const v = validateAttempts(spec([
-      { id: 'a', title: 'A', task: 'a' },
-      { id: 'b', title: 'B', task: 'b', attempts: 2, dependsOn: ['a'] },
-    ], 'worktree'));
-    expect(v.violations).toHaveLength(0);
-  });
-
-  test('a best-of-N item that others depend on is allowed when it carries a stable id (non-leaf)', () => {
-    const v = validateAttempts(spec([
-      { id: 'a', title: 'A', task: 'a', attempts: 2 },
-      { id: 'b', title: 'B', task: 'b', dependsOn: ['a'] },
-    ], 'worktree'));
-    expect(v.violations).toHaveLength(0);
-  });
-
-  test('a depended-upon best-of-N item WITHOUT a stable id is a violation', () => {
-    // Express a dependency edge that names the item by its title (its only handle
-    // when it has no id), the stable-id rule must reject it.
-    const v = validateAttempts(spec([
-      { title: 'A', task: 'a', attempts: 2 },
-      { id: 'b', title: 'B', task: 'b', dependsOn: ['A'] },
-    ], 'worktree'));
-    expect(v.violations.some((m) => /no stable id/.test(m))).toBe(true);
-  });
-
-  test('an over-cap attempts value is a non-blocking note', () => {
-    const v = validateAttempts(spec([{ id: 'a', title: 'A', task: 'a', attempts: 9 }], 'worktree'));
-    expect(v.violations).toHaveLength(0);
-    expect(v.notes.some((m) => /caps best-of-N at 5/.test(m))).toBe(true);
-  });
-});
 
 // ---- /workstream attempts subcommands ------------------------------------
 

@@ -177,12 +177,6 @@ describe('ux:resize; setContentWidth updates prompt wrapping width', () => {
     input.setContentWidth(80);
   });
 
-  test('setContentWidth accepts a new width without throwing', () => {
-    expect(() => input.setContentWidth(40)).not.toThrow();
-    expect(() => input.setContentWidth(120)).not.toThrow();
-    expect(() => input.setContentWidth(1)).not.toThrow();
-  });
-
   test('getVisiblePromptLineCount reflects new width after setContentWidth', () => {
     // A 40-char prompt at width 80 fits in 1 line; at width 10 it wraps.
     const longPrompt = 'a'.repeat(40);
@@ -200,16 +194,4 @@ describe('ux:resize; setContentWidth updates prompt wrapping width', () => {
     expect(lineCountNarrow).toBeGreaterThan(1);
   });
 
-  test('setContentWidth to very small value does not throw', () => {
-    input.prompt = 'hello world';
-    expect(() => input.setContentWidth(1)).not.toThrow();
-  });
-
-  test('setContentWidth to same value is idempotent', () => {
-    input.setContentWidth(80);
-    const before = input.getVisiblePromptLineCount(80);
-    input.setContentWidth(80);
-    const after = input.getVisiblePromptLineCount(80);
-    expect(after).toBe(before);
-  });
 });

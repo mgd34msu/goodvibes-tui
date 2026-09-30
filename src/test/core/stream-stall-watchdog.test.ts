@@ -5,12 +5,8 @@
  * timers (not available in bun:test as of this codebase) to keep tests fast
  * while exercising the real timer contract.
  */
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import {
-  createStreamStallWatchdog,
-  STALL_THRESHOLD_MS,
-  type WatchdogTurnEvents,
-} from '../../core/stream-stall-watchdog.ts';
+import { describe, test, expect } from 'bun:test';
+import { createStreamStallWatchdog, type WatchdogTurnEvents } from '../../core/stream-stall-watchdog.ts';
 
 // ---------------------------------------------------------------------------
 // Minimal event surface stub
@@ -66,9 +62,6 @@ const TEST_THRESHOLD_MS = 20;
 // ---------------------------------------------------------------------------
 
 describe('StreamStallWatchdog', () => {
-  test('STALL_THRESHOLD_MS is 30000', () => {
-    expect(STALL_THRESHOLD_MS).toBe(30_000);
-  });
 
   test('fires onStall exactly once after STREAM_START with no delta', async () => {
     const events = makeEvents();

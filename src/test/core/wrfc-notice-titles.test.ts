@@ -2,11 +2,9 @@
  * The terminal's own review-chain lines read under plain titles in the
  * notification history (ui-live-run-9 item 2). The lines below are built
  * from the same templates runtime/bootstrap-core.ts and
- * runtime/wrfc-persistence.ts use, and the source check keeps the two in step.
+ * runtime/wrfc-persistence.ts use.
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { shellChainNoticeOf } from '../../core/wrfc-notice-titles.ts';
 import { publishNotice } from '../../core/notices.ts';
 import { NotificationFeed } from '../../views/notifications-feed.ts';
@@ -33,16 +31,6 @@ describe("the terminal's own review-chain lines", () => {
       expect(feed.list().map((entry) => entry.title)).toEqual([title]);
     });
   }
-
-  test('the producers still write these templates', () => {
-    const root = join(import.meta.dir, '..', '..', 'runtime');
-    const core = readFileSync(join(root, 'bootstrap-core.ts'), 'utf8');
-    const persistence = readFileSync(join(root, 'wrfc-persistence.ts'), 'utf8');
-    for (const fragment of ['`[WRFC] Engineer enumerated ${count} constraint', '`[WRFC] Fix #${payload.attempt} targeting ${targetIds.length} constraint', '`[WRFC] ✗ Chain ${payload.chainId.slice(0, 12)}: ${unsatisfied.length} constraint violation', '`[WRFC] Guard: ${reason}; task: "${shortTask}" (${kind})`', '`[WRFC] Pre-router buffer overflowed: ${dropped} earliest message']) {
-      expect(core).toContain(fragment);
-    }
-    expect(persistence).toContain('was interrupted by a restart; state was');
-  });
 
   test('other lines are left as they are', () => {
     expect(shellChainNoticeOf('[Failover] Restored abacusai:route-llm for the next turn.')).toBeUndefined();

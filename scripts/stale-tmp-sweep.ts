@@ -79,10 +79,6 @@ export function sweepStaleTestTmp(root: string, options: SweepOptions = {}): str
 // sweep is the backstop for what migration alone doesn't reach:
 //   - historical orphans already sitting in the real temp dir from before
 //     that migration shipped;
-//   - the whole-suite `bun test --coverage src` invocation used by
-//     `bun run test:coverage` (scripts/coverage-gate.ts), which spawns a
-//     single process directly and does NOT get the per-file TMPDIR
-//     redirection that `scripts/run-tests.ts` gives `bun run test`;
 //   - direct `bun test <file>` invocations (an IDE "run test" button, a
 //     one-off debug session) that bypass scripts/run-tests.ts entirely;
 //   - the small number of production/script files (the external-editor

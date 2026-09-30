@@ -103,10 +103,6 @@ describe('Slash-command alias lint (β4)', () => {
     expect(violations).toHaveLength(0);
   });
 
-  test('registry loads without throwing (smoke test)', () => {
-    expect(allCommands.length).toBeGreaterThan(10);
-  });
-
   test('all primary command names are globally unique', () => {
     const seen = new Map<string, string>();
     for (const cmd of allCommands) {

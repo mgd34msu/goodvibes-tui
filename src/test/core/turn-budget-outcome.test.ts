@@ -1,11 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import {
-  formatTurnBudgetOutcome,
-  describeTurnBudgetSource,
-  describeFailureReason,
-  isTurnBudgetReason,
-  TURN_BUDGET_FAILURE_REASON,
-} from '../../core/turn-budget-outcome.ts';
+import { formatTurnBudgetOutcome, describeTurnBudgetSource, describeFailureReason, isTurnBudgetReason } from '../../core/turn-budget-outcome.ts';
 
 describe('describeTurnBudgetSource', () => {
   test.each([
@@ -40,9 +34,6 @@ describe('formatTurnBudgetOutcome', () => {
 });
 
 describe('failure-reason mapping', () => {
-  test('the machine-readable reason constant is max_turns', () => {
-    expect(TURN_BUDGET_FAILURE_REASON).toBe('max_turns');
-  });
   test('isTurnBudgetReason recognizes the typed reason only', () => {
     expect(isTurnBudgetReason('max_turns')).toBe(true);
     expect(isTurnBudgetReason('review rejected')).toBe(false);

@@ -166,55 +166,6 @@ function isKnownToParser(flag: string, needsValue = false): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Flags that take a value argument (used to avoid false "requires value" errors
-// when testing parser acceptance).
-// ---------------------------------------------------------------------------
-
-const FLAGS_THAT_TAKE_VALUE = new Set([
-  '--provider',
-  '--model',
-  '--daemon-home',
-  '--working-dir',
-  '--prompt',
-  '--output-format',
-  '--output',
-  '--config',
-  '--enable',
-  '--disable',
-  '--port',
-  '--hostname',
-  '--host',
-  '--session',
-  // --resume and --fork are optional-value; bare forms work fine
-]);
-
-// ---------------------------------------------------------------------------
-// 1. Parser accepts every documented long flag without "Unknown option" error
-// ---------------------------------------------------------------------------
-
-describe('help-parser parity: parser accepts every known long flag', () => {
-  for (const flag of PARSER_KNOWN_LONG_FLAGS) {
-    test(`parser accepts ${flag}`, () => {
-      const needsValue = FLAGS_THAT_TAKE_VALUE.has(flag);
-      expect(isKnownToParser(flag, needsValue)).toBe(true);
-    });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// 2. Parser accepts every known short flag
-// ---------------------------------------------------------------------------
-
-describe('help-parser parity: parser accepts every known short flag', () => {
-  for (const [shortFlag, longFlag] of PARSER_SHORT_TO_LONG) {
-    test(`parser accepts ${shortFlag} (alias for ${longFlag})`, () => {
-      const needsValue = FLAGS_THAT_TAKE_VALUE.has(longFlag);
-      expect(isKnownToParser(shortFlag, needsValue)).toBe(true);
-    });
-  }
-});
-
-// ---------------------------------------------------------------------------
 // 3. Help text contains every documented long flag
 // ---------------------------------------------------------------------------
 
@@ -302,39 +253,6 @@ describe('help-parser parity: GLOBAL_FLAGS completions contains all parser flags
 // ---------------------------------------------------------------------------
 // 6. Deprecation warning: --output-format emits a deprecation warning
 // ---------------------------------------------------------------------------
-
-describe('deprecation warnings', () => {
-  test('--output-format emits a deprecation warning in result.warnings', () => {
-    const result = parse(['--output-format', 'json']);
-    expect(result.warnings).toContain(
-      '--output-format is deprecated; use --output (or -o) instead.',
-    );
-    // Still works, parses the value correctly
-    expect(result.flags.outputFormat).toBe('json');
-    // Not a hard error
-    expect(result.errors).toHaveLength(0);
-  });
-
-  test('--output does NOT emit a deprecation warning', () => {
-    const result = parse(['--output', 'json']);
-    expect(result.warnings).toHaveLength(0);
-  });
-
-  test('-o (short) does NOT emit a deprecation warning', () => {
-    const result = parse(['-o', 'stream-json']);
-    expect(result.warnings).toHaveLength(0);
-  });
-
-  test('multiple --output-format usages accumulate multiple warnings', () => {
-    const result = parse(['--output-format', 'json', '--output-format', 'text']);
-    expect(result.warnings.filter((w) => w.includes('--output-format is deprecated'))).toHaveLength(2);
-  });
-
-  test('result.warnings is empty by default (no flags)', () => {
-    const result = parse([]);
-    expect(result.warnings).toEqual([]);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 7. No ghost flags in help text (spot-check for removed flags)

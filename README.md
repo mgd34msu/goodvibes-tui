@@ -213,12 +213,13 @@ bun run dev
 | Command | Does |
 | --- | --- |
 | `bun run dev` | Run the TUI from source |
-| `bun run test` | Run the suite through the parallel per-file runner |
+| `bun run test:changed` | Run the test files your change affects (since `origin/main`) |
+| `bun run test` | Run the whole suite through the parallel per-file runner (CI runs it on every push) |
 | `bun run build` | Compile `src/main.ts` into `dist/goodvibes` |
 
 The compiled binary is the TUI entrypoint. With `daemon.enabled` on (the default) it adopts a running standalone GoodVibes daemon over loopback, and when a daemon is installed as a service but stopped, it starts that service once and waits for it to come online. It never embeds or constructs a daemon of its own. The control plane, HTTP listener (`danger.httpListener`), and web surface are all hosted by the daemon; the TUI configures them and reports their bindings.
 
-Tests live under `src/test/`, mirroring the source tree, and cover contract, security, release-gate, runtime, renderer, view, integration, and anti-regression cases. Several gates run alongside them in CI: byte-exact golden renderer frames, performance budgets for startup and frame composition and line production (`scripts/perf-baseline.json`), and architecture rules for import cycles, layer boundaries, source-file size, and unused renderer exports (`scripts/check-architecture.ts`).
+Tests live under `src/test/`, mirroring the source tree; byte-exact golden renderer frames are part of that suite. End-to-end tests under `src/test/e2e/` drive the compiled binary in a real terminal against a scripted model. CI also checks import cycles and layer boundaries (`scripts/check-architecture.ts`), and the release gates hold the performance budgets (`scripts/perf-baseline.json`). [Testing and validation](docs/testing-and-validation.md) says what runs where.
 
 Some decisions worth knowing before you read the source:
 
@@ -248,7 +249,7 @@ src/
 ├── cli/                    flag parsing, management verbs, doctor, launch-time self-update
 ├── tools/, mcp/            TUI-local tool guards, MCP runtime reload
 ├── audio/, export/         voice capture, wake word, playback and speech routing; gist upload
-├── verification/, widget/  live verifier and its ledger, the terminal widget module
+├── verification/, widget/  live verifier, the terminal widget module
 ├── utils/, scripts/        formatting and clipboard helpers, message processing script
 └── test/                   the suite, mirroring the tree above
 ```

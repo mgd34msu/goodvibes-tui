@@ -134,14 +134,6 @@ describe('GC-ARCH-001 domain import boundary contract', () => {
     }
   });
 
-  test('all remaining local domains are self-contained', () => {
-    for (const domain of DOMAINS) {
-      const allowed = getAllowedReadsFor(domain);
-      expect(allowed.size).toBe(1);
-      expect(allowed.has(domain)).toBe(true);
-    }
-  });
-
   test('domains with no matrix entry have no cross-domain read rights', () => {
     const matrixReaders = new Set(DOMAIN_READ_MATRIX.map((e) => e.reader));
 

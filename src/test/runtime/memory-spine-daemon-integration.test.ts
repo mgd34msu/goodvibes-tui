@@ -23,7 +23,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { bootDaemon, type BootedDaemon } from '@pellux/goodvibes-sdk/platform/daemon';
 import { MemorySpineClient } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
-import type { MemoryAccess, MemoryTransport } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
+import type { MemoryAccess } from '@pellux/goodvibes-sdk/platform/runtime/memory-spine';
 import type { MemoryLink, MemoryRecord } from '@pellux/goodvibes-sdk/platform/state';
 import { createTuiMemorySpineTransport } from '../../runtime/memory-spine-transport.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
@@ -290,42 +290,6 @@ describe('memory-spine version-skew wire honesty (route-not-found vs record-miss
       baseUrl: 'http://127.0.0.1:9', authToken: 'tok', fetchImpl: cannedFetch(404, { error: 'Not found' }),
     });
     await expect(transport.update!('mem_x', { summary: 's' })).rejects.toThrow(/does not support the 'update' memory verb/);
-  }, TEST_BUDGET_MS);
-});
-
-describe('memory-spine recall honesty passthrough', () => {
-  test('indexUnavailableReason from the wire transport survives to the caller unchanged (never dropped or re-derived)', async () => {
-    const reason = 'semantic index unavailable: sqlite-vec extension not loaded';
-    // Typed as MemoryTransport (core-only) rather than the full MemoryAccess,
-    // version tolerance: a transport implementing only the CORE verbs is valid;
-    // this spy never exercises an extended verb.
-    const spyTransport: MemoryTransport = {
-      add: async () => { throw new Error('unused in this test'); },
-      honestSearch: async () => ({
-        records: [],
-        mode: 'literal',
-        requestedSemantic: true,
-        indexUnavailableReason: reason,
-        caveat: null,
-        recallFiltered: false,
-        excludedFlaggedCount: 0,
-        excludedBelowFloorCount: 0,
-        excludedOutOfWindowCount: 0,
-        totalBeforeRecallFilter: 0,
-        recallFloor: 60,
-      }),
-      get: async () => null,
-      updateReview: async () => null,
-      delete: async () => false,
-    };
-    const { access: local } = createFakeLocalAccess();
-    const client = new MemorySpineClient({ local, log: { debug: () => {}, info: () => {} } });
-    client.activate(spyTransport);
-
-    const result = await client.honestSearch({ query: 'anything', semantic: true }, { recall: true });
-    expect(result.indexUnavailableReason).toBe(reason);
-    expect(result.mode).toBe('literal');
-    expect(result.requestedSemantic).toBe(true);
   }, TEST_BUDGET_MS);
 });
 

@@ -1,28 +1,6 @@
 # Local verification
 
-GoodVibes has three verification layers:
-
-| Layer | What it covers |
-| --- | --- |
-| `local signal` | Schema, routing, rendering, persistence, CLI, daemon, and real-state checks that can run without proving an external SaaS or device outcome |
-| `local behavior` | Behavior that completes locally through in-process tests, the compiled CLI, a daemon smoke, or controlled persisted state |
-| `external outcome` | Real delivery/provisioning checks such as Slack delivery, Cloudflare provisioning, Home Assistant device behavior, or a remote runner |
-
-## Verification ledger
-
-Run the inventory ledger:
-
-```bash
-bun run verification:ledger
-```
-
-Write JSON for automation:
-
-```bash
-bun run verification:ledger -- --json --out /tmp/goodvibes-verification-ledger
-```
-
-The ledger counts settings, feature flags, slash commands, built-in modals and views, CLI commands, external surfaces, and onboarding capability bundles. It intentionally separates local proof from external proof so the project can show where verification is strong without claiming that a third-party service was exercised.
+Two read-only tools check a real GoodVibes home and a real build on your machine, which the test suite cannot see.
 
 ## GoodVibes home audit
 
@@ -51,7 +29,7 @@ The audit treats root-level `~/.goodvibes` files as owned by other GoodVibes pro
 
 ## Live verification
 
-Run the compiled CLI, authenticated daemon probes, inventory ledger, and home audit together:
+Run the compiled CLI, authenticated daemon probes, and home audit together:
 
 ```bash
 bun run verification:live -- --home ~/.goodvibes --out /tmp/goodvibes-live-verification
@@ -59,7 +37,6 @@ bun run verification:live -- --home ~/.goodvibes --out /tmp/goodvibes-live-verif
 
 The live verifier checks:
 
-- inventory coverage is at least 90% local signal;
 - `~/.goodvibes/tui/settings.json` has no stale TUI keys;
 - `dist/goodvibes` exists and can run `version`, `status --output json`, `providers`, `control-plane status`, `listener test`, `surfaces check`, `service check`, and `doctor`;
 - the daemon bearer token can authenticate `/status`, `/api/health`, and `/v1/models`;
@@ -71,18 +48,15 @@ By default, warnings do not fail the command because they are useful runtime fin
 bun run verification:live -- --strict --out /tmp/goodvibes-live-verification-strict
 ```
 
-## Release-oriented local gate
+## Before a release
 
-For a practical local gate before a release or large config migration:
+CI runs the test suite, the typecheck, the build and the binary smokes on every
+push, and the release gates before a release (see
+[testing and validation](../testing-and-validation.md)). What CI cannot check
+is your own machine's state, so before a release or a large config migration:
 
 ```bash
-bun test src/test/config/goodvibes-home-audit.test.ts src/test/verification/verification-ledger.test.ts
-bun test src/test/input src/test/views
-bun run tsc --noEmit --pretty false
-bun run architecture:check
-bun run perf:check
 bun run build
-bun run smoke:tui
 bun run verification:live -- --home ~/.goodvibes --out /tmp/goodvibes-live-verification
 ```
 

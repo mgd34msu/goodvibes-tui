@@ -63,11 +63,6 @@ function makeCtx(webSearchService?: ReturnType<typeof makeFakeService>) {
 }
 
 describe('/search command registration', () => {
-  test('registers /search', () => {
-    const registry = new CommandRegistry();
-    registerWebSearchRuntimeCommands(registry);
-    expect(registry.get('search')).toBeDefined();
-  });
 });
 
 describe('/search: honest degradation', () => {

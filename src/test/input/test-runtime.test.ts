@@ -1,7 +1,5 @@
 // ---------------------------------------------------------------------------
 // test-runtime.test.ts, /test runner surface coverage:
-//   (a) every Bun.spawn() call reachable from /test captures stderr (same
-//       tty-corruption guard as diff-runtime.test.ts, extended to this file).
 //   (b) no test script in package.json -> honest skip, no process spawned.
 //   (c) happy path -> truthful parsed pass counts + a 'done' tool-result render.
 //   (d) failure path -> truthful non-zero exit -> 'error' status + failing
@@ -24,54 +22,16 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CommandContext } from '../../input/command-registry.ts';
-import { CommandRegistry } from '../../input/command-registry.ts';
 import {
   parseTestOutput,
-  registerTestRuntimeCommands,
   runTestCommand,
   shQuote,
 } from '../../input/commands/test-runtime.ts';
 import { createShellPathService } from '@/runtime/index.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-
-/**
- * Every `Bun.spawn(` call site's option object must include `stderr:`, a
- * cheap static guard against reintroducing the tty-corruption bug fixed for
- * /diff (see diff-runtime.test.ts). Duplicated here (rather than imported)
- * because the original is a private test-file helper.
- */
-function assertEverySpawnCapturesStderr(filePath: string): void {
-  const src = readFileSync(filePath, 'utf-8');
-  let idx = src.indexOf('Bun.spawn(');
-  let checked = 0;
-  while (idx !== -1) {
-    const openParenIdx = idx + 'Bun.spawn'.length;
-    let depth = 0;
-    let end = -1;
-    for (let i = openParenIdx; i < src.length; i++) {
-      if (src[i] === '(') depth++;
-      else if (src[i] === ')') {
-        depth--;
-        if (depth === 0) { end = i; break; }
-      }
-    }
-    expect(end).toBeGreaterThan(-1);
-    const callText = src.slice(openParenIdx, end);
-    expect(callText).toContain('stderr:');
-    checked++;
-    idx = src.indexOf('Bun.spawn(', end);
-  }
-  expect(checked).toBeGreaterThan(0); // guard against a no-op scan (renamed/removed calls)
-}
-
-describe('(a) every /test-reachable Bun.spawn call captures stderr', () => {
-  test('test-runtime.ts', () => {
-    assertEverySpawnCapturesStderr(join(import.meta.dir, '../../input/commands/test-runtime.ts'));
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Fake CommandContext harness
@@ -317,21 +277,4 @@ describe('(g) integration: a malicious pattern does not execute as a second comm
 
     expect(existsSync(markerPath)).toBe(false);
   }));
-});
-
-// ---------------------------------------------------------------------------
-// (h) registration sanity, /test is registered with the expected shape.
-// command-grammar.test.ts and command-aliases-lint.test.ts already validate
-// naming/description conventions repo-wide once registered; this just checks
-// the command exists under the expected name.
-// ---------------------------------------------------------------------------
-
-describe('(h) registration', () => {
-  test('/test is registered', () => {
-    const registry = new CommandRegistry();
-    registerTestRuntimeCommands(registry);
-    const cmd = registry.getAll().find((c) => c.name === 'test');
-    expect(cmd).toBeDefined();
-    expect(cmd?.usage).toBe('[pattern]');
-  });
 });

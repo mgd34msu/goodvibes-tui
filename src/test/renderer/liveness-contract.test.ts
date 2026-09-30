@@ -110,14 +110,6 @@ describe('liveness contract: settings modal (values-only update)', () => {
     });
   });
 
-  test('an identical re-render trivially satisfies the contract (no diffs)', () => {
-    withSettingsModal((modal) => {
-      const frameA = frameFromLayer(renderSettingsModal(modal, W, H), W, H);
-      const frameB = frameFromLayer(renderSettingsModal(modal, W, H), W, H);
-      assertFrameLiveness(frameA, frameB);
-      expect(differingCells(frameA, frameB)).toEqual([]);
-    });
-  });
 });
 
 describe('liveness contract: harness is non-vacuous (catches violations)', () => {

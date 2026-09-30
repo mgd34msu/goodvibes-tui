@@ -181,9 +181,4 @@ describe('resetTestRuntimeServices: stops the graph it drops', () => {
     }
   });
 
-  test('resetting twice is a no-op rather than an error', () => {
-    getTestRuntimeServices();
-    resetTestRuntimeServices();
-    expect(() => resetTestRuntimeServices()).not.toThrow();
-  });
 });

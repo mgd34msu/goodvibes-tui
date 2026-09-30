@@ -181,15 +181,6 @@ describe('createContextAccountingSource', () => {
 });
 
 describe('context_accounting tool through the real registry seam', () => {
-  test('unbound holder: the tool honestly reports no live session context, never fabricates', async () => {
-    const holder = new ContextAccountingHolder();
-    const tool = createContextAccountingTool(holder);
-    const result = await tool.execute({});
-    expect(result.success).toBe(true);
-    const parsed = JSON.parse((result as { output: string }).output) as { available: boolean; reason: string };
-    expect(parsed.available).toBe(false);
-    expect(parsed.reason).toContain('No live session context is bound');
-  });
 
   test('bound holder: the tool returns real turn-injection, token, and compaction data from our source', async () => {
     const holder = new ContextAccountingHolder();

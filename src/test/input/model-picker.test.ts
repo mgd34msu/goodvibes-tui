@@ -1017,19 +1017,6 @@ describe('ModelPickerModal', () => {
       picker.configuredProviders = new Set(['anthropic', 'openai']);
     });
 
-    test('POPULAR_PROVIDERS contains the 8 expected providers', () => {
-      expect(POPULAR_PROVIDERS.has('anthropic')).toBe(true);
-      expect(POPULAR_PROVIDERS.has('google')).toBe(true);
-      expect(POPULAR_PROVIDERS.has('groq')).toBe(true);
-      expect(POPULAR_PROVIDERS.has('mistral')).toBe(true);
-      expect(POPULAR_PROVIDERS.has('nvidia')).toBe(true);
-      expect(POPULAR_PROVIDERS.has('ollama')).toBe(true);
-      expect(POPULAR_PROVIDERS.has('openai')).toBe(true);
-      expect(POPULAR_PROVIDERS.has('openrouter')).toBe(true);
-      expect(POPULAR_PROVIDERS.has('synthetic')).toBe(true);
-      expect(POPULAR_PROVIDERS.size).toBe(9);
-    });
-
     test('getGroupedProviders splits into popular / all (no configured group)', () => {
       const { popular, all } = picker.getGroupedProviders();
       // anthropic and openai are in POPULAR_PROVIDERS so they go to popular regardless of config

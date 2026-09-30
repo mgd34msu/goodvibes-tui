@@ -273,11 +273,6 @@ function makeCtx(service?: WorkstreamCommandService) {
 // ---------------------------------------------------------------------------
 
 describe('workstream-runtime command registration', () => {
-  test('registers /workstream', () => {
-    const registry = new CommandRegistry();
-    registerWorkstreamRuntimeCommands(registry);
-    expect(registry.get('workstream')).toBeDefined();
-  });
 });
 
 // ---------------------------------------------------------------------------

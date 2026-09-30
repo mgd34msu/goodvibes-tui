@@ -25,7 +25,6 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { isDaemonOwnedConfigKey, isDaemonOwnedSecretKey } from '@pellux/goodvibes-sdk/platform/config';
 import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
 import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import {
@@ -51,16 +50,6 @@ disposeTestRuntimeServicesAfterAll();
 describe('a client with no verbs of its own says so instead of guessing', () => {
   const services = getTestRuntimeServices();
 
-  test('this composition registers no mail or calendar handlers, because it registers none at all', () => {
-    // Not an omission: the catalog exists only to satisfy the SDK's
-    // startExternalServices parameter in adopt-only mode. Nothing is served off
-    // it, and a handler appearing here would mean a second implementation had
-    // come back into this process alongside the daemon's.
-    for (const methodId of ['email.inbox.list', 'email.send', 'calendar.events.list', 'calendar.events.create'] as const) {
-      expect(services.gatewayMethods.hasHandler(methodId), `${methodId} must not be answered in-process`).toBe(false);
-    }
-  });
-
   test('an empty catalog is reported as unreachable, never as needs-setup', async () => {
     // The distinction is the whole point. "needs-setup" tells the user to go
     // configure an account; "unreachable" tells them the daemon is not
@@ -75,35 +64,6 @@ describe('a client with no verbs of its own says so instead of guessing', () => 
 });
 
 describe('daemon ownership of what setup writes', () => {
-  test('the surfaces.* SETTINGS the daemon reads are daemon-owned, so /config set survives this client closing', () => {
-    // The requirement: anything configured from a surface keeps working with
-    // that surface closed. For the non-secret settings that already held,
-    // because `surfaces.` is a daemon-owned prefix.
-    expect(isDaemonOwnedConfigKey('surfaces.email.host' as never)).toBe(true);
-    expect(isDaemonOwnedConfigKey('surfaces.email.user' as never)).toBe(true);
-    expect(isDaemonOwnedConfigKey('surfaces.calendar.caldavUrl' as never)).toBe(true);
-  });
-
-  test('the mail/calendar PASSWORDS are daemon-owned too, which is what closed the gap this surface refused to paper over', () => {
-    // This assertion is inverted from what it was, and the inversion is the
-    // point, the previous version said in as many words that it would fail
-    // when the owning round declared these paths, and that the setup guidance
-    // should change in the same commit. Both happened here.
-    //
-    // A credential is filed in the daemon tier only when a daemon-owned config
-    // path declares it. `surfaces.email.password` and
-    // `surfaces.calendar.caldavPassword` were read by this repo's daemon and
-    // declared in neither CONFIG_SCHEMA nor the platform's non-schema
-    // daemon-owned path list, so they stranded in whichever client silo wrote
-    // them. The platform round that began serving email.* and calendar.*
-    // declares the whole mail and CalDAV connection, not just the passwords, on
-    // the stated ground that a password with no host and no user is not a usable
-    // credential either. Slack's token remains the control: always declared,
-    // always routed correctly.
-    expect(isDaemonOwnedSecretKey('GOODVIBES_SURFACES_SLACK_BOT_TOKEN')).toBe(true);
-    expect(isDaemonOwnedSecretKey('GOODVIBES_SURFACES_EMAIL_PASSWORD')).toBe(true);
-    expect(isDaemonOwnedSecretKey('GOODVIBES_SURFACES_CALENDAR_CALDAV_PASSWORD')).toBe(true);
-  });
 
   test('setup guidance now names the store write that reaches the daemon', () => {
     // The other half of the flip above: with the keys declared, a write

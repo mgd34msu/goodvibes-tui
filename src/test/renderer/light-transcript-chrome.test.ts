@@ -85,11 +85,6 @@ describe('tool-call status glyph flips with themeMode', () => {
     expect(light.has('#ef4444')).toBe(false);
   });
 
-  test('dark render is byte-identical across renders (dark-path proof)', () => {
-    const a = beadRow(doneCall, 'done', '3 lines', W, 1_500);
-    const b = beadRow(doneCall, 'done', '3 lines', W, 1_500);
-    expect(fgSet(a)).toEqual(fgSet(b));
-  });
 });
 
 // ── composer orchestration flag (chrome.remote) ─────────────────────────────
@@ -155,7 +150,4 @@ describe('thinking block accent/text flip with themeMode', () => {
     expect(light.has('#a855f7')).toBe(false);
   });
 
-  test('dark render is byte-identical across renders (dark-path proof)', () => {
-    expect(fgSet(renderThinkingBlock(TEXT, W))).toEqual(fgSet(renderThinkingBlock(TEXT, W)));
-  });
 });

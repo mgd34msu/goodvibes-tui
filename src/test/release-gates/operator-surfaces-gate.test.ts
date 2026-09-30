@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
@@ -61,7 +61,7 @@ function makeMemoryAccess(registry: MemoryRegistry): MemorySpineClient {
  * schedulers. Nothing upstream stops a graph it did not compose itself, so the
  * test that built it owns stopping it.
  */
-const disposables = trackDisposables();
+const disposables = trackDisposables({ scope: 'all' });
 
 describe('operator surfaces gate', () => {
   let configManager: ConfigManager;
@@ -70,6 +70,12 @@ describe('operator surfaces gate', () => {
 
   beforeEach(() => {
     policyRuntimeState = new PolicyRuntimeState();
+  });
+
+  // One composed graph per file: no test here writes to it (the orchestration
+  // cancel test builds its own AgentManager), and composing it per test was
+  // the bulk of this file's run time.
+  beforeAll(() => {
     configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(tmpdir(), `gv-operator-surfaces-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
     configManager.set('fleet.maxSize', 8);
     configManager.set('orchestration.maxDepth', 1);
@@ -232,30 +238,6 @@ describe('operator surfaces gate', () => {
     // Deleted outright, with nothing to resolve to.
     expect(resolveViewName('view-list', redirect)).toBeNull();
     expect(resolveViewName('eval', redirect)).toBeNull();
-  });
-
-  test('command registry exposes the provider, policy, and session control surfaces', () => {
-    const registry = new CommandRegistry();
-    registerBuiltinCommands(registry);
-
-    expect(registry.get('policy')).toBeDefined();
-    expect(registry.get('cockpit')).toBeDefined();
-    expect(registry.get('incident')).toBeDefined();
-    expect(registry.get('orchestration')).toBeDefined();
-    expect(registry.get('hooks')).toBeDefined();
-    expect(registry.get('communication')).toBeDefined();
-    expect(registry.get('security')).toBeDefined();
-    expect(registry.get('marketplace')).toBeDefined();
-    expect(registry.get('sandbox')).toBeDefined();
-    expect(registry.get('approval')).toBeDefined();
-    expect(registry.get('subscription')).toBeDefined();
-    expect(registry.get('storage')).toBeDefined();
-    expect(registry.get('deeplink')).toBeDefined();
-    expect(registry.get('knowledge')).toBeDefined();
-    expect(registry.get('remote')).toBeDefined();
-    expect(registry.get('mcp')).toBeDefined();
-    expect(registry.get('provider')).toBeDefined();
-    expect(registry.get('session')).toBeDefined();
   });
 
   test('policy command opens the policy modal when no subcommand is supplied', async () => {

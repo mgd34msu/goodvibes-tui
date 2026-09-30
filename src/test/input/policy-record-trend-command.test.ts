@@ -19,11 +19,6 @@ function makeContext(out: string[], policyRuntimeState: PolicyRuntimeState): Com
 }
 
 describe('/policy record-trend', () => {
-  test('is registered as a policy subcommand', () => {
-    const registry = new CommandRegistry();
-    registerBuiltinCommands(registry);
-    expect(registry.get('policy')).toBeDefined();
-  });
 
   test('reports honestly when no simulation dashboard is active (no silent no-op)', async () => {
     const registry = new CommandRegistry();

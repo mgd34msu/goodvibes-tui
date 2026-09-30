@@ -86,11 +86,6 @@ function makeCtx(
 }
 
 describe('codebase-runtime command registration', () => {
-  test('registers /codebase', () => {
-    const registry = new CommandRegistry();
-    registerCodebaseRuntimeCommands(registry);
-    expect(registry.get('codebase')).toBeDefined();
-  });
 });
 
 describe('/codebase: store-absent guard', () => {

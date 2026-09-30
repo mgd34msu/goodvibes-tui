@@ -54,41 +54,13 @@ export const LINE_BENCH_CONFIG = {
   transcriptMessages: 1000,
 } as const;
 
-/**
- * Ratchet budgets (ms) keyed by metric id. Set just above measured reality on a
- * quiet dev linux-x64 box; CI runners run 2-4× slower so budgets carry headroom.
- * The committed perf-baseline.json `line` section is the source of truth the gate
- * compares against, these are the fallback defaults when no baseline exists.
- * Ratchet rule: tighten when measured p95 drops below budget/2.
- */
-export const LINE_BUDGETS: Readonly<Record<string, number>> = {
-  'transcript.build_1k_ms': 400,
-  // appending ONE message to a warm 1000-message transcript. The
-  // per-message Line[] cache reuses the unchanged 1000 and renders only the new
-  // one, so this collapses from the full build_1k cost (~45 ms) to well under
-  // 1 ms on a quiet box.
-  // ratchet: re-measured with the per-message cache in place, on a quiet linux-x64 box the p50 is
-  // rock-stable at 0.87-0.91 ms across 8 runs. Gate stat is p50 (a robust median
-  // over 200 iterations, it does not spike on a single GC pause). Budget
-  // tightened 20 -> 6 ms: ~6.7× this-box p50 and ~1.7-3.3× a CI-slowed median
-  // (runners run 2-4× slower). A regression that reintroduces the pre-cache full
-  // rebuild on append (~45 ms) now fails the gate by ~7.5×.
-  'transcript.append_one_ms': 6,
-  // a resize invalidates every width-dependent message (all of them), so
-  // it still pays a near-full re-render, gated at the same ceiling as build_1k.
-  'transcript.resize_1k_ms': 400,
-  'markdown.render_ms': 6,
-  'codeblock.regex_ms': 4,
-  'codeblock.treesitter_ms': 4,
-  'overlay.open_ms': 10,
-} as const;
 
 // ---------------------------------------------------------------------------
 // Result shape
 // ---------------------------------------------------------------------------
 
 export interface LineBenchCase {
-  /** Metric id (matches LINE_BUDGETS keys and perf-baseline.json line keys). */
+  /** Metric id (matches the perf-baseline.json line keys). */
   readonly id: string;
   /** Human-readable label for the report table. */
   readonly label: string;

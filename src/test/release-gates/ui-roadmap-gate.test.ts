@@ -10,22 +10,6 @@ import { createTestManagers } from '../helpers/test-managers.ts';
 import { makeTestShellViews } from '../helpers/shell-views.ts';
 
 describe('UI roadmap gate', () => {
-  test('locks the canonical Unicode primitive set', () => {
-    expect(GLYPHS.frame.vertical).toBe('│');
-    expect(GLYPHS.surface.top).toBe('▄');
-    expect(GLYPHS.surface.bottom).toBe('▀');
-    expect(GLYPHS.surface.cursor).toBe('█');
-    expect(GLYPHS.navigation.collapsed).toBe('▸');
-    expect(GLYPHS.navigation.expanded).toBe('▾');
-    expect(GLYPHS.status.success).toBe('✓');
-    expect(GLYPHS.status.pending).toBe('•');
-  });
-
-  test('keeps non-conversational routing defaults out of the main transcript', () => {
-    expect(DEFAULT_CONFIG.ui.systemMessages).toBe('panel');
-    expect(DEFAULT_CONFIG.ui.operationalMessages).toBe('panel');
-    expect(DEFAULT_CONFIG.ui.wrfcMessages).toBe('both');
-  });
 
   test('supports line-accurate conversation navigation by transcript event family', () => {
     const conversation = new ConversationManager(() => 100);

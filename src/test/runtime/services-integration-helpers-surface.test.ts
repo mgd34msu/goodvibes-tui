@@ -20,7 +20,7 @@
  * same directories to prove the distinction is real: that instance reports
  * nothing, which is the shape of the original bug.
  */
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { IntegrationHelperService, writeLastSessionPointer, writeRecoveryFile } from '@/runtime/index.ts';
 import { createUiReadModels } from '../../runtime/ui-read-models.ts';
 import { getTestRuntimeServices, resetTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
@@ -30,7 +30,9 @@ import { ageRecoverySnapshot } from '../helpers/session-surface.ts';
 // registered inside the helper, for the reason its doc comment gives.
 disposeTestRuntimeServicesAfterAll();
 
-beforeEach(() => {
+// Both tests write distinct session ids and neither reads the other's state,
+// so one composed graph serves the file.
+beforeAll(() => {
   resetTestRuntimeServices();
 });
 

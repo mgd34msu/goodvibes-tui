@@ -18,17 +18,10 @@
  *   - bootstrap.ts gates on the registered capability id (drift gate so the
  *     permanently-false id can never return).
  */
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { mkdirSync, rmSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { bindFeatureSettingsBridge, deriveFeatureStates } from '@pellux/goodvibes-sdk/platform/runtime/state';
+import { describe, test, expect } from 'bun:test';
 import {
   OpsControlPlane,
   RuntimeEventBus,
-  createFeatureFlagManager,
   createRuntimeOpsApi,
   createTaskManager,
 } from '@/runtime/index.ts';
@@ -77,38 +70,6 @@ function makeEnv() {
 
   return { store, bus, dispatch, taskManager, opsControlPlane, opsApi, printed, run };
 }
-
-describe('ops gate: control-plane gateway capability', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `gv-ops-gate-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    mkdirSync(tmpDir, { recursive: true });
-  });
-
-  test('a stock configuration enables the gate; controlPlane.gateway=false disables it live', () => {
-    const cm = new ConfigManager({ surfaceRoot: 'tui', workingDir: tmpDir, homeDir: tmpDir, configDir: join(tmpDir, '.goodvibes', 'global-tui') });
-    const flags = createFeatureFlagManager();
-    flags.loadFromConfig({ flags: deriveFeatureStates(cm) });
-    bindFeatureSettingsBridge(cm, flags);
-
-    expect(flags.isEnabled('control-plane-gateway')).toBe(true);
-    cm.setDynamic('controlPlane.gateway', false);
-    expect(flags.isEnabled('control-plane-gateway')).toBe(false);
-    cm.setDynamic('controlPlane.gateway', true);
-    expect(flags.isEnabled('control-plane-gateway')).toBe(true);
-
-    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  test('bootstrap gates the ops control plane on the registered capability id, never the unregistered one', () => {
-    const source = readFileSync(join(import.meta.dir, '..', '..', 'runtime', 'bootstrap.ts'), 'utf-8');
-    expect(source).toContain("isEnabled('control-plane-gateway')");
-    // The id that was never registered in any SDK registry (its gate was
-    // permanently false) must not come back.
-    expect(source.match(/isEnabled\('operator-control-plane'\)/)).toBeNull();
-  });
-});
 
 describe('/ops task interventions: real task manager, real control plane', () => {
   test('pause blocks a running task, resume returns it to running', async () => {

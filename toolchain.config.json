@@ -1,5 +1,5 @@
 {
-  "//": "TOOLCHAIN-PIN: @pellux/goodvibes-toolchain is published on npm and pinned EXACTLY (2.0.17) in package.json devDependencies, so `bun install --frozen-lockfile` puts the same CLI bins (goodvibes-build-binaries, goodvibes-post-build-smoke) on PATH that release-time bunx invocations name by version. Every release.yml call site that accepts a toolchain-spec input passes @pellux/goodvibes-toolchain@2.0.17; bumping the pin means bumping it in package.json, bun.lock, and those call sites together. The reusable-workflow refs stay at mgd34msu/goodvibes-sdk@main. This file is the repo-specific contract consumed by the toolchain CLIs; behavior lives in the package.",
+  "//": "TOOLCHAIN-PIN: @pellux/goodvibes-toolchain is published on npm and pinned EXACTLY in package.json devDependencies, so `bun install --frozen-lockfile` puts the same CLI bins (goodvibes-build-binaries, goodvibes-post-build-smoke) on PATH that release-time bunx invocations name by version. The workflow call sites that name a toolchain version, and the SDK reusable-workflow SHAs, are rewritten from package.json by `bun run release:prepare` (scripts/release-prepare.ts), which release-cut runs as its sync command. This file is the repo-specific contract consumed by the toolchain CLIs; behavior lives in the package.",
   "packageName": "@pellux/goodvibes-tui",
   "sdkPin": {
     "sdkPackage": "@pellux/goodvibes-sdk",
@@ -61,16 +61,6 @@
       }
     ]
   },
-  "coverage": {
-    "funcsFloor": 71,
-    "linesFloor": 75,
-    "command": [
-      "bun",
-      "test",
-      "--coverage",
-      "src"
-    ]
-  },
   "smoke": {
     "bannerPrefix": "goodvibes ",
     "forbiddenStrings": [
@@ -96,16 +86,9 @@
       [
         "bun",
         "run",
-        "scripts/prebuild.ts"
-      ],
-      [
-        "bun",
-        "run",
-        "scripts/export-foundation-artifacts.ts"
-      ],
-      [
-        "bun",
-        "install"
+        "scripts/release-prepare.ts",
+        "--no-bump",
+        "--no-changelog"
       ]
     ],
     "commitPaths": [
@@ -115,7 +98,9 @@
       "CHANGELOG.md",
       "docs/foundation-artifacts",
       "platform-packages",
-      "bun.lock"
+      "bun.lock",
+      "docs/commands-reference.md",
+      ".github/workflows"
     ],
     "changelogHeading": "bracket",
     "changelogInsertMarker": "first-separator"

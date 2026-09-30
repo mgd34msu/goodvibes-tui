@@ -14,11 +14,6 @@ function textLines(lines: import('@pellux/goodvibes-sdk/platform/types').Line[])
 }
 
 describe('renderMarkdown', () => {
-  test('returns Line array', () => {
-    const result = renderMarkdown('hello', WIDTH);
-    expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
-  });
 
   test('each line has correct width', () => {
     const result = renderMarkdown('hello world', WIDTH);
@@ -133,11 +128,6 @@ describe('renderMarkdown', () => {
     expect(Array.isArray(result)).toBe(true);
     const text = textLines(result).join('\n');
     expect(text).toContain('x');
-  });
-
-  test('handles empty string input', () => {
-    const result = renderMarkdown('', WIDTH);
-    expect(Array.isArray(result)).toBe(true);
   });
 
   test('H1 heading cells are bold', () => {

@@ -1,8 +1,7 @@
 name: Windows beta (non-gating)
 
 # Native Windows is BETA and deliberately NOT part of the release gate.
-# This workflow validates the ref (typecheck + tests), builds the windows-x64
-# binary through the SAME toolchain path every shipped target uses
+# This workflow builds the windows-x64 binary through the SAME toolchain path every shipped target uses
 # (goodvibes-build-binaries, driven by toolchain.config.json), and runs the SAME
 # post-build smoke the release matrix runs (banner prefix, packaging-failure
 # sentinels, no placeholder version, no build-order-lottery namespace reads) on a
@@ -11,7 +10,9 @@ name: Windows beta (non-gating)
 # A green run here is therefore the same evidence the release matrix produces for
 # linux/darwin, which is what makes it a usable promotion signal for moving
 # windows-x64 into the release matrix. It runs weekly as well as on demand, so
-# the signal cannot quietly go stale between manual dispatches.
+# the signal cannot quietly go stale between manual dispatches. The typecheck and
+# the test suite are not repeated here: ci.yml runs them on every push to main,
+# which is the ref a scheduled run builds.
 # See docs/windows.md for the staging plan and the POSIX blockers.
 
 on:
@@ -29,33 +30,8 @@ permissions:
   contents: read
 
 jobs:
-  # ── Validate the ref itself first: a "Windows build is green" claim means
-  #    nothing if the source it built does not typecheck or pass its tests. ───
-  verify-ref:
-    name: Typecheck + tests (the built ref)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
-      - name: Setup
-        uses: ./.github/actions/setup
-      - name: Configure git for tests
-        run: |
-          git config --global user.name "CI"
-          git config --global user.email "ci@test.com"
-      - name: Type check
-        run: bun x tsc --noEmit --pretty false
-      - name: Type check (tests)
-        run: bun x tsc --noEmit -p tsconfig.test.json --pretty false
-      - name: Run tests
-        run: bun run test
-
   build-windows-beta:
     name: Build windows-x64 (beta)
-    needs: [verify-ref]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

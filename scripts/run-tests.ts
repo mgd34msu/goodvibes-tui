@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { filterTestFilesByPattern, parseTestPattern } from './test-pattern-rule.ts';
+import { filterTestFilesByPattern, parseChangedBase, parseTestPattern } from './test-pattern-rule.ts';
 import { sweepStaleTestTmp, sweepStaleOsTmpEntries } from './stale-tmp-sweep.ts';
 import { TEST_TEMP_MANIFEST_ENV, removeManifestedTempDirs } from './test-temp-manifest.ts';
 
@@ -25,8 +25,12 @@ const RUNNER_DIR = join(TEST_TMP_ROOT, `run-${process.pid}`);
 // is a no-op because both specifiers resolve to the same module.
 const TEMP_CLEANUP_PRELOAD = join(ROOT, 'src', 'test', 'preload', 'temp-cleanup.ts');
 
-// Pass --coverage through to bun test when invoked with that flag.
-const COVERAGE = process.argv.includes('--coverage');
+// `--changed[=<ref>]` (the `bun run test:changed` script passes
+// --changed=origin/main): each per-file child gets bun's own --changed
+// selection, so a file whose import graph touches nothing changed since <ref>
+// (committed or not) runs zero tests and is reported as not affected. The file
+// set, the per-file isolation and the temp containment are the full run's.
+const CHANGED_BASE = parseChangedBase(process.argv.slice(2));
 
 // Optional positional pattern filter (first non-flag argv token), e.g. the TUI's
 // /test <pattern> passthrough. Matched as a substring against each test file's
@@ -84,10 +88,16 @@ const TIMEOUT_MS = (() => {
 // each test process finishes. Safe under concurrency: a live sibling's dirs were
 // created moments ago and are never 1 h old.
 
+// The end-to-end tests drive the BUILT binary (docs/testing-and-validation.md). They
+// run from their own CI job after the build, through `bun run test:e2e`, never
+// as part of this per-file source run.
+const E2E_ROOT = join(SEARCH_ROOT, 'test', 'e2e');
+
 function collectTests(dir: string, acc: string[]): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (fullPath === E2E_ROOT) continue;
       collectTests(fullPath, acc);
       continue;
     }
@@ -108,10 +118,8 @@ sweepStaleTestTmp(TEST_TMP_ROOT);
 // Also sweep the real OS temp dir for this project's own known mkdtemp
 // prefixes (age-gated at 4 h, see scripts/stale-tmp-sweep.ts). This is a
 // backstop for orphans that predate the makeProjectTempDir migration, or
-// that came from an invocation path other than this one (bun run
-// test:coverage's whole-suite `bun test` spawn has its own call to this
-// same sweep, see scripts/coverage-gate.ts, since it doesn't go through
-// this file at all).
+// that came from an invocation path other than this one (a bare
+// `bun test <file>` never goes through this file).
 sweepStaleOsTmpEntries(tmpdir());
 rmSync(RUNNER_DIR, { recursive: true, force: true });
 mkdirSync(RUNNER_DIR, { recursive: true });
@@ -123,6 +131,12 @@ if (testFiles.length === 0) {
 
 let passedFiles = 0;
 let failedFiles = 0;
+let unaffectedFiles = 0;
+
+/** bun's --changed selection ran nothing in this file: none of its imports changed. */
+function isUnaffectedByChange(output: string): boolean {
+  return CHANGED_BASE !== undefined && /^--changed: .*(nothing to run|no test files are affected)/m.test(output);
+}
 
 /**
  * Run one test file in its own bun process with an isolated TMPDIR
@@ -151,7 +165,7 @@ async function runFile(testFile: string): Promise<void> {
   // crash-mid-file until the 1 h stale sweep.
   try {
     const bunArgs = ['bun', 'test', '--preload', TEMP_CLEANUP_PRELOAD, `--timeout=${TIMEOUT_MS}`];
-    if (COVERAGE) bunArgs.push('--coverage');
+    if (CHANGED_BASE !== undefined) bunArgs.push(CHANGED_BASE === '' ? '--changed' : `--changed=${CHANGED_BASE}`);
     bunArgs.push(testFile);
     const proc = Bun.spawn(bunArgs, {
       cwd: ROOT,
@@ -189,6 +203,10 @@ async function runFile(testFile: string): Promise<void> {
 
     const ok = exitCode === 0;
     const output = (stdout + stderr).trimEnd();
+    if (ok && isUnaffectedByChange(output)) {
+      unaffectedFiles += 1;
+      return;
+    }
     console.log(`\n==> ${rel}${ok ? '' : '  [FAIL]'}`);
     if (output) console.log(output);
 
@@ -215,7 +233,11 @@ async function worker(): Promise<void> {
   }
 }
 
-console.log(`Running ${testFiles.length} test files with ${JOBS} parallel job${JOBS === 1 ? '' : 's'}${PATTERN ? ` (pattern: ${PATTERN})` : ''}.`);
+const selection = [
+  PATTERN ? `pattern: ${PATTERN}` : '',
+  CHANGED_BASE !== undefined ? `changed since ${CHANGED_BASE || 'the working tree base'}` : '',
+].filter(Boolean).join(', ');
+console.log(`Running ${testFiles.length} test files with ${JOBS} parallel job${JOBS === 1 ? '' : 's'}${selection ? ` (${selection})` : ''}.`);
 try {
   await Promise.all(Array.from({ length: Math.min(JOBS, testFiles.length) }, () => worker()));
 } finally {
@@ -225,5 +247,6 @@ try {
   rmSync(RUNNER_DIR, { recursive: true, force: true });
 }
 
-console.log(`\nTest files: ${testFiles.length}, passed: ${passedFiles}, failed: ${failedFiles}`);
+const unaffectedNote = CHANGED_BASE !== undefined ? `, not affected by the change: ${unaffectedFiles}` : '';
+console.log(`\nTest files: ${testFiles.length}, passed: ${passedFiles}, failed: ${failedFiles}${unaffectedNote}`);
 process.exit(failedFiles === 0 ? 0 : 1);

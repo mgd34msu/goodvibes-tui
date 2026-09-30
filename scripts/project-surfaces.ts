@@ -87,9 +87,8 @@ export function syncFoundationArtifacts(root = ROOT): void {
 
 /**
  * Generate docs/commands-reference.md from the live slash-command registry.
- * The committed file is guarded against drift by
- * src/test/release-gates/command-reference-gate.test.ts, which regenerates and
- * byte-compares (the same idiom as the foundation-artifact goldens above).
+ * Rewritten by every prebuild and by release:prepare, so the committed file is
+ * current at each version bump without a drift check on every push.
  */
 export function syncCommandReference(root = ROOT): void {
   const markdown = renderCommandReferenceMarkdown(categorizeBuiltinCommands());

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { filterTestFilesByPattern, parseTestPattern } from '../../../scripts/test-pattern-rule.ts';
+import { filterTestFilesByPattern, parseChangedBase, parseTestPattern } from '../../../scripts/test-pattern-rule.ts';
 
 describe('parseTestPattern', () => {
   test('returns undefined with no args', () => {
@@ -7,15 +7,15 @@ describe('parseTestPattern', () => {
   });
 
   test('returns undefined when only known flags are present', () => {
-    expect(parseTestPattern(['--coverage', '--jobs', '4'])).toBeUndefined();
+    expect(parseTestPattern(['--changed=origin/main', '--jobs', '4'])).toBeUndefined();
   });
 
   test('returns the first non-flag positional token', () => {
     expect(parseTestPattern(['diff-runtime'])).toBe('diff-runtime');
   });
 
-  test('skips --coverage and --jobs N before finding the pattern', () => {
-    expect(parseTestPattern(['--coverage', '--jobs', '4', 'diff-runtime'])).toBe('diff-runtime');
+  test('skips --changed=<ref> and --jobs N before finding the pattern', () => {
+    expect(parseTestPattern(['--changed=origin/main', '--jobs', '4', 'diff-runtime'])).toBe('diff-runtime');
   });
 
   test('ignores unrecognized flags rather than treating them as the pattern', () => {
@@ -32,11 +32,33 @@ describe('parseTestPattern', () => {
     // to run nothing at all.
     expect(parseTestPattern(['--timeout', '60000'])).toBeUndefined();
     expect(parseTestPattern(['--timeout', '60000', 'diff-runtime'])).toBe('diff-runtime');
-    expect(parseTestPattern(['--coverage', '--jobs', '4', '--timeout', '60000', 'diff-runtime'])).toBe('diff-runtime');
+    expect(parseTestPattern(['--changed=origin/main', '--jobs', '4', '--timeout', '60000', 'diff-runtime'])).toBe('diff-runtime');
   });
 
   test('--timeout=N is a single token and needs no value skip', () => {
     expect(parseTestPattern(['--timeout=60000', 'diff-runtime'])).toBe('diff-runtime');
+  });
+});
+
+describe('parseChangedBase', () => {
+  test('is undefined without the flag, so a full run is never narrowed', () => {
+    expect(parseChangedBase([])).toBeUndefined();
+    expect(parseChangedBase(['diff-runtime', '--jobs', '4'])).toBeUndefined();
+  });
+
+  test('--changed=<ref> yields the ref', () => {
+    expect(parseChangedBase(['--changed=origin/main'])).toBe('origin/main');
+    expect(parseChangedBase(['diff-runtime', '--changed=HEAD~3'])).toBe('HEAD~3');
+  });
+
+  test("a bare --changed yields '' (bun's own default base)", () => {
+    expect(parseChangedBase(['--changed'])).toBe('');
+  });
+
+  test('--changed and a positional pattern combine', () => {
+    const argv = ['--changed=origin/main', 'src/test/input'];
+    expect(parseChangedBase(argv)).toBe('origin/main');
+    expect(parseTestPattern(argv)).toBe('src/test/input');
   });
 });
 
@@ -45,7 +67,7 @@ describe('filterTestFilesByPattern', () => {
   const files = [
     '/repo/src/test/input/diff-runtime.test.ts',
     '/repo/src/test/input/git-runtime.test.ts',
-    '/repo/src/test/scripts/coverage-gate.test.ts',
+    '/repo/src/test/scripts/check-workflows-gate.test.ts',
   ];
 
   test('returns all files unchanged when pattern is undefined', () => {

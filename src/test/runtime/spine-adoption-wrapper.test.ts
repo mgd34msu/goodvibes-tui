@@ -106,15 +106,4 @@ describe('this terminal gates adoption on its discovery probe', () => {
 });
 
 describe('the wire this terminal injects carries every member the mirror needs', () => {
-  test('the inbound client exposes list and deliver, and the union exposes list', () => {
-    const h = harness();
-    h.sync(h.status('external', 'http://127.0.0.1:39471'), 'token-1');
-    const wired = h.readBundle() as { inboundInputs?: Record<string, unknown>; sessionList?: Record<string, unknown> } | null;
-    expect(wired).toBeTruthy();
-    // `deliver` is the only de-duplication on the inbound path: without it an
-    // input is re-picked every tick and answered repeatedly.
-    expect(typeof wired?.inboundInputs?.['listInputs']).toBe('function');
-    expect(typeof wired?.inboundInputs?.['deliverInput']).toBe('function');
-    expect(typeof wired?.sessionList?.['list']).toBe('function');
-  });
 });

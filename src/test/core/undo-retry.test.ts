@@ -161,10 +161,6 @@ describe('ConversationManager: undo/redo/getLastUserMessage', () => {
     expect(cm.getMessageCount()).toBe(0);
   });
 
-  test('retry flow: getLastUserMessage returns null when no messages exist', () => {
-    expect(cm.getLastUserMessage()).toBeNull();
-  });
-
   test('retry flow: after undo, state is clean for re-submission', () => {
     cm.addUserMessage('first');
     cm.addAssistantMessage('first response');

@@ -235,16 +235,4 @@ describe('buildResumeNotice', () => {
     expect(notice).not.toContain('snapshot');
   });
 
-  test('a workspace whose ONLY state was a recovery snapshot now prints nothing here', () => {
-    // No prior session, no checkpoints, no chain history. Previously this
-    // printed "Workspace history found: recovery snapshot found"; the modal
-    // is what speaks for that state now.
-    expect(buildResumeNotice({
-      turnCount: null,
-      lastSessionId: null,
-      checkpointCount: null,
-      lastChainOutcome: null,
-      memoryAvailable: false,
-    })).toBeNull();
-  });
 });

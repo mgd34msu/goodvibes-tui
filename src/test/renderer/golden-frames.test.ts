@@ -423,11 +423,6 @@ describe('golden-frames', () => {
       assertGolden('shell-footer', lines);
     });
 
-    test('render is deterministic (two consecutive renders match)', () => {
-      const a = snapshotEncode('shell-footer', renderShellFooterSurface());
-      const b = snapshotEncode('shell-footer', renderShellFooterSurface());
-      expect(a).toBe(b);
-    });
   });
 
   describe('context-meter', () => {
@@ -437,11 +432,6 @@ describe('golden-frames', () => {
       assertGolden('context-meter', lines);
     });
 
-    test('render is deterministic (two consecutive renders match)', () => {
-      const a = snapshotEncode('context-meter', renderContextMeterSurface());
-      const b = snapshotEncode('context-meter', renderContextMeterSurface());
-      expect(a).toBe(b);
-    });
   });
 
   describe('markdown-transcript', () => {
@@ -451,11 +441,6 @@ describe('golden-frames', () => {
       assertGolden('markdown-transcript', lines);
     });
 
-    test('render is deterministic (two consecutive renders match)', () => {
-      const a = snapshotEncode('markdown-transcript', renderMarkdownTranscriptSurface());
-      const b = snapshotEncode('markdown-transcript', renderMarkdownTranscriptSurface());
-      expect(a).toBe(b);
-    });
   });
 
   describe('mismatch detection', () => {
@@ -602,11 +587,6 @@ describe('golden-frames : splash (constraint 4)', () => {
       assertGolden(surface, lines);
     });
 
-    test(`width=${width} render is deterministic (two consecutive renders match)`, () => {
-      const a = snapshotEncode(surface, renderSplashSurface(width));
-      const b = snapshotEncode(surface, renderSplashSurface(width));
-      expect(a).toBe(b);
-    });
   }
 
   test('splash goldens contain the fullwidth/halfwidth glyph aesthetic verbatim', () => {
@@ -669,11 +649,6 @@ describe('golden-frames : conversation: fenced code block (regex-fallback path)'
     const lines = renderCodeBlockFallbackSurface();
     expect(lines.length).toBeGreaterThan(0);
     assertGolden('code-block-fallback', lines);
-  });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('code-block-fallback', renderCodeBlockFallbackSurface());
-    const b = snapshotEncode('code-block-fallback', renderCodeBlockFallbackSurface());
-    expect(a).toBe(b);
   });
 });
 
@@ -745,11 +720,6 @@ describe('golden-frames : conversation: thinking block', () => {
     expect(lines.length).toBeGreaterThan(0);
     assertGolden('thinking-block', lines);
   });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('thinking-block', renderThinkingBlockSurface());
-    const b = snapshotEncode('thinking-block', renderThinkingBlockSurface());
-    expect(a).toBe(b);
-  });
 });
 
 // Streaming partial frame, renderMarkdown with isStreaming:true, the same
@@ -777,11 +747,6 @@ describe('golden-frames : conversation: streaming partial frame', () => {
     const lines = renderStreamingPartialSurface();
     expect(lines.length).toBeGreaterThan(0);
     assertGolden('streaming-partial', lines);
-  });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('streaming-partial', renderStreamingPartialSurface());
-    const b = snapshotEncode('streaming-partial', renderStreamingPartialSurface());
-    expect(a).toBe(b);
   });
 });
 
@@ -816,13 +781,6 @@ function describeOverlayGolden(
         const lines = render(variant.width, variant.height);
         expect(lines.length).toBeGreaterThan(0);
         assertGolden(surface, lines);
-      });
-      test(`${variant.label} size render is deterministic (two consecutive renders match)`, async () => {
-        render(variant.width, variant.height);
-        await settleSyntaxHighlighting();
-        const a = snapshotEncode(surface, render(variant.width, variant.height));
-        const b = snapshotEncode(surface, render(variant.width, variant.height));
-        expect(a).toBe(b);
       });
     }
   });
@@ -1327,11 +1285,6 @@ describe('golden-frames : history-search-overlay', () => {
       expect(lines.length).toBeGreaterThan(0);
       assertGolden(surface, lines);
     });
-    test(`${variant.label} width render is deterministic (two consecutive renders match)`, () => {
-      const a = snapshotEncode(surface, renderHistorySearchSurface(variant.width));
-      const b = snapshotEncode(surface, renderHistorySearchSurface(variant.width));
-      expect(a).toBe(b);
-    });
   }
 });
 
@@ -1427,11 +1380,6 @@ describe('golden-frames : shell-footer (busy)', () => {
     expect(lines.length).toBeGreaterThan(0);
     assertGolden('shell-footer-busy', lines);
   });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('shell-footer-busy', renderShellFooterBusySurface());
-    const b = snapshotEncode('shell-footer-busy', renderShellFooterBusySurface());
-    expect(a).toBe(b);
-  });
 });
 
 // ─── 8b. Shell footer with a live microphone ────────────────────────────────
@@ -1468,11 +1416,6 @@ for (const indicator of ['statusline', 'banner'] as const) {
       const lines = renderShellFooterVoiceSurface(indicator);
       expect(lines.length).toBeGreaterThan(0);
       assertGolden(surface, lines);
-    });
-    test('render is deterministic (two consecutive renders match)', () => {
-      const a = snapshotEncode(surface, renderShellFooterVoiceSurface(indicator));
-      const b = snapshotEncode(surface, renderShellFooterVoiceSurface(indicator));
-      expect(a).toBe(b);
     });
   });
 }
@@ -1684,27 +1627,12 @@ describe('golden-frames : light theme', () => {
     assertGolden('markdown-transcript-light', lines);
   });
 
-  test('markdown transcript (light) is deterministic and differs from dark', () => {
-    const a = snapshotEncode('markdown-transcript-light', underLight(() => renderMarkdownTranscriptSurface()));
-    const b = snapshotEncode('markdown-transcript-light', underLight(() => renderMarkdownTranscriptSurface()));
-    expect(a).toBe(b);
-    const dark = snapshotEncode('markdown-transcript', renderMarkdownTranscriptSurface());
-    expect(a).not.toBe(dark); // light tokens actually changed the styles
-  });
-
   test('command palette (light) matches committed golden snapshot', () => {
     const lines = underLight(() => renderPaletteLightSurface());
     expect(lines.length).toBeGreaterThan(0);
     assertGolden('command-palette-light', lines);
   });
 
-  test('command palette (light) is deterministic and differs from dark (a lighter scrim, white surface)', () => {
-    const a = snapshotEncode('command-palette-light', underLight(() => renderPaletteLightSurface()));
-    const b = snapshotEncode('command-palette-light', underLight(() => renderPaletteLightSurface()));
-    expect(a).toBe(b);
-    const dark = snapshotEncode('command-palette-light', renderPaletteLightSurface());
-    expect(a).not.toBe(dark);
-  });
 });
 
 // ─── ux/light-chrome, header/footer/thinking chrome flips with themeMode ──
@@ -1771,21 +1699,8 @@ describe('golden-frames : chrome light/dark flip (ux/light-chrome)', () => {
     assertGolden('chrome-light', lines);
   });
 
-  test('chrome (light) is deterministic and differs from dark', () => {
-    const a = snapshotEncode('chrome-light', underLight(() => renderChromeHeaderFooterSurface()));
-    const b = snapshotEncode('chrome-light', underLight(() => renderChromeHeaderFooterSurface()));
-    expect(a).toBe(b);
-    const dark = snapshotEncode('chrome-light', renderChromeHeaderFooterSurface());
-    expect(a).not.toBe(dark); // light chrome tones actually changed the styles
-  });
-
-  test('dark chrome is byte-identical across renders and unmoved by the wiring', () => {
-    // The default active mode in the shared test process is dark (default
-    // theme), so the dark output must be render-stable AND equal to the
-    // committed dark chrome golden.
-    const a = snapshotEncode('chrome-dark', renderChromeHeaderFooterSurface());
-    const b = snapshotEncode('chrome-dark', renderChromeHeaderFooterSurface());
-    expect(a).toBe(b);
+  test('dark chrome matches the committed dark golden, unmoved by the light wiring', () => {
+    // The default active mode in the shared test process is dark.
     assertGolden('chrome-dark', renderChromeHeaderFooterSurface());
   });
 
@@ -1860,11 +1775,6 @@ describe('golden-frames : permission prompt: exec sandbox escalation', () => {
     expect(lines.length).toBeGreaterThan(0);
     assertGolden('permission-prompt-sandbox-escalation', lines);
   });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('permission-prompt-sandbox-escalation', renderSandboxEscalationPromptSurface());
-    const b = snapshotEncode('permission-prompt-sandbox-escalation', renderSandboxEscalationPromptSurface());
-    expect(a).toBe(b);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1907,11 +1817,6 @@ describe('golden-frames : permission prompt: mcp-server elicitation attribution'
     expect(lines.some((l) => l.map((c) => c.char).join('').includes('MCP server: figma'))).toBe(true);
     assertGolden('permission-prompt-mcp-server-attribution', lines);
   });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('permission-prompt-mcp-server-attribution', render());
-    const b = snapshotEncode('permission-prompt-mcp-server-attribution', render());
-    expect(a).toBe(b);
-  });
 });
 
 describe('golden-frames : permission prompt: sandbox-escalation attribution (broker-routed)', () => {
@@ -1923,11 +1828,6 @@ describe('golden-frames : permission prompt: sandbox-escalation attribution (bro
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.some((l) => l.map((c) => c.char).join('').includes('exec-sandbox wants: wants-network'))).toBe(true);
     assertGolden('permission-prompt-sandbox-escalation-attribution', lines);
-  });
-  test('render is deterministic (two consecutive renders match)', () => {
-    const a = snapshotEncode('permission-prompt-sandbox-escalation-attribution', render());
-    const b = snapshotEncode('permission-prompt-sandbox-escalation-attribution', render());
-    expect(a).toBe(b);
   });
 });
 

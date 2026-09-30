@@ -19,7 +19,6 @@ import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
 import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
-import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
@@ -251,37 +250,6 @@ describe('ModelPickerModal: deleteContextCapChar', () => {
 // ProviderRegistry, setModelContextCap
 // ---------------------------------------------------------------------------
 
-describe('ProviderRegistry: setModelContextCap', () => {
-  let registry: ProviderRegistry;
-
-  beforeEach(() => {
-    registry = harness.providerRegistry;
-  });
-
-  test('updates contextWindow for a discovered model', () => {
-    // Inject a discovered server, the registry creates ModelDefinition entries from it
-    const server: DiscoveredServer = {
-      name: 'ollama',
-      host: '127.0.0.1',
-      port: 11434,
-      baseURL: 'http://127.0.0.1:11434/v1',
-      models: ['qwen3-local'],
-      serverType: 'ollama',
-      modelContextWindows: { 'qwen3-local': 8192 },
-    };
-    registry.registerDiscoveredProviders([server]);
-
-    registry.setModelContextCap('ollama:qwen3-local', 32768);
-    const updated = registry.listModels().find((m) => m.registryKey === 'ollama:qwen3-local');
-    expect(updated?.contextWindow).toBe(32768);
-    expect(updated?.contextWindowProvenance).toBe('configured_cap');
-  });
-
-  test('does not throw when model is not found', () => {
-    expect(() => registry.setModelContextCap('nonexistent:model', 8192)).not.toThrow();
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Handler, Space key (local vs cloud)
 // ---------------------------------------------------------------------------
@@ -334,104 +302,63 @@ describe('ModelPickerModal: isLocalModel', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Handler, Enter key in contextCap mode
+// Handler, what Enter and Escape in contextCap mode commit
 // ---------------------------------------------------------------------------
 
-describe('ModelPickerModal: contextCap Enter scenarios', () => {
-  let picker: ModelPickerModal;
-  const local = makeLocalModel();
+describe('handleModelPickerToken: the cap Enter commits, and Escape commits nothing', () => {
+  const ENTER = { type: 'key' as const, name: 'return', logicalName: 'enter', ctrl: false, shift: false, meta: false };
+  const ESCAPE = { type: 'key' as const, name: 'escape', logicalName: 'escape', ctrl: false, shift: false, meta: false };
 
-  beforeEach(() => {
-    picker = createPicker();
+  function drive(typed: string, token: typeof ENTER | typeof ESCAPE) {
+    const picker = createPicker();
+    const local = makeLocalModel({ contextWindow: 4096 });
+    picker.openAllModels([local], local.id);
     picker.enterContextCapMode(local);
+    for (const d of typed) picker.appendContextCapChar(d);
+    const selections: Array<{ model: ModelDefinition; contextCap?: number | null }> = [];
+    let escaped = 0;
+    const state = {
+      modelPicker: picker,
+      modalStack: ['modelPicker'],
+      commandContext: {
+        completeModelSelection: (selection: { model: ModelDefinition; contextCap?: number | null }) => { selections.push(selection); },
+      } as never,
+      getViewportHeight: () => 30,
+      requestRender: () => {},
+      handleEscape: () => { escaped += 1; },
+    };
+    handleModelPickerToken(state, token);
+    return { picker, local, selections, escaped, modalStack: state.modalStack };
+  }
+
+  test('a typed cap reaches the model selection as that integer', () => {
+    const { selections, picker, modalStack } = drive('8192', ENTER);
+    expect(selections).toHaveLength(1);
+    expect(selections[0]!.model.id).toBe('local-model');
+    expect(selections[0]!.contextCap).toBe(8192);
+    expect(picker.active).toBe(false);
+    expect(modalStack).toEqual([]);
   });
 
-  test('blank input: parsedCap is null (validCap is null)', () => {
-    // Simulate what handler does on Enter
-    const rawInput = picker.contextCapQuery.trim();
-    const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
-    const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
-    expect(validCap).toBeNull();
+  test('the upper bound 10,000,000 is accepted and committed', () => {
+    const { selections } = drive('10000000', ENTER);
+    expect(selections[0]!.contextCap).toBe(10_000_000);
   });
 
-  test('valid positive integer: validCap is that integer', () => {
-    picker.appendContextCapChar('8');
-    picker.appendContextCapChar('1');
-    picker.appendContextCapChar('9');
-    picker.appendContextCapChar('2');
-    const rawInput = picker.contextCapQuery.trim();
-    const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
-    const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
-    expect(validCap).toBe(8192);
+  test('a blank cap commits the model with no cap', () => {
+    const { selections } = drive('', ENTER);
+    expect(selections).toHaveLength(1);
+    expect(selections[0]!.contextCap).toBeNull();
   });
 
-  test('zero input: validCap is null (zero is not positive)', () => {
-    picker.appendContextCapChar('0');
-    const rawInput = picker.contextCapQuery.trim();
-    const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
-    const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
-    expect(validCap).toBeNull();
-  });
-
-  test('value exceeding 10_000_000: validCap is null', () => {
-    // 10000001, one over the limit
-    for (const d of '10000001') picker.appendContextCapChar(d);
-    const rawInput = picker.contextCapQuery.trim();
-    const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
-    const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
-    expect(validCap).toBeNull();
-  });
-
-  test('value at exact upper bound 10_000_000; validCap is accepted', () => {
-    for (const d of '10000000') picker.appendContextCapChar(d);
-    const rawInput = picker.contextCapQuery.trim();
-    const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
-    const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
-    expect(validCap).toBe(10_000_000);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Handler, Escape key in contextCap mode (reset)
-// ---------------------------------------------------------------------------
-
-describe('ModelPickerModal: Escape from contextCap resets state', () => {
-  let picker: ModelPickerModal;
-
-  beforeEach(() => {
-    picker = createPicker();
-  });
-
-  test('Escape clears contextCapQuery and returns to model mode', () => {
-    const local = makeLocalModel();
-    picker.enterContextCapMode(local);
-    picker.appendContextCapChar('4');
-    picker.appendContextCapChar('0');
-
-    // Simulate handler escape logic
-    picker.contextCapQuery = '';
-    picker.contextCapPendingModel = null;
-    picker.mode = 'model';
-
+  test('Escape returns to the model list, clears the typed cap and commits nothing', () => {
+    const { picker, local, selections, escaped } = drive('9999', ESCAPE);
     expect(picker.mode).toBe('model');
+    expect(picker.active).toBe(true);
     expect(picker.contextCapQuery).toBe('');
     expect(picker.contextCapPendingModel).toBeNull();
-  });
-
-  test('Escape does not apply contextCap to the model', () => {
-    const local = makeLocalModel({ contextWindow: 4096 });
-    picker.enterContextCapMode(local);
-    picker.appendContextCapChar('9');
-    picker.appendContextCapChar('9');
-    picker.appendContextCapChar('9');
-    picker.appendContextCapChar('9');
-
-    // Simulate escape, cancel without applying
-    picker.contextCapQuery = '';
-    picker.contextCapPendingModel = null;
-    picker.mode = 'model';
-
-    // The original model object's contextWindow is untouched
+    expect(selections).toHaveLength(0);
+    expect(escaped).toBe(0); // one level popped, the picker itself stays open
     expect(local.contextWindow).toBe(4096);
   });
 });

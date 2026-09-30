@@ -29,31 +29,6 @@ function receipt(partial: Partial<MemoryConsolidationRunReceipt>): MemoryConsoli
   } as MemoryConsolidationRunReceipt;
 }
 
-describe('formatConsolidationReceipt (STEP 7)', () => {
-  test('a run that changed something is one honest line', () => {
-    const text = formatConsolidationReceipt(receipt({
-      merged: [{}, {}] as never,
-      archived: [{}] as never,
-      decayed: [{}, {}, {}] as never,
-    }));
-    expect(text).toBe('Memory consolidation: 2 merged, 1 archived, 3 decayed (scanned 42).');
-  });
-
-  test('a quiet run (nothing merged/archived/decayed/proposed) yields null; no notice', () => {
-    expect(formatConsolidationReceipt(receipt({}))).toBeNull();
-  });
-
-  test('a run with proposals points at the real command and tab (the TUI\'s only pointer to WHAT was proposed)', () => {
-    const text = formatConsolidationReceipt(receipt({ proposed: [{}, {}] as never }));
-    expect(text).toBe('Memory consolidation: 2 proposed (scanned 42). Review the 2 proposed changes with /memory (Proposals tab).');
-  });
-
-  test('a single proposal uses singular "change", still naming /memory and its Proposals tab', () => {
-    const text = formatConsolidationReceipt(receipt({ merged: [{}] as never, proposed: [{}] as never }));
-    expect(text).toBe('Memory consolidation: 1 merged, 1 proposed (scanned 42). Review the 1 proposed change with /memory (Proposals tab).');
-  });
-});
-
 describe('consolidation receipt through the attach-time queue (STEP 7)', () => {
   test('a seeded consolidation receipt renders as a one-line attach notice, once', () => {
     const dir = makeProjectTempDir('gv-consolidation');

@@ -89,10 +89,6 @@ describe('SettingsModal: network category', () => {
 
   // ── Category registration ─────────────────────────────────────────────
 
-  test('network is a registered category', () => {
-    expect(SETTINGS_CATEGORIES).toContain('network');
-  });
-
   test('network group is populated after open()', () => {
     modal.open(cm, ffm, subscriptionManager, serviceRegistry, emptyMcpRegistry);
     const items = modal.groups.get('network');

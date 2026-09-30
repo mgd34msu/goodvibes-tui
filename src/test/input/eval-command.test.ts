@@ -48,33 +48,6 @@ function makeGateContext(printed: string[]): CommandContext {
 }
 
 describe('evalCommand gate -- flag-safe positional parsing', () => {
-  // -- Parsing unit tests (no file I/O) ----------------------------------------
-
-  test('[finding 5] positionals filter strips --save-baseline from args', () => {
-    // Simulate args as received by handleGate when invoked as:
-    //   /eval gate core-performance --save-baseline
-    const args = ['core-performance', '--save-baseline'];
-    const positionals = args.filter(a => !a.startsWith('--'));
-
-    // suiteName must be the first non-flag arg
-    expect(positionals[0]).toBe('core-performance');
-    // second positional slot must be undefined -- not '--save-baseline'
-    expect(positionals[1]).toBeUndefined();
-    // default path must be applied
-    const baselineFile = positionals[1] ?? '.goodvibes/eval/baseline.json';
-    expect(baselineFile).toBe('.goodvibes/eval/baseline.json');
-    expect(baselineFile).not.toBe('--save-baseline');
-  });
-
-  test('[finding 5] flag-first ordering: positionals[0] is still the suite name', () => {
-    // /eval gate --save-baseline core-performance
-    const args = ['--save-baseline', 'core-performance'];
-    const positionals = args.filter(a => !a.startsWith('--'));
-    const suiteName = positionals[0];
-    expect(suiteName).toBe('core-performance');
-    expect(suiteName).not.toBe('--save-baseline');
-  });
-
   // -- Integration tests (unknown suite -> early exit, no file I/O) ------------
 
   test('gate with flag in 2nd slot: error names the actual suite, not the flag', async () => {

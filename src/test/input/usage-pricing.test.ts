@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { ResolvedModelPricing } from '@pellux/goodvibes-sdk/platform/providers';
 import {
-  describePricingSource,
   setModelPricingResolver,
   setPricingSource,
   MODEL_PRICES_CONFIG_KEY,
@@ -161,33 +160,5 @@ describe('Usage: p stores your price in pricing.modelPrices live', () => {
     expect(host.active).toBe(true);
     host.escape();
     expect(host.active).toBe(false);
-  });
-});
-
-describe('describePricingSource', () => {
-  afterEach(() => { setModelPricingResolver(null); setPricingSource(null); });
-
-  test('manual price reads your price', () => {
-    setModelPricingResolver(() => pricedResolution('user'));
-    expect(describePricingSource('anthropic:claude-sonnet-4-6')).toBe('your price');
-  });
-
-  test('dated catalog price reads catalog price, as of <date>', () => {
-    setModelPricingResolver(() => pricedResolution('catalog', '2026-07-01'));
-    expect(describePricingSource('anthropic:claude-sonnet-4-6')).toBe('catalog price, as of 2026-07-01');
-  });
-
-  test('provider-served price reads provider price, as of <date>', () => {
-    setModelPricingResolver(() => pricedResolution('provider', '2026-07-10'));
-    expect(describePricingSource('anthropic:claude-sonnet-4-6')).toBe('provider price, as of 2026-07-10');
-  });
-
-  test('unknown model has no source description (callers render price unknown)', () => {
-    setModelPricingResolver(() => ({ status: 'unknown' } as ResolvedModelPricing));
-    expect(describePricingSource('mystery:model-x')).toBeNull();
-  });
-
-  test('the built-in fallback table names itself honestly', () => {
-    expect(describePricingSource('claude-sonnet-4-6')).toBe('built-in price');
   });
 });

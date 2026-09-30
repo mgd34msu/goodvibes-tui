@@ -53,8 +53,8 @@ export function renderCommandReferenceMarkdown(entries: readonly CategorizedComm
   lines.push('<!-- GENERATED FILE: DO NOT EDIT BY HAND.');
   lines.push('     Regenerate with `bun run docs:commands`.');
   lines.push('     Source of truth: the slash-command registry (src/input/commands.ts).');
-  lines.push('     A drift check (src/test/release-gates/command-reference-gate.test.ts)');
-  lines.push('     fails CI if this file is stale. -->');
+  lines.push('     Every build (scripts/prebuild.ts) and `bun run release:prepare`');
+  lines.push('     rewrite it, so it is current at each version bump. -->');
   lines.push('');
   lines.push('# Command Reference');
   lines.push('');

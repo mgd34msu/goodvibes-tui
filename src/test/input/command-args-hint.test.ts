@@ -25,12 +25,6 @@ const registry = new CommandRegistry();
 registerBuiltinCommands(registry);
 
 describe('command-args-hint drift guard', () => {
-  test('every hinted command name resolves in the real registry', () => {
-    const hintedCommands = ['session', 'template', 'secrets', 'permissions', 'config', 'plugin'];
-    for (const name of hintedCommands) {
-      expect(registry.get(name), `/${name} should be a registered command`).toBeDefined();
-    }
-  });
 
   // Aliases share their canonical subcommand's hint text (see
   // SESSION_SUBCOMMAND_ARG_HINTS's doc) and are never spelled out on their

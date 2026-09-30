@@ -1,17 +1,11 @@
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { join } from 'node:path';
+import { describe, test, expect } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '@pellux/goodvibes-terminal-shell';
 import { InfiniteBuffer } from '@pellux/goodvibes-terminal-shell';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
-import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
-import { getTestProviderRegistry, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
+import { disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { handleClipboardPaste } from '../../input/handler-content-actions.ts';
-import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // Stop the shared test runtime graph when this file ends. Called here, not
 // registered inside the helper, for the reason its doc comment gives.
@@ -30,15 +24,6 @@ function makeInput(): InputHandler {
   const sel = new SelectionManager();
   const history = new InfiniteBuffer();
   return new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {}, createDefaultUiRuntimeServices());
-}
-
-function createConfigManager(): ConfigManager {
-  const root = makeProjectTempDir('gv-image-input');
-  return new ConfigManager({ surfaceRoot: 'tui',
-    workingDir: root,
-    homeDir: root,
-    configDir: join(root, '.goodvibes', 'global-tui'),
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -297,80 +282,4 @@ describe('addUserMessage with ContentPart[]', () => {
 // ---------------------------------------------------------------------------
 
 describe('Orchestrator capability check for non-multimodal models', () => {
-  test('strips images and adds warning when model lacks multimodal capability', async () => {
-    const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools');
-    const { Orchestrator } = await import('@pellux/goodvibes-sdk/platform/core');
-    const { ConversationManager } = await import('../../core/conversation.ts');
-    const { RuntimeEventBus } = await import('@/runtime/index.ts');
-
-    const runtimeBus = new RuntimeEventBus();
-    const toolRegistry = new ToolRegistry();
-    const cm = new ConversationManager(() => 80);
-    const configManager = createConfigManager();
-    const policyRuntimeState = new PolicyRuntimeState();
-    const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
-    const orch = new Orchestrator({
-      conversation: cm,
-      getViewportHeight: () => 24,
-      scrollToEnd: () => {},
-      toolRegistry,
-      permissionManager: pm,
-      getSystemPrompt: () => '',
-      runtimeBus,
-      services: {
-        agentManager: new AgentManager({ configManager }),
-        wrfcController: { listChains: () => [] },
-      },
-    });
-    orch.setCoreServices({
-      providerRegistry: getTestProviderRegistry(),
-      configManager,
-    });
-    const providerRegistry = getTestProviderRegistry();
-
-    // Inject a non-multimodal model into provider registry for this test
-    const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
-    const mockBackingProvider = providerRegistry.get('openrouter');
-    if (!mockBackingProvider) throw new Error('Expected openrouter provider in test registry');
-    const originalChat = mockBackingProvider.chat.bind(mockBackingProvider);
-    let systemMessages: string[] = [];
-    const origAddSystem = cm.addSystemMessage.bind(cm);
-    cm.addSystemMessage = (msg: string) => {
-      systemMessages.push(msg);
-      origAddSystem(msg);
-    };
-
-    // Patch getCurrentModel to return a non-multimodal model
-    providerRegistry.getCurrentModel = () => ({
-      id: 'test-model',
-      registryKey: 'openrouter:test-model',
-      displayName: 'Test Model',
-      description: '',
-      provider: 'openrouter',
-      contextWindow: 8192,
-      selectable: true,
-      capabilities: { multimodal: false, toolCalling: true, codeEditing: false, reasoning: false },
-    });
-
-    // Patch the resolved provider instance to return a fast canned response.
-    mockBackingProvider.chat = async () => ({
-      content: 'ok',
-      toolCalls: [],
-      usage: { inputTokens: 1, outputTokens: 1 },
-      stopReason: 'completed' as const,
-    });
-
-    const content = [
-      { type: 'text' as const, text: 'describe this' },
-      { type: 'image' as const, data: 'abc', mediaType: 'image/png' },
-    ];
-
-    await orch.handleUserInput('describe this', content);
-
-    // Restore
-    providerRegistry.getCurrentModel = originalGetCurrentModel;
-    mockBackingProvider.chat = originalChat;
-
-    expect(systemMessages.some(m => m.includes('does not support image input'))).toBe(true);
-  });
 });

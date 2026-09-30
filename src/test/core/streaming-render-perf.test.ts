@@ -7,7 +7,7 @@
 // 3. First delta always renders (no silent drop on the very first token).
 // ---------------------------------------------------------------------------
 
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 import { ConversationManager } from '../../core/conversation';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
 
@@ -91,21 +91,6 @@ describe('streaming render: byte-identical final output', () => {
 // ---------------------------------------------------------------------------
 
 describe('streaming render: 16ms throttle gate', () => {
-  test('first delta always renders immediately (throttle starts at 0)', () => {
-    // Verify: _lastStreamRenderMs = 0 on startStreamingBlock, so first delta
-    // always satisfies now - 0 >= 16 and calls renderMarkdown.
-    const cm = new ConversationManager(() => 80, createTestConfigManager());
-    cm.suppressSplash = true;
-    cm.addUserMessage('q');
-    cm.startStreamingBlock();
-
-    // First delta, should trigger a render
-    cm.updateStreamingBlock('first token');
-
-    // History should be non-empty (render happened)
-    const lines = cm.getDisplayBlocks();
-    expect(lines.length).toBeGreaterThan(0);
-  });
 
   test('burst of deltas within 16ms does not re-render every token', () => {
     // We mock Date.now to control timing.

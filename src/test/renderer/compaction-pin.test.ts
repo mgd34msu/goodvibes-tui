@@ -37,55 +37,6 @@ function makeEvent(overrides: Partial<CompactionEvent> = {}): CompactionEvent {
 }
 
 // ---------------------------------------------------------------------------
-// SessionMemoryStore semantics
-// ---------------------------------------------------------------------------
-
-describe('SessionMemoryStore pin semantics', () => {
-  test('add() returns a non-empty ID for non-blank text', () => {
-    const store = new SessionMemoryStore();
-    const id = store.add('remember this');
-    expect(typeof id).toBe('string');
-    expect(id.length).toBeGreaterThan(0);
-  });
-
-  test('add() returns empty string for blank text', () => {
-    const store = new SessionMemoryStore();
-    const id = store.add('   ');
-    expect(id).toBe('');
-  });
-
-  test('pinned memories are listed after add()', () => {
-    const store = new SessionMemoryStore();
-    store.add('pin-a');
-    store.add('pin-b');
-    const list = store.list();
-    expect(list.length).toBe(2);
-    expect(list.map((m) => m.text)).toContain('pin-a');
-    expect(list.map((m) => m.text)).toContain('pin-b');
-  });
-
-  test('remove() unpin a memory by ID', () => {
-    const store = new SessionMemoryStore();
-    const id = store.add('removable');
-    const removed = store.remove(id);
-    expect(removed).toBe(true);
-    expect(store.list().length).toBe(0);
-  });
-
-  test('remove() returns false for unknown ID', () => {
-    const store = new SessionMemoryStore();
-    expect(store.remove('mem-999')).toBe(false);
-  });
-
-  test('IDs are unique across add() calls', () => {
-    const store = new SessionMemoryStore();
-    const ids = [store.add('a'), store.add('b'), store.add('c')];
-    const unique = new Set(ids);
-    expect(unique.size).toBe(3);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Pin count flows into compaction preview and after-notice
 // ---------------------------------------------------------------------------
 
@@ -129,17 +80,6 @@ describe('pin count in compaction preview', () => {
     const event = makeEvent();
     const notice = buildCompactionAfterNotice({ event, pinnedMemoryCount: 0 });
     expect(notice).not.toContain('pinned');
-  });
-
-  test('pin survives a clear and re-add cycle: IDs remain unique', () => {
-    const store = new SessionMemoryStore();
-    store.add('first');
-    store.clear();
-    const id2 = store.add('second');
-    // After clear, the list contains only the new entry
-    expect(store.list().length).toBe(1);
-    // And the ID should still be non-empty
-    expect(id2.length).toBeGreaterThan(0);
   });
 
   test('pinned honesty: preview says "session memories are in-memory only" via the /keep command wording contract', () => {

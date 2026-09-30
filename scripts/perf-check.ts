@@ -1,146 +1,79 @@
+#!/usr/bin/env bun
 /**
- * perf-check.ts, CI performance budget gate.
+ * perf-check.ts, the headless performance gate. A release gate, not a per-push
+ * check: it runs in release-gates.yml (nightly, on demand, and before an
+ * armed release), never in ci.yml.
  *
- * Runs REAL headless measurements and compares against committed baselines.
- * Fails closed in CI when the baseline is absent (cannot gate against nothing).
+ * Metrics (all measured in-process or in a child bun, never the TUI binary):
+ *   startup.renderer_load_ms   cold import of compositor + buffer + sdk types
+ *   frame.composite_p95_ms     Compositor.composite() p95 over 200 full repaints
+ *   frame.composite_p99_ms     the same run's p99
+ *   <line bench ids>           Line[] builders above the compositor
+ *                              (transcript build/append/resize, markdown, code
+ *                              blocks, overlay open); see perf-line-bench.ts
  *
- * Measurements (all headless, never launches the interactive TUI binary):
- *   startup.renderer_load_ms , cold import of compositor + buffer + grid
- *   frame.composite_p95_ms   , Compositor.composite() p95 over 200 full-repaint frames
- *   frame.composite_p99_ms   , Compositor.composite() p99 over 200 full-repaint frames
- *
- * Budgets are ratchets, set just above measured reality, tighten as perf improves.
- * Regenerate the baseline and budgets with:
- *   bun run perf:baseline
+ * Budgets come from scripts/perf-baseline.json and nowhere else. Each budget
+ * is the worst gate statistic seen across BASELINE_RUNS full measurement runs,
+ * times HEADROOM, rounded up to two decimals. HEADROOM covers a GitHub runner
+ * being slower than the machine that wrote the baseline; it is one number for
+ * every metric instead of a hand-picked multiple per metric.
  *
  * Usage:
- *   bun run scripts/perf-check.ts          # normal gate
- *   GOODVIBES_PERF_SAVE_BASELINE=1 bun run scripts/perf-check.ts  # capture + save baseline
+ *   bun run perf:check       measure once and compare with the baseline
+ *   bun run perf:baseline    measure BASELINE_RUNS times and rewrite the baseline
  *
- * Exit codes:
- *   0, all budgets passed
- *   1, one or more budgets exceeded, or baseline absent in CI
+ * Exit: 0 all within budget; 1 a budget exceeded, a metric has no budget, or
+ * the baseline is missing.
  */
 
 import { performance } from 'node:perf_hooks';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { runFrameBench, FRAME_BUDGETS } from './perf-frame-bench.ts';
-import { runLineBenches, LINE_BUDGETS, type LineBenchCase } from './perf-line-bench.ts';
+import { spawnSync } from 'node:child_process';
+import { runFrameBench } from './perf-frame-bench.ts';
+import { runLineBenches, type LineBenchCase } from './perf-line-bench.ts';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+/** Multiple of the worst measured value a budget allows. */
+export const HEADROOM = 2;
+/** Full measurement runs a baseline takes the worst value from. */
+export const BASELINE_RUNS = 3;
 
-interface BudgetResult {
-  metric: string;
-  measured: number;
-  budget: number;
-  unit: string;
-  passed: boolean;
+const BASELINE_PATH = resolve(import.meta.dirname, 'perf-baseline.json');
+const saveBaseline = process.env['GOODVIBES_PERF_SAVE_BASELINE'] === '1';
+
+interface MetricEntry {
+  /** Worst gate statistic seen across the baseline runs. */
+  readonly measured_ms: number;
+  readonly budget_ms: number;
+  readonly stat: 'value' | 'p50' | 'p95' | 'p99';
 }
 
 interface PerfBaseline {
-  _comment?: string;
-  startup: {
-    renderer_load_ms: { measured_max_ms: number; budget_ms: number; note: string };
-  };
-  frame: {
-    composite_p95_ms: { measured_ms: number; budget_ms: number; note: string };
-    composite_p99_ms: { measured_ms: number; budget_ms: number; note: string };
-  };
-  // Line-production benchmarks ABOVE the compositor. Keyed by metric id
-  // (matches perf-line-bench LineBenchCase.id). Each entry carries the measured
-  // timing statistics, an allocation footprint (retained heap + object count per
-  // op), and the budget the gate compares against.
-  line?: Record<string, LineBudgetEntry>;
+  readonly _comment: string;
+  readonly headroom: number;
+  readonly runs: number;
+  readonly metrics: Record<string, MetricEntry>;
 }
 
-interface LineBudgetEntry {
-  measured_p50_ms: number;
-  measured_p95_ms: number;
-  budget_ms: number;
-  /** Which timing statistic the gate compares against the budget. */
-  gate_stat: 'p50' | 'p95';
-  heap_bytes_per_op: number;
-  objects_per_op: number;
-  lines: number;
-  note: string;
-}
-
-// Large allocation-heavy builds (the 1k-message transcript) are gated on the
-// stable median; small, high-sample-count builders are gated on p95. This keeps
-// the gate from flaking on a single GC pause landing in a 12-sample tail.
+// Large allocation-heavy builds are gated on the stable median; small,
+// high-sample-count builders on p95. A single GC pause landing in a 12-sample
+// tail would otherwise decide the heavy ones.
 const LINE_GATE_STAT: Readonly<Record<string, 'p50' | 'p95'>> = {
   'transcript.build_1k_ms': 'p50',
-  // Rebuild-family benches gate on the stable median: a small-sample p95 is
-  // dominated by whichever iteration triggered a full GC of a large build.
   'transcript.append_one_ms': 'p50',
   'transcript.resize_1k_ms': 'p50',
 };
 
-function gateStatFor(id: string): 'p50' | 'p95' {
+function lineStat(id: string): 'p50' | 'p95' {
   return LINE_GATE_STAT[id] ?? 'p95';
 }
 
-function measuredForGate(c: LineBenchCase): number {
-  return gateStatFor(c.id) === 'p50' ? c.timeP50Ms : c.timeP95Ms;
+interface Measurement {
+  readonly value: number;
+  readonly stat: MetricEntry['stat'];
 }
 
-// ---------------------------------------------------------------------------
-// Baseline loading
-// ---------------------------------------------------------------------------
-
-const BASELINE_PATH = resolve(import.meta.dirname, 'perf-baseline.json');
-const isCI = process.env['CI'] === 'true';
-const saveBaseline = process.env['GOODVIBES_PERF_SAVE_BASELINE'] === '1';
-
-function loadBaseline(): PerfBaseline | null {
-  if (!existsSync(BASELINE_PATH)) return null;
-  try {
-    return JSON.parse(readFileSync(BASELINE_PATH, 'utf-8')) as PerfBaseline;
-  } catch {
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Fail-closed baseline guard (mirrors eval-gate pattern from cd8f14fa)
-// ---------------------------------------------------------------------------
-//
-// In CI (env CI=true), a missing or corrupt baseline is a hard failure.
-// A missing baseline means the gate has no reference to compare against,
-// passing unconditionally is fail-open and meaningless (the bug this fixes).
-//
-// Locally, a missing baseline triggers auto-measure-and-save so first-runs
-// are convenient. This matches eval-gate's local convenience behaviour.
-
-const baseline = loadBaseline();
-
-if (!baseline && isCI) {
-  process.stderr.write(`
-Perf Gate: FAILED; baseline not found at ${BASELINE_PATH}.
-
-Running without a baseline in CI is fail-open: the gate cannot detect
-performance regressions if there is no reference to compare against.
-
-To generate a baseline locally:
-  bun run perf:baseline        # measures, saves scripts/perf-baseline.json
-
-Commit that file and re-run CI.
-`);
-  process.exit(1);
-}
-
-// ---------------------------------------------------------------------------
-// Startup measurement: renderer module cold-load
-// ---------------------------------------------------------------------------
-// Measures time to import compositor + buffer + grid from a fresh bun process.
-// This is the cheapest proxy for "renderer subsystem is not catastrophically slow".
-// We spawn a child process so each run is a genuine cold import.
-
-async function measureStartup(): Promise<number> {
-  const { spawnSync } = await import('node:child_process');
+function measureStartup(): number {
   const script = [
     `import { performance } from 'node:perf_hooks';`,
     `const t0 = performance.now();`,
@@ -150,188 +83,104 @@ async function measureStartup(): Promise<number> {
     `const t1 = performance.now();`,
     `process.stdout.write(String(Math.round((t1 - t0) * 10) / 10));`,
   ].join(' ');
-
-  const result = spawnSync(
-    process.execPath,
-    ['--eval', script],
-    { cwd: resolve(import.meta.dirname, '..'), encoding: 'utf-8', timeout: 30_000 },
-  );
-
-  if (result.status !== 0) {
-    throw new Error(`startup probe failed: ${result.stderr}`);
-  }
+  const result = spawnSync(process.execPath, ['--eval', script], {
+    cwd: resolve(import.meta.dirname, '..'),
+    encoding: 'utf-8',
+    timeout: 30_000,
+  });
+  if (result.status !== 0) throw new Error(`startup probe failed: ${result.stderr}`);
   return parseFloat(result.stdout);
 }
 
-// ---------------------------------------------------------------------------
-// Frame bench: Compositor.composite() throughput
-// ---------------------------------------------------------------------------
-// Delegates to the shared perf-frame-bench.ts helper so the gate script and
-// the test in performance-gate.test.ts always measure identically.
-// Change bench methodology in perf-frame-bench.ts, it updates both consumers.
-// NEVER launches the interactive TUI binary.
+async function measureAll(): Promise<Map<string, Measurement>> {
+  const out = new Map<string, Measurement>();
+  out.set('startup.renderer_load_ms', { value: measureStartup(), stat: 'value' });
+  const frame = await runFrameBench();
+  out.set('frame.composite_p95_ms', { value: frame.p95, stat: 'p95' });
+  out.set('frame.composite_p99_ms', { value: frame.p99, stat: 'p99' });
+  const lines: LineBenchCase[] = await runLineBenches();
+  for (const c of lines) {
+    const stat = lineStat(c.id);
+    out.set(c.id, { value: stat === 'p50' ? c.timeP50Ms : c.timeP95Ms, stat });
+  }
+  return out;
+}
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
+/** Budget for a worst-seen value: HEADROOM times it, rounded up to 0.01 ms. */
+export function budgetFor(worstMs: number, headroom = HEADROOM): number {
+  return Math.ceil(worstMs * headroom * 100) / 100;
+}
 
-async function main(): Promise<void> {
-  console.log('='.repeat(72));
-  console.log('Perf Gate: measuring headless benchmarks');
-  console.log(new Date().toISOString());
-  console.log('='.repeat(72));
-
-  // --- Run measurements ---
-  let startupMs: number;
-  let frameP95: number;
-  let frameP99: number;
-
+function loadBaseline(): PerfBaseline | null {
+  if (!existsSync(BASELINE_PATH)) return null;
   try {
-    process.stdout.write('\nMeasuring startup (renderer module load)... ');
-    startupMs = await measureStartup();
-    console.log(`${startupMs.toFixed(1)}ms`);
-  } catch (err) {
-    console.error(`startup probe error: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-
-  try {
-    process.stdout.write('Measuring frame bench (200 full-repaint frames)... ');
-    const frame = await runFrameBench();
-    frameP95 = frame.p95;
-    frameP99 = frame.p99;
-    console.log(`p95=${frameP95.toFixed(2)}ms  p99=${frameP99.toFixed(2)}ms`);
-  } catch (err) {
-    console.error(`frame bench error: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-
-  let lineCases: LineBenchCase[];
-  try {
-    process.stdout.write('Measuring line-production bench (transcript, views, markdown, code, overlay)... ');
-    lineCases = await runLineBenches();
-    console.log(`${lineCases.length} builders measured`);
-  } catch (err) {
-    console.error(`line bench error: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-
-  // --- Load or establish budgets ---
-  const budgets: PerfBaseline = baseline ?? {
-    startup: { renderer_load_ms: { measured_max_ms: startupMs, budget_ms: Math.ceil(startupMs * 2 / 50) * 50, note: 'auto' } },
-    frame: {
-      composite_p95_ms: { measured_ms: frameP95, budget_ms: FRAME_BUDGETS.p95_ms, note: 'auto' },
-      composite_p99_ms: { measured_ms: frameP99, budget_ms: FRAME_BUDGETS.p99_ms, note: 'auto' },
-    },
-  };
-
-  // --- Evaluate against budgets ---
-  const results: BudgetResult[] = [
-    {
-      metric: 'startup.renderer_load_ms',
-      measured: startupMs,
-      budget: budgets.startup.renderer_load_ms.budget_ms,
-      unit: 'ms',
-      passed: startupMs <= budgets.startup.renderer_load_ms.budget_ms,
-    },
-    {
-      metric: 'frame.composite_p95_ms',
-      measured: frameP95,
-      budget: budgets.frame.composite_p95_ms.budget_ms ?? FRAME_BUDGETS.p95_ms,
-      unit: 'ms',
-      passed: frameP95 <= budgets.frame.composite_p95_ms.budget_ms,
-    },
-    {
-      metric: 'frame.composite_p99_ms',
-      measured: frameP99,
-      budget: budgets.frame.composite_p99_ms.budget_ms ?? FRAME_BUDGETS.p99_ms,
-      unit: 'ms',
-      passed: frameP99 <= budgets.frame.composite_p99_ms.budget_ms,
-    },
-  ];
-
-  // Line-production benchmarks: gate each builder against its budget. The gate
-  // statistic (p50 for the heavy transcript build, p95 for the rest) is recorded
-  // per metric so the ratchet stays transparent.
-  for (const c of lineCases) {
-    const measured = measuredForGate(c);
-    const budget = budgets.line?.[c.id]?.budget_ms ?? LINE_BUDGETS[c.id] ?? Number.POSITIVE_INFINITY;
-    results.push({
-      metric: c.id,
-      measured,
-      budget,
-      unit: 'ms',
-      passed: measured <= budget,
-    });
-  }
-
-  // --- Format report ---
-  const W_METRIC = 30;
-  const W_VAL = 12;
-  const sep = '-'.repeat(W_METRIC + W_VAL * 2 + 14);
-  console.log(`\n${'Metric'.padEnd(W_METRIC)} | ${'Measured'.padEnd(W_VAL)} | ${'Budget'.padEnd(W_VAL)} | Status`);
-  console.log(sep);
-  for (const r of results) {
-    const status = r.passed ? 'PASS' : 'FAIL';
-    const measured = `${r.measured.toFixed(2)}${r.unit}`;
-    const budget = `${r.budget}${r.unit}`;
-    console.log(`${r.metric.padEnd(W_METRIC)} | ${measured.padEnd(W_VAL)} | ${budget.padEnd(W_VAL)} | ${status}`);
-  }
-  console.log(sep);
-
-  const anyFailed = results.some(r => !r.passed);
-
-  // --- Save baseline (local auto-capture or explicit flag) ---
-  if (saveBaseline || (!baseline && !isCI)) {
-    const newBaseline: PerfBaseline = {
-      _comment: `Perf baseline generated ${new Date().toISOString().slice(0, 10)} on ${process.platform}-${process.arch}. Rule: budgets are set at ceil(measured_max × 2) for startup, and at the stated SLO for frame timing (p95 ≤ 16ms). Regenerate with: bun run perf:baseline`,
-      startup: {
-        renderer_load_ms: {
-          measured_max_ms: Math.ceil(startupMs),
-          budget_ms: Math.ceil(startupMs * 2 / 50) * 50,
-          note: 'Time to cold-import compositor + buffer + grid from a fresh bun process. Budget = ceil(max × 2), rounded to 50ms. Ratchet: tighten budget when measured_max drops below budget/2.',
-        },
-      },
-      frame: {
-        composite_p95_ms: {
-          measured_ms: Math.round(frameP95 * 100) / 100,
-          budget_ms: 16,
-          note: 'Compositor.composite() p95 over 200 full-repaint frames, 80×24 synthetic content. Budget = stated frame SLO (16ms). Ratchet: tighten when measured drops below budget/3.',
-        },
-        composite_p99_ms: {
-          measured_ms: Math.round(frameP99 * 100) / 100,
-          budget_ms: Math.ceil(frameP99 * 4 / 10) * 10,
-          note: 'Compositor.composite() p99 over 200 frames. Budget = ceil(measured × 4), rounded to 10ms. Ratchet: tighten when measured drops below budget/3.',
-        },
-      },
-      line: Object.fromEntries(lineCases.map((c): [string, LineBudgetEntry] => {
-        const stat = gateStatFor(c.id);
-        return [c.id, {
-          measured_p50_ms: Math.round(c.timeP50Ms * 1000) / 1000,
-          measured_p95_ms: Math.round(c.timeP95Ms * 1000) / 1000,
-          budget_ms: LINE_BUDGETS[c.id] ?? Math.ceil(measuredForGate(c) * 4),
-          gate_stat: stat,
-          heap_bytes_per_op: Math.round(c.heapBytesPerOp),
-          objects_per_op: Math.round(c.objectsPerOp),
-          lines: c.linesProduced,
-          note: `${c.label}. Gated on ${stat}. Budget carries CI headroom (runners run 2-4× slower). Ratchet: tighten when measured ${stat} drops below budget/2.`,
-        }];
-      })),
-    };
-    writeFileSync(BASELINE_PATH, JSON.stringify(newBaseline, null, 2) + '\n', 'utf-8');
-    console.log(`\nBaseline saved to ${BASELINE_PATH}`);
-    console.log('Commit this file before running in CI.');
-  }
-
-  // --- Exit ---
-  console.log('');
-  if (anyFailed) {
-    console.error('Perf Gate: FAILED; one or more budgets exceeded.');
-    process.exit(1);
-  } else {
-    console.log('Perf Gate: PASSED; all budgets within threshold.');
-    process.exit(0);
+    const parsed = JSON.parse(readFileSync(BASELINE_PATH, 'utf-8')) as PerfBaseline;
+    return parsed.metrics ? parsed : null;
+  } catch {
+    return null;
   }
 }
 
-await main();
+async function writeBaseline(): Promise<void> {
+  const worst = new Map<string, Measurement>();
+  for (let run = 1; run <= BASELINE_RUNS; run += 1) {
+    process.stdout.write(`baseline run ${run}/${BASELINE_RUNS}... `);
+    const measured = await measureAll();
+    for (const [id, m] of measured) {
+      const prior = worst.get(id);
+      if (!prior || m.value > prior.value) worst.set(id, m);
+    }
+    console.log('done');
+  }
+  const metrics: Record<string, MetricEntry> = {};
+  for (const [id, m] of [...worst].sort(([a], [b]) => a.localeCompare(b))) {
+    const measured = Math.round(m.value * 1000) / 1000;
+    metrics[id] = { measured_ms: measured, budget_ms: budgetFor(measured), stat: m.stat };
+  }
+  const baseline: PerfBaseline = {
+    _comment: `Written by \`bun run perf:baseline\` on ${new Date().toISOString().slice(0, 10)}, ${process.platform}-${process.arch}. budget_ms = measured_ms (worst of ${BASELINE_RUNS} runs) x ${HEADROOM}, rounded up to 0.01 ms.`,
+    headroom: HEADROOM,
+    runs: BASELINE_RUNS,
+    metrics,
+  };
+  writeFileSync(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`, 'utf-8');
+  console.log(`\nBaseline written to ${BASELINE_PATH}`);
+  for (const [id, e] of Object.entries(metrics)) {
+    console.log(`  ${id.padEnd(30)} measured ${e.measured_ms}ms  budget ${e.budget_ms}ms`);
+  }
+}
+
+async function check(): Promise<number> {
+  const baseline = loadBaseline();
+  if (!baseline) {
+    console.error(`Perf gate: no baseline at ${BASELINE_PATH}. Write one with \`bun run perf:baseline\`.`);
+    return 1;
+  }
+  const started = performance.now();
+  const measured = await measureAll();
+  let failed = 0;
+  console.log(`\n${'Metric'.padEnd(30)} | ${'Measured'.padEnd(12)} | ${'Budget'.padEnd(12)} | Status`);
+  for (const [id, m] of measured) {
+    const entry = baseline.metrics[id];
+    const ok = entry !== undefined && m.value <= entry.budget_ms;
+    if (!ok) failed += 1;
+    const budget = entry ? `${entry.budget_ms}ms` : 'none';
+    console.log(`${id.padEnd(30)} | ${`${m.value.toFixed(2)}ms`.padEnd(12)} | ${budget.padEnd(12)} | ${ok ? 'PASS' : 'FAIL'}`);
+  }
+  for (const id of Object.keys(baseline.metrics)) {
+    if (!measured.has(id)) {
+      failed += 1;
+      console.log(`${id.padEnd(30)} | ${'not measured'.padEnd(12)} | ${`${baseline.metrics[id]!.budget_ms}ms`.padEnd(12)} | FAIL`);
+    }
+  }
+  console.log(`\n${failed === 0 ? 'Perf gate: PASSED' : `Perf gate: FAILED (${failed} metric(s))`} in ${Math.round(performance.now() - started)}ms.`);
+  return failed === 0 ? 0 : 1;
+}
+
+if (import.meta.main) {
+  if (saveBaseline) {
+    await writeBaseline();
+    process.exit(0);
+  }
+  process.exit(await check());
+}

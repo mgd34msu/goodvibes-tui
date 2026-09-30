@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import { rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerGitRuntimeCommands } from '../../input/commands/git-runtime.ts';
@@ -79,12 +79,6 @@ describe('/git diff opens the Changes modal on the full, uncapped working-tree d
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
-
-  test('the 4,000-char slice and its stub string are gone from the source', () => {
-    const src = readFileSync(join(import.meta.dir, '../../input/commands/git-runtime.ts'), 'utf-8');
-    expect(src).not.toContain('diff truncated');
-    expect(src).not.toContain('slice(0, 4000)');
   });
 
   test('an empty working tree prints "No unstaged changes." and never opens Changes', async () => {

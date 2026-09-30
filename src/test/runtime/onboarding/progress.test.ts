@@ -190,10 +190,6 @@ describe('wizard progress persistence', () => {
     expect(existsSync(path)).toBe(false);
   });
 
-  test('does not throw when progress file is already absent', () => {
-    expect(() => deleteWizardProgress(shellPaths)).not.toThrow();
-  });
-
   test('readWizardProgress returns exists=false after deleteWizardProgress', () => {
     writeWizardProgress(shellPaths, {
       mode: 'reopen',

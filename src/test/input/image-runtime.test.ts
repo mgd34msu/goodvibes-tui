@@ -91,11 +91,6 @@ function makeCtx(mediaProviders?: ReturnType<typeof makeFakeMediaProviders>, art
 }
 
 describe('/imagine command registration', () => {
-  test('registers /imagine', () => {
-    const registry = new CommandRegistry();
-    registerImageRuntimeCommands(registry);
-    expect(registry.get('imagine')).toBeDefined();
-  });
 });
 
 describe('/imagine: honest degradation', () => {

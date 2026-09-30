@@ -130,11 +130,6 @@ for (const entry of GOLDEN_MODALS) {
         expect(lines.length).toBeGreaterThan(0);
         assertGolden(surfaceName, lines);
       });
-      test(`${size.label} width render is deterministic`, async () => {
-        const a = snapshotEncode(surfaceName, await renderSurface(await entry.factory(), size.width));
-        const b = snapshotEncode(surfaceName, await renderSurface(await entry.factory(), size.width));
-        expect(a).toBe(b);
-      });
     }
   });
 }

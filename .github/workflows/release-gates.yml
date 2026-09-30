@@ -1,0 +1,94 @@
+name: Release gates
+
+# The checks a RELEASE needs and a push does not. They are slower, and what they
+# measure changes rarely, so they run:
+#
+#   - from ci.yml, before auto-release, on a push to main whose version has no
+#     tag yet (auto-release `needs` this workflow, so no version is tagged
+#     without it); the built binary is the one that run's `build` job made;
+#   - nightly, so drift shows up within a day;
+#   - on demand (Actions > Release gates > Run workflow).
+#
+#   perf       the headless performance budgets (scripts/perf-check.ts,
+#              budgets in scripts/perf-baseline.json)
+#   e2e        the built binary in a real terminal: daemon adoption, a WRFC
+#              chain through its fix phase to a merge, the turn-end OSC 9
+#              notification, and a resize from 80 to 120 to 200 columns
+#              (startup and a first turn run per push, in ci.yml)
+#
+# A dispatch with perf-baseline=true re-measures the budgets on a GitHub runner
+# and uploads scripts/perf-baseline.json as an artifact to commit.
+
+on:
+  workflow_call:
+    inputs:
+      ci-build-artifact:
+        description: Name of an artifact in the calling run that holds dist/goodvibes-linux-x64 and dist/lib.
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+    inputs:
+      perf-baseline:
+        description: "Re-measure the perf budgets on this runner and upload the new baseline"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    # Nightly, 07:30 UTC.
+    - cron: "30 7 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  perf:
+    name: Performance budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Perf budgets
+        if: ${{ !inputs.perf-baseline }}
+        run: bun run perf:check
+      - name: Re-measure the baseline on this runner
+        if: ${{ inputs.perf-baseline }}
+        run: bun run perf:baseline
+      - name: Upload the re-measured baseline
+        if: ${{ inputs.perf-baseline }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: perf-baseline
+          path: scripts/perf-baseline.json
+          if-no-files-found: error
+          retention-days: 7
+
+  e2e:
+    name: End-to-end (release set)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Install tmux (the E2E terminal)
+        run: command -v tmux || (sudo apt-get update -q && sudo apt-get install -y -q tmux)
+      - name: Download the calling run's build
+        if: ${{ inputs.ci-build-artifact }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.ci-build-artifact }}
+          path: dist/
+      - name: Build (linux-x64), when not called with a build
+        if: ${{ !inputs.ci-build-artifact }}
+        run: bun run build:linux-x64
+      - name: Restore executable bit
+        run: chmod +x dist/goodvibes-linux-x64
+      - name: Daemon adoption, WRFC fix and merge, turn-end notification, resize
+        env:
+          GOODVIBES_E2E_BINARY: dist/goodvibes-linux-x64
+        run: bun run test:e2e:release

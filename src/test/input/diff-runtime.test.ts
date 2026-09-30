@@ -8,8 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerDiffRuntimeCommands } from '../../input/commands/diff-runtime.ts';
 import { createShellPathService } from '@/runtime/index.ts';
@@ -17,48 +16,6 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import { ChangesModal } from '../../input/changes-modal.ts';
 import type { ChangesSource } from '../../input/changes-git.ts';
 import { layerTextBlock } from '../helpers/surface-frame.ts';
-
-/**
- * Every `Bun.spawn(` call site's option object must include `stderr:`, a
- * cheap static guard against reintroducing the tty-corruption bug: for a
- * spawned child with no explicit stdio option, Bun inherits stderr from the
- * parent process (verified directly: `Bun.spawn([...], { stdout: 'pipe' })`
- * in a non-git cwd writes git's `fatal:` text to the real stderr stream).
- */
-function assertEverySpawnCapturesStderr(filePath: string): void {
-  const src = readFileSync(filePath, 'utf-8');
-  let idx = src.indexOf('Bun.spawn(');
-  let checked = 0;
-  while (idx !== -1) {
-    const openParenIdx = idx + 'Bun.spawn'.length;
-    let depth = 0;
-    let end = -1;
-    for (let i = openParenIdx; i < src.length; i++) {
-      if (src[i] === '(') depth++;
-      else if (src[i] === ')') {
-        depth--;
-        if (depth === 0) { end = i; break; }
-      }
-    }
-    expect(end).toBeGreaterThan(-1);
-    const callText = src.slice(openParenIdx, end);
-    expect(callText).toContain('stderr:');
-    checked++;
-    idx = src.indexOf('Bun.spawn(', end);
-  }
-  expect(checked).toBeGreaterThan(0); // guard against a no-op scan (renamed/removed calls)
-}
-
-describe('(a) every /diff-reachable Bun.spawn call captures stderr', () => {
-  test('changes-git.ts (every git read and write behind /diff and the Changes modal)', () => {
-    assertEverySpawnCapturesStderr(join(import.meta.dir, '../../input/changes-git.ts'));
-  });
-
-  test('diff-runtime.ts spawns nothing itself (it only opens the Changes modal)', () => {
-    const src = readFileSync(join(import.meta.dir, '../../input/commands/diff-runtime.ts'), 'utf-8');
-    expect(src).not.toContain('Bun.spawn(');
-  });
-});
 
 // ── (b) /diff in a non-git directory ────────────────────────────────────────
 

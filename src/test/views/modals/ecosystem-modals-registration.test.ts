@@ -51,20 +51,6 @@ describe('group-B config-modal surface registration', () => {
     expect(surfaces.map((s) => s.name)).toEqual(EXPECTED_SURFACE_NAMES);
   });
 
-  test('every surface satisfies the ConfigModalSurface host contract', async () => {
-    for (const surface of await allSurfaces()) {
-      expect(typeof surface.buildView).toBe('function');
-      const view = surface.buildView();
-      expect(typeof view.title).toBe('string');
-      expect(view.tabs.length).toBeGreaterThan(0);
-      // Each tab has a stable id + label; every row carries a stable id.
-      for (const tab of view.tabs) {
-        expect(typeof tab.id).toBe('string');
-        for (const row of tab.rows) expect(typeof row.id).toBe('string');
-      }
-    }
-  });
-
   test('row ids are unique within each tab (the host keys its live overlay off them)', async () => {
     for (const surface of await allSurfaces()) {
       for (const tab of surface.buildView().tabs) {

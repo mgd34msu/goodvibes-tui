@@ -2,7 +2,7 @@
  * Tests for SettingsModal state class.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../../input/settings-modal.ts';
@@ -136,15 +136,6 @@ describe('SettingsModal', () => {
       'Runtime & Data',
       'Advanced',
     ]);
-  });
-
-  test('open() populates all categories', () => {
-    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
-    for (const cat of SETTINGS_CATEGORIES) {
-      const items = modal.groups.get(cat);
-      expect(items).toBeDefined();
-      expect(Array.isArray(items)).toBe(true);
-    }
   });
 
   test('open() routes every SDK config schema key into the workspace', () => {

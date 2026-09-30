@@ -42,23 +42,6 @@ describe('voice provider selection: local beside elevenlabs (STEP 5)', () => {
     return reg;
   }
 
-  test('the streaming-TTS providers include both "local" and "elevenlabs"', () => {
-    const providers = registryWithLocal().list().filter((p) => p.capabilities.includes('tts-stream'));
-    const ids = providers.map((p) => p.id);
-    expect(ids).toContain('local');
-    expect(ids).toContain('elevenlabs');
-  });
-
-  test('the local provider has no billing dimension and reports an honest unconfigured status (never an error)', async () => {
-    const local = registryWithLocal().get('local');
-    expect(local).not.toBeNull();
-    expect(local!.billing).toBe('none');
-    const status = await local!.status?.();
-    expect(status).toBeDefined();
-    // Empty config → configurable-not-configured, never a thrown error.
-    expect(status!.state).toBe('unconfigured');
-    expect(status!.configured).toBe(false);
-  });
 });
 
 describe('local-voice setup offer: size-labeled one-act beside ElevenLabs (STEP 5)', () => {

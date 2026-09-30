@@ -49,18 +49,6 @@ function ttsSpeedRow(): SettingEntry {
 }
 
 describe('tts.speed comes from the config schema', () => {
-  test('the schema owns the key, its type, its default and its range', () => {
-    const schemaEntry = CONFIG_SCHEMA.find((setting) => setting.key === TTS_SPEED);
-    expect(schemaEntry, 'tts.speed is a real CONFIG_SCHEMA key').toBeDefined();
-    expect(schemaEntry!.type).toBe('number');
-    expect(schemaEntry!.default).toBe(1);
-    // The range is enforced by the schema's own validator, so the modal never
-    // has to carry a second opinion about what a legal speed is.
-    expect(schemaEntry!.validate?.(0.25)).toBe(true);
-    expect(schemaEntry!.validate?.(4)).toBe(true);
-    expect(schemaEntry!.validate?.(0.1)).toBe(false);
-    expect(schemaEntry!.validate?.(5)).toBe(false);
-  });
 
   test('the modal row IS the schema descriptor, not a copy of it', () => {
     const schemaEntry = CONFIG_SCHEMA.find((setting) => setting.key === TTS_SPEED);

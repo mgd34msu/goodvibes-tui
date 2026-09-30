@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
-import { join } from 'node:path';
 import { CONFIG_SCHEMA, ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { getOperatorContract } from '@pellux/goodvibes-contracts';
 import { buildSettingGroups } from '@/input/settings-modal-data.ts';
@@ -27,7 +26,7 @@ import {
   type ProfileStateView,
   type ProfileVerb,
 } from '@/input/commands/profile-types.ts';
-import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '@/input/settings-modal-types.ts';
+import { SETTINGS_CATEGORY_GROUPS } from '@/input/settings-modal-types.ts';
 import { CATEGORY_INFO, CATEGORY_LABELS } from '@/renderer/settings-modal-helpers.ts';
 
 // ---------------------------------------------------------------------------
@@ -538,15 +537,6 @@ function compileTimePayloadExactness(): void {
 }
 
 describe('compile-time payload exactness', () => {
-  test('the exactness assertions are enforced by the test typecheck, not here', () => {
-    // Deliberately not called: every assertion in it is a type-level one that
-    // `tsc -p tsconfig.test.json` checks. Each `@ts-expect-error` in that body
-    // FAILS THE BUILD if the error it expects stops happening, so weakening
-    // ExactProfileInput back to plain parameter typing cannot pass silently,
-    // verified by doing exactly that, which turned two of the four directives
-    // into "Unused '@ts-expect-error' directive" errors.
-    expect(typeof compileTimePayloadExactness).toBe('function');
-  });
 });
 
 describe('write payloads conform to the declared contract input', () => {
@@ -701,12 +691,6 @@ describe('write payloads conform to the declared contract input', () => {
     expect('text' in properties).toBe(true);
   });
 
-  test('authority is required on every write verb, not optional', () => {
-    for (const verb of ['profile.set', 'profile.append', 'profile.forget', 'profile.undo']) {
-      expect({ verb, required: declaredInput(verb).required ?? [] })
-        .toEqual({ verb, required: expect.arrayContaining(['authority']) });
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -844,9 +828,6 @@ describe('response checking', () => {
 // ---------------------------------------------------------------------------
 
 describe('profile settings category', () => {
-  test('"profile" is a settings category, so profile.* keys are not dropped', () => {
-    expect(SETTINGS_CATEGORIES).toContain('profile');
-  });
 
   test('"profile" belongs to exactly one group, and that group is Runtime & Data', () => {
     const owning = SETTINGS_CATEGORY_GROUPS.filter((group) => group.categories.includes('profile'));
@@ -900,15 +881,6 @@ describe('profile.* keys reach the settings workspace', () => {
     'profile.conversationalCapture',
     'profile.ownerChannels',
   ] as const;
-
-  test('the SDK schema carries every profile.* key the design specifies', () => {
-    const inSchema = new Set(
-      CONFIG_SCHEMA.filter((setting) => setting.key.startsWith('profile.')).map((setting) => setting.key),
-    );
-    for (const key of EXPECTED_KEYS) expect(inSchema.has(key)).toBe(true);
-    // No extras: a key here that the design does not name is a drift signal.
-    expect(inSchema.size).toBe(EXPECTED_KEYS.length);
-  });
 
   test('every one of them lands in the "profile" category, none dropped', () => {
     const groups = buildSettingGroups(makeConfig());

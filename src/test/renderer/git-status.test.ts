@@ -79,14 +79,6 @@ function providerWithFakeFetch(
 
 describe('GitStatusProvider', () => {
   describe('getStatus: clean repo', () => {
-    test('returns correct branch name', async () => {
-      const provider = new GitStatusProvider(process.cwd());
-      // Directly test _fetch by patching getInstance at the module level
-      // We'll use real git since we're in a git repo
-      const info = await provider.getStatus();
-      expect(typeof info.branch).toBe('string');
-      expect(info.branch.length).toBeGreaterThan(0);
-    });
 
     test('returns boolean for dirty', async () => {
       const provider = new GitStatusProvider(process.cwd());
@@ -94,12 +86,6 @@ describe('GitStatusProvider', () => {
       expect(typeof info.dirty).toBe('boolean');
     });
 
-    test('returns numeric ahead/behind', async () => {
-      const provider = new GitStatusProvider(process.cwd());
-      const info = await provider.getStatus();
-      expect(typeof info.ahead).toBe('number');
-      expect(typeof info.behind).toBe('number');
-    });
   });
 
   describe('unborn HEAD (repo with no commits); 5a', () => {
@@ -126,14 +112,6 @@ describe('GitStatusProvider', () => {
       expect(second).toBe(first);
     });
 
-    test('refresh() forces a fresh fetch and returns updated info', async () => {
-      const provider = new GitStatusProvider(process.cwd());
-      // Prime cache
-      await provider.getStatus();
-      // refresh must resolve without error
-      const info = await provider.refresh();
-      expect(typeof info.branch).toBe('string');
-    });
   });
 
   describe('error handling: never throws', () => {

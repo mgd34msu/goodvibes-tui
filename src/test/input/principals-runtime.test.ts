@@ -24,9 +24,6 @@ function makeRegistry() {
 }
 
 describe('/principals command', () => {
-  test('registers as "principals"', () => {
-    expect(makeRegistry().get('principals')).toBeDefined();
-  });
 
   test('unknown subcommand prints usage without touching the operator connection', async () => {
     const ctx = makeCtx();

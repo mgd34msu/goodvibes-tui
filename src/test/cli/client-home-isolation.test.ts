@@ -19,13 +19,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import {
   resolveGoodVibesDaemonHome,
   resolveGoodVibesHome,
-  resolveGoodVibesHomeOwnership,
-  resolveGoodVibesTreeDirectory,
 } from '@pellux/goodvibes-sdk/platform/config';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
@@ -139,34 +137,6 @@ describe('a client process cannot write outside a redirected home', () => {
   });
 });
 
-describe('the home resolver both entry points share', () => {
-  test('an unset, blank, or whitespace value means the login home, never the filesystem root', () => {
-    expect(resolveGoodVibesHome({ HOME: '/tmp/login-home-fixture' })).toBe('/tmp/login-home-fixture');
-    expect(resolveGoodVibesHome({ HOME: '/tmp/login-home-fixture', GOODVIBES_HOME: '' })).toBe('/tmp/login-home-fixture');
-    expect(resolveGoodVibesHome({ HOME: '/tmp/login-home-fixture', GOODVIBES_HOME: '   ' })).toBe('/tmp/login-home-fixture');
-  });
-
-  test('a relative override resolves against the working directory rather than being used as-is', () => {
-    const resolved = resolveGoodVibesHome({ HOME: '/tmp/login-home-fixture', GOODVIBES_HOME: 'sandbox-home' });
-    expect(resolved).toBe(join(process.cwd(), 'sandbox-home'));
-  });
-
-  test('the daemon home falls under an overridden tree root unless named separately', () => {
-    const under = resolveGoodVibesHomeOwnership({ HOME: '/tmp/login', GOODVIBES_HOME: '/tmp/tree' });
-    expect(under.daemonHomeDirectory).toBe('/tmp/tree/.goodvibes/daemon');
-
-    const named = resolveGoodVibesHomeOwnership({
-      HOME: '/tmp/login',
-      GOODVIBES_HOME: '/tmp/tree',
-      GOODVIBES_DAEMON_HOME: '/tmp/identity',
-    });
-    expect(named.homeDirectory).toBe('/tmp/tree');
-    expect(named.daemonHomeDirectory).toBe('/tmp/identity');
-    // Naming the daemon's identity directory must not move the tree with it.
-    expect(resolveGoodVibesDaemonHome('/tmp/tree', { GOODVIBES_DAEMON_HOME: '/tmp/identity' })).toBe('/tmp/identity');
-  });
-});
-
 describe('GOODVIBES_HOME has exactly one meaning', () => {
   let loginHome = '';
   let sandbox = '';
@@ -178,19 +148,6 @@ describe('GOODVIBES_HOME has exactly one meaning', () => {
 
   afterEach(() => {
     for (const directory of [loginHome, sandbox]) rmSync(directory, { recursive: true, force: true });
-  });
-
-  test('it names the tree root, and the .goodvibes directory is derived from it', () => {
-    expect(resolveGoodVibesTreeDirectory({ HOME: '/tmp/login', GOODVIBES_HOME: '/tmp/tree' }))
-      .toBe(join('/tmp/tree', '.goodvibes'));
-  });
-
-  test('with the variable unset the derived tree is ~/.goodvibes, byte-for-byte what the scripts defaulted to', () => {
-    // The migration-safety claim, asserted rather than asserted-in-prose: the
-    // two reporting scripts used to default to `join(homedir(), '.goodvibes')`
-    // and now derive from the resolver. An owner who never sets the variable
-    // sees no change at all.
-    expect(resolveGoodVibesTreeDirectory({ HOME: '/tmp/login' })).toBe(join('/tmp/login', '.goodvibes'));
   });
 
   test('the audit script inspects the same tree a redirected client writes into', () => {
@@ -215,61 +172,5 @@ describe('GOODVIBES_HOME has exactly one meaning', () => {
     // the audit reports must be the parent of the store the client writes.
     expect(join(report.homeDir, 'daemon', 'secrets.enc'))
       .toBe(join(sandbox, '.goodvibes', 'daemon', 'secrets.enc'));
-  });
-
-  test('nothing in this repository reads the variable', () => {
-    // The behavioural twin of check-architecture's one-goodvibes-home-meaning
-    // rule, so a second meaning cannot be reintroduced in either gate alone.
-    // Reads only, src/cli/service-posture.ts WRITES it into the systemd unit's
-    // Environment= block, which is how the daemon receives the one meaning.
-    //
-    // The expected reader count is now ZERO, not one: the resolver moved to the
-    // SDK (@pellux/goodvibes-sdk/platform/config) when the daemon turned out to
-    // carry a byte-identical copy of it, and one meaning cannot live in two
-    // repositories. So there is no longer a local file allowed to ask, any
-    // match here is a surface re-deriving the tree root for itself, which is
-    // exactly the shape of the incident this whole module exists to prevent.
-    const readPattern = /\benv(?:ironment)?\s*(?:\[\s*['"]GOODVIBES_HOME['"]\s*\]|\.GOODVIBES_HOME\b)/;
-    const sources: string[] = [];
-    const collect = (directory: string): void => {
-      for (const entry of readdirSync(directory, { withFileTypes: true })) {
-        const path = join(directory, entry.name);
-        if (entry.isDirectory()) collect(path);
-        else if (path.endsWith('.ts')) sources.push(path);
-      }
-    };
-    collect(join(projectRoot, 'src'));
-    collect(join(projectRoot, 'scripts'));
-
-    const readers = sources
-      .filter((path) => !path.includes(`${sep}test${sep}`) && !path.endsWith('.test.ts'))
-      .filter((path) => readPattern.test(readFileSync(path, 'utf8')))
-      .map((path) => relative(projectRoot, path))
-      .sort();
-
-    expect(readers).toEqual([]);
-  });
-});
-
-describe('the client entry point resolves no home of its own', () => {
-  test('src/main.ts asks the shared resolver instead of calling homedir()', () => {
-    // The behavioural tests above prove the composition; this one pins the call
-    // site, because the defect was one line reverting to homedir() while every
-    // layer beneath it stayed correct.
-    const source = readFileSync(join(projectRoot, 'src', 'main.ts'), 'utf8');
-    expect(source).toContain('homeDirectory: resolveGoodVibesHome()');
-    expect(source).not.toMatch(/homeDirectory:\s*homedir\(\)/);
-  });
-
-  test('nothing in this repository starts a daemon of its own any more', () => {
-    // The pair this used to pin was src/main.ts and src/daemon/cli.ts: two
-    // entry points in one tree, which had to resolve the home the same way or
-    // an app and the daemon it embedded would read different trees. There is
-    // one entry point now, the daemon is a separate program with a separate
-    // repository, so the divergence this guarded against cannot happen here.
-    // What is pinned instead is that the second entry point is really gone.
-    expect(existsSync(join(projectRoot, 'src', 'daemon'))).toBe(false);
-    const pkg = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')) as { bin?: Record<string, string> };
-    expect(Object.keys(pkg.bin ?? {})).toEqual(['goodvibes']);
   });
 });

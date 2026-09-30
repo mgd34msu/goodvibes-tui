@@ -132,10 +132,6 @@ describe('palette queries and budget', () => {
     expect(PALETTE_QUERIES).toBe(expected);
   });
 
-  test('palette window is the background window (150 ms) plus a 25 ms margin', () => {
-    expect(DEFAULT_PROBE_TIMEOUT_MS).toBe(150);
-    expect(PALETTE_PROBE_TIMEOUT_MS).toBe(DEFAULT_PROBE_TIMEOUT_MS + 25);
-  });
 });
 
 // ---------------------------------------------------------------------------

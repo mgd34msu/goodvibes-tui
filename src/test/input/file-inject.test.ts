@@ -3,6 +3,8 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FilePickerModal } from '../../input/file-picker.ts';
+import { expandPrompt } from '../../input/handler-content-actions.ts';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,23 +52,6 @@ describe('FilePickerModal: inject mode', () => {
     expect(picker.active).toBe(false);
   });
 
-  test('inject mode marker format is !@path', () => {
-    // Simulate what handler.ts does when injectMode + enter:
-    // marker = `!@${selected}` → verify the format
-    const selectedFile = 'src/input/handler.ts';
-    const marker = `!@${selectedFile}`;
-    expect(marker).toBe('!@src/input/handler.ts');
-    expect(marker.startsWith('!@')).toBe(true);
-  });
-
-  test('non-inject mode marker format is @path', () => {
-    const selectedFile = 'src/input/handler.ts';
-    const marker = `@${selectedFile}`;
-    expect(marker).toBe('@src/input/handler.ts');
-    expect(marker.startsWith('@')).toBe(true);
-    expect(marker.startsWith('!@')).toBe(false);
-  });
-
   test('insertPos is stored correctly', () => {
     const picker = new FilePickerModal({ workingDirectory: tmpDir });
     picker.open(42, true);
@@ -89,89 +74,26 @@ describe('FilePickerModal: inject mode', () => {
   });
 });
 
-describe('!@ expansion (expandPrompt-style logic)', () => {
-  test('expandPrompt replaces !@path with file content', () => {
-    // Write a temp file inside the project working dir so path-safety check passes
-    const { readFileSync: rfs } = require('node:fs');
-    const filePath = join(tmpDir, 'inject_target.txt');
-    writeFileSync(filePath, 'file content here');
+describe('!@ expansion through expandPrompt', () => {
+  const expand = (text: string): string | ContentPart[] => expandPrompt(new Map(), new Map(), text, tmpDir);
 
-    // Simulate the expand logic from handler.ts expandPrompt,
-    // but bypass resolveAndValidatePath since we control the path in this test.
-    let expanded = `prefix !@${filePath} suffix`;
-    const injectRegex = /(?:^|(?<=\s))!@(\S+)/g;
-    let m;
-    while ((m = injectRegex.exec(expanded)) !== null) {
-      const fp = m[1];
-      try {
-        const content = rfs(fp, 'utf-8');
-        expanded = expanded.slice(0, m.index) + content + expanded.slice(m.index + m[0].length);
-        injectRegex.lastIndex = m.index + content.length;
-      } catch {
-        // leave marker
-      }
-    }
-
-    expect(expanded).toContain('file content here');
-    expect(expanded).not.toContain('!@');
+  test('replaces a !@path marker with the file content', () => {
+    writeFileSync(join(tmpDir, 'inject_target.txt'), 'file content here');
+    expect(expand('prefix !@inject_target.txt suffix')).toBe('prefix file content here suffix');
   });
 
-  test('expandPrompt leaves !@marker if file cannot be read', () => {
-    const nonExistentPath = join(tmpDir, 'does_not_exist.txt');
-
-    let expanded = `prefix !@${nonExistentPath} suffix`;
-    const injectRegex = /(?:^|(?<=\s))!@(\S+)/g;
-    let m;
-    while ((m = injectRegex.exec(expanded)) !== null) {
-      const fp = m[1];
-      try {
-        const { readFileSync } = require('node:fs');
-        const content = readFileSync(fp, 'utf-8');
-        expanded = expanded.slice(0, m.index) + content + expanded.slice(m.index + m[0].length);
-        injectRegex.lastIndex = m.index + content.length;
-      } catch {
-        // leave marker
-        break;
-      }
-    }
-
-    expect(expanded).toContain('!@');
-    expect(expanded).toContain(nonExistentPath);
+  test('leaves the marker in place when the file cannot be read', () => {
+    expect(expand('prefix !@does_not_exist.txt suffix')).toBe('prefix !@does_not_exist.txt suffix');
   });
 
-  test('expandPrompt does not expand !@ in the middle of a word', () => {
-    // The word-boundary regex should NOT match foo!@bar
-    const injectRegex = /(?:^|(?<=\s))!@(\S+)/g;
-    const text = 'foo!@bar baz';
-    const matches: string[] = [];
-    let m;
-    while ((m = injectRegex.exec(text)) !== null) {
-      matches.push(m[1]);
-    }
-    expect(matches).toHaveLength(0);
+  test('does not expand !@ in the middle of a word', () => {
+    writeFileSync(join(tmpDir, 'bar'), 'SHOULD-NOT-APPEAR');
+    expect(expand('foo!@bar baz')).toBe('foo!@bar baz');
   });
 
-  test('expandPrompt matches !@ at start of string', () => {
-    const injectRegex = /(?:^|(?<=\s))!@(\S+)/g;
-    const text = '!@somefile.ts';
-    const matches: string[] = [];
-    let m;
-    while ((m = injectRegex.exec(text)) !== null) {
-      matches.push(m[1]);
-    }
-    expect(matches).toHaveLength(1);
-    expect(matches[0]).toBe('somefile.ts');
-  });
-
-  test('expandPrompt matches !@ after whitespace', () => {
-    const injectRegex = /(?:^|(?<=\s))!@(\S+)/g;
-    const text = 'include this: !@file.ts and more';
-    const matches: string[] = [];
-    let m;
-    while ((m = injectRegex.exec(text)) !== null) {
-      matches.push(m[1]);
-    }
-    expect(matches).toHaveLength(1);
-    expect(matches[0]).toBe('file.ts');
+  test('expands !@ at the start of the prompt and after whitespace', () => {
+    writeFileSync(join(tmpDir, 'a.ts'), 'AAA');
+    writeFileSync(join(tmpDir, 'b.ts'), 'BBB');
+    expect(expand('!@a.ts then !@b.ts')).toBe('AAA then BBB');
   });
 });

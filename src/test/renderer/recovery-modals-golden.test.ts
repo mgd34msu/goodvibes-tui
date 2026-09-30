@@ -164,12 +164,6 @@ for (const entry of RECOVERY_MODALS) {
         assertGolden(surfaceName, lines);
       });
 
-      test(`${size.label} render is deterministic`, () => {
-        const a = snapshotEncode(surfaceName, renderRecoveryModal(entry, size.width, size.height));
-        const b = snapshotEncode(surfaceName, renderRecoveryModal(entry, size.width, size.height));
-        expect(a).toBe(b);
-      });
-
       test(`${size.label} shows every answer at once, with nothing scrolled away`, () => {
         const rows = rowsOf(renderRecoveryModal(entry, size.width, size.height));
         for (const choice of entry.choices) {

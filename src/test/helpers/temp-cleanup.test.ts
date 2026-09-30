@@ -126,13 +126,6 @@ describe('temp-registry', () => {
     rmSync(kept, { recursive: true, force: true });
   });
 
-  test('cleanup of an already-deleted directory does not throw', () => {
-    const registry = createTempDirRegistry();
-    const dir = specDir('gv-registry-gone');
-    registry.register(dir);
-    rmSync(dir, { recursive: true, force: true });
-    expect(() => registry.cleanup()).not.toThrow();
-  });
 });
 
 // ---------------------------------------------------------------------------

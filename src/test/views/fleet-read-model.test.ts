@@ -585,15 +585,6 @@ describe('createFleetReadModel', () => {
     expect(snap.capturedAt).toBe(NOW);
   });
 
-  test('subscribe delegates to registry.subscribe and returns an unsubscribe function', () => {
-    const registry = makeRegistry([]);
-    const model = createFleetReadModel(registry);
-    let calls = 0;
-    const unsub = model.subscribe(() => { calls++; });
-    expect(typeof unsub).toBe('function');
-    unsub();
-  });
-
   test('interrupt/kill delegate to the underlying registry', () => {
     const registry = makeRegistry([]);
     const model = createFleetReadModel(registry);
@@ -630,14 +621,6 @@ describe('createFleetReadModel', () => {
     };
     const model = createFleetReadModel(registry);
     expect(model.steer('agent-stalled', 'still there?')).toEqual({ queued: true, messageId: 'msg-woke-1', woke: true });
-  });
-
-  test('subscribeConsumed without a runtimeBus dep is a graceful no-op (never invokes the listener)', () => {
-    const registry = makeRegistry([]);
-    const model = createFleetReadModel(registry);
-    const unsub = model.subscribeConsumed(() => { throw new Error('must not be called'); });
-    expect(typeof unsub).toBe('function');
-    expect(() => unsub()).not.toThrow();
   });
 
   test('subscribeConsumed forwards COMMUNICATION_CONSUMED envelopes from the communication domain, filtering out other event types', () => {

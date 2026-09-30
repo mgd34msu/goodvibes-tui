@@ -79,25 +79,6 @@ describe('liveness contract: providers-modal (values-only update, real host path
     }
   });
 
-  test('an identical re-render trivially satisfies the contract (no diffs)', async () => {
-    const snaps = [{ providerId: 'anthropic', active: true, modelCount: 5 }];
-    const runtime: ProviderRuntimeInspect = {
-      listProviderIds: () => snaps.map((s) => s.providerId),
-      inspectAll: async () => snaps as never,
-    };
-    const modal = new ConfigModal();
-    try {
-      modal.open(createProviderHealthModalSurface(runtime), () => {});
-      await tick();
-      modal.moveDown();
-      const a = frameFromLayer(renderConfigModal(modal, W, H), W, H);
-      const b = frameFromLayer(renderConfigModal(modal, W, H), W, H);
-      assertFrameLiveness(a, b);
-      expect(differingCells(a, b)).toEqual([]);
-    } finally {
-      modal.close();
-    }
-  });
 });
 
 describe('liveness contract: remote-modal (values-only update, real host path)', () => {

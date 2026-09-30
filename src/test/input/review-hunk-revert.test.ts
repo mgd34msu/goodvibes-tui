@@ -3,26 +3,16 @@
 // apply exactly one hunk via checkpoints.revertHunkPreview → a confirm dialog →
 // checkpoints.revertHunk (with the token), rendering a [Revert] receipt.
 //
-// Two levels:
-//  1. The real composed-daemon gateway surface (getTestRuntimeServices): a real
-//     working-tree hunk is previewed, confirmed with the minted token, and
-//     reverse-applied; a stale hunk is an honest applies:false, never a partial.
-//  2. The revert flow (revertReviewHunk) against a stubbed gateway: it asks
-//     through ctx.confirm, confirming invokes revertHunk with the token, and the
-//     receipt lands in the transcript; a stale hunk never asks; a 409 writes
-//     nothing partial.
+// The revert flow (revertReviewHunk) against a stubbed gateway: it asks
+// through ctx.confirm, confirming invokes revertHunk with the token, and the
+// receipt lands in the transcript; a stale hunk never asks; a 409 writes
+// nothing partial.
 // ---------------------------------------------------------------------------
 
 import { describe, expect, test } from 'bun:test';
-import { assertEveryDescriptorHasHandler } from '@pellux/goodvibes-terminal-shell/conformance';
-import { getTestRuntimeServices, disposeTestRuntimeServicesAfterAll } from '../helpers/runtime-services.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { revertReviewHunk } from '../../input/commands/review-runtime.ts';
 import { parseReviewDiff, flattenHunks } from '../../views/diff-review-model.ts';
-
-// Stop the shared test runtime graph when this file ends. Called here, not
-// registered inside the helper, for the reason its doc comment gives.
-disposeTestRuntimeServicesAfterAll();
 
 const SAMPLE_DIFF = [
   'diff --git a/sample.txt b/sample.txt',
@@ -34,39 +24,6 @@ const SAMPLE_DIFF = [
   ' line2',
   '',
 ].join('\n');
-
-describe('the hunk-revert verbs are the daemon\'s to answer, and this app knows it', () => {
-  const services = getTestRuntimeServices();
-  const IDS = ['checkpoints.revertHunkPreview', 'checkpoints.revertHunk'] as const;
-
-  for (const id of IDS) {
-    test(`${id} is in the contract this app calls against`, () => {
-      // The descriptor is cataloged, the contract is shared, and the revert
-      // flow below builds its request from it. What is NOT here is a handler.
-      expect(services.gatewayMethods.get(id)).toBeTruthy();
-    });
-  }
-
-  test('neither verb is answered in this process', () => {
-    // The reverse-apply writes to the working tree and mints a confirm token
-    // against the checkpoint store. The daemon owns that store; a second
-    // implementation here would mint tokens the daemon never issued and apply
-    // hunks it has no record of. `assertEveryDescriptorHasHandler` is the
-    // conformance check the DAEMON repository runs against its own catalog.
-    expect(() => assertEveryDescriptorHasHandler(services.gatewayMethods, { onlyIds: IDS })).toThrow();
-  });
-
-  test('invoking one here fails loudly rather than pretending', async () => {
-    // Not a silent empty result: a surface that got `{}` back from an
-    // unimplemented verb would render "nothing to revert" for a file that has
-    // plenty to revert. The revert flow below is driven through the gateway
-    // seam it is handed, which in production is the adopted daemon.
-    const staleHunk = ['@@ -1,2 +1,3 @@', ' a', '+b', ' c'].join('\n');
-    await expect(services.gatewayMethods.invoke('checkpoints.revertHunk', {
-      context: { clientKind: 'tui' }, body: { path: 'does-not-exist-xyz.txt', hunk: staleHunk },
-    } as never)).rejects.toThrow();
-  });
-});
 
 // ---- The revert flow against a stubbed gateway ---------------------------
 

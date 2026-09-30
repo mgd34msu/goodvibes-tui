@@ -10,7 +10,6 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { buildSettingGroups } from '../../input/settings-modal-data.ts';
-import { SETTINGS_CATEGORIES } from '../../input/settings-modal-types.ts';
 
 const dirs: string[] = [];
 function makeConfig(): ConfigManager {
@@ -30,9 +29,6 @@ afterEach(() => {
 });
 
 describe('settings C3a surfaces', () => {
-  test("'diagnostics' is a registered settings category", () => {
-    expect(SETTINGS_CATEGORIES).toContain('diagnostics');
-  });
 
   test('diagnostics.postEdit surfaces under the diagnostics category (was previously dropped)', () => {
     const groups = buildSettingGroups(makeConfig());

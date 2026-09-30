@@ -2,16 +2,11 @@
  * perf-frame-bench.ts, Shared headless frame micro-benchmark.
  *
  * Exports `runFrameBench()` which measures Compositor.composite() throughput
- * on a synthetic 80×24 frame. Used by both scripts/perf-check.ts (gate) and
- * src/test/release-gates/performance-gate.test.ts (test) so both always
- * measure identically, changing methodology here updates both consumers.
+ * on a synthetic 80×24 frame, for scripts/perf-check.ts (the release gate).
  *
  * NEVER launches the interactive TUI binary. Stubs stdout entirely.
  *
- * Ratchet budgets (set just above measured reality, tighten as perf improves):
- *   p95 budget: 16ms  (stated product SLO; measured p95 ~4ms on dev linux-x64)
- *   p99 budget: 110ms (ceil(measured p99 ~26.88ms × 4), rounded to 10ms; CI runners run 2-4× slower than dev)
- * Ratchet rule: tighten when measured drops below budget/3.
+ * Budgets live in scripts/perf-baseline.json, written by `bun run perf:baseline`.
  */
 
 import { performance } from 'node:perf_hooks';
@@ -25,12 +20,6 @@ export const FRAME_BENCH_CONFIG = {
   height: 24,
   warmupFrames: 10,
   measureFrames: 200,
-} as const;
-
-/** Ratchet budgets, tighten when measured drops below budget/3. */
-export const FRAME_BUDGETS = {
-  p95_ms: 16, // stated product SLO
-  p99_ms: 110, // ceil(measured p99 ~26.88ms × 4), rounded to 10ms. Must match scripts/perf-baseline.json
 } as const;
 
 /** Result of a single frame bench run. */
