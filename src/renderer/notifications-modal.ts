@@ -59,7 +59,7 @@ function dot(entry: NotificationFeedEntry, unread: boolean): { mark: string; fg:
 }
 
 /** A body's lines as one row description: a list row keeps no line breaks, so lines are joined with a visible separator, never run together. */
-export function bodyLine(body: string | undefined): string | undefined {
+function bodyLine(body: string | undefined): string | undefined {
   if (body === undefined) return undefined;
   const lines = body.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
   return lines.length > 0 ? lines.join(' \u00b7 ') : undefined;
